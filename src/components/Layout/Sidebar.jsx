@@ -11,7 +11,7 @@ import {
 import './Sidebar.css';
 
 export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isDesktop }) {
-    const { user, logout } = useAuth();
+    const { user, confirmLogout } = useAuth();
     const { state, dispatch, getMyDayCards, getImportantCards, getPlannedCards, DEFAULT_BOARD_COLORS } = useApp();
     const { showContextMenu } = useContextMenu();
     const { setIsOpen: setPomodoroOpen } = usePomodoro();
@@ -89,7 +89,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
 
     const handleLogout = () => {
         onClose?.();
-        logout();
+        confirmLogout();
     };
 
     // Board context menu

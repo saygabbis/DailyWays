@@ -1,5 +1,6 @@
-import { createContext, useContext, useReducer, useEffect } from 'react';
+import { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import storageService, { STORAGE_KEYS } from '../services/storageService';
+import { fetchBoards, saveBoards, insertBoardFull } from '../services/boardService';
 import { useAuth } from './AuthContext';
 
 const AppContext = createContext(null);
@@ -407,27 +408,63 @@ function appReducer(state, action) {
 export function AppProvider({ children }) {
     const { user } = useAuth();
     const [state, dispatch] = useReducer(appReducer, initialState);
+    const initialLoadDone = useRef(false);
+    const saveTimeoutRef = useRef(null);
 
-    // Load boards when user logs in
+    // Load boards: Supabase primeiro; se vazio, tenta localStorage (backup) e sincroniza para Supabase
     useEffect(() => {
-        if (user) {
-            const saved = storageService.load(STORAGE_KEYS.BOARDS + '_' + user.id);
-            if (saved && saved.length > 0) {
-                dispatch({ type: 'SET_BOARDS', payload: saved });
-                dispatch({ type: 'SET_ACTIVE_BOARD', payload: saved[0].id });
-            } else {
-                const defaults = createDefaultBoards();
-                dispatch({ type: 'SET_BOARDS', payload: defaults });
-                dispatch({ type: 'SET_ACTIVE_BOARD', payload: defaults[0].id });
-            }
+        if (!user) {
+            initialLoadDone.current = false;
+            return;
         }
+        let cancelled = false;
+        const localKey = STORAGE_KEYS.BOARDS + '_' + user.id;
+        (async () => {
+            const fromDb = await fetchBoards(user.id);
+            if (cancelled) return;
+            if (fromDb?.length > 0) {
+                dispatch({ type: 'SET_BOARDS', payload: fromDb });
+                dispatch({ type: 'SET_ACTIVE_BOARD', payload: fromDb[0].id });
+                storageService.save(localKey, fromDb);
+                initialLoadDone.current = true;
+                return;
+            }
+            const fromLocal = storageService.load(localKey);
+            if (fromLocal && Array.isArray(fromLocal) && fromLocal.length > 0) {
+                dispatch({ type: 'SET_BOARDS', payload: fromLocal });
+                dispatch({ type: 'SET_ACTIVE_BOARD', payload: fromLocal[0].id });
+                initialLoadDone.current = true;
+                for (const board of fromLocal) {
+                    await insertBoardFull(user.id, board);
+                }
+                storageService.save(localKey, fromLocal);
+                return;
+            }
+            const defaults = createDefaultBoards();
+            dispatch({ type: 'SET_BOARDS', payload: defaults });
+            dispatch({ type: 'SET_ACTIVE_BOARD', payload: defaults[0].id });
+            const saved = await saveBoards(user.id, defaults);
+            if (saved.success) storageService.save(localKey, defaults);
+            initialLoadDone.current = true;
+        })();
+        return () => { cancelled = true; };
     }, [user]);
 
-    // Save boards on change
+    // Persist boards: Supabase + localStorage (backup). Debounce curto para não perder em F5.
     useEffect(() => {
-        if (user && state.boards.length > 0) {
-            storageService.save(STORAGE_KEYS.BOARDS + '_' + user.id, state.boards);
-        }
+        if (!user || !initialLoadDone.current || state.boards.length === 0) return;
+        const boardsToSave = state.boards;
+        const localKey = STORAGE_KEYS.BOARDS + '_' + user.id;
+        storageService.save(localKey, boardsToSave);
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(async () => {
+            saveTimeoutRef.current = null;
+            const result = await saveBoards(user.id, boardsToSave);
+            if (result.success) storageService.save(localKey, boardsToSave);
+        }, 400);
+        return () => {
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        };
     }, [state.boards, user]);
 
     // Helpers
@@ -467,8 +504,6 @@ export function AppProvider({ children }) {
             getAllCards,
             getMyDayCards,
             getImportantCards,
-            getPlannedCards,
-            searchCards,
             getPlannedCards,
             searchCards,
             LABEL_COLORS: state.labels,

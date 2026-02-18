@@ -238,6 +238,54 @@
     color: var(--accent-secondary);
 }
 
+.auth-success-title {
+    font-size: var(--font-size-2xl);
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: var(--space-md) 0 var(--space-xs);
+}
+
+.auth-container-success .auth-subtitle {
+    margin-bottom: var(--space-lg);
+}
+
+.auth-confirm-msg {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    margin-bottom: var(--space-xl);
+}
+
+.auth-confirm-msg-box {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl);
+    margin-bottom: var(--space-xl);
+    text-align: left;
+}
+
+.auth-confirm-msg strong {
+    color: var(--text-primary);
+}
+
+.auth-confirm-hint {
+    margin-top: var(--space-md);
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+}
+
+.auth-success-spinner {
+    width: 40px;
+    height: 40px;
+    margin: 0 auto var(--space-xl);
+    border: 3px solid var(--border-color);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
 @media (max-width: 480px) {
     .auth-container {
         padding: var(--space-xl) var(--space-lg);

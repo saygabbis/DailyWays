@@ -5,7 +5,7 @@ import NotificationDropdown from '../Notifications/NotificationDropdown';
 import './Header.css';
 
 export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOpenSettings, onOpenSearch }) {
-    const { user, logout } = useAuth();
+    const { user, confirmLogout } = useAuth();
     const [showProfile, setShowProfile] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
     const profileRef = useRef(null);
@@ -84,7 +84,7 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                                 <span>Minha Conta</span>
                             </button>
                             <div className="header-profile-divider" />
-                            <button className="header-profile-item header-profile-logout" onClick={logout}>
+                            <button className="header-profile-item header-profile-logout" onClick={confirmLogout}>
                                 <LogOut size={16} />
                                 <span>Sair</span>
                             </button>
