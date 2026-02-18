@@ -1,0 +1,103 @@
+/* ===== Context Menu ===== */
+
+.context-menu {
+    position: fixed;
+    z-index: 9999;
+    min-width: 200px;
+    max-width: 280px;
+    background: var(--bg-secondary);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xs);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2), 0 0 0 1px var(--glass-border);
+    backdrop-filter: blur(12px);
+}
+
+.context-menu-title {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: var(--space-sm) var(--space-md);
+    margin-bottom: 2px;
+}
+
+.context-menu-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: var(--space-xs) 0;
+}
+
+.context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: 8px var(--space-md);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    transition: all var(--transition-fast);
+    text-align: left;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+}
+
+.context-menu-item:hover {
+    background: var(--bg-hover);
+}
+
+.context-menu-item:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.context-menu-danger:hover {
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
+.context-menu-danger:hover .context-menu-icon {
+    color: var(--danger);
+}
+
+.context-menu-icon {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+}
+
+.context-menu-label {
+    flex: 1;
+}
+
+.context-menu-shortcut {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    font-weight: 600;
+}
+
+/* ── Scale In Animation ── */
+@keyframes ctxScaleIn {
+    from {
+        transform: scale(0.92);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.context-menu.animate-scale-in {
+    animation: ctxScaleIn 0.12s ease-out;
+    transform-origin: top left;
+}

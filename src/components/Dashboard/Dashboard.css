@@ -1,0 +1,222 @@
+/* ===== Dashboard View ===== */
+
+.dashboard-view {
+    padding: var(--space-xl);
+    max-width: 1200px;
+    margin: 0 auto;
+    height: 100%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xl);
+}
+
+.dashboard-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-xl);
+    background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+}
+
+.dashboard-hero::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, var(--accent-light) 0%, transparent 70%);
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.dashboard-hero-content h1 {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    margin-bottom: var(--space-xs);
+    color: var(--text-primary);
+}
+
+.dashboard-hero-content p {
+    color: var(--text-tertiary);
+}
+
+.dashboard-hero-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-primary);
+}
+
+/* Stats Grid */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-lg);
+}
+
+.stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.stat-progress {
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-lg);
+    padding: var(--space-xl);
+}
+
+.progress-ring-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.progress-ring {
+    transform: rotate(-90deg);
+}
+
+.progress-value {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.progress-number {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.progress-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+}
+
+.stat-footer {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+}
+
+/* Column Stats */
+.dashboard-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.stat-highlight {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--space-lg);
+    padding: var(--space-lg);
+}
+
+.stat-icon-bg {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.stat-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-value {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.stat-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+/* Recents */
+.dashboard-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+}
+
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    margin-bottom: var(--space-md);
+}
+
+.recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.recent-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+}
+
+.recent-check {
+    color: var(--success);
+    margin-right: var(--space-sm);
+}
+
+.recent-title {
+    flex: 1;
+    color: var(--text-primary);
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+.recent-date {
+    color: var(--text-tertiary);
+    font-size: var(--font-size-xs);
+}
+
+.empty-recents {
+    color: var(--text-tertiary);
+    text-align: center;
+    padding: var(--space-md);
+    font-style: italic;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}

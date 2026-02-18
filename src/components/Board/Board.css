@@ -1,0 +1,467 @@
+/* ===== Board View — DailyWays Design ===== */
+.board-view {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: var(--space-xl);
+    height: calc(100vh - var(--header-height));
+    /* Prevent lists from overflowing the page */
+    position: relative;
+}
+
+/* Custom scrollbar for horizontal board scroll */
+.board-view::-webkit-scrollbar {
+    height: 8px;
+}
+
+.board-view::-webkit-scrollbar-track {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+.board-view::-webkit-scrollbar-thumb {
+    background: var(--border-color-strong);
+    border-radius: 4px;
+}
+
+.board-view::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-primary);
+}
+
+/* ── Board Toolbar ── */
+.board-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+    justify-content: flex-end;
+}
+
+.board-members {
+    display: flex;
+    align-items: center;
+    margin-right: var(--space-sm);
+}
+
+.board-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-card);
+    border: 2px solid var(--bg-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-left: -8px;
+    cursor: default;
+    transition: transform var(--transition-fast);
+}
+
+.board-avatar:first-child {
+    margin-left: 0;
+}
+
+.board-avatar:hover {
+    transform: translateY(-2px);
+    z-index: 1;
+}
+
+.board-avatar:nth-child(1) {
+    background: #ff6b6b;
+    color: white;
+}
+
+.board-avatar:nth-child(2) {
+    background: #4d96ff;
+    color: white;
+}
+
+.board-avatar-more {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-elevated);
+    border: 2px solid var(--bg-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-left: -8px;
+    cursor: default;
+}
+
+.board-toolbar-delim {
+    width: 1px;
+    height: 24px;
+    background: var(--border-color);
+    margin: 0 var(--space-xs);
+}
+
+.board-lists {
+    display: flex;
+    gap: var(--space-lg);
+    align-items: flex-start;
+    height: 100%;
+    padding-bottom: var(--space-lg);
+    /* Ensure lists never wrap and extend horizontally */
+    min-width: min-content;
+}
+
+/* ── List ── */
+.board-list {
+    flex-shrink: 0;
+    width: 320px;
+    max-height: calc(100vh - var(--header-height) - var(--space-3xl));
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    border: 1.5px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-sm);
+    animation: slideUp var(--transition-base) ease-out;
+    transition: background-color var(--transition-base), border-color var(--transition-base);
+}
+
+.board-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+}
+
+.board-list-title {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    cursor: default;
+    color: var(--text-primary);
+}
+
+.board-list-count {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--accent-primary);
+    background: var(--accent-light);
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+}
+
+.board-list-actions {
+    position: relative;
+}
+
+.board-list-menu {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: var(--bg-secondary);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-xs);
+    min-width: 160px;
+    z-index: var(--z-dropdown);
+    box-shadow: var(--shadow-lg);
+}
+
+.board-list-menu button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    transition: all var(--transition-fast);
+}
+
+.board-list-menu button:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.board-list-menu button.danger:hover {
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
+.board-list-rename input {
+    height: 32px;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    width: 100%;
+}
+
+/* ── Cards Container ── */
+.board-list-cards {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    min-height: 60px;
+    transition: background var(--transition-fast);
+}
+
+/* Cards container custom scrollbar */
+.board-list-cards::-webkit-scrollbar {
+    width: 4px;
+}
+
+.board-list-cards::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.board-list-cards::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.board-list-cards.dragging-over {
+    background: var(--accent-light);
+    border-radius: var(--radius-md);
+}
+
+/* ── Card ── */
+.board-card {
+    background: var(--bg-card);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    position: relative;
+    box-shadow: var(--shadow-card);
+}
+
+.board-card:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-card-hover);
+}
+
+.board-card-dragging {
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-card-hover);
+    transform: rotate(2deg);
+}
+
+.board-card-done {
+    opacity: 0.55;
+}
+
+.board-card-labels {
+    display: flex;
+    gap: 4px;
+    margin-bottom: var(--space-sm);
+}
+
+.board-card-label {
+    width: 32px;
+    height: 6px;
+    border-radius: var(--radius-full);
+    display: inline-block;
+}
+
+.board-card-title {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    line-height: 1.4;
+    margin-bottom: var(--space-sm);
+    color: var(--text-primary);
+}
+
+.board-card-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+}
+
+.board-card-meta>span {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.board-card-priority {
+    font-weight: 700;
+}
+
+.board-card-due {
+    color: var(--text-tertiary);
+}
+
+.board-card-due.overdue {
+    color: var(--danger);
+    font-weight: 700;
+}
+
+.board-card-due.today {
+    color: var(--warning);
+    font-weight: 700;
+}
+
+.board-card-myday {
+    color: var(--label-yellow);
+}
+
+.board-card-subtasks.all-done {
+    color: var(--success);
+}
+
+.board-card-progress {
+    height: 4px;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-full);
+    margin-top: var(--space-sm);
+    overflow: hidden;
+}
+
+.board-card-progress-bar {
+    height: 100%;
+    border-radius: var(--radius-full);
+    transition: width var(--transition-base);
+}
+
+/* ── Footer / Add Card ── */
+.board-list-footer {
+    padding: var(--space-sm);
+    border-top: 1px solid var(--border-color);
+}
+
+.board-add-card-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: 10px var(--space-md);
+    border-radius: var(--radius-md);
+    color: var(--text-tertiary);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    transition: all var(--transition-fast);
+}
+
+.board-add-card-btn:hover {
+    background: var(--bg-hover);
+    color: var(--accent-primary);
+}
+
+.board-add-card-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.board-add-card-form input {
+    height: 38px;
+    font-size: var(--font-size-sm);
+}
+
+.board-add-card-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+/* ── Add List ── */
+.board-add-list {
+    flex-shrink: 0;
+    width: 320px;
+}
+
+.board-add-list-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: var(--space-lg);
+    border-radius: var(--radius-lg);
+    background: var(--bg-secondary);
+    border: 2px dashed var(--border-color);
+    color: var(--text-tertiary);
+    font-size: var(--font-size-base);
+    font-weight: 500;
+    transition: all var(--transition-fast);
+}
+
+.board-add-list-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: var(--accent-light);
+}
+
+.board-add-list-form {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    border: 1.5px solid var(--border-color);
+    padding: var(--space-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    box-shadow: var(--shadow-sm);
+}
+
+.board-add-list-form input {
+    height: 40px;
+}
+
+.board-add-list-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+/* ── Empty State ── */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    gap: var(--space-md);
+    color: var(--text-tertiary);
+    padding: var(--space-3xl);
+}
+
+.empty-state-icon {
+    font-size: 64px;
+    filter: grayscale(0.5);
+}
+
+.empty-state h2 {
+    font-size: var(--font-size-xl);
+    color: var(--text-primary);
+}
+
+.empty-state p {
+    font-size: var(--font-size-base);
+    max-width: 300px;
+}
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+    .board-view {
+        padding: var(--space-md);
+    }
+
+    .board-list {
+        width: 280px;
+    }
+
+    .board-add-list {
+        width: 280px;
+    }
+}

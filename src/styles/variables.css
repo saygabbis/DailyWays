@@ -1,0 +1,171 @@
+/* ===== TaskFlow Design System — Light & Dark Themes ===== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* ══════════════════════════════════════════════
+   LIGHT THEME (default, inspired by Taskia)
+   ══════════════════════════════════════════════ */
+:root,
+[data-theme="light"] {
+  /* ── Backgrounds ── */
+  --bg-primary: #f5f3ff;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f8f7fc;
+  --bg-elevated: #f0eef8;
+  --bg-hover: rgba(124, 58, 237, 0.05);
+  --bg-active: rgba(124, 58, 237, 0.10);
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --bg-input: #f8f7fc;
+
+  /* ── Surface / Glass ── */
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(124, 58, 237, 0.10);
+  --glass-shadow: 0 4px 24px rgba(124, 58, 237, 0.08);
+  --glass-blur: blur(20px);
+
+  /* ── Text ── */
+  --text-primary: #1a1235;
+  --text-secondary: #6b6585;
+  --text-tertiary: #9e97b3;
+  --text-inverse: #ffffff;
+
+  /* ── Accent ── */
+  --accent-primary: #7c3aed;
+  --accent-secondary: #6d28d9;
+  --accent-light: #ede9fe;
+  --accent-gradient: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  --accent-gradient-hover: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  --accent-glow: 0 4px 16px rgba(124, 58, 237, 0.25);
+
+  /* ── Semantic ── */
+  --success: #10b981;
+  --success-bg: rgba(16, 185, 129, 0.10);
+  --warning: #f59e0b;
+  --warning-bg: rgba(245, 158, 11, 0.10);
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.08);
+  --info: #3b82f6;
+  --info-bg: rgba(59, 130, 246, 0.08);
+
+  /* ── Labels ── */
+  --label-red: #ef4444;
+  --label-orange: #f97316;
+  --label-yellow: #eab308;
+  --label-green: #22c55e;
+  --label-blue: #3b82f6;
+  --label-purple: #8b5cf6;
+  --label-pink: #ec4899;
+  --label-teal: #14b8a6;
+
+  /* ── Priority ── */
+  --priority-urgent: #ef4444;
+  --priority-high: #f97316;
+  --priority-medium: #f59e0b;
+  --priority-low: #9e97b3;
+
+  /* ── Sidebar active ── */
+  --sidebar-active-bg: var(--accent-gradient);
+  --sidebar-active-text: #ffffff;
+
+  /* ── Borders ── */
+  --border-color: #e8e4f0;
+  --border-color-strong: #d4cfe4;
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 2px 8px rgba(124, 58, 237, 0.06);
+  --shadow-card-hover: 0 8px 24px rgba(124, 58, 237, 0.12);
+
+  color-scheme: light;
+}
+
+/* ══════════════════════════════════════════════
+   DARK THEME
+   ══════════════════════════════════════════════ */
+[data-theme="dark"] {
+  --bg-primary: #0f0b1a;
+  --bg-secondary: #1a1429;
+  --bg-tertiary: #231d35;
+  --bg-elevated: #2d2542;
+  --bg-hover: rgba(139, 92, 246, 0.08);
+  --bg-active: rgba(139, 92, 246, 0.15);
+  --bg-sidebar: #1a1429;
+  --bg-card: #1a1429;
+  --bg-input: #231d35;
+
+  --glass-bg: rgba(26, 20, 41, 0.85);
+  --glass-border: rgba(139, 92, 246, 0.12);
+  --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+
+  --text-primary: #f0eef5;
+  --text-secondary: #a8a0c0;
+  --text-tertiary: #6e6590;
+  --text-inverse: #0f0b1a;
+
+  --accent-light: rgba(139, 92, 246, 0.15);
+
+  --border-color: rgba(139, 92, 246, 0.12);
+  --border-color-strong: rgba(139, 92, 246, 0.20);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0 8px 24px rgba(139, 92, 246, 0.15);
+  --accent-glow: 0 4px 20px rgba(139, 92, 246, 0.3);
+
+  color-scheme: dark;
+}
+
+/* ══════════════════════════════════════════════
+   SHARED TOKENS
+   ══════════════════════════════════════════════ */
+:root {
+  /* ── Typography ── */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-size-xs: 0.6875rem;
+  --font-size-sm: 0.75rem;
+  --font-size-base: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 2rem;
+  --font-size-3xl: 2.5rem;
+
+  /* ── Spacing ── */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 0.75rem;
+  --space-lg: 1rem;
+  --space-xl: 1.5rem;
+  --space-2xl: 2rem;
+  --space-3xl: 3rem;
+
+  /* ── Radius ── */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* ── Transitions ── */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Layout ── */
+  --sidebar-width: 260px;
+  --header-height: 64px;
+
+  /* ── Z-index ── */
+  --z-sidebar: 100;
+  --z-header: 90;
+  --z-modal-backdrop: 200;
+  --z-modal: 210;
+  --z-dropdown: 150;
+  --z-tooltip: 300;
+}

@@ -1,0 +1,230 @@
+/* ===== Sidebar — DailyWays Design ===== */
+
+.sidebar {
+    width: var(--sidebar-width);
+    height: 100vh;
+    background: var(--bg-sidebar);
+    border-right: 1.5px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: var(--z-sidebar);
+    transform: translateX(-100%);
+    transition: transform var(--transition-base), background-color var(--transition-base);
+}
+
+.sidebar-open {
+    transform: translateX(0);
+}
+
+/* Overlay — rendered conditionally by React (mobile only) */
+.sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(2px);
+    z-index: calc(var(--z-sidebar) - 1);
+    animation: fadeIn var(--transition-fast);
+}
+
+/* ── Header ── */
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-xl) var(--space-lg);
+    min-height: var(--header-height);
+}
+
+.sidebar-logo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--accent-primary);
+}
+
+.sidebar-logo svg {
+    color: var(--accent-primary);
+}
+
+.sidebar-close {
+    display: flex;
+}
+
+/* ── Body ── */
+.sidebar-body {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: var(--space-lg);
+}
+
+/* ── Section Labels ── */
+.sidebar-section-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-tertiary);
+    padding: var(--space-lg) var(--space-lg) var(--space-sm);
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+/* ── Navigation ── */
+.sidebar-nav {
+    padding: 0 var(--space-sm);
+}
+
+/* ── Item ── */
+.sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all var(--transition-fast);
+    text-align: left;
+    margin-bottom: 2px;
+    position: relative;
+}
+
+.sidebar-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.sidebar-item-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* Active state — gradient pill */
+.sidebar-item-active {
+    background: var(--accent-gradient) !important;
+    color: #ffffff !important;
+    font-weight: 600;
+    box-shadow: var(--accent-glow);
+}
+
+.sidebar-item-active .sidebar-item-icon svg,
+.sidebar-item-active svg {
+    color: #ffffff !important;
+}
+
+.sidebar-item-active .sidebar-badge {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+
+.sidebar-item-active .sidebar-badge-subtle {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* ── Badge ── */
+.sidebar-badge {
+    margin-left: auto;
+    background: var(--accent-light);
+    color: var(--accent-primary);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: var(--radius-full);
+}
+
+.sidebar-badge-subtle {
+    margin-left: auto;
+    color: var(--text-tertiary);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+}
+
+/* ── Boards ── */
+.sidebar-boards-section {
+    padding: 0 var(--space-sm);
+}
+
+.sidebar-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-xs) var(--space-sm);
+}
+
+.sidebar-board-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sidebar-board-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: var(--radius-full);
+    flex-shrink: 0;
+}
+
+.sidebar-new-board {
+    padding: var(--space-xs) var(--space-sm);
+}
+
+.sidebar-new-board input {
+    height: 38px;
+    font-size: var(--font-size-sm);
+    border-radius: var(--radius-md);
+}
+
+/* ── Others section ── */
+.sidebar-others {
+    margin-top: auto;
+    border-top: 1.5px solid var(--border-color);
+    padding-top: var(--space-xs);
+}
+
+/* ── Logout ── */
+.sidebar-logout:hover {
+    color: var(--danger) !important;
+}
+
+.sidebar-logout:hover svg {
+    color: var(--danger) !important;
+}
+
+/* ── Truncate ── */
+.truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ── Resize Handle ── */
+.sidebar-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 10;
+    transition: background var(--transition-fast);
+}
+
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle:active {
+    background: var(--accent-primary);
+    opacity: 0.5;
+}
