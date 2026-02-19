@@ -11,6 +11,8 @@ function listToRow(list, boardId, position) {
     board_id: boardId,
     title: list.title ?? 'Nova Lista',
     position,
+    color: list.color ?? null,
+    is_completion_list: list.isCompletionList ?? false,
   };
 }
 
@@ -41,6 +43,8 @@ function rowToList(row, cards = []) {
   return {
     id: row.id,
     title: row.title,
+    color: row.color ?? null,
+    isCompletionList: row.is_completion_list ?? false,
     cards: cards.map(c => rowToCard(c)),
   };
 }
@@ -72,16 +76,18 @@ function rowToBoard(row) {
 
 /**
  * Busca todos os boards do usuário (owner ou member) com listas, cards e subtarefas.
+ * Retorna { data, error }: em erro (sessão expirada, rede, etc.) error é preenchido e data é [];
+ * assim o app não confunde "falha na API" com "usuário sem dados" e evita sobrescrever com boards padrão.
  */
 export async function fetchBoards(userId) {
-  if (!userId) return [];
+  if (!userId) return { data: [], error: null };
   const { data: owned, error: ownedErr } = await supabase
     .from('boards')
     .select('*')
     .eq('owner_id', userId);
   if (ownedErr) {
     console.error('fetchBoards owned error', ownedErr);
-    return [];
+    return { data: [], error: ownedErr.message || 'Erro ao carregar boards.' };
   }
   const { data: memberRows, error: memberErr } = await supabase
     .from('board_members')
@@ -100,7 +106,7 @@ export async function fetchBoards(userId) {
       .in('id', memberBoardIds);
     if (!sharedErr && shared?.length) boardsData = boardsData.concat(shared);
   }
-  if (!boardsData.length) return [];
+  if (!boardsData.length) return { data: [], error: null };
   const boardIds = boardsData.map(b => b.id);
   const { data: listsData, error: listsError } = await supabase
     .from('lists')
@@ -109,7 +115,7 @@ export async function fetchBoards(userId) {
     .order('position', { ascending: true });
   if (listsError) {
     console.error('fetchBoards lists error', listsError);
-    return [];
+    return { data: [], error: listsError.message || 'Erro ao carregar listas.' };
   }
   const listIds = (listsData ?? []).map(l => l.id);
   const { data: cardsData, error: cardsError } = await supabase
@@ -119,7 +125,7 @@ export async function fetchBoards(userId) {
     .order('created_at', { ascending: true });
   if (cardsError) {
     console.error('fetchBoards cards error', cardsError);
-    return [];
+    return { data: [], error: cardsError.message || 'Erro ao carregar cards.' };
   }
   const cardIds = (cardsData ?? []).map(c => c.id);
   const { data: subtasksData } = await supabase
@@ -141,10 +147,11 @@ export async function fetchBoards(userId) {
     if (!listsByBoard[l.board_id]) listsByBoard[l.board_id] = [];
     listsByBoard[l.board_id].push(rowToList(l, cardsByList[l.id] ?? []));
   });
-  return boardsData.map(b => ({
+  const data = boardsData.map(b => ({
     ...rowToBoard(b),
     lists: listsByBoard[b.id] ?? [],
   }));
+  return { data, error: null };
 }
 
 /**
@@ -242,7 +249,8 @@ export async function updateBoardFull(userId, board) {
 export async function saveBoards(userId, boards) {
   if (!userId || !boards?.length) return { success: true };
   try {
-    const current = await fetchBoards(userId);
+    const { data: current, error: fetchError } = await fetchBoards(userId);
+    if (fetchError) return { success: false, error: fetchError };
     const currentIds = new Set(current.map(b => b.id));
     const payloadIds = new Set(boards.map(b => b.id));
     for (const b of current) {

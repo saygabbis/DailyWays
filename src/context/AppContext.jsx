@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import storageService, { STORAGE_KEYS } from '../services/storageService';
-import { fetchBoards, saveBoards, insertBoardFull } from '../services/boardService';
+import { fetchBoards, saveBoards, insertBoardFull, updateBoardFull } from '../services/boardService';
 import { useAuth } from './AuthContext';
 
 const AppContext = createContext(null);
@@ -48,6 +48,8 @@ function createDefaultBoards() {
             {
                 id: crypto.randomUUID(),
                 title: 'A Fazer',
+                color: null,
+                isCompletionList: false,
                 cards: [
                     {
                         id: crypto.randomUUID(),
@@ -69,11 +71,15 @@ function createDefaultBoards() {
             {
                 id: crypto.randomUUID(),
                 title: 'Em Progresso',
+                color: null,
+                isCompletionList: false,
                 cards: [],
             },
             {
                 id: crypto.randomUUID(),
                 title: 'Concluído',
+                color: null,
+                isCompletionList: true,
                 cards: [],
             },
         ],
@@ -94,9 +100,9 @@ function appReducer(state, action) {
                 emoji: action.payload.emoji || '📋',
                 createdAt: new Date().toISOString(),
                 lists: [
-                    { id: crypto.randomUUID(), title: 'A Fazer', cards: [] },
-                    { id: crypto.randomUUID(), title: 'Em Progresso', cards: [] },
-                    { id: crypto.randomUUID(), title: 'Concluído', cards: [] },
+                    { id: crypto.randomUUID(), title: 'A Fazer', color: null, isCompletionList: false, cards: [] },
+                    { id: crypto.randomUUID(), title: 'Em Progresso', color: null, isCompletionList: false, cards: [] },
+                    { id: crypto.randomUUID(), title: 'Concluído', color: null, isCompletionList: true, cards: [] },
                 ],
             };
             return { ...state, boards: [...state.boards, newBoard], activeBoard: newBoard.id };
@@ -167,6 +173,8 @@ function appReducer(state, action) {
             const newList = {
                 id: crypto.randomUUID(),
                 title: action.payload.title || 'Nova Lista',
+                color: null,
+                isCompletionList: false,
                 cards: [],
             };
             return {
@@ -410,42 +418,72 @@ export function AppProvider({ children }) {
     const [state, dispatch] = useReducer(appReducer, initialState);
     const initialLoadDone = useRef(false);
     const saveTimeoutRef = useRef(null);
+    const loadInProgressRef = useRef(false);
 
-    // Load boards: Supabase primeiro; se vazio, tenta localStorage (backup) e sincroniza para Supabase
+    // Load boards: Supabase primeiro. Se der ERRO (sessão expirada, rede), NUNCA criar defaults:
+    // usar localStorage como fallback e retentar a API depois. Só criar boards padrão quando a API
+    // retornar sucesso com lista vazia (usuário novo).
     useEffect(() => {
         if (!user) {
             initialLoadDone.current = false;
             return;
         }
+        if (loadInProgressRef.current) return;
+        loadInProgressRef.current = true;
         let cancelled = false;
         const localKey = STORAGE_KEYS.BOARDS + '_' + user.id;
-        (async () => {
-            const fromDb = await fetchBoards(user.id);
-            if (cancelled) return;
-            if (fromDb?.length > 0) {
-                dispatch({ type: 'SET_BOARDS', payload: fromDb });
-                dispatch({ type: 'SET_ACTIVE_BOARD', payload: fromDb[0].id });
-                storageService.save(localKey, fromDb);
-                initialLoadDone.current = true;
-                return;
+
+        const applyBoards = (boards) => {
+            if (!cancelled && boards?.length > 0) {
+                dispatch({ type: 'SET_BOARDS', payload: boards });
+                dispatch({ type: 'SET_ACTIVE_BOARD', payload: boards[0].id });
+                storageService.save(localKey, boards);
             }
+        };
+
+        const loadFromApi = async (isRetry = false) => {
+            const { data: fromDb, error: fetchError } = await fetchBoards(user.id);
+            if (cancelled) return { ok: false };
+            if (fetchError) {
+                // Erro (sessão expirada, rede, etc.): NUNCA criar defaults. Usar localStorage se houver.
+                const fromLocal = storageService.load(localKey);
+                if (fromLocal && Array.isArray(fromLocal) && fromLocal.length > 0) {
+                    applyBoards(fromLocal);
+                }
+                if (!isRetry) {
+                    setTimeout(() => loadFromApi(true), 2000);
+                }
+                return { ok: false };
+            }
+            if (fromDb.length > 0) {
+                applyBoards(fromDb);
+                return { ok: true };
+            }
+            // Sucesso com lista vazia: tentar backup local e só então criar defaults
             const fromLocal = storageService.load(localKey);
             if (fromLocal && Array.isArray(fromLocal) && fromLocal.length > 0) {
-                dispatch({ type: 'SET_BOARDS', payload: fromLocal });
-                dispatch({ type: 'SET_ACTIVE_BOARD', payload: fromLocal[0].id });
-                initialLoadDone.current = true;
+                applyBoards(fromLocal);
                 for (const board of fromLocal) {
                     await insertBoardFull(user.id, board);
                 }
                 storageService.save(localKey, fromLocal);
-                return;
+                return { ok: true };
             }
             const defaults = createDefaultBoards();
             dispatch({ type: 'SET_BOARDS', payload: defaults });
             dispatch({ type: 'SET_ACTIVE_BOARD', payload: defaults[0].id });
             const saved = await saveBoards(user.id, defaults);
             if (saved.success) storageService.save(localKey, defaults);
-            initialLoadDone.current = true;
+            return { ok: true };
+        };
+
+        (async () => {
+            try {
+                await loadFromApi(false);
+                if (!cancelled) initialLoadDone.current = true;
+            } finally {
+                loadInProgressRef.current = false;
+            }
         })();
         return () => { cancelled = true; };
     }, [user]);
@@ -466,6 +504,15 @@ export function AppProvider({ children }) {
             if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         };
     }, [state.boards, user]);
+
+    // Atualiza board no estado e persiste no banco imediatamente (evita depender só do debounce).
+    const updateBoardAndPersist = async (boardId, updates) => {
+        const board = state.boards.find(b => b.id === boardId);
+        if (!board || !user) return;
+        const updatedBoard = { ...board, ...updates };
+        dispatch({ type: 'UPDATE_BOARD', payload: { id: boardId, updates } });
+        await updateBoardFull(user.id, updatedBoard);
+    };
 
     // Helpers
     const getActiveBoard = () => state.boards.find(b => b.id === state.activeBoard);
@@ -506,6 +553,7 @@ export function AppProvider({ children }) {
             getImportantCards,
             getPlannedCards,
             searchCards,
+            updateBoardAndPersist,
             LABEL_COLORS: state.labels,
             DEFAULT_BOARD_COLORS,
         }}>

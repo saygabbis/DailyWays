@@ -3,7 +3,8 @@ import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { useApp } from '../../context/AppContext';
 import { useContextMenu, useLongPress } from '../Common/ContextMenu';
 import BoardCard from './BoardCard';
-import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy } from 'lucide-react';
+import ListDetailsModal from './ListDetailsModal';
+import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy, Settings2 } from 'lucide-react';
 
 export default function BoardList({ list, boardId, onCardClick }) {
     const { dispatch, state } = useApp();
@@ -13,6 +14,7 @@ export default function BoardList({ list, boardId, onCardClick }) {
     const [showMenu, setShowMenu] = useState(false);
     const [editing, setEditing] = useState(false);
     const [editTitle, setEditTitle] = useState(list.title);
+    const [showListDetails, setShowListDetails] = useState(false);
 
     const searchQuery = state.searchQuery?.toLowerCase() || '';
 
@@ -48,8 +50,19 @@ export default function BoardList({ list, boardId, onCardClick }) {
         setEditing(false);
     };
 
+    const handleSaveListDetails = (updates) => {
+        dispatch({ type: 'UPDATE_LIST', payload: { boardId, listId: list.id, updates } });
+        if (updates.title !== undefined) setEditTitle(updates.title);
+        setShowListDetails(false);
+    };
+
     // Context menu items for the list
     const getListContextItems = () => [
+        {
+            label: 'Detalhes da lista',
+            icon: <Settings2 size={15} />,
+            action: () => setShowListDetails(true),
+        },
         {
             label: 'Renomear lista',
             icon: <Edit3 size={15} />,
@@ -85,7 +98,12 @@ export default function BoardList({ list, boardId, onCardClick }) {
     const longPressProps = useLongPress(handleListContextMenu);
 
     return (
-        <div className="board-list" onContextMenu={handleListContextMenu} {...longPressProps}>
+        <div
+            className="board-list"
+            onContextMenu={handleListContextMenu}
+            {...longPressProps}
+            style={list.color ? { borderLeftColor: list.color, borderLeftWidth: 4, borderLeftStyle: 'solid' } : undefined}
+        >
             {/* List Header */}
             <div className="board-list-header">
                 {editing ? (
@@ -177,6 +195,15 @@ export default function BoardList({ list, boardId, onCardClick }) {
                     </button>
                 )}
             </div>
+
+            {showListDetails && (
+                <ListDetailsModal
+                    list={list}
+                    boardId={boardId}
+                    onSave={handleSaveListDetails}
+                    onClose={() => setShowListDetails(false)}
+                />
+            )}
         </div>
     );
 }

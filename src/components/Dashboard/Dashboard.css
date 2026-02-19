@@ -92,6 +92,10 @@
     transform: rotate(-90deg);
 }
 
+.progress-ring-circle-animated {
+    transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .progress-value {
     position: absolute;
     display: flex;

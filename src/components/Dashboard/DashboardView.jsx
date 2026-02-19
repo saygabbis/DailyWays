@@ -1,3 +1,4 @@
+import { useRef, useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
     LayoutDashboard, CheckCircle2, AlertCircle,
@@ -7,24 +8,54 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import './Dashboard.css';
 
+const CIRCLE_R = 52;
+const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_R;
+
 export default function DashboardView() {
     const { state, getMyDayCards } = useApp();
+    const [animatedRate, setAnimatedRate] = useState(0);
+    const hasAnimated = useRef(false);
 
-    // Calculate Stats
-    const allCards = state.boards.flatMap(b => b.lists.flatMap(l => l.cards));
-    const totalTasks = allCards.length;
-    const completedTasks = allCards.filter(c => c.completed).length;
-    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    // Progresso por SUBTAREFAS: total = todas as subtasks, concluídas = com done: true
+    const allSubtasks = state.boards.flatMap(b =>
+        b.lists.flatMap(l =>
+            l.cards.flatMap(c => (c.subtasks || []).map(st => ({ ...st, _card: c, _list: l })))
+        )
+    );
+    const totalSubtasks = allSubtasks.length;
+    const completedSubtasks = allSubtasks.filter(st => st.done).length;
+    const completionRate = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
 
-    const urgentCount = allCards.filter(c => c.priority === 'urgent' && !c.completed).length;
-    const highCount = allCards.filter(c => c.priority === 'high' && !c.completed).length;
+    // Animação do anel ao entrar na tela
+    useEffect(() => {
+        if (hasAnimated.current) {
+            setAnimatedRate(completionRate);
+            return;
+        }
+        hasAnimated.current = true;
+        setAnimatedRate(0);
+        const t = setTimeout(() => {
+            setAnimatedRate(completionRate);
+        }, 100);
+        return () => clearTimeout(t);
+    }, [completionRate]);
+
+    // Card "concluído" para contagens: está em uma lista marcada como lista de conclusão
+    const allCardsWithList = state.boards.flatMap(b =>
+        b.lists.flatMap(l => l.cards.map(c => ({ ...c, _list: l })))
+    );
+    const isCardInCompletionList = (c) => c._list?.isCompletionList === true;
+
+    const urgentCount = allCardsWithList.filter(c => c.priority === 'urgent' && !isCardInCompletionList(c)).length;
+    const highCount = allCardsWithList.filter(c => c.priority === 'high' && !isCardInCompletionList(c)).length;
 
     const myDayCount = getMyDayCards().length;
     const myDayCompleted = getMyDayCards().filter(c => c.completed).length;
 
-    const recentlyCompleted = allCards
-        .filter(c => c.completed)
-        .slice(0, 5); // In a real app, sort by completion date if available
+    // Recém concluídos: apenas cards que estão em listas de conclusão
+    const recentlyCompleted = allCardsWithList
+        .filter(isCardInCompletionList)
+        .slice(0, 5);
 
     return (
         <div className="dashboard-view animate-fade-in">
@@ -59,16 +90,16 @@ export default function DashboardView() {
                                 cy="60"
                             />
                             <circle
-                                className="progress-ring-circle"
+                                className="progress-ring-circle progress-ring-circle-animated"
                                 stroke="var(--accent-primary)"
                                 strokeWidth="8"
                                 fill="transparent"
-                                r="52"
+                                r={CIRCLE_R}
                                 cx="60"
                                 cy="60"
                                 style={{
-                                    strokeDasharray: `${2 * Math.PI * 52} ${2 * Math.PI * 52}`,
-                                    strokeDashoffset: (2 * Math.PI * 52) - ((completionRate / 100) * (2 * Math.PI * 52))
+                                    strokeDasharray: `${CIRCLE_CIRCUMFERENCE} ${CIRCLE_CIRCUMFERENCE}`,
+                                    strokeDashoffset: CIRCLE_CIRCUMFERENCE - (animatedRate / 100) * CIRCLE_CIRCUMFERENCE
                                 }}
                             />
                         </svg>
@@ -78,7 +109,7 @@ export default function DashboardView() {
                         </div>
                     </div>
                     <div className="stat-footer">
-                        <span>{completedTasks} de {totalTasks} tarefas</span>
+                        <span>{completedSubtasks} de {totalSubtasks} subtarefas</span>
                     </div>
                 </div>
 

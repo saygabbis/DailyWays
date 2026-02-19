@@ -29,6 +29,10 @@ export default function BoardView({ onCardClick }) {
         if (!destination) return;
         if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
+        const sourceList = board.lists.find(l => l.id === source.droppableId);
+        const destList = board.lists.find(l => l.id === destination.droppableId);
+        const movedCard = sourceList?.cards[source.index];
+
         dispatch({
             type: 'MOVE_CARD',
             payload: {
@@ -39,6 +43,23 @@ export default function BoardView({ onCardClick }) {
                 destIndex: destination.index,
             },
         });
+
+        if (destList?.isCompletionList && movedCard?.subtasks?.length > 0) {
+            const allDone = movedCard.subtasks.every(st => st.done);
+            if (!allDone) {
+                dispatch({
+                    type: 'UPDATE_CARD',
+                    payload: {
+                        boardId: board.id,
+                        listId: destination.droppableId,
+                        cardId: movedCard.id,
+                        updates: {
+                            subtasks: movedCard.subtasks.map(st => ({ ...st, done: true })),
+                        },
+                    },
+                });
+            }
+        }
     };
 
     const handleAddList = (e) => {

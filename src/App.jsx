@@ -19,11 +19,11 @@ import './App.css';
 function AppContent() {
   const { getActiveBoard } = useApp();
   const [activeView, setActiveView] = useState('myday');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
   const [selectedCard, setSelectedCard] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
 
   useEffect(() => {
     const handleResize = () => setIsDesktop(window.innerWidth > 768);

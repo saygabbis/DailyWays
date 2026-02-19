@@ -12,7 +12,7 @@ import './Sidebar.css';
 
 export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isDesktop }) {
     const { user, confirmLogout } = useAuth();
-    const { state, dispatch, getMyDayCards, getImportantCards, getPlannedCards, DEFAULT_BOARD_COLORS } = useApp();
+    const { state, dispatch, getMyDayCards, getImportantCards, getPlannedCards, DEFAULT_BOARD_COLORS, updateBoardAndPersist } = useApp();
     const { showContextMenu } = useContextMenu();
     const { setIsOpen: setPomodoroOpen } = usePomodoro();
     const [showNewBoard, setShowNewBoard] = useState(false);
@@ -100,7 +100,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
             action: () => {
                 const newTitle = prompt('Novo nome do board:', board.title);
                 if (newTitle?.trim()) {
-                    dispatch({ type: 'UPDATE_BOARD', payload: { id: board.id, updates: { title: newTitle.trim() } } });
+                    updateBoardAndPersist(board.id, { title: newTitle.trim() });
                 }
             },
         },
@@ -111,7 +111,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 const nextColor = DEFAULT_BOARD_COLORS[
                     (DEFAULT_BOARD_COLORS.indexOf(board.color) + 1) % DEFAULT_BOARD_COLORS.length
                 ];
-                dispatch({ type: 'UPDATE_BOARD', payload: { id: board.id, updates: { color: nextColor } } });
+                updateBoardAndPersist(board.id, { color: nextColor });
             },
         },
         {
@@ -217,9 +217,9 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                         </div>
                     </div>
 
-                    {/* OTHERS section */}
-                    <nav className="sidebar-nav sidebar-others">
-                        <div className="sidebar-section-label">OUTROS</div>
+                    {/* RECURSOS section */}
+                    <nav className="sidebar-nav">
+                        <div className="sidebar-section-label">RECURSOS</div>
                         <button
                             className="sidebar-item"
                             onClick={() => setPomodoroOpen(true)}
@@ -229,6 +229,11 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                             </span>
                             <span>Modo Foco</span>
                         </button>
+                    </nav>
+
+                    {/* OTHERS section */}
+                    <nav className="sidebar-nav sidebar-others">
+                        <div className="sidebar-section-label">OUTROS</div>
                         {othersItems.map(item => (
                             <button
                                 key={item.id}
