@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useContextMenu, useLongPress } from '../Common/ContextMenu';
 import { Calendar, CheckSquare, AlertCircle, Sun, Edit3, Trash2, Star, Tag, Copy, ArrowRight } from 'lucide-react';
@@ -5,7 +6,7 @@ import { format, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function BoardCard({ card, boardId, listId, isDragging, onClick }) {
-    const { LABEL_COLORS, dispatch } = useApp();
+    const { LABEL_COLORS, dispatch, showConfirm } = useApp();
     const { showContextMenu } = useContextMenu();
 
     const doneSubtasks = card.subtasks.filter(st => st.done).length;
@@ -76,10 +77,20 @@ export default function BoardCard({ card, boardId, listId, isDragging, onClick }
             label: 'Deletar tarefa',
             icon: <Trash2 size={15} />,
             danger: true,
-            action: () => dispatch({
-                type: 'DELETE_CARD',
-                payload: { boardId, listId, cardId: card.id },
-            }),
+            action: async () => {
+                const confirmed = await showConfirm({
+                    title: 'Deletar Tarefa',
+                    message: `Tem certeza que deseja deletar "${card.title}"?`,
+                    confirmLabel: 'Deletar',
+                    type: 'danger'
+                });
+                if (confirmed) {
+                    dispatch({
+                        type: 'DELETE_CARD',
+                        payload: { boardId, listId, cardId: card.id },
+                    });
+                }
+            },
         },
     ];
 
@@ -89,6 +100,15 @@ export default function BoardCard({ card, boardId, listId, isDragging, onClick }
 
     const longPressProps = useLongPress(handleContextMenu);
 
+    // Animation auto-cleanup to prevent restart on DND portal remount
+    const [shouldAnimate, setShouldAnimate] = useState(true);
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setShouldAnimate(false);
+        }, 600);
+        return () => clearTimeout(timer);
+    }, []);
+
     return (
         <div
             className={`board-card ${isDragging ? 'board-card-dragging' : ''} ${allDone ? 'board-card-done' : ''}`}
@@ -96,68 +116,70 @@ export default function BoardCard({ card, boardId, listId, isDragging, onClick }
             onContextMenu={handleContextMenu}
             {...longPressProps}
         >
-            {/* Labels */}
-            {card.labels.length > 0 && (
-                <div className="board-card-labels">
-                    {card.labels.map(labelId => {
-                        const label = LABEL_COLORS.find(l => l.id === labelId);
-                        return label ? (
-                            <span
-                                key={labelId}
-                                className="board-card-label"
-                                style={{ background: label.color }}
-                                title={label.name}
-                            />
-                        ) : null;
-                    })}
+            <div className={`board-card-inner ${shouldAnimate ? 'animate-slide-up-jelly' : ''}`}>
+                {/* Labels */}
+                {card.labels.length > 0 && (
+                    <div className="board-card-labels">
+                        {card.labels.map(labelId => {
+                            const label = LABEL_COLORS.find(l => l.id === labelId);
+                            return label ? (
+                                <span
+                                    key={labelId}
+                                    className="board-card-label"
+                                    style={{ background: label.color }}
+                                    title={label.name}
+                                />
+                            ) : null;
+                        })}
+                    </div>
+                )}
+
+                {/* Title */}
+                <div className="board-card-title">{card.title}</div>
+
+                {/* Meta */}
+                <div className="board-card-meta">
+                    {card.priority && card.priority !== 'none' && (
+                        <span className="board-card-priority" style={{ color: priorityConfig[card.priority]?.color }}>
+                            <AlertCircle size={12} />
+                            {priorityConfig[card.priority]?.label}
+                        </span>
+                    )}
+
+                    {card.dueDate && (
+                        <span className={`board-card-due ${isOverdue ? 'overdue' : ''} ${isToday(new Date(card.dueDate)) ? 'today' : ''}`}>
+                            <Calendar size={12} />
+                            {format(new Date(card.dueDate), 'dd MMM', { locale: ptBR })}
+                        </span>
+                    )}
+
+                    {card.myDay && (
+                        <span className="board-card-myday">
+                            <Sun size={12} />
+                        </span>
+                    )}
+
+                    {hasSubtasks && (
+                        <span className={`board-card-subtasks ${allDone ? 'all-done' : ''}`}>
+                            <CheckSquare size={12} />
+                            {doneSubtasks}/{totalSubtasks}
+                        </span>
+                    )}
                 </div>
-            )}
 
-            {/* Title */}
-            <div className="board-card-title">{card.title}</div>
-
-            {/* Meta */}
-            <div className="board-card-meta">
-                {card.priority && card.priority !== 'none' && (
-                    <span className="board-card-priority" style={{ color: priorityConfig[card.priority]?.color }}>
-                        <AlertCircle size={12} />
-                        {priorityConfig[card.priority]?.label}
-                    </span>
-                )}
-
-                {card.dueDate && (
-                    <span className={`board-card-due ${isOverdue ? 'overdue' : ''} ${isToday(new Date(card.dueDate)) ? 'today' : ''}`}>
-                        <Calendar size={12} />
-                        {format(new Date(card.dueDate), 'dd MMM', { locale: ptBR })}
-                    </span>
-                )}
-
-                {card.myDay && (
-                    <span className="board-card-myday">
-                        <Sun size={12} />
-                    </span>
-                )}
-
+                {/* Progress bar for subtasks */}
                 {hasSubtasks && (
-                    <span className={`board-card-subtasks ${allDone ? 'all-done' : ''}`}>
-                        <CheckSquare size={12} />
-                        {doneSubtasks}/{totalSubtasks}
-                    </span>
+                    <div className="board-card-progress">
+                        <div
+                            className="board-card-progress-bar"
+                            style={{
+                                width: `${(doneSubtasks / totalSubtasks) * 100}%`,
+                                background: allDone ? 'var(--success)' : 'var(--accent-gradient)',
+                            }}
+                        />
+                    </div>
                 )}
             </div>
-
-            {/* Progress bar for subtasks */}
-            {hasSubtasks && (
-                <div className="board-card-progress">
-                    <div
-                        className="board-card-progress-bar"
-                        style={{
-                            width: `${(doneSubtasks / totalSubtasks) * 100}%`,
-                            background: allDone ? 'var(--success)' : 'var(--accent-gradient)',
-                        }}
-                    />
-                </div>
-            )}
         </div>
     );
 }

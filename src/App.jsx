@@ -12,14 +12,16 @@ import DashboardView from './components/Dashboard/DashboardView';
 import TaskDetailModal from './components/TaskDetail/TaskDetailModal';
 import SettingsModal from './components/Settings/SettingsView';
 import SearchOverlay from './components/Search/SearchOverlay';
+import ConfirmModal from './components/Common/ConfirmModal';
 import PomodoroTimer from './components/Pomodoro/PomodoroTimer';
+import FloatingSaveButton from './components/Common/FloatingSaveButton';
 import { useContextMenu } from './components/Common/ContextMenu';
 import { LayoutDashboard, Sun, Star, CalendarDays, Search, Settings, PanelLeft, Maximize, Plus } from 'lucide-react';
 import './styles/global.css';
 import './App.css';
 
 function AppContent() {
-  const { getActiveBoard } = useApp();
+  const { getActiveBoard, confirmConfig } = useApp();
   const [activeView, setActiveView] = useState(() => localStorage.getItem('dailyways_active_view') || 'myday');
   const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
@@ -173,11 +175,11 @@ function AppContent() {
         />
 
         <div className="app-content">
-          {activeView === 'dashboard' && <DashboardView />}
-          {activeView === 'myday' && <MyDayView onCardClick={handleCardClick} />}
-          {activeView === 'important' && <ImportantView onCardClick={handleCardClick} />}
-          {activeView === 'planned' && <PlannedView onCardClick={handleCardClick} />}
-          {activeView === 'board' && <BoardView onCardClick={handleCardClick} />}
+          {activeView === 'dashboard' && <DashboardView key="dashboard" />}
+          {activeView === 'myday' && <MyDayView key="myday" onCardClick={handleCardClick} />}
+          {activeView === 'important' && <ImportantView key="important" onCardClick={handleCardClick} />}
+          {activeView === 'planned' && <PlannedView key="planned" onCardClick={handleCardClick} />}
+          {activeView === 'board' && activeBoard && <BoardView key={`board-${activeBoard.id}`} onCardClick={handleCardClick} />}
           {activeView === 'help' && (
             <div style={{ padding: 'var(--space-xl)', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '80px' }}>
               <h2 style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🤝 Central de Ajuda</h2>
@@ -196,6 +198,9 @@ function AppContent() {
       {/* Pomodoro Focus Timer */}
       <PomodoroTimer />
 
+      {/* Floating save button — shown when there are unsaved local changes */}
+      <FloatingSaveButton />
+
       {/* Task detail floating modal */}
       {selectedCard && (
         <TaskDetailModal
@@ -205,6 +210,9 @@ function AppContent() {
           onClose={() => setSelectedCard(null)}
         />
       )}
+
+      {/* Global Confirmation Modal */}
+      {confirmConfig && <ConfirmModal {...confirmConfig} />}
     </div>
   );
 }

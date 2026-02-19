@@ -79,7 +79,7 @@ export default function SearchOverlay({ onClose, onCardClick }) {
     return (
         <>
             <div className="modal-backdrop" onClick={onClose} />
-            <div className="search-overlay animate-scale-in">
+            <div className="search-overlay animate-scale-in-centered">
                 {/* Search input */}
                 <div className="search-overlay-header">
                     <Search size={20} className="search-overlay-icon" />

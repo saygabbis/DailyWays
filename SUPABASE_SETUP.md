@@ -61,3 +61,27 @@ Você **pode usar seu e-mail pessoal** (ex.: gaffonsoxx@gmail.com) ou criar uma 
    - Se ainda der erro: confira que no Azure a Redirect URI está **exatamente** igual à que o Supabase mostra no painel do provider Azure (copie/cole).
 
 Depois disso, o app estará pronto para uso.
+
+---
+
+### Realtime — Sincronização entre abas / usuários
+
+Para que o app sincronize automaticamente boards entre duas abas abertas simultaneamente (ou entre usuários diferentes com acesso ao mesmo board), as tabelas precisam fazer parte da publicação `supabase_realtime`.
+
+**Opção A — via migration (recomendado)**
+
+No **SQL Editor** do Supabase, execute:
+
+```
+supabase/migrations/20250219100000_realtime_publication.sql
+```
+
+O script usa blocos `DO/EXCEPTION` e é idempotente (pode ser re-executado sem erro).
+
+**Opção B — pelo Dashboard**
+
+1. Acesse **Database → Replication** no painel Supabase.
+2. Em **"supabase_realtime"**, clique em **"0 tables"** (ou no número atual).
+3. Ative os toggles para `boards`, `lists`, `cards` e `subtasks`.
+
+> **Nota:** RLS continua aplicado ao Realtime — cada usuário só recebe eventos das linhas que tem permissão de ler.

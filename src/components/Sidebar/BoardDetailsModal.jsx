@@ -29,7 +29,7 @@ export default function BoardDetailsModal({ board, onClose }) {
     return (
         <>
             <div className="modal-backdrop" onClick={onClose} />
-            <div className="modal-content board-details-modal animate-scale-in">
+            <div className="modal-content board-details-modal animate-scale-in-centered">
                 <div className="modal-header">
                     <h3>Detalhes do Board</h3>
                     <button className="btn-icon" onClick={onClose}><X size={20} /></button>

@@ -7,7 +7,7 @@ import {
 import './TaskDetail.css';
 
 export default function TaskDetailModal({ card, boardId, listId, onClose }) {
-    const { dispatch, LABEL_COLORS, state, persistBoard } = useApp();
+    const { dispatch, LABEL_COLORS, state, persistBoard, showConfirm } = useApp();
 
     // Get the LIVE card data from state (not the stale prop)
     const liveCard = (() => {
@@ -67,10 +67,19 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         return () => clearTimeout(timeout);
     }, [title, description, priority, dueDate, myDay, labels]);
 
-    const handleDelete = () => {
-        dispatch({ type: 'DELETE_CARD', payload: { boardId, listId, cardId: card.id } });
-        persistBoard(boardId);
-        onClose();
+    const handleDelete = async () => {
+        const confirmed = await showConfirm({
+            title: 'Deletar Tarefa',
+            message: `Tem certeza que deseja deletar "${card.title}"?`,
+            confirmLabel: 'Deletar',
+            type: 'danger'
+        });
+
+        if (confirmed) {
+            dispatch({ type: 'DELETE_CARD', payload: { boardId, listId, cardId: card.id } });
+            persistBoard(boardId);
+            onClose();
+        }
     };
 
     const toggleLabel = (labelId) => {
@@ -170,7 +179,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     return (
         <>
             <div className="modal-backdrop" onClick={onClose} />
-            <div className="task-detail-modal animate-scale-in">
+            <div className="task-detail-modal animate-scale-in-centered">
                 {/* Header */}
                 <div className="task-detail-header">
                     <h2>Detalhes da Tarefa</h2>
@@ -249,7 +258,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                         </div>
 
                         {/* Priority */}
-                        <div className="task-detail-field">
+                        <div className="task-detail-field full-width">
                             <label><AlertCircle size={15} /> Prioridade</label>
                             <div className="task-detail-priority-grid">
                                 {priorities.map(p => (
@@ -293,7 +302,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
 
                         {/* Add Label Popover */}
                         {showAddLabel && (
-                            <div className="label-popover animate-scale-in">
+                            <div className="label-popover animate-pop-in">
                                 <input
                                     type="text"
                                     placeholder="Nome da etiqueta..."

@@ -58,7 +58,7 @@ export default function DashboardView() {
         .slice(0, 5);
 
     return (
-        <div className="dashboard-view animate-fade-in">
+        <div className="dashboard-view animate-slide-up">
             {/* Hero */}
             <div className="dashboard-hero">
                 <div className="dashboard-hero-content">
@@ -73,7 +73,7 @@ export default function DashboardView() {
             {/* Stats Grid */}
             <div className="dashboard-grid">
                 {/* Main Progress */}
-                <div className="stat-card stat-progress">
+                <div className="stat-card stat-progress animate-slide-up" style={{ animationDelay: '100ms' }}>
                     <div className="stat-header">
                         <span className="stat-title">Progresso Total</span>
                         <BarChart2 size={16} />
@@ -115,7 +115,7 @@ export default function DashboardView() {
 
                 {/* Counts */}
                 <div className="dashboard-column">
-                    <div className="stat-card stat-highlight">
+                    <div className="stat-card stat-highlight animate-slide-up" style={{ animationDelay: '200ms' }}>
                         <div className="stat-icon-bg" style={{ background: 'var(--priority-urgent)' }}>
                             <AlertCircle size={24} color="white" />
                         </div>
@@ -124,7 +124,7 @@ export default function DashboardView() {
                             <span className="stat-label">Urgentes</span>
                         </div>
                     </div>
-                    <div className="stat-card stat-highlight">
+                    <div className="stat-card stat-highlight animate-slide-up" style={{ animationDelay: '300ms' }}>
                         <div className="stat-icon-bg" style={{ background: 'var(--priority-high)' }}>
                             <AlertCircle size={24} color="white" />
                         </div>
@@ -133,7 +133,7 @@ export default function DashboardView() {
                             <span className="stat-label">Alta Prioridade</span>
                         </div>
                     </div>
-                    <div className="stat-card stat-highlight">
+                    <div className="stat-card stat-highlight animate-slide-up" style={{ animationDelay: '400ms' }}>
                         <div className="stat-icon-bg" style={{ background: 'var(--accent-primary)' }}>
                             <Clock size={24} color="white" />
                         </div>
@@ -152,8 +152,8 @@ export default function DashboardView() {
                     {recentlyCompleted.length === 0 ? (
                         <div className="empty-recents">Nenhuma tarefa concluída recentemente</div>
                     ) : (
-                        recentlyCompleted.map(card => (
-                            <div key={card.id} className="recent-item">
+                        recentlyCompleted.map((card, i) => (
+                            <div key={card.id} className="recent-item animate-slide-up" style={{ animationDelay: `${500 + i * 50}ms` }}>
                                 <CheckCircle2 size={16} className="recent-check" />
                                 <span className="recent-title">{card.title}</span>
                                 <span className="recent-date">

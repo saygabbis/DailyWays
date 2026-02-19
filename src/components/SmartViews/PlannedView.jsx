@@ -48,16 +48,17 @@ export default function PlannedView({ onCardClick }) {
                     {icon} {title} <span className="smart-group-count">{items.length}</span>
                 </h3>
                 <div className="smart-tasks-list">
-                    {items.map(card => (
-                        <SmartTaskItem
-                            key={card.id}
-                            card={card}
-                            board={{ id: card.boardId, title: card.boardTitle, emoji: card.boardEmoji }}
-                            list={{ id: card.listId, title: card.listTitle }}
-                            onClick={() => onCardClick(card, card.boardId, card.listId)}
-                            onToggleImportant={() => toggleImportant(card)}
-                            showLocation={true}
-                        />
+                    {items.map((card, i) => (
+                        <div key={card.id} className="animate-slide-up" style={{ animationDelay: `${i * 50}ms` }}>
+                            <SmartTaskItem
+                                card={card}
+                                board={{ id: card.boardId, title: card.boardTitle, emoji: card.boardEmoji }}
+                                list={{ id: card.listId, title: card.listTitle }}
+                                onClick={() => onCardClick(card, card.boardId, card.listId)}
+                                onToggleImportant={() => toggleImportant(card)}
+                                showLocation={true}
+                            />
+                        </div>
                     ))}
                 </div>
             </div>
@@ -65,7 +66,7 @@ export default function PlannedView({ onCardClick }) {
     };
 
     return (
-        <div className="smart-view">
+        <div className="smart-view animate-slide-up">
             <div className="smart-hero planned-hero">
                 <div className="smart-hero-content">
                     <h1>Planejado</h1>

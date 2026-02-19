@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
+import { insertBoardFull, deleteBoard } from '../../services/boardService';
 import { useContextMenu, useLongPress } from '../Common/ContextMenu';
 import { usePomodoro } from '../../context/PomodoroContext';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -18,7 +19,8 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
     const {
         state, dispatch, getMyDayCards, getImportantCards, getPlannedCards,
         DEFAULT_BOARD_COLORS, updateBoardAndPersist, updateBoardAndPersistImmediate,
-        updateBoardsOrder, persistBoard, getActiveBoard
+        updateBoardsOrder, persistBoard, getActiveBoard, isSavingBoard, suppressRealtime,
+        showConfirm,
     } = useApp();
     const { showContextMenu } = useContextMenu();
     const { toggleOpen } = usePomodoro();
@@ -78,13 +80,33 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         { id: 'help', label: 'Central de Ajuda', icon: HelpCircle },
     ];
 
-    const handleAddBoard = (e) => {
+    const handleAddBoard = async (e) => {
         e.preventDefault();
         if (!newBoardTitle.trim()) return;
-        dispatch({ type: 'ADD_BOARD', payload: { title: newBoardTitle } });
+
+        // Criar o board com IDs definitivos (mesmo id que vai ao Supabase)
+        const newBoard = {
+            id: crypto.randomUUID(),
+            title: newBoardTitle.trim(),
+            color: DEFAULT_BOARD_COLORS[Math.floor(Math.random() * DEFAULT_BOARD_COLORS.length)],
+            emoji: '📋',
+            createdAt: new Date().toISOString(),
+            lists: [
+                { id: crypto.randomUUID(), title: 'A Fazer', color: null, isCompletionList: false, cards: [] },
+                { id: crypto.randomUUID(), title: 'Em Progresso', color: null, isCompletionList: false, cards: [] },
+                { id: crypto.randomUUID(), title: 'Concluído', color: null, isCompletionList: true, cards: [] },
+            ],
+        };
+
+        // Estado local imediato (otimismo) — ADD_BOARD usará o mesmo id e listas
+        dispatch({ type: 'ADD_BOARD', payload: newBoard });
         setNewBoardTitle('');
         setShowNewBoard(false);
         onViewChange('board');
+
+        // Persistir no servidor
+        if (suppressRealtime) suppressRealtime(3000);
+        await insertBoardFull(user.id, { ...newBoard, position: state.boards.length });
     };
 
     const handleBoardClick = (boardId) => {
@@ -98,9 +120,16 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         if (!isDesktop) onClose?.();
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         onClose?.();
-        confirmLogout();
+        const confirmed = await showConfirm({
+            title: 'Sair da Conta',
+            message: 'Tem certeza que deseja encerrar sua sessão?',
+            confirmLabel: 'Sair',
+            cancelLabel: 'Manter conectado',
+            type: 'danger'
+        });
+        if (confirmed) logout();
     };
 
     const handleDragEnd = async (result) => {
@@ -151,16 +180,45 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         {
             label: 'Duplicar',
             icon: <Copy size={15} />,
-            action: () => dispatch({ type: 'DUPLICATE_BOARD', payload: board.id }),
+            action: async () => {
+                // Gerar todos os IDs novos antes, assim dispatch e Supabase usam os MESMOS IDs
+                const dup = {
+                    ...JSON.parse(JSON.stringify(board)),
+                    id: crypto.randomUUID(),
+                    title: `${board.title} (cópia)`,
+                    createdAt: new Date().toISOString(),
+                    lists: board.lists.map(l => ({
+                        ...l,
+                        id: crypto.randomUUID(),
+                        cards: l.cards.map(c => ({
+                            ...c,
+                            id: crypto.randomUUID(),
+                            subtasks: (c.subtasks || []).map(st => ({ ...st, id: crypto.randomUUID() })),
+                        })),
+                    })),
+                };
+                // ADD_BOARD com os IDs já definidos (não gera novos IDs internamente)
+                dispatch({ type: 'ADD_BOARD', payload: dup });
+                if (suppressRealtime) suppressRealtime(3000);
+                await insertBoardFull(user.id, { ...dup, position: state.boards.length + 1 });
+            },
         },
         { type: 'divider' },
         {
             label: 'Deletar board',
             icon: <Trash2 size={15} />,
             danger: true,
-            action: () => {
-                if (confirm(`Deletar "${board.title}"?`)) {
+            action: async () => {
+                const confirmed = await showConfirm({
+                    title: 'Deletar Board',
+                    message: `Tem certeza que deseja deletar o board "${board.title}"? Esta ação não pode ser desfeita.`,
+                    confirmLabel: 'Deletar',
+                    type: 'danger'
+                });
+                if (confirmed) {
                     dispatch({ type: 'DELETE_BOARD', payload: board.id });
+                    if (suppressRealtime) suppressRealtime(3000);
+                    await deleteBoard(board.id);
                 }
             },
         },

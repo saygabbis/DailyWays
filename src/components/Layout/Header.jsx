@@ -1,14 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Menu, X, Bell, Settings, User, LogOut, ChevronDown } from 'lucide-react';
+import { Search, Menu, X, Bell, Settings, User, LogOut, ChevronDown, Layout } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 import NotificationDropdown from '../Notifications/NotificationDropdown';
 import './Header.css';
 
 export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOpenSettings, onOpenSearch }) {
     const { user, confirmLogout } = useAuth();
+    const { getActiveBoard, showBoardToolbar, dispatch } = useApp();
     const [showProfile, setShowProfile] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
     const profileRef = useRef(null);
+
+    const activeBoard = getActiveBoard();
 
     const firstName = user?.name?.split(' ')[0] || 'Usuário';
 
@@ -66,7 +70,7 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                     </button>
 
                     {showProfile && (
-                        <div className="header-profile-dropdown animate-scale-in">
+                        <div className="header-profile-dropdown animate-pop-in">
                             <div className="header-profile-header">
                                 <div className="header-profile-avatar">{user?.avatar || firstName[0]}</div>
                                 <div>
@@ -83,6 +87,12 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                                 <User size={16} />
                                 <span>Minha Conta</span>
                             </button>
+                            {activeBoard && (
+                                <button className="header-profile-item" onClick={() => dispatch({ type: 'TOGGLE_BOARD_TOOLBAR' })}>
+                                    <Layout size={16} />
+                                    <span>{showBoardToolbar ? 'Ocultar Toolbar' : 'Mostrar Toolbar'}</span>
+                                </button>
+                            )}
                             <div className="header-profile-divider" />
                             <button className="header-profile-item header-profile-logout" onClick={confirmLogout}>
                                 <LogOut size={16} />

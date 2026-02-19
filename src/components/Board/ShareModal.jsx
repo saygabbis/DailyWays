@@ -38,7 +38,7 @@ export default function ShareModal({ onClose, boardTitle }) {
     return (
         <>
             <div className="modal-backdrop" onClick={onClose} />
-            <div className="share-modal animate-scale-in">
+            <div className="share-modal animate-scale-in-centered">
                 <div className="share-header">
                     <h2>Compartilhar "{boardTitle}"</h2>
                     <button className="btn-icon" onClick={onClose}><X size={20} /></button>

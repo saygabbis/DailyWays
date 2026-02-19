@@ -325,18 +325,18 @@ export async function updateBoardFull(userId, board) {
   console.log(`[boardService] upsertBoardFull (Smart): board "${board.title}" (${boardId})`);
 
   try {
-    // 1. Atualizar metadados do board
+    // 1. Atualizar metadados do board (usamos upsert em vez de update para ser resiliente a boards novos)
     const { error: upErr } = await supabase
       .from('boards')
-      .update({
+      .upsert({
+        id: boardId,
+        owner_id: userId,
         title: board.title,
         color: board.color,
         emoji: board.emoji,
         position: board.position ?? 0,
         updated_at: new Date().toISOString(),
-      })
-      .eq('id', boardId)
-      .eq('owner_id', userId);
+      });
 
     if (upErr) throw upErr;
 
@@ -366,13 +366,15 @@ export async function updateBoardFull(userId, board) {
 
     // 3. Identificar e deletar removidos (Sync reverso)
     // Deletar subtarefas órfãs
-    const { data: dbCards } = await supabase.from('cards').select('id').in('list_id', Array.from(payloadListIds));
-    const allDbCardIds = (dbCards ?? []).map(c => c.id);
-    if (allDbCardIds.length > 0) {
-      const { data: dbSubtasks } = await supabase.from('subtasks').select('id').in('card_id', allDbCardIds);
-      const subtasksToDelete = (dbSubtasks ?? []).filter(st => !payloadSubtaskIds.has(st.id)).map(st => st.id);
-      if (subtasksToDelete.length > 0) {
-        await supabase.from('subtasks').delete().in('id', subtasksToDelete);
+    if (payloadListIds.size > 0) {
+      const { data: dbCards } = await supabase.from('cards').select('id').in('list_id', Array.from(payloadListIds));
+      const allDbCardIds = (dbCards ?? []).map(c => c.id);
+      if (allDbCardIds.length > 0) {
+        const { data: dbSubtasks } = await supabase.from('subtasks').select('id').in('card_id', allDbCardIds);
+        const subtasksToDelete = (dbSubtasks ?? []).filter(st => !payloadSubtaskIds.has(st.id)).map(st => st.id);
+        if (subtasksToDelete.length > 0) {
+          await supabase.from('subtasks').delete().in('id', subtasksToDelete);
+        }
       }
     }
 
@@ -385,12 +387,12 @@ export async function updateBoardFull(userId, board) {
       if (cardsToDelete.length > 0) {
         await supabase.from('cards').delete().in('id', cardsToDelete);
       }
-    }
 
-    // Deletar listas órfãs
-    const listsToDelete = allDbListIds.filter(id => !payloadListIds.has(id));
-    if (listsToDelete.length > 0) {
-      await supabase.from('lists').delete().in('id', listsToDelete);
+      // Deletar listas órfãs
+      const listsToDelete = allDbListIds.filter(id => !payloadListIds.has(id));
+      if (listsToDelete.length > 0) {
+        await supabase.from('lists').delete().in('id', listsToDelete);
+      }
     }
 
     // 4. Batch Upsert (Apenas 3 chamadas para tudo)

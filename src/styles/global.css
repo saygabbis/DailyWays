@@ -202,6 +202,14 @@ textarea {
 }
 
 /* ── Select ── */
+button,
+a,
+input,
+select,
+textarea {
+    transition: all var(--transition-base);
+}
+
 select {
     font-family: var(--font-family);
     font-size: var(--font-size-base);
@@ -238,7 +246,66 @@ select option {
 @keyframes slideUp {
     from {
         opacity: 0;
-        transform: translateY(12px);
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideUpSolid {
+    from {
+        transform: translateY(16px);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+.animate-slide-up-solid {
+    animation: slideUpSolid var(--duration-slow) var(--ease-elastic) both;
+}
+
+@keyframes slideUpJelly {
+    0% {
+        transform: translateY(20px) scale(1, 1);
+        opacity: 0;
+    }
+
+    10% {
+        opacity: 1;
+        /* Instant opacity as per user request to remove fade-in */
+    }
+
+    40% {
+        transform: translateY(-2px) scale(1.02, 0.98);
+    }
+
+    60% {
+        transform: translateY(1px) scale(0.99, 1.01);
+    }
+
+    80% {
+        transform: translateY(-0.5px) scale(1.005, 0.995);
+    }
+
+    100% {
+        transform: translateY(0) scale(1, 1);
+        opacity: 1;
+    }
+}
+
+.animate-slide-up-jelly {
+    animation: slideUpJelly 0.6s var(--ease-out-soft) both;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-12px);
     }
 
     to {
@@ -272,12 +339,71 @@ select option {
 @keyframes scaleIn {
     from {
         opacity: 0;
-        transform: scale(0.95);
+        transform: scale(0.95) translateY(10px);
     }
 
     to {
         opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Specialized centered scale-in for modals to prevent displacement */
+@keyframes scaleInCentered {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@keyframes popIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+
+    70% {
+        transform: scale(1.05);
+    }
+
+    100% {
+        opacity: 1;
         transform: scale(1);
+    }
+}
+
+@keyframes jelly {
+    0% {
+        transform: scale(1, 1);
+    }
+
+    30% {
+        transform: scale(1.03, 0.97);
+    }
+
+    40% {
+        transform: scale(0.98, 1.02);
+    }
+
+    50% {
+        transform: scale(1.01, 0.99);
+    }
+
+    65% {
+        transform: scale(0.99, 1.01);
+    }
+
+    75% {
+        transform: scale(1.01, 0.99);
+    }
+
+    100% {
+        transform: scale(1, 1);
     }
 }
 
@@ -300,15 +426,31 @@ select option {
 }
 
 .animate-fade-in {
-    animation: fadeIn var(--transition-base) ease-out;
+    animation: fadeIn var(--duration-base) var(--ease-out-soft) both;
 }
 
 .animate-slide-up {
-    animation: slideUp var(--transition-base) ease-out;
+    animation: slideUp var(--duration-slow) var(--ease-elastic) both;
+}
+
+.animate-slide-down {
+    animation: slideDown var(--duration-slow) var(--ease-elastic) both;
 }
 
 .animate-scale-in {
-    animation: scaleIn var(--transition-spring) ease-out;
+    animation: scaleIn var(--duration-base) var(--ease-elastic) both;
+}
+
+.animate-scale-in-centered {
+    animation: scaleInCentered var(--duration-base) var(--ease-elastic) both;
+}
+
+.animate-pop-in {
+    animation: popIn 0.3s var(--ease-spring) both;
+}
+
+.animate-jelly {
+    animation: jelly 0.5s var(--ease-in-out-soft) both;
 }
 
 /* ── Modal Backdrop ── */

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { useApp } from '../../context/AppContext';
 import { useContextMenu, useLongPress } from '../Common/ContextMenu';
@@ -6,15 +7,14 @@ import BoardCard from './BoardCard';
 import ListDetailsModal from './ListDetailsModal';
 import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy, Settings2 } from 'lucide-react';
 
-export default function BoardList({ list, boardId, onCardClick }) {
-    const { dispatch, state } = useApp();
+export default function BoardList({ list, boardId, onCardClick, index, onOpenListDetails, dragHandleProps }) {
+    const { dispatch, state, persistBoard, showConfirm } = useApp();
     const { showContextMenu } = useContextMenu();
     const [addingCard, setAddingCard] = useState(false);
     const [newCardTitle, setNewCardTitle] = useState('');
     const [showMenu, setShowMenu] = useState(false);
     const [editing, setEditing] = useState(false);
     const [editTitle, setEditTitle] = useState(list.title);
-    const [showListDetails, setShowListDetails] = useState(false);
 
     const searchQuery = state.searchQuery?.toLowerCase() || '';
 
@@ -35,23 +35,36 @@ export default function BoardList({ list, boardId, onCardClick }) {
             type: 'ADD_CARD',
             payload: { boardId, listId: list.id, title: newCardTitle },
         });
+        persistBoard(boardId);
         setNewCardTitle('');
         setAddingCard(false);
     };
 
-    const handleDeleteList = () => {
-        dispatch({ type: 'DELETE_LIST', payload: { boardId, listId: list.id } });
+    const handleDeleteList = async () => {
+        const confirmed = await showConfirm({
+            title: 'Deletar Lista',
+            message: `Tem certeza que deseja deletar a lista "${list.title}"? Todas as tarefas dentro dela serão removidas permanentemente.`,
+            confirmLabel: 'Deletar',
+            type: 'danger'
+        });
+
+        if (confirmed) {
+            dispatch({ type: 'DELETE_LIST', payload: { boardId, listId: list.id } });
+            persistBoard(boardId);
+        }
         setShowMenu(false);
     };
 
     const handleRenameList = (e) => {
         e.preventDefault();
         dispatch({ type: 'UPDATE_LIST', payload: { boardId, listId: list.id, updates: { title: editTitle } } });
+        persistBoard(boardId);
         setEditing(false);
     };
 
     const handleSaveListDetails = (updates) => {
         dispatch({ type: 'UPDATE_LIST', payload: { boardId, listId: list.id, updates } });
+        persistBoard(boardId);
         if (updates.title !== undefined) setEditTitle(updates.title);
         setShowListDetails(false);
     };
@@ -61,7 +74,7 @@ export default function BoardList({ list, boardId, onCardClick }) {
         {
             label: 'Detalhes da lista',
             icon: <Settings2 size={15} />,
-            action: () => setShowListDetails(true),
+            action: () => onOpenListDetails(list),
         },
         {
             label: 'Renomear lista',
@@ -80,6 +93,7 @@ export default function BoardList({ list, boardId, onCardClick }) {
                     type: 'UPDATE_LIST',
                     payload: { boardId, listId: list.id, updates: { cards: sortedCards } },
                 });
+                persistBoard(boardId);
             },
         },
         { type: 'divider' },
@@ -97,113 +111,132 @@ export default function BoardList({ list, boardId, onCardClick }) {
 
     const longPressProps = useLongPress(handleListContextMenu);
 
+    // Animation auto-cleanup for the list
+    const [shouldAnimate, setShouldAnimate] = useState(true);
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setShouldAnimate(false);
+        }, 800); // Slightly longer than cards to account for stagger delays
+        return () => clearTimeout(timer);
+    }, []);
+
     return (
         <div
             className="board-list"
             onContextMenu={handleListContextMenu}
             {...longPressProps}
-            style={list.color ? { borderLeftColor: list.color, borderLeftWidth: 4, borderLeftStyle: 'solid' } : undefined}
+            style={{
+                ...list.color ? { borderLeftColor: list.color, borderLeftWidth: 4, borderLeftStyle: 'solid' } : {}
+            }}
         >
-            {/* List Header */}
-            <div className="board-list-header">
-                {editing ? (
-                    <form onSubmit={handleRenameList} className="board-list-rename">
-                        <input
-                            value={editTitle}
-                            onChange={e => setEditTitle(e.target.value)}
-                            autoFocus
-                            onBlur={handleRenameList}
-                        />
-                    </form>
-                ) : (
-                    <h3 className="board-list-title" onClick={() => setEditing(true)} style={{ cursor: 'pointer' }}>
-                        {list.title}
-                        <span className="board-list-count">{list.cards.length}</span>
-                    </h3>
-                )}
-                <div className="board-list-actions">
-                    <button className="btn-icon btn-sm" onClick={() => setShowMenu(!showMenu)}>
-                        <MoreHorizontal size={16} />
-                    </button>
-                    {showMenu && (
-                        <div className="board-list-menu animate-scale-in">
-                            <button onClick={() => { setEditing(true); setShowMenu(false); }}>
-                                <Edit3 size={14} /> Renomear
-                            </button>
-                            <button onClick={handleDeleteList} className="danger">
-                                <Trash2 size={14} /> Deletar lista
-                            </button>
+            <div
+                className={`board-list-inner ${shouldAnimate ? 'animate-slide-up' : ''}`}
+                style={{
+                    animationDelay: list.isNew ? '0ms' : `${Math.min(index, 6) * 50}ms`
+                }}
+            >
+                {/* List Header */}
+                <div className="board-list-header" {...dragHandleProps}>
+                    {editing ? (
+                        <form onSubmit={handleRenameList} className="board-list-rename">
+                            <input
+                                value={editTitle}
+                                onChange={e => setEditTitle(e.target.value)}
+                                autoFocus
+                                onBlur={handleRenameList}
+                            />
+                        </form>
+                    ) : (
+                        <h3 className="board-list-title" onClick={() => setEditing(true)} style={{ cursor: 'pointer' }}>
+                            {list.title}
+                            <span className="board-list-count">{list.cards.length}</span>
+                        </h3>
+                    )}
+                    <div className="board-list-actions">
+                        <button className="btn-icon btn-sm" onClick={() => setShowMenu(!showMenu)}>
+                            <MoreHorizontal size={16} />
+                        </button>
+                        {showMenu && (
+                            <div className="board-list-menu animate-pop-in">
+                                <button onClick={() => { setEditing(true); setShowMenu(false); }}>
+                                    <Edit3 size={14} /> Renomear
+                                </button>
+                                <button onClick={handleDeleteList} className="danger">
+                                    <Trash2 size={14} /> Deletar lista
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Cards */}
+                <Droppable droppableId={list.id}>
+                    {(provided, snapshot) => (
+                        <div
+                            className={`board-list-cards ${snapshot.isDraggingOver ? 'dragging-over' : ''}`}
+                            ref={provided.innerRef}
+                            {...provided.droppableProps}
+                        >
+                            {filteredCards.map((card, index) => (
+                                <Draggable key={card.id} draggableId={card.id} index={index}>
+                                    {(provided, snapshot) => {
+                                        const cardContent = (
+                                            <div
+                                                ref={provided.innerRef}
+                                                {...provided.draggableProps}
+                                                {...provided.dragHandleProps}
+                                                style={{
+                                                    ...provided.draggableProps.style,
+                                                    cursor: snapshot.isDragging ? 'grabbing' : 'pointer',
+                                                }}
+                                            >
+                                                <BoardCard
+                                                    card={card}
+                                                    boardId={boardId}
+                                                    listId={list.id}
+                                                    isDragging={snapshot.isDragging}
+                                                    onClick={() => onCardClick(card, boardId, list.id)}
+                                                />
+                                            </div>
+                                        );
+
+                                        if (snapshot.isDragging) {
+                                            return ReactDOM.createPortal(cardContent, document.body);
+                                        }
+                                        return cardContent;
+                                    }}
+                                </Draggable>
+                            ))}
+                            {provided.placeholder}
                         </div>
+                    )}
+                </Droppable>
+
+                {/* Add Card */}
+                <div className="board-list-footer">
+                    {addingCard ? (
+                        <form onSubmit={handleAddCard} className="board-add-card-form animate-slide-up-jelly">
+                            <input
+                                type="text"
+                                placeholder="Título da tarefa..."
+                                value={newCardTitle}
+                                onChange={e => setNewCardTitle(e.target.value)}
+                                autoFocus
+                                onBlur={() => { if (!newCardTitle.trim()) setAddingCard(false); }}
+                            />
+                            <div className="board-add-card-actions">
+                                <button type="submit" className="btn btn-primary btn-sm">Adicionar</button>
+                                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAddingCard(false)}>✕</button>
+                            </div>
+                        </form>
+                    ) : (
+                        <button className="board-add-card-btn" onClick={() => setAddingCard(true)}>
+                            <Plus size={16} />
+                            <span>Adicionar tarefa</span>
+                        </button>
                     )}
                 </div>
             </div>
-
-            {/* Cards */}
-            <Droppable droppableId={list.id}>
-                {(provided, snapshot) => (
-                    <div
-                        className={`board-list-cards ${snapshot.isDraggingOver ? 'dragging-over' : ''}`}
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                    >
-                        {filteredCards.map((card, index) => (
-                            <Draggable key={card.id} draggableId={card.id} index={index}>
-                                {(provided, snapshot) => (
-                                    <div
-                                        ref={provided.innerRef}
-                                        {...provided.draggableProps}
-                                        {...provided.dragHandleProps}
-                                        style={provided.draggableProps.style}
-                                    >
-                                        <BoardCard
-                                            card={card}
-                                            boardId={boardId}
-                                            listId={list.id}
-                                            isDragging={snapshot.isDragging}
-                                            onClick={() => onCardClick(card, boardId, list.id)}
-                                        />
-                                    </div>
-                                )}
-                            </Draggable>
-                        ))}
-                        {provided.placeholder}
-                    </div>
-                )}
-            </Droppable>
-
-            {/* Add Card */}
-            <div className="board-list-footer">
-                {addingCard ? (
-                    <form onSubmit={handleAddCard} className="board-add-card-form animate-slide-up">
-                        <input
-                            type="text"
-                            placeholder="Título da tarefa..."
-                            value={newCardTitle}
-                            onChange={e => setNewCardTitle(e.target.value)}
-                            autoFocus
-                            onBlur={() => { if (!newCardTitle.trim()) setAddingCard(false); }}
-                        />
-                        <div className="board-add-card-actions">
-                            <button type="submit" className="btn btn-primary btn-sm">Adicionar</button>
-                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAddingCard(false)}>✕</button>
-                        </div>
-                    </form>
-                ) : (
-                    <button className="board-add-card-btn" onClick={() => setAddingCard(true)}>
-                        <Plus size={16} />
-                        <span>Adicionar tarefa</span>
-                    </button>
-                )}
-            </div>
-
-            {showListDetails && (
-                <ListDetailsModal
-                    list={list}
-                    boardId={boardId}
-                    onSave={handleSaveListDetails}
-                    onClose={() => setShowListDetails(false)}
-                />
-            )}
         </div>
     );
 }

@@ -139,6 +139,12 @@ export function AuthProvider({ children }) {
       cleanUrlTokens();
 
       if (session?.user) {
+        // Se o usuário ainda não confirmou o e-mail (fluxo OTP de cadastro),
+        // não fazer login automático para que a tela de inserção do código apareça.
+        if (event === 'SIGNED_IN' && !session.user.email_confirmed_at) {
+          console.log('[Auth] onAuthStateChange: SIGNED_IN ignorado — e-mail ainda não confirmado (aguardando OTP).');
+          return;
+        }
         try {
           await refreshUser(session.user);
         } catch (err) {
@@ -274,13 +280,13 @@ export function AuthProvider({ children }) {
         setAuthError('Este e-mail já está cadastrado. Tente fazer login.');
         return { success: false, error: 'Este e-mail já está cadastrado. Tente fazer login.' };
       }
-      // Conta criada; sem sessão = precisa confirmar e-mail (sempre mostrar tela "Conta criada")
-      if (data?.user && !data?.session) {
+      // Conta criada; sem sessão OU e-mail não confirmado = precisa confirmar e-mail via OTP
+      if (data?.user && (!data?.session || !data.user.email_confirmed_at)) {
         setLoading(false);
         setAuthError('');
         return { success: true, pendingEmailConfirmation: true };
       }
-      // Com sessão = conta criada e já logado; não atualizar user aqui para a UI mostrar "Conta criada! Redirecionando..."
+      // Com sessão e e-mail confirmado = conta criada e já logado
       if (data?.user && data?.session) {
         setLoading(false);
         setAuthError('');

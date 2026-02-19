@@ -23,10 +23,7 @@
 
 .app-content {
   flex: 1;
-  /* Allow vertical scroll in non-board views (Dashboard, MyDay, etc) */
-  overflow-y: auto;
-  overflow-x: hidden;
-  /* Enable flex child scrolling */
+  /* Simple flex container, no overflow or scroll stability to avoid DND confusion */
   min-height: 0;
 }
 

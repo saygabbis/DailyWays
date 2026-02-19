@@ -69,7 +69,7 @@ export default function MyDayView({ onCardClick }) {
     }
 
     return (
-        <div className="myday-view animate-fade-in">
+        <div className="myday-view animate-slide-up">
             {/* Hero Header */}
             <div className="myday-hero">
                 <div className="myday-hero-content">
@@ -121,16 +121,17 @@ export default function MyDayView({ onCardClick }) {
                 ) : (
                     <div className="myday-tasks-list">
                         {cards.map((card, i) => (
-                            <SmartTaskItem
-                                key={card.id}
-                                card={card}
-                                board={{ id: card.boardId, title: card.boardTitle, emoji: card.boardEmoji }}
-                                list={{ id: card.listId, title: card.listTitle }}
-                                onClick={() => onCardClick(card, card.boardId, card.listId)}
-                                onToggleMyDay={() => removeFromMyDay(card)}
-                                onToggleImportant={() => toggleImportant(card)}
-                                showLocation={true}
-                            />
+                            <div key={card.id} className="animate-slide-up" style={{ animationDelay: `${i * 50}ms` }}>
+                                <SmartTaskItem
+                                    card={card}
+                                    board={{ id: card.boardId, title: card.boardTitle, emoji: card.boardEmoji }}
+                                    list={{ id: card.listId, title: card.listTitle }}
+                                    onClick={() => onCardClick(card, card.boardId, card.listId)}
+                                    onToggleMyDay={() => removeFromMyDay(card)}
+                                    onToggleImportant={() => toggleImportant(card)}
+                                    showLocation={true}
+                                />
+                            </div>
                         ))}
                     </div>
                 )}

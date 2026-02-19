@@ -144,7 +144,7 @@ export default function SettingsModal({ onClose }) {
     return (
         <>
             <div className="modal-backdrop" onClick={onClose} />
-            <div className="settings-modal animate-scale-in">
+            <div className="settings-modal animate-scale-in-centered">
                 {/* Close button */}
                 <button className="settings-modal-close btn-icon" onClick={onClose}>
                     <X size={20} />

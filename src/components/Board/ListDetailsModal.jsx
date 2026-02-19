@@ -37,7 +37,7 @@ export default function ListDetailsModal({ list, boardId, onSave, onClose }) {
     return (
         <>
             <div className="modal-backdrop" onClick={onClose} />
-            <div className="list-details-modal animate-scale-in" onClick={e => e.stopPropagation()}>
+            <div className="list-details-modal animate-scale-in-centered" onClick={e => e.stopPropagation()}>
                 <div className="list-details-header">
                     <h2>Detalhes da lista</h2>
                     <button type="button" className="btn-icon" onClick={onClose}><X size={20} /></button>

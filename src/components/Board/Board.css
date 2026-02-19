@@ -1,13 +1,26 @@
 /* ===== Board View — DailyWays Design ===== */
 .board-view {
     flex: 1;
-    overflow-x: auto;
-    overflow-y: auto;
-    padding: var(--space-xl);
-    /* Fill remaining height below header */
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    /* Padding moved to scroller */
     height: calc(100vh - var(--header-height));
     min-height: 0;
     position: relative;
+    /* Remove overflow: hidden to help DND nested scroll detection */
+}
+
+.board-scroller {
+    flex: 1;
+    overflow: auto;
+    padding: var(--space-xl);
+    height: 100%;
+}
+
+.board-scroller.is-panning {
+    cursor: grabbing;
+    user-select: none;
 }
 
 /* Custom scrollbar for horizontal board scroll */
@@ -34,7 +47,8 @@
     position: absolute;
     top: var(--space-md);
     right: var(--space-xl);
-    z-index: 10;
+    z-index: 100;
+    /* Higher than lists */
     display: flex;
     align-items: center;
     gap: var(--space-md);
@@ -46,6 +60,76 @@
     border-radius: var(--radius-full);
     padding: 6px 12px;
     box-shadow: var(--glass-shadow);
+    transition: box-shadow var(--transition-fast) ease, background var(--transition-fast) ease;
+    user-select: none;
+    cursor: move;
+    /* Allow dragging from the background */
+    white-space: nowrap;
+    min-width: max-content;
+}
+
+.board-toolbar.floating {
+    position: absolute;
+    z-index: 80;
+    /* Relative to board-view, below header/sidebar but above content */
+    margin: 0;
+    top: 20px;
+    right: 20px;
+}
+
+.board-toolbar.dragging {
+    box-shadow: var(--shadow-xl);
+    background: var(--bg-card);
+    opacity: 0.95;
+    z-index: 1001;
+    /* Ensure it stays on top while moving */
+    cursor: move;
+}
+
+.board-toolbar>* {
+    flex-shrink: 0;
+}
+
+.board-toolbar button,
+.board-toolbar input,
+.board-toolbar a {
+    cursor: pointer;
+    /* Ensure buttons have correct cursor */
+}
+
+.board-list-header-actions button {
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
+.board-toolbar-handle {
+    display: flex;
+    align-items: center;
+    color: var(--text-secondary);
+    opacity: 0.6;
+    transition: opacity var(--transition-fast);
+    cursor: grab;
+    padding: 4px;
+    margin-left: -4px;
+}
+
+.board-toolbar.dragging .board-toolbar-handle {
+    cursor: grabbing;
+}
+
+.board-toolbar:hover .board-toolbar-handle {
+    opacity: 0.8;
+}
+
+.toolbar-close-btn {
+    opacity: 0.7;
+    transition: all var(--transition-fast);
+}
+
+.toolbar-close-btn:hover {
+    opacity: 1;
+    color: var(--danger);
+    background: var(--bg-hover) !important;
 }
 
 .board-members {
@@ -113,6 +197,33 @@
     margin: 0 var(--space-xs);
 }
 
+/* ── Saving Indicator ── */
+.board-saving-indicator {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0.01em;
+    opacity: 1;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.spinning {
+    animation: spin 0.9s linear infinite;
+}
+
+
 .board-lists {
     display: flex;
     gap: var(--space-lg);
@@ -127,15 +238,41 @@
 .board-list {
     flex-shrink: 0;
     width: 320px;
-    max-height: calc(100vh - var(--header-height) - var(--space-3xl));
     background: var(--bg-secondary);
     border-radius: var(--radius-lg);
     border: 1.5px solid var(--border-color);
     display: flex;
     flex-direction: column;
     box-shadow: var(--shadow-sm);
-    animation: slideUp var(--transition-base) ease-out;
-    transition: background-color var(--transition-base), border-color var(--transition-base);
+    transition: background-color var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
+    max-height: 100%;
+}
+
+.board-list-inner {
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+}
+
+/* Wrapper for DND to avoid layout shifts */
+.board-list-wrapper {
+    flex-shrink: 0;
+    width: 320px;
+    height: 100%;
+}
+
+.list-dragging {
+    opacity: 0.8;
+}
+
+.list-dragging .board-list {
+    box-shadow: var(--shadow-xl);
+    border-color: var(--accent-primary);
+    transform: rotate(1deg);
+}
+
+.board-list:hover {
+    box-shadow: var(--shadow-md);
 }
 
 .board-list-header {
@@ -215,7 +352,8 @@
 /* ── Cards Container ── */
 .board-list-cards {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: visible;
+    /* Changed from auto to visible to avoid DND nesting bug */
     padding: var(--space-sm);
     display: flex;
     flex-direction: column;
@@ -250,25 +388,56 @@
     border-radius: var(--radius-md);
     padding: var(--space-md);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    /* Outer container has NO transition on transform/all to avoid DND lag */
+    transition: background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
     position: relative;
     box-shadow: var(--shadow-card);
 }
 
+.board-card-inner {
+    transition: transform var(--transition-fast) var(--ease-out-soft);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.board-card:hover .board-card-inner {
+    transform: translateY(-4px);
+    animation: jelly 0.6s var(--ease-in-out-soft) both;
+}
+
 .board-card:hover {
     border-color: var(--accent-primary);
-    transform: translateY(-2px);
     box-shadow: var(--shadow-card-hover);
+}
+
+.board-card:active .board-card-inner {
+    transform: translateY(-2px) scale(0.98);
+}
+
+.board-card-dragging .board-card-inner {
+    transform: rotate(2deg);
+    animation: none !important;
+    /* Prevent entrance animation during drag */
 }
 
 .board-card-dragging {
-    border-color: var(--accent-primary);
-    box-shadow: var(--shadow-card-hover);
-    transform: rotate(2deg);
+    border-color: var(--accent-primary) !important;
+    box-shadow: var(--shadow-xl) !important;
+    z-index: 9999;
 }
 
 .board-card-done {
-    opacity: 0.55;
+    opacity: 1;
+}
+
+.board-card-done .board-card-title {
+    opacity: 0.9;
+}
+
+.board-card-done .board-card-meta,
+.board-card-done .board-card-labels {
+    opacity: 0.8;
 }
 
 .board-card-labels {
@@ -286,7 +455,7 @@
 
 .board-card-title {
     font-size: var(--font-size-base);
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1.4;
     margin-bottom: var(--space-sm);
     color: var(--text-primary);
@@ -298,7 +467,7 @@
     flex-wrap: wrap;
     gap: var(--space-sm);
     font-size: var(--font-size-xs);
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
 }
 
 .board-card-meta>span {
@@ -312,7 +481,7 @@
 }
 
 .board-card-due {
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
 }
 
 .board-card-due.overdue {
@@ -360,9 +529,9 @@
     width: 100%;
     padding: 10px var(--space-md);
     border-radius: var(--radius-md);
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
     font-size: var(--font-size-sm);
-    font-weight: 500;
+    font-weight: 600;
     transition: all var(--transition-fast);
 }
 
@@ -402,9 +571,9 @@
     border-radius: var(--radius-lg);
     background: var(--bg-secondary);
     border: 2px dashed var(--border-color);
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
     font-size: var(--font-size-base);
-    font-weight: 500;
+    font-weight: 600;
     transition: all var(--transition-fast);
 }
 
@@ -412,6 +581,7 @@
     border-color: var(--accent-primary);
     color: var(--accent-primary);
     background: var(--accent-light);
+    transform: translateY(-2px);
 }
 
 .board-add-list-form {

@@ -59,7 +59,7 @@ export default function NotificationDropdown({ onClose }) {
     return (
         <>
             <div className="notification-backdrop" onClick={onClose} />
-            <div className="notification-dropdown animate-scale-in">
+            <div className="notification-dropdown animate-pop-in">
                 <div className="notification-header">
                     <h3>Notificações</h3>
                     <button className="btn-text btn-xs" onClick={markAllRead}>

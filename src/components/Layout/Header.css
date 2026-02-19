@@ -111,6 +111,11 @@
 .header-icon-btn:hover {
     background: var(--bg-hover);
     color: var(--accent-primary);
+    transform: translateY(-1px);
+}
+
+.header-icon-btn:active {
+    transform: translateY(0) scale(0.95);
 }
 
 /* ── User ── */
@@ -133,6 +138,11 @@
 .header-user-btn:hover {
     background: var(--bg-hover);
     border-color: var(--border-color);
+    transform: translateY(-1px);
+}
+
+.header-user-btn:active {
+    transform: translateY(0) scale(0.98);
 }
 
 .header-user-info {
@@ -182,6 +192,8 @@
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
     padding: var(--space-sm);
     z-index: var(--z-dropdown);
+    animation: scaleIn var(--transition-base) var(--ease-spring);
+    transform-origin: top right;
 }
 
 .header-profile-header {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ENABLE_MICROSOFT_LOGIN } from '../../config';
 import { Lock, Mail, User, ArrowRight, Sparkles, Chrome, Command, Github, Shield } from 'lucide-react';
@@ -394,8 +395,8 @@ export default function AuthPage() {
         )}
       </div>
 
-      {/* OTP Verification Modal */}
-      {showOtpModal && (
+      {/* OTP Verification Modal — Portal no body para escapar do overflow:hidden do auth-page */}
+      {showOtpModal && createPortal(
         <div className="otp-overlay" onClick={cancelOtp}>
           <div className="otp-modal animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="otp-modal-header">
@@ -434,7 +435,8 @@ export default function AuthPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
