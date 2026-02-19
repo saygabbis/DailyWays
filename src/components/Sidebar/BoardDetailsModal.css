@@ -1,0 +1,86 @@
+/* Board Details Modal */
+.board-details-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 400px;
+    background: var(--bg-primary);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+    z-index: 1002;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: scaleIn var(--transition-spring) ease-out;
+}
+
+.modal-header {
+    padding: var(--space-lg);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: var(--font-size-lg);
+}
+
+.modal-body {
+    padding: var(--space-xl);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+}
+
+.modal-footer {
+    padding: var(--space-lg);
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.settings-accent-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.settings-accent-btn {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.settings-accent-btn:hover {
+    transform: scale(1.05);
+}
+
+.settings-accent-btn.active {
+    border-color: var(--accent-primary);
+    transform: scale(1.1);
+}
+
+.active-check {
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.settings-field-hint {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    margin-top: 4px;
+}

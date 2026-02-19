@@ -7,7 +7,7 @@ import {
 import './TaskDetail.css';
 
 export default function TaskDetailModal({ card, boardId, listId, onClose }) {
-    const { dispatch, LABEL_COLORS, state } = useApp();
+    const { dispatch, LABEL_COLORS, state, persistBoard } = useApp();
 
     // Get the LIVE card data from state (not the stale prop)
     const liveCard = (() => {
@@ -61,21 +61,23 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                     }
                 },
             });
+            // Persistir mudanças de texto/campos
+            persistBoard(boardId);
         }, 300);
         return () => clearTimeout(timeout);
     }, [title, description, priority, dueDate, myDay, labels]);
 
     const handleDelete = () => {
         dispatch({ type: 'DELETE_CARD', payload: { boardId, listId, cardId: card.id } });
+        persistBoard(boardId);
         onClose();
     };
 
     const toggleLabel = (labelId) => {
-        setLabels(prev =>
-            prev.includes(labelId)
-                ? prev.filter(l => l !== labelId)
-                : [...prev, labelId]
-        );
+        const newLabels = labels.includes(labelId)
+            ? labels.filter(l => l !== labelId)
+            : [...labels, labelId];
+        setLabels(newLabels);
     };
 
     const handleAddLabel = (e) => {
@@ -92,7 +94,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         setShowAddLabel(false);
     };
 
-    // ── Subtask operations (all dispatch immediately) ──
+    // ── Subtask operations (all dispatch and persist immediately) ──
     const handleAddSubtask = (e) => {
         e.preventDefault();
         if (!newSubtask.trim()) return;
@@ -100,6 +102,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
             type: 'ADD_SUBTASK',
             payload: { boardId, listId, cardId: card.id, title: newSubtask.trim() },
         });
+        persistBoard(boardId);
         setNewSubtask('');
         subtaskInputRef.current?.focus();
     };
@@ -109,6 +112,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
             type: 'TOGGLE_SUBTASK',
             payload: { boardId, listId, cardId: card.id, subtaskId },
         });
+        persistBoard(boardId);
     };
 
     const handleDeleteSubtask = (subtaskId) => {
@@ -116,6 +120,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
             type: 'DELETE_SUBTASK',
             payload: { boardId, listId, cardId: card.id, subtaskId },
         });
+        persistBoard(boardId);
     };
 
     const startEditSubtask = (st) => {
@@ -136,6 +141,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                     }
                 },
             });
+            persistBoard(boardId);
         }
         setEditingSubtaskId(null);
         setEditingSubtaskTitle('');

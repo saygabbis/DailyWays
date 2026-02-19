@@ -245,9 +245,18 @@ export default function SettingsModal({ onClose }) {
                                         <input
                                             type="text"
                                             value={avatar}
-                                            onChange={e => setAvatar(e.target.value)}
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                // If more than one char/emoji, take the LAST one
+                                                if (val.length > 0) {
+                                                    const chars = Array.from(val);
+                                                    setAvatar(chars[chars.length - 1]);
+                                                } else {
+                                                    setAvatar('');
+                                                }
+                                            }}
                                             placeholder="😊"
-                                            maxLength={2}
+                                            maxLength={10} // Increased temporarily to allow capture of new char before slice
                                         />
                                     </div>
 

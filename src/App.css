@@ -13,6 +13,8 @@
   min-height: 100vh;
   background: var(--bg-primary);
   transition: background-color var(--transition-base), margin-left var(--transition-base);
+  /* Allow flex children to shrink and scroll */
+  min-width: 0;
 }
 
 .app-main.sidebar-pushed {
@@ -21,7 +23,11 @@
 
 .app-content {
   flex: 1;
-  overflow: hidden;
+  /* Allow vertical scroll in non-board views (Dashboard, MyDay, etc) */
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Enable flex child scrolling */
+  min-height: 0;
 }
 
 /* ── Loading ── */

@@ -17,6 +17,7 @@ export default function AuthPage() {
   const {
     login,
     register,
+    verifySignupOtp,
     loginWithProvider,
     verifyMfa,
     loadSession,
@@ -36,7 +37,13 @@ export default function AuthPage() {
   const [pendingEmailConfirmation, setPendingEmailConfirmation] = useState(false);
   const [showAccountCreatedRedirecting, setShowAccountCreatedRedirecting] = useState(false);
   const [showMfaStep, setShowMfaStep] = useState(false);
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpEmail, setOtpEmail] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
   const errorRef = useRef(null);
+  const otpInputRef = useRef(null);
 
   useEffect(() => {
     const oauthError = getOAuthErrorFromUrl();
@@ -101,7 +108,11 @@ export default function AuthPage() {
           return;
         }
         if (result?.success && result.pendingEmailConfirmation) {
-          setPendingEmailConfirmation(true);
+          console.log('[AuthPage] OTP modal: abrindo para', email.trim());
+          setOtpEmail(email.trim());
+          setOtpCode('');
+          setOtpError('');
+          setShowOtpModal(true);
           setError('');
         } else if (result?.success && result.hasSession) {
           setShowAccountCreatedRedirecting(true);
@@ -130,10 +141,31 @@ export default function AuthPage() {
     setIsLogin(!isLogin);
     setError('');
     clearAuthError();
-    setPendingEmailConfirmation(false);
     setShowAccountCreatedRedirecting(false);
     setShowMfaStep(false);
     setMfaCode('');
+    setShowOtpModal(false);
+    setOtpCode('');
+    setOtpError('');
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otpCode.length < 6) return;
+    setOtpLoading(true);
+    setOtpError('');
+    const result = await verifySignupOtp(otpEmail, otpCode);
+    setOtpLoading(false);
+    if (result.success) {
+      setShowOtpModal(false);
+    } else {
+      setOtpError(result.error || 'Código inválido.');
+    }
+  };
+
+  const cancelOtp = () => {
+    setShowOtpModal(false);
+    setOtpCode('');
+    setOtpError('');
   };
 
   useEffect(() => {
@@ -155,7 +187,14 @@ export default function AuthPage() {
     setError('');
   };
 
-  if (pendingEmailConfirmation || showAccountCreatedRedirecting) {
+  // Focus OTP input when modal opens
+  useEffect(() => {
+    if (showOtpModal && otpInputRef.current) {
+      setTimeout(() => otpInputRef.current?.focus(), 100);
+    }
+  }, [showOtpModal]);
+
+  if (showAccountCreatedRedirecting) {
     return (
       <div className="auth-page">
         <div className="auth-bg">
@@ -170,28 +209,12 @@ export default function AuthPage() {
               <span>DailyWays</span>
             </div>
             <h1 className="auth-success-title">Conta criada!</h1>
-            <p className="auth-subtitle">
-              {showAccountCreatedRedirecting ? 'Redirecionando você para o app…' : 'Próximo passo: confirme seu e-mail'}
-            </p>
+            <p className="auth-subtitle">Redirecionando você para o app…</p>
           </div>
           <div className="auth-confirm-msg auth-confirm-msg-box">
-            {showAccountCreatedRedirecting ? (
-              <p>Você já está logado. Em instantes você será redirecionado.</p>
-            ) : (
-              <>
-                <p>Enviamos um e-mail de confirmação para <strong>{email}</strong>.</p>
-                <p>Abra o link que enviamos para ativar sua conta e depois faça login. Se não aparecer na caixa de entrada, confira a pasta de <strong>spam</strong>.</p>
-                <p className="auth-confirm-hint">Se não receber o e-mail em alguns minutos, você pode tentar fazer login — alguns provedores não exigem confirmação.</p>
-              </>
-            )}
+            <p>Você já está logado. Em instantes você será redirecionado.</p>
           </div>
-          {showAccountCreatedRedirecting ? (
-            <div className="auth-success-spinner" aria-hidden />
-          ) : (
-            <button type="button" className="btn btn-primary auth-submit" onClick={() => { setPendingEmailConfirmation(false); setEmail(''); switchMode(); }}>
-              Ir para o login
-            </button>
-          )}
+          <div className="auth-success-spinner" aria-hidden />
         </div>
       </div>
     );
@@ -370,6 +393,49 @@ export default function AuthPage() {
           </>
         )}
       </div>
+
+      {/* OTP Verification Modal */}
+      {showOtpModal && (
+        <div className="otp-overlay" onClick={cancelOtp}>
+          <div className="otp-modal animate-scale-in" onClick={e => e.stopPropagation()}>
+            <div className="otp-modal-header">
+              <Mail size={28} className="otp-icon" />
+              <h2>Verifique seu e-mail</h2>
+              <p>Enviamos um código de 6 dígitos para <strong>{otpEmail}</strong></p>
+            </div>
+            <div className="otp-modal-body">
+              <input
+                ref={otpInputRef}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="000000"
+                value={otpCode}
+                onChange={e => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                maxLength={6}
+                className="otp-input"
+                autoComplete="one-time-code"
+                onKeyDown={e => { if (e.key === 'Enter' && otpCode.length === 6) handleVerifyOtp(); }}
+              />
+              {otpError && <div className="otp-error">{otpError}</div>}
+              <p className="otp-hint">O código expira em 5 minutos. Confira também o spam.</p>
+            </div>
+            <div className="otp-modal-actions">
+              <button
+                type="button"
+                className="btn btn-primary otp-verify-btn"
+                onClick={handleVerifyOtp}
+                disabled={otpLoading || otpCode.length < 6}
+              >
+                {otpLoading ? <span className="auth-spinner" /> : 'Verificar e Logar'}
+              </button>
+              <button type="button" className="otp-cancel-btn" onClick={cancelOtp}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

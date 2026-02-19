@@ -7,7 +7,7 @@ import { Plus, UserPlus, Users } from 'lucide-react';
 import './Board.css';
 
 export default function BoardView({ onCardClick }) {
-    const { getActiveBoard, dispatch } = useApp();
+    const { getActiveBoard, dispatch, persistBoard } = useApp();
     const [addingList, setAddingList] = useState(false);
     const [newListTitle, setNewListTitle] = useState('');
     const [showShare, setShowShare] = useState(false);
@@ -60,14 +60,20 @@ export default function BoardView({ onCardClick }) {
                 });
             }
         }
+
+        // Persistir mudança estrutural imediatamente
+        persistBoard(board.id);
     };
 
-    const handleAddList = (e) => {
+    const handleAddList = async (e) => {
         e.preventDefault();
         if (!newListTitle.trim()) return;
         dispatch({ type: 'ADD_LIST', payload: { boardId: board.id, title: newListTitle } });
         setNewListTitle('');
         setAddingList(false);
+
+        // Persistir mudança estrutural imediatamente
+        persistBoard(board.id);
     };
 
     return (

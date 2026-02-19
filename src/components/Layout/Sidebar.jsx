@@ -3,20 +3,31 @@ import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { useContextMenu, useLongPress } from '../Common/ContextMenu';
 import { usePomodoro } from '../../context/PomodoroContext';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import {
     Sun, Star, CalendarDays, LayoutGrid, Plus, LogOut,
     ChevronLeft, Sparkles, Settings, HelpCircle,
-    Edit3, Trash2, Copy, Palette, Focus, LayoutDashboard
+    Edit3, Trash2, Copy, Palette, Focus, LayoutDashboard,
+    MoreHorizontal
 } from 'lucide-react';
 import './Sidebar.css';
 
 export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isDesktop }) {
     const { user, confirmLogout } = useAuth();
-    const { state, dispatch, getMyDayCards, getImportantCards, getPlannedCards, DEFAULT_BOARD_COLORS, updateBoardAndPersist } = useApp();
+    const {
+        state, dispatch, getMyDayCards, getImportantCards, getPlannedCards,
+        DEFAULT_BOARD_COLORS, updateBoardAndPersist, updateBoardAndPersistImmediate,
+        updateBoardsOrder, persistBoard, getActiveBoard
+    } = useApp();
     const { showContextMenu } = useContextMenu();
-    const { setIsOpen: setPomodoroOpen } = usePomodoro();
+    const { toggleOpen } = usePomodoro();
+
     const [showNewBoard, setShowNewBoard] = useState(false);
     const [newBoardTitle, setNewBoardTitle] = useState('');
+    const [editingBoardId, setEditingBoardId] = useState(null);
+    const [editBoardTitle, setEditBoardTitle] = useState('');
+    const [detailsBoard, setDetailsBoard] = useState(null);
 
     // Resizable sidebar
     const sidebarRef = useRef(null);
@@ -92,27 +103,50 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         confirmLogout();
     };
 
+    const handleDragEnd = async (result) => {
+        const { source, destination } = result;
+        if (!destination || source.index === destination.index) return;
+
+        dispatch({
+            type: 'REORDER_BOARDS',
+            payload: { sourceIndex: source.index, destIndex: destination.index },
+            userId: user.id
+        });
+
+        // Persistir nova ordem imediatamente
+        const newBoards = [...state.boards];
+        const [moved] = newBoards.splice(source.index, 1);
+        newBoards.splice(destination.index, 0, moved);
+        const payloads = newBoards.map((b, i) => ({ id: b.id, position: i }));
+        await updateBoardsOrder(user.id, payloads);
+    };
+
+    const handleStartRename = (board) => {
+        setEditingBoardId(board.id);
+        setEditBoardTitle(board.title);
+    };
+
+    const handleRenameSubmit = async (e, boardId) => {
+        if (e) e.preventDefault();
+        const titleToSave = editBoardTitle.trim();
+        setEditingBoardId(null); // Close UI immediately
+
+        if (titleToSave) {
+            await updateBoardAndPersist(boardId, { title: titleToSave });
+        }
+    };
+
     // Board context menu
     const getBoardContextItems = (board) => [
         {
-            label: 'Renomear',
-            icon: <Edit3 size={15} />,
-            action: () => {
-                const newTitle = prompt('Novo nome do board:', board.title);
-                if (newTitle?.trim()) {
-                    updateBoardAndPersist(board.id, { title: newTitle.trim() });
-                }
-            },
+            label: 'Detalhes',
+            icon: <MoreHorizontal size={15} />,
+            action: () => setDetailsBoard(board),
         },
         {
-            label: 'Mudar cor',
-            icon: <Palette size={15} />,
-            action: () => {
-                const nextColor = DEFAULT_BOARD_COLORS[
-                    (DEFAULT_BOARD_COLORS.indexOf(board.color) + 1) % DEFAULT_BOARD_COLORS.length
-                ];
-                updateBoardAndPersist(board.id, { color: nextColor });
-            },
+            label: 'Renomear',
+            icon: <Edit3 size={15} />,
+            action: () => handleStartRename(board),
         },
         {
             label: 'Duplicar',
@@ -198,23 +232,58 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                             </form>
                         )}
 
-                        <div className="sidebar-board-list">
-                            {state.boards.map(board => (
-                                <button
-                                    key={board.id}
-                                    className={`sidebar-item ${activeView === 'board' && state.activeBoard === board.id ? 'sidebar-item-active' : ''
-                                        }`}
-                                    onClick={() => handleBoardClick(board.id)}
-                                    onContextMenu={(e) => handleBoardContextMenu(e, board)}
-                                >
-                                    <span className="sidebar-board-dot" style={{ background: board.color }} />
-                                    <span className="truncate">{board.emoji} {board.title}</span>
-                                    <span className="sidebar-badge-subtle">
-                                        {board.lists.reduce((acc, l) => acc + l.cards.length, 0)}
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
+                        <DragDropContext onDragEnd={handleDragEnd}>
+                            <Droppable droppableId="boards">
+                                {(provided) => (
+                                    <div
+                                        className="sidebar-board-list"
+                                        {...provided.droppableProps}
+                                        ref={provided.innerRef}
+                                    >
+                                        {state.boards.map((board, index) => (
+                                            <Draggable key={board.id} draggableId={board.id} index={index}>
+                                                {(provided, snapshot) => (
+                                                    <div
+                                                        ref={provided.innerRef}
+                                                        {...provided.draggableProps}
+                                                        {...provided.dragHandleProps}
+                                                        className={`sidebar-item board-item ${activeView === 'board' && state.activeBoard === board.id ? 'sidebar-item-active' : ''} ${snapshot.isDragging ? 'dragging' : ''}`}
+                                                        onClick={() => handleBoardClick(board.id)}
+                                                        onContextMenu={(e) => handleBoardContextMenu(e, board)}
+                                                        onDoubleClick={() => isDesktop && handleStartRename(board)}
+                                                    >
+                                                        <div className="board-drag-indicator">
+                                                            <MoreHorizontal size={14} className="rotate-90" />
+                                                        </div>
+
+                                                        <span className="sidebar-board-dot" style={{ background: board.color }} />
+
+                                                        {editingBoardId === board.id ? (
+                                                            <form onSubmit={(e) => handleRenameSubmit(e, board.id)} className="sidebar-rename-form">
+                                                                <input
+                                                                    autoFocus
+                                                                    value={editBoardTitle}
+                                                                    onChange={e => setEditBoardTitle(e.target.value)}
+                                                                    onBlur={(e) => handleRenameSubmit(e, board.id)}
+                                                                    onKeyDown={e => e.key === 'Escape' && setEditingBoardId(null)}
+                                                                />
+                                                            </form>
+                                                        ) : (
+                                                            <span className="truncate">{board.emoji} {board.title}</span>
+                                                        )}
+
+                                                        <span className="sidebar-badge-subtle">
+                                                            {board.lists.reduce((acc, l) => acc + l.cards.length, 0)}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </Draggable>
+                                        ))}
+                                        {provided.placeholder}
+                                    </div>
+                                )}
+                            </Droppable>
+                        </DragDropContext>
                     </div>
 
                     {/* RECURSOS section */}
@@ -222,7 +291,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                         <div className="sidebar-section-label">RECURSOS</div>
                         <button
                             className="sidebar-item"
-                            onClick={() => setPomodoroOpen(true)}
+                            onClick={toggleOpen}
                         >
                             <span className="sidebar-item-icon">
                                 <Focus size={18} />
@@ -261,6 +330,14 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                     <div className="sidebar-resize-handle" onMouseDown={handleMouseDown} />
                 )}
             </aside>
+
+            {/* Modals */}
+            {detailsBoard && (
+                <BoardDetailsModal
+                    board={detailsBoard}
+                    onClose={() => setDetailsBoard(null)}
+                />
+            )}
         </>
     );
 }

@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import storageService, { STORAGE_KEYS } from '../services/storageService';
-import { fetchBoards, saveBoards, insertBoardFull, updateBoardFull } from '../services/boardService';
+import { fetchBoards, saveBoards, insertBoardFull, updateBoardFull, updateBoardsOrder } from '../services/boardService';
 import { useAuth } from './AuthContext';
 
 const AppContext = createContext(null);
@@ -122,6 +122,9 @@ function appReducer(state, action) {
             };
 
         case 'SET_ACTIVE_BOARD':
+            if (action.payload) {
+                storageService.save(STORAGE_KEYS.ACTIVE_BOARD, action.payload);
+            }
             return { ...state, activeBoard: action.payload };
 
         case 'REORDER_BOARDS': {
@@ -129,7 +132,10 @@ function appReducer(state, action) {
             const newBoards = [...state.boards];
             const [moved] = newBoards.splice(sourceIndex, 1);
             newBoards.splice(destIndex, 0, moved);
-            return { ...state, boards: newBoards };
+
+            // Update position fields to match new index
+            const updatedBoards = newBoards.map((b, i) => ({ ...b, position: i }));
+            return { ...state, boards: updatedBoards };
         }
 
         case 'DUPLICATE_BOARD': {
@@ -415,6 +421,7 @@ function appReducer(state, action) {
 
 export function AppProvider({ children }) {
     const { user } = useAuth();
+    const userId = user?.id ?? null;
     const [state, dispatch] = useReducer(appReducer, initialState);
     const initialLoadDone = useRef(false);
     const saveTimeoutRef = useRef(null);
@@ -423,32 +430,52 @@ export function AppProvider({ children }) {
     // Load boards: Supabase primeiro. Se der ERRO (sessão expirada, rede), NUNCA criar defaults:
     // usar localStorage como fallback e retentar a API depois. Só criar boards padrão quando a API
     // retornar sucesso com lista vazia (usuário novo).
+    // IMPORTANTE: depende de [userId] (primitivo), NÃO de [user] (objeto),
+    // para evitar re-execução quando refreshUser cria novo objeto com mesmo ID.
     useEffect(() => {
-        if (!user) {
+        if (!userId) {
+            // Logout: limpar tudo para evitar race conditions no próximo login
             initialLoadDone.current = false;
+            loadInProgressRef.current = false;
+            dispatch({ type: 'SET_BOARDS', payload: [] });
+            dispatch({ type: 'SET_ACTIVE_BOARD', payload: null });
+            console.log('[AppContext] User logout: state cleared');
             return;
         }
-        if (loadInProgressRef.current) return;
+        if (loadInProgressRef.current) {
+            console.log('[AppContext] Load already in progress, skipping');
+            return;
+        }
         loadInProgressRef.current = true;
         let cancelled = false;
-        const localKey = STORAGE_KEYS.BOARDS + '_' + user.id;
+        const localKey = STORAGE_KEYS.BOARDS + '_' + userId;
 
-        const applyBoards = (boards) => {
+        const applyBoards = (boards, source) => {
             if (!cancelled && boards?.length > 0) {
+                console.log(`[AppContext] applyBoards (${source}): ${boards.length} boards`);
                 dispatch({ type: 'SET_BOARDS', payload: boards });
-                dispatch({ type: 'SET_ACTIVE_BOARD', payload: boards[0].id });
+
+                // Restore last active board from localStorage or use first one
+                const lastActive = storageService.load(STORAGE_KEYS.ACTIVE_BOARD);
+                const activeId = (lastActive && boards.find(b => b.id === lastActive))
+                    ? lastActive
+                    : boards[0].id;
+
+                dispatch({ type: 'SET_ACTIVE_BOARD', payload: activeId });
                 storageService.save(localKey, boards);
             }
         };
 
         const loadFromApi = async (isRetry = false) => {
-            const { data: fromDb, error: fetchError } = await fetchBoards(user.id);
+            console.log(`[AppContext] loadFromApi (retry=${isRetry}) for user ${userId.slice(0, 8)}...`);
+            const { data: fromDb, error: fetchError } = await fetchBoards(userId);
             if (cancelled) return { ok: false };
             if (fetchError) {
+                console.error('[AppContext] fetchBoards error:', fetchError);
                 // Erro (sessão expirada, rede, etc.): NUNCA criar defaults. Usar localStorage se houver.
                 const fromLocal = storageService.load(localKey);
                 if (fromLocal && Array.isArray(fromLocal) && fromLocal.length > 0) {
-                    applyBoards(fromLocal);
+                    applyBoards(fromLocal, 'localStorage-fallback');
                 }
                 if (!isRetry) {
                     setTimeout(() => loadFromApi(true), 2000);
@@ -456,23 +483,17 @@ export function AppProvider({ children }) {
                 return { ok: false };
             }
             if (fromDb.length > 0) {
-                applyBoards(fromDb);
+                applyBoards(fromDb, 'supabase');
                 return { ok: true };
             }
-            // Sucesso com lista vazia: tentar backup local e só então criar defaults
-            const fromLocal = storageService.load(localKey);
-            if (fromLocal && Array.isArray(fromLocal) && fromLocal.length > 0) {
-                applyBoards(fromLocal);
-                for (const board of fromLocal) {
-                    await insertBoardFull(user.id, board);
-                }
-                storageService.save(localKey, fromLocal);
-                return { ok: true };
-            }
+            // Supabase retornou sucesso com 0 boards = usuário novo. Criar defaults limpos.
+            // NÃO restaurar do localStorage aqui — pode conter boards de outro usuário.
+            console.log('[AppContext] Nenhum board no Supabase, criando defaults...');
+            storageService.remove(localKey); // Limpa localStorage antigo deste userId
             const defaults = createDefaultBoards();
             dispatch({ type: 'SET_BOARDS', payload: defaults });
             dispatch({ type: 'SET_ACTIVE_BOARD', payload: defaults[0].id });
-            const saved = await saveBoards(user.id, defaults);
+            const saved = await saveBoards(userId, defaults);
             if (saved.success) storageService.save(localKey, defaults);
             return { ok: true };
         };
@@ -480,38 +501,64 @@ export function AppProvider({ children }) {
         (async () => {
             try {
                 await loadFromApi(false);
-                if (!cancelled) initialLoadDone.current = true;
+                if (!cancelled) {
+                    initialLoadDone.current = true;
+                    console.log('[AppContext] Initial load done');
+                }
+            } catch (err) {
+                console.error('[AppContext] loadFromApi uncaught error:', err);
             } finally {
                 loadInProgressRef.current = false;
             }
         })();
         return () => { cancelled = true; };
-    }, [user]);
+    }, [userId]);
 
-    // Persist boards: Supabase + localStorage (backup). Debounce curto para não perder em F5.
-    useEffect(() => {
-        if (!user || !initialLoadDone.current || state.boards.length === 0) return;
-        const boardsToSave = state.boards;
-        const localKey = STORAGE_KEYS.BOARDS + '_' + user.id;
-        storageService.save(localKey, boardsToSave);
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = setTimeout(async () => {
-            saveTimeoutRef.current = null;
-            const result = await saveBoards(user.id, boardsToSave);
-            if (result.success) storageService.save(localKey, boardsToSave);
-        }, 400);
-        return () => {
-            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        };
-    }, [state.boards, user]);
+    // ── Persistence: Optimized ──
+    // Removemos o useEffect global que salvava tudo a cada mudança (causava race conditions).
+    // Agora salvamos mudanças estruturais IMEDIATAMENTE e mudanças de texto com debounce por board.
 
-    // Atualiza board no estado e persiste no banco imediatamente (evita depender só do debounce).
-    const updateBoardAndPersist = async (boardId, updates) => {
+    // Helper para salvar um board específico de forma eficiente
+    const persistBoard = async (boardId) => {
+        if (!userId || !initialLoadDone.current) return;
         const board = state.boards.find(b => b.id === boardId);
-        if (!board || !user) return;
-        const updatedBoard = { ...board, ...updates };
+        if (!board) return;
+
+        console.log(`[AppContext] persistBoard: ${board.title}`);
+        await updateBoardFull(userId, board);
+    };
+
+    // Atualiza board no estado e persiste IMEDIATAMENTE (usado para Drag & Drop e mudanças estruturais)
+    const updateBoardAndPersistImmediate = async (boardId, updates) => {
+        if (!boardId || !userId) return;
         dispatch({ type: 'UPDATE_BOARD', payload: { id: boardId, updates } });
-        await updateBoardFull(user.id, updatedBoard);
+
+        // Buscamos o board atualizado do estado (após dispatch) para persistir completo
+        // Como o dispatch é síncrono no React (geralmente), o state.boards ainda é o antigo aqui.
+        // Então montamos o objeto manualmente para o upstart.
+        const board = state.boards.find(b => b.id === boardId);
+        if (board) {
+            await updateBoardFull(userId, { ...board, ...updates });
+        }
+    };
+
+    // Atualiza board no estado e persiste no banco imediatamente (otimizado para board específico).
+    const updateBoardAndPersist = async (boardId, updates) => {
+        if (!boardId || !userId) return;
+        dispatch({ type: 'UPDATE_BOARD', payload: { id: boardId, updates } });
+
+        // Buscamos o board atualizado do estado para persistir
+        const updatedBoard = state.boards.find(b => b.id === boardId);
+        if (updatedBoard) {
+            await updateBoardFull(userId, { ...updatedBoard, ...updates });
+        }
+    };
+
+    const updateBoardsOrderAndPersist = async (newBoards) => {
+        if (!userId) return;
+        // Map current array order to positions
+        const payloads = newBoards.map((b, i) => ({ id: b.id, position: i }));
+        await updateBoardsOrder(userId, payloads);
     };
 
     // Helpers
@@ -554,6 +601,9 @@ export function AppProvider({ children }) {
             getPlannedCards,
             searchCards,
             updateBoardAndPersist,
+            updateBoardAndPersistImmediate,
+            updateBoardsOrder,
+            persistBoard,
             LABEL_COLORS: state.labels,
             DEFAULT_BOARD_COLORS,
         }}>

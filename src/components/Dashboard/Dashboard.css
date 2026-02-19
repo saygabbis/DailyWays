@@ -220,7 +220,59 @@
 
 /* Mobile */
 @media (max-width: 768px) {
+    .dashboard-view {
+        padding: var(--space-md);
+        gap: var(--space-md);
+    }
+
     .dashboard-grid {
         grid-template-columns: 1fr;
+    }
+
+    .dashboard-hero {
+        padding: var(--space-lg);
+        flex-direction: column;
+        text-align: center;
+        gap: var(--space-md);
+    }
+
+    .dashboard-hero-content h1 {
+        font-size: var(--font-size-xl);
+    }
+
+    .dashboard-hero-icon {
+        width: 48px;
+        height: 48px;
+    }
+
+    .stat-highlight {
+        padding: var(--space-md);
+    }
+
+    .stat-icon-bg {
+        width: 40px;
+        height: 40px;
+    }
+
+    .stat-value {
+        font-size: var(--font-size-lg);
+    }
+}
+
+@media (max-width: 480px) {
+    .dashboard-view {
+        padding: var(--space-sm);
+    }
+
+    .dashboard-hero-content h1 {
+        font-size: var(--font-size-lg);
+    }
+
+    .progress-number {
+        font-size: var(--font-size-xl);
+    }
+
+    .dashboard-section {
+        padding: var(--space-md);
     }
 }

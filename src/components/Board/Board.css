@@ -2,10 +2,11 @@
 .board-view {
     flex: 1;
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: auto;
     padding: var(--space-xl);
+    /* Fill remaining height below header */
     height: calc(100vh - var(--header-height));
-    /* Prevent lists from overflowing the page */
+    min-height: 0;
     position: relative;
 }
 
@@ -30,11 +31,21 @@
 
 /* ── Board Toolbar ── */
 .board-toolbar {
+    position: absolute;
+    top: var(--space-md);
+    right: var(--space-xl);
+    z-index: 10;
     display: flex;
     align-items: center;
     gap: var(--space-md);
-    margin-bottom: var(--space-lg);
-    justify-content: flex-end;
+    /* Glassmorphic float */
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-full);
+    padding: 6px 12px;
+    box-shadow: var(--glass-shadow);
 }
 
 .board-members {
@@ -451,17 +462,134 @@
     max-width: 300px;
 }
 
-/* ── Mobile ── */
+/* ── Tablet ── */
 @media (max-width: 768px) {
     .board-view {
         padding: var(--space-md);
+        padding-bottom: 0;
+        height: calc(100vh - var(--header-height));
+        /* Enable horizontal snap scrolling between lists */
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .board-lists {
+        gap: var(--space-md);
+        /* Ensure lists have enough space to breathe */
+        padding-right: var(--space-md);
     }
 
     .board-list {
-        width: 280px;
+        /* Fill most of the screen — leave a peek of the next list */
+        width: calc(100vw - var(--space-xl) * 2);
+        min-width: 260px;
+        max-width: 360px;
+        scroll-snap-align: center;
+        max-height: calc(100vh - var(--header-height) - var(--space-2xl));
     }
 
     .board-add-list {
-        width: 280px;
+        width: calc(100vw - var(--space-xl) * 2);
+        min-width: 260px;
+        max-width: 360px;
+        scroll-snap-align: center;
+    }
+
+    .board-toolbar {
+        flex-wrap: wrap;
+        gap: var(--space-sm);
+    }
+
+    .board-card {
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    .board-card-title {
+        font-size: var(--font-size-sm);
+    }
+
+    .board-card-meta {
+        font-size: 0.625rem;
+    }
+
+    .board-list-header {
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    .board-list-footer {
+        padding: var(--space-xs) var(--space-sm);
+    }
+
+    .board-add-card-btn {
+        padding: 8px var(--space-md);
+    }
+}
+
+/* ── Mobile Small ── */
+@media (max-width: 480px) {
+    .board-view {
+        padding: var(--space-sm);
+        padding-bottom: 0;
+    }
+
+    .board-lists {
+        gap: var(--space-sm);
+        padding-right: var(--space-sm);
+    }
+
+    .board-list {
+        /* Almost full width on small phones */
+        width: calc(100vw - var(--space-lg) * 2);
+        max-width: none;
+        max-height: calc(100vh - var(--header-height) - var(--space-lg));
+    }
+
+    .board-add-list {
+        width: calc(100vw - var(--space-lg) * 2);
+        max-width: none;
+    }
+
+    .board-list-title {
+        font-size: var(--font-size-sm);
+    }
+
+    .board-card {
+        padding: var(--space-sm);
+    }
+
+    .board-card-labels {
+        margin-bottom: 4px;
+    }
+
+    .board-card-label {
+        width: 24px;
+        height: 4px;
+    }
+
+    .board-card-title {
+        font-size: var(--font-size-sm);
+        margin-bottom: 4px;
+    }
+
+    .board-add-list-btn {
+        padding: var(--space-md);
+        font-size: var(--font-size-sm);
+    }
+
+    .board-list-cards {
+        padding: var(--space-xs);
+        gap: var(--space-xs);
+    }
+
+    .empty-state {
+        padding: var(--space-xl);
+    }
+
+    .empty-state h2 {
+        font-size: var(--font-size-lg);
+    }
+
+    .empty-state p {
+        font-size: var(--font-size-sm);
     }
 }

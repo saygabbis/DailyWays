@@ -204,8 +204,71 @@
     color: var(--danger) !important;
 }
 
+/* Board Reordering & Renaming */
+.board-item {
+    position: relative;
+    padding-left: 8px !important;
+}
+
+.board-drag-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    margin-right: 4px;
+    color: var(--text-tertiary);
+    opacity: 0;
+    transition: opacity var(--transition-fast), color var(--transition-fast);
+}
+
+.board-item:hover .board-drag-indicator {
+    opacity: 1;
+}
+
+.board-item {
+    cursor: pointer !important;
+}
+
+.board-item.dragging {
+    cursor: grabbing !important;
+    background: var(--bg-hover) !important;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+}
+
+.rotate-90 {
+    transform: rotate(90deg);
+}
+
+.board-item.dragging {
+    background: var(--bg-hover) !important;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+}
+
+.sidebar-rename-form {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding: 0;
+}
+
+.sidebar-rename-form input {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    padding: 2px 6px;
+    outline: none;
+}
+
 /* ── Truncate ── */
 .truncate {
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -227,4 +290,36 @@
 .sidebar-resize-handle:active {
     background: var(--accent-primary);
     opacity: 0.5;
+}
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+    .sidebar {
+        width: min(var(--sidebar-width), 85vw);
+        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .sidebar-item {
+        padding: 12px 14px;
+        font-size: var(--font-size-md);
+    }
+
+    .sidebar-resize-handle {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .sidebar {
+        width: 100vw;
+        border-right: none;
+    }
+
+    .sidebar-header {
+        padding: var(--space-lg);
+    }
+
+    .sidebar-section-label {
+        padding: var(--space-md) var(--space-lg) var(--space-sm);
+    }
 }

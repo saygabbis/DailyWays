@@ -116,7 +116,7 @@ export default function BoardList({ list, boardId, onCardClick }) {
                         />
                     </form>
                 ) : (
-                    <h3 className="board-list-title" onDoubleClick={() => setEditing(true)}>
+                    <h3 className="board-list-title" onClick={() => setEditing(true)} style={{ cursor: 'pointer' }}>
                         {list.title}
                         <span className="board-list-count">{list.cards.length}</span>
                     </h3>

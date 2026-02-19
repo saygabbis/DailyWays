@@ -6,43 +6,86 @@ export function usePomodoro() {
     return useContext(PomodoroContext);
 }
 
+const DEFAULT_TIMES = {
+    focus: 25 * 60,
+    short: 5 * 60,
+    long: 15 * 60
+};
+
 export function PomodoroProvider({ children }) {
-    const [timeLeft, setTimeLeft] = useState(25 * 60);
-    const [isActive, setIsActive] = useState(false);
     const [mode, setMode] = useState('focus'); // focus, short, long
     const [isOpen, setIsOpen] = useState(false);
+    const [isMinimized, setIsMinimized] = useState(false);
+
+    // Independent state for each mode
+    const [timers, setTimers] = useState({
+        focus: { timeLeft: DEFAULT_TIMES.focus, isActive: false },
+        short: { timeLeft: DEFAULT_TIMES.short, isActive: false },
+        long: { timeLeft: DEFAULT_TIMES.long, isActive: false }
+    });
 
     useEffect(() => {
-        let interval = null;
-        if (isActive && timeLeft > 0) {
-            interval = setInterval(() => {
-                setTimeLeft(timeLeft => timeLeft - 1);
-            }, 1000);
-        } else if (timeLeft === 0) {
-            setIsActive(false);
-            // Play sound or notification here
-            const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-            audio.play().catch(e => console.log('Audio play failed', e));
-        }
-        return () => clearInterval(interval);
-    }, [isActive, timeLeft]);
+        const interval = setInterval(() => {
+            setTimers(prev => {
+                const next = { ...prev };
+                let changed = false;
 
-    const toggleTimer = () => setIsActive(!isActive);
+                Object.keys(next).forEach(m => {
+                    if (next[m].isActive && next[m].timeLeft > 0) {
+                        next[m] = { ...next[m], timeLeft: next[m].timeLeft - 1 };
+                        changed = true;
+                    } else if (next[m].isActive && next[m].timeLeft === 0) {
+                        next[m] = { ...next[m], isActive: false };
+                        changed = true;
+                        // Alarm sound (only for the current mode or all?)
+                        // Play sound only if it just hit zero
+                        const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+                        audio.play().catch(e => console.log('Audio play failed', e));
+                    }
+                });
+
+                return changed ? next : prev;
+            });
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, []);
+
+    const toggleTimer = () => {
+        setTimers(prev => ({
+            ...prev,
+            [mode]: { ...prev[mode], isActive: !prev[mode].isActive }
+        }));
+    };
 
     const resetTimer = () => {
-        setIsActive(false);
-        if (mode === 'focus') setTimeLeft(25 * 60);
-        if (mode === 'short') setTimeLeft(5 * 60);
-        if (mode === 'long') setTimeLeft(15 * 60);
+        setTimers(prev => ({
+            ...prev,
+            [mode]: { timeLeft: DEFAULT_TIMES[mode], isActive: false }
+        }));
     };
 
     const setTimerMode = (newMode) => {
         setMode(newMode);
-        setIsActive(false);
-        if (newMode === 'focus') setTimeLeft(25 * 60);
-        if (newMode === 'short') setTimeLeft(5 * 60);
-        if (newMode === 'long') setTimeLeft(15 * 60);
     };
+
+    const setTimeLeft = (seconds) => {
+        setTimers(prev => ({
+            ...prev,
+            [mode]: { ...prev[mode], timeLeft: seconds }
+        }));
+    };
+
+    const toggleOpen = () => {
+        if (!isOpen) {
+            setIsOpen(true);
+            setIsMinimized(false);
+        } else {
+            setIsMinimized(!isMinimized);
+        }
+    };
+
+    const toggleMinimize = () => setIsMinimized(prev => !prev);
 
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
@@ -51,15 +94,27 @@ export function PomodoroProvider({ children }) {
     };
 
     const progress = () => {
-        const total = mode === 'focus' ? 25 * 60 : mode === 'short' ? 5 * 60 : 15 * 60;
-        return ((total - timeLeft) / total) * 100;
+        const total = DEFAULT_TIMES[mode];
+        return ((total - timers[mode].timeLeft) / total) * 100;
     };
 
     return (
         <PomodoroContext.Provider value={{
-            timeLeft, isActive, mode, isOpen,
-            toggleTimer, resetTimer, setTimerMode, setIsOpen,
-            formatTime, progress
+            timeLeft: timers[mode].timeLeft,
+            isActive: timers[mode].isActive,
+            mode,
+            isOpen,
+            isMinimized,
+            toggleTimer,
+            resetTimer,
+            setTimerMode,
+            setIsOpen,
+            setIsMinimized,
+            toggleOpen,
+            toggleMinimize,
+            formatTime,
+            progress,
+            setTimeLeft
         }}>
             {children}
         </PomodoroContext.Provider>

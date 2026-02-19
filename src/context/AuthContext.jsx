@@ -21,8 +21,17 @@ function buildUserData(authUser, profile) {
 
 async function ensureProfile(authUser) {
   if (!authUser?.id) return null;
-  const { data: existing } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
-  if (existing) return existing;
+  console.log('[Auth] ensureProfile: checking for', authUser.id.slice(0, 8));
+  const { data: existing, error: selectErr } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
+  if (selectErr && selectErr.code !== 'PGRST116') {
+    // PGRST116 = "not found" which is expected for new users
+    console.error('[Auth] ensureProfile SELECT error:', selectErr);
+  }
+  if (existing) {
+    console.log('[Auth] ensureProfile: found existing profile');
+    return existing;
+  }
+  console.log('[Auth] ensureProfile: creating new profile...');
   const username = authUser.user_metadata?.username ?? `user_${authUser.id.slice(0, 8)}`;
   const name = authUser.user_metadata?.name ?? authUser.email?.split('@')[0] ?? 'Usuário';
   const { data: inserted, error } = await supabase.from('profiles').insert({
@@ -33,10 +42,14 @@ async function ensureProfile(authUser) {
     updated_at: new Date().toISOString(),
   }).select().single();
   if (error) {
-    if (error.code === '23505') return (await supabase.from('profiles').select('*').eq('id', authUser.id).single()).data;
-    console.error('ensureProfile error', error);
+    if (error.code === '23505') {
+      console.log('[Auth] ensureProfile: duplicate, fetching again');
+      return (await supabase.from('profiles').select('*').eq('id', authUser.id).single()).data;
+    }
+    console.error('[Auth] ensureProfile INSERT error:', error);
     return null;
   }
+  console.log('[Auth] ensureProfile: created new profile');
   return inserted;
 }
 
@@ -59,27 +72,81 @@ export function AuthProvider({ children }) {
   }, []);
 
   const loadSession = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) await refreshUser(session.user);
+    try {
+      const result = await supabase.auth.getSession();
+      const session = result?.data?.session ?? null;
+      if (session?.user) await refreshUser(session.user);
+    } catch (err) {
+      console.error('[Auth] loadSession error:', err);
+    }
   }, [refreshUser]);
 
   useEffect(() => {
     let mounted = true;
+    let initialLoadComplete = false;
+
+    // Limpa tokens de auth da URL (OAuth redirect) para que no F5
+    // o Supabase não tente re-processar tokens expirados.
+    const cleanUrlTokens = () => {
+      const hash = window.location.hash;
+      if (hash && (hash.includes('access_token') || hash.includes('refresh_token') || hash.includes('type=recovery'))) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    };
+
+    // 1. Carregamento inicial via getSession (espera o Supabase terminar internamente)
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (mounted && session?.user) await refreshUser(session.user);
-      if (mounted) setLoading(false);
+      try {
+        const result = await supabase.auth.getSession();
+        const session = result?.data?.session ?? null;
+        console.log('[Auth] getSession:', session ? `user=${session.user.id.slice(0, 8)}` : 'sem sessão');
+        if (mounted && session?.user) {
+          await refreshUser(session.user);
+          console.log('[Auth] refreshUser OK');
+        }
+      } catch (err) {
+        console.error('[Auth] getSession/refreshUser error:', err);
+      }
+      cleanUrlTokens();
+      if (mounted) {
+        setLoading(false);
+        initialLoadComplete = true;
+      }
     })();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, { session }) => {
+
+    // 2. Listener para mudanças POSTERIORES (login, logout, token refresh).
+    //    Eventos durante o carregamento inicial são ignorados pois getSession já cuida.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sessionData) => {
       if (!mounted) return;
+
+      // Durante o load inicial, getSession() já cuida de tudo.
+      // Ignorar eventos iniciais evita chamadas concorrentes que travam.
+      if (!initialLoadComplete) {
+        console.log(`[Auth] onAuthStateChange: ignorando ${event} (load inicial em progresso)`);
+        return;
+      }
+
+      console.log('[Auth] onAuthStateChange:', event);
+      const session = sessionData ?? null;
+
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setProfile(null);
         setMfaChallengeId(null);
         return;
       }
-      if (session?.user) await refreshUser(session.user);
+
+      cleanUrlTokens();
+
+      if (session?.user) {
+        try {
+          await refreshUser(session.user);
+        } catch (err) {
+          console.error('[Auth] onAuthStateChange refreshUser error:', err);
+        }
+      }
     });
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
@@ -164,7 +231,7 @@ export function AuthProvider({ children }) {
       try {
         target.location.replace(data.url);
       } catch (e) {
-        try { window.location.replace(data.url); } catch (e2) {}
+        try { window.location.replace(data.url); } catch (e2) { }
       }
       return { success: true, redirecting: true };
     }
@@ -182,6 +249,13 @@ export function AuthProvider({ children }) {
           emailRedirectTo: window.location.origin,
         },
       });
+      console.log('[Auth] signUp result:', {
+        error: error?.message ?? null,
+        userId: data?.user?.id ?? null,
+        session: !!data?.session,
+        identities: data?.user?.identities?.length ?? 'N/A',
+        emailConfirmedAt: data?.user?.email_confirmed_at ?? null,
+      });
       if (error) {
         setLoading(false);
         const raw = error.message || '';
@@ -192,6 +266,13 @@ export function AuthProvider({ children }) {
             : raw || 'Erro ao criar conta.';
         setAuthError(msg);
         return { success: false, error: msg };
+      }
+      // Supabase retorna user com identities vazio se email já existe (anti-enumeration)
+      if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+        console.warn('[Auth] signUp: email já existe (identities vazio). Supabase finge sucesso por segurança.');
+        setLoading(false);
+        setAuthError('Este e-mail já está cadastrado. Tente fazer login.');
+        return { success: false, error: 'Este e-mail já está cadastrado. Tente fazer login.' };
       }
       // Conta criada; sem sessão = precisa confirmar e-mail (sempre mostrar tela "Conta criada")
       if (data?.user && !data?.session) {
@@ -217,10 +298,39 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const verifySignupOtp = async (email, token) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'signup',
+      });
+      if (error) {
+        setLoading(false);
+        const raw = error.message || '';
+        const msg = raw.includes('expired') || raw.includes('invalid')
+          ? 'Código inválido ou expirado. Tente novamente.'
+          : raw || 'Erro ao verificar código.';
+        return { success: false, error: msg };
+      }
+      if (data?.session?.user) {
+        await refreshUser(data.session.user);
+        setLoading(false);
+        return { success: true };
+      }
+      setLoading(false);
+      return { success: false, error: 'Não foi possível verificar. Tente novamente.' };
+    } catch (e) {
+      setLoading(false);
+      return { success: false, error: e?.message || 'Erro ao verificar código.' };
+    }
+  };
+
   const logout = async () => {
     try {
       await supabase.auth.signOut({ scope: 'local' });
-    } catch (_) {}
+    } catch (_) { }
     setUser(null);
     setProfile(null);
     setMfaChallengeId(null);
@@ -328,6 +438,7 @@ export function AuthProvider({ children }) {
     login,
     verifyMfa,
     register,
+    verifySignupOtp,
     logout,
     confirmLogout,
     updateProfile,
