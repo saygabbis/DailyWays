@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePomodoro } from '../../context/PomodoroContext';
-import { Play, Pause, RotateCcw, X, Minimize2, Settings, ChevronLeft, Maximize2 } from 'lucide-react';
+import { Play, Pause, RotateCcw, X, Minimize2, Settings } from 'lucide-react';
 import './PomodoroTimer.css';
+
+const DEFAULT_SIZE = { width: 280, height: null }; // height null = auto
+const DEFAULT_MINI_SIZE = { width: 120, height: 60 };
+const DEFAULT_POS = () => ({ x: window.innerWidth - 320, y: window.innerHeight - 380 });
 
 export default function PomodoroTimer() {
     const {
@@ -12,325 +16,269 @@ export default function PomodoroTimer() {
 
     const [showSettings, setShowSettings] = useState(false);
     const [customMinutes, setCustomMinutes] = useState('25');
-    const [position, setPosition] = useState({ x: window.innerWidth - 320, y: window.innerHeight - 400 });
-    const [dimensions, setDimensions] = useState(() => {
-        const saved = localStorage.getItem('pomodoro_size');
-        // Reduced default height to 320 to avoid empty space
-        return saved ? JSON.parse(saved) : { width: 300, height: 320 };
-    });
-    const [isDragging, setIsDragging] = useState(false);
-    const [isResizing, setIsResizing] = useState(false);
-    const [isActuallyDragging, setIsActuallyDragging] = useState(false);
+    const [position, setPosition] = useState(DEFAULT_POS);
+    const [size, setSize] = useState(DEFAULT_SIZE);     // full mode
+    const [miniSize, setMiniSize] = useState(DEFAULT_MINI_SIZE);    // minimized mode
 
-    const dragDistance = useRef(0);
-    const dragStartOffset = useRef({ x: 0, y: 0 });
-    const resizeStartSize = useRef({ width: 0, height: 0, x: 0, y: 0 });
-    const initialPinchDistance = useRef(0);
-    const longPressTimer = useRef(null);
-    const widgetRef = useRef(null);
-
-    // Initial position & size on mount
     useEffect(() => {
         if (isOpen) {
-            const savedPos = localStorage.getItem('pomodoro_pos');
-            if (savedPos) setPosition(JSON.parse(savedPos));
-
-            const savedSize = localStorage.getItem('pomodoro_size');
-            if (savedSize) setDimensions(JSON.parse(savedSize));
+            setPosition(DEFAULT_POS());
+            setSize(DEFAULT_SIZE);
+            setMiniSize(DEFAULT_MINI_SIZE);
         }
     }, [isOpen]);
 
-    const handleMouseDown = useCallback((e) => {
-        // Only drag if header or minimized pill is clicked
-        const isHeader = e.target.closest('.pomodoro-header');
-        const isMinimizedPill = e.target.closest('.pomodoro-minimized-content');
+    // Drag ──────────────────────────────────────────────────────────────────
+    const [isDragging, setIsDragging] = useState(false);
+    const [isActuallyDragging, setIsActuallyDragging] = useState(false);
+    const dragDistance = useRef(0);
+    const dragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
 
-        if (isHeader || isMinimizedPill) {
-            dragDistance.current = 0;
-            dragStartOffset.current = {
-                x: e.clientX,
-                y: e.clientY,
-                posX: position.x,
-                posY: position.y
-            };
+    // Resize ────────────────────────────────────────────────────────────────
+    const [resizeDir, setResizeDir] = useState(null); // 'e'|'s'|'se'
+    const resizeStart = useRef({ width: 0, height: 0, mouseX: 0, mouseY: 0 });
 
-            setIsDragging(true);
-        }
+    const widgetRef = useRef(null);
+
+    const handleMouseDownDrag = useCallback((e) => {
+        e.preventDefault();
+        dragDistance.current = 0;
+        dragStart.current = { x: e.clientX, y: e.clientY, posX: position.x, posY: position.y };
+        setIsDragging(true);
     }, [position]);
 
-    const handleMouseUpGlobal = useCallback(() => {
-        if (longPressTimer.current) {
-            clearTimeout(longPressTimer.current);
-            longPressTimer.current = null;
-        }
-        setIsDragging(false);
-        setIsActuallyDragging(false);
-        setIsResizing(false);
-    }, []);
-
-    const handleResizeMouseDown = (e) => {
-        e.stopPropagation();
+    const startResize = useCallback((dir) => (e) => {
         e.preventDefault();
-        setIsResizing(true);
-        resizeStartSize.current = {
-            width: dimensions.width,
-            height: dimensions.height,
-            x: e.clientX,
-            y: e.clientY
-        };
-    };
-
-    // Pinch zoom for mobile
-    const handleTouchStart = (e) => {
-        if (e.touches.length === 2) {
-            const dist = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
-            initialPinchDistance.current = dist;
-            resizeStartSize.current = { ...dimensions };
+        e.stopPropagation();
+        const el = widgetRef.current;
+        const currentW = el?.offsetWidth || (isMinimized ? miniSize.width : size.width || 280);
+        const currentH = el?.offsetHeight || (isMinimized ? miniSize.height : size.height || 300);
+        resizeStart.current = { width: currentW, height: currentH, mouseX: e.clientX, mouseY: e.clientY };
+        // Anchor height when starting vertical resize on full mode
+        if (!isMinimized && dir.includes('s')) {
+            setSize(prev => ({ ...prev, height: currentH }));
         }
-    };
-
-    const handleTouchMove = (e) => {
-        if (e.touches.length === 2 && initialPinchDistance.current > 0) {
-            const dist = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
-            const factor = dist / initialPinchDistance.current;
-
-            const newWidth = Math.min(600, Math.max(isMinimized ? 120 : 250, resizeStartSize.current.width * factor));
-            const newHeight = Math.min(800, Math.max(isMinimized ? 40 : 300, resizeStartSize.current.height * factor));
-
-            setDimensions({ width: newWidth, height: newHeight });
-        }
-    };
-
-    const handleTouchEnd = () => {
-        initialPinchDistance.current = 0;
-        localStorage.setItem('pomodoro_size', JSON.stringify(dimensions));
-    };
+        setResizeDir(dir);
+    }, [isMinimized, miniSize, size]);
 
     useEffect(() => {
-        const handleMouseMove = (e) => {
-            if (isDragging && !isResizing) {
-                const deltaX = e.clientX - dragStartOffset.current.x;
-                const deltaY = e.clientY - dragStartOffset.current.y;
-                const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-
+        const onMove = (e) => {
+            // Drag
+            if (isDragging && !resizeDir) {
+                const dx = e.clientX - dragStart.current.x;
+                const dy = e.clientY - dragStart.current.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
                 if (dist > 3 || isActuallyDragging) {
                     if (!isActuallyDragging) setIsActuallyDragging(true);
-
-                    let newX = dragStartOffset.current.posX + deltaX;
-                    let newY = dragStartOffset.current.posY + deltaY;
                     dragDistance.current = dist;
-
-                    const padding = 10;
-                    const width = widgetRef.current?.offsetWidth || dimensions.width;
-                    const height = widgetRef.current?.offsetHeight || dimensions.height;
-
-                    newX = Math.max(padding, Math.min(newX, window.innerWidth - width - padding));
-                    newY = Math.max(padding, Math.min(newY, window.innerHeight - height - padding));
-
-                    const newPos = { x: newX, y: newY };
-                    setPosition(newPos);
-                    localStorage.setItem('pomodoro_pos', JSON.stringify(newPos));
+                    const pad = 10;
+                    const el = widgetRef.current;
+                    const w = el?.offsetWidth || 280;
+                    const h = el?.offsetHeight || 200;
+                    setPosition({
+                        x: Math.max(pad, Math.min(dragStart.current.posX + dx, window.innerWidth - w - pad)),
+                        y: Math.max(pad, Math.min(dragStart.current.posY + dy, window.innerHeight - h - pad)),
+                    });
                 }
-            } else if (isResizing) {
-                const deltaX = e.clientX - resizeStartSize.current.x;
-                const deltaY = e.clientY - resizeStartSize.current.y;
+            }
+            // Resize
+            if (resizeDir) {
+                const dx = e.clientX - resizeStart.current.mouseX;
+                const dy = e.clientY - resizeStart.current.mouseY;
 
-                const minW = isMinimized ? 120 : 250;
-                const minH = isMinimized ? 45 : 200;
+                // Uniform delta: any movement (right or down) scales it up
+                // Using Math.max(dx, dy) makes it feel responsive to both axes
+                const delta = Math.max(dx, dy);
 
-                const newWidth = Math.min(800, Math.max(minW, resizeStartSize.current.width + deltaX));
-                const newHeight = Math.min(1000, Math.max(minH, resizeStartSize.current.height + deltaY));
+                if (isMinimized) {
+                    setMiniSize(prev => {
+                        const ratio = resizeStart.current.width / resizeStart.current.height;
+                        // Lower min width to 80 for more range
+                        const newW = Math.min(450, Math.max(80, resizeStart.current.width + delta));
 
-                const newSize = { width: newWidth, height: newHeight };
-                setDimensions(newSize);
-                localStorage.setItem('pomodoro_size', JSON.stringify(newSize));
+                        // Keep it rounder by default (ratio closer to 2)
+                        const targetRatio = Math.max(1.8, Math.min(2.4, ratio + delta / 500));
+
+                        return { width: newW, height: newW / targetRatio };
+                    });
+                } else {
+                    setSize(prev => {
+                        const newW = Math.min(480, Math.max(200, resizeStart.current.width + delta));
+                        return { width: newW };
+                    });
+                }
             }
         };
-
-        if (isDragging || isResizing) {
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUpGlobal);
+        const onUp = () => { setIsDragging(false); setIsActuallyDragging(false); setResizeDir(null); };
+        if (isDragging || resizeDir) {
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
         }
         return () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUpGlobal);
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
         };
-    }, [isDragging, isActuallyDragging, isResizing, position, handleMouseUpGlobal]);
+    }, [isDragging, isActuallyDragging, resizeDir, isMinimized]);
 
     if (!isOpen) return null;
 
-    const handleMinimizedClick = () => {
-        // Only expand if we didn't drag it much
-        if (dragDistance.current < 5) {
-            toggleMinimize();
-        }
-    };
+    const handleMinimizedClick = () => { if (dragDistance.current < 5) toggleMinimize(); };
+    const w = size.width || 280;
+    const isCompact = w < 250;
+    const timerFontSize = Math.min(3.5, Math.max(1.8, w / 90));
+    const btnSize = Math.min(64, w / 4.5);
+
+    const getModeLabel = () => mode === 'focus' ? 'Foco' : mode === 'short' ? 'Pausa Curta' : 'Pausa Longa';
+    const getModeColor = () => mode === 'focus' ? 'var(--accent-primary)' : mode === 'short' ? 'var(--success)' : 'var(--info)';
 
     const handleApplyCustomTime = (e) => {
         e.preventDefault();
         const mins = parseInt(customMinutes);
-        if (mins > 0 && mins <= 120) {
-            setTimeLeft(mins * 60);
-            setShowSettings(false);
+        if (mins > 0 && mins <= 120) { setTimeLeft(mins * 60); setShowSettings(false); }
+    };
+
+    const cursorStyle = isActuallyDragging ? 'grabbing'
+        : resizeDir === 'e' ? 'ew-resize'
+            : resizeDir === 's' ? 'ns-resize'
+                : resizeDir === 'se' ? 'nwse-resize'
+                    : 'auto';
+
+    const widgetStyle = isMinimized
+        ? {
+            left: position.x,
+            top: position.y,
+            width: miniSize.width,
+            height: miniSize.height,
+            cursor: cursorStyle,
         }
-    };
-
-
-    const getModeLabel = () => {
-        if (mode === 'focus') return 'Foco';
-        if (mode === 'short') return 'Pausa Curta';
-        if (mode === 'long') return 'Pausa Longa';
-    };
-
-    const getModeColor = () => {
-        if (mode === 'focus') return 'var(--accent-primary)';
-        if (mode === 'short') return 'var(--success)';
-        if (mode === 'long') return 'var(--info)';
-    };
-
-    // Style overrides based on dimensions
-    const widgetStyles = {
-        left: position.x,
-        top: position.y,
-        width: isMinimized ? Math.max(140, dimensions.width * 0.45) : dimensions.width,
-        height: isMinimized ? 'auto' : dimensions.height,
-        cursor: isActuallyDragging ? 'grabbing' : isResizing ? 'nwse-resize' : 'auto',
-        transform: isActuallyDragging ? 'scale(1.02)' : 'none',
-        transition: isActuallyDragging ? 'none' : 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease'
-    };
+        : {
+            left: position.x,
+            top: position.y,
+            width: size.width,
+            height: size.height ?? undefined, // undefined = auto
+            cursor: cursorStyle,
+            transform: isActuallyDragging ? 'scale(1.02)' : 'none',
+            transition: isActuallyDragging || resizeDir ? 'none' : 'transform 0.25s ease, box-shadow 0.25s ease',
+        };
 
     return (
         <div
             ref={widgetRef}
-            className={`pomodoro-widget ${isMinimized ? 'minimized' : ''} ${isDragging ? 'dragging' : ''} animate-scale-in`}
-            style={widgetStyles}
-            onMouseDown={handleMouseDown}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
+            className={`pomodoro-widget ${isMinimized ? 'minimized' : ''} ${isDragging ? 'dragging' : ''} ${resizeDir ? 'resizing' : ''} animate-scale-in`}
+            style={widgetStyle}
             onContextMenu={e => e.preventDefault()}
         >
-            {/* Header (only in full mode) */}
+            {/* ── Full mode ───────────────────────────────────────────────── */}
             {!isMinimized && (
-                <div className="pomodoro-header">
-                    <div className="pomodoro-drag-handle">
-                        <span className="pomodoro-title">{getModeLabel()}</span>
+                <>
+                    <div className="pomodoro-header" onMouseDown={handleMouseDownDrag}>
+                        <div className="pomodoro-drag-handle">
+                            <span className="pomodoro-title">{getModeLabel()}</span>
+                        </div>
+                        <div className="pomodoro-controls-top">
+                            <button className="btn-icon-sm" onClick={() => setShowSettings(s => !s)}>
+                                <Settings size={14} />
+                            </button>
+                            <button className="btn-icon-sm" onClick={toggleMinimize}>
+                                <Minimize2 size={14} />
+                            </button>
+                            <button className="btn-icon-sm" onClick={() => setIsOpen(false)}>
+                                <X size={14} />
+                            </button>
+                        </div>
                     </div>
-                    <div className="pomodoro-controls-top">
-                        <button className="btn-icon-sm" onClick={() => setShowSettings(!showSettings)}>
-                            <Settings size={14} />
-                        </button>
-                        <button className="btn-icon-sm" onClick={toggleMinimize}>
-                            <Minimize2 size={14} />
-                        </button>
-                        <button className="btn-icon-sm" onClick={() => setIsOpen(false)}>
-                            <X size={14} />
-                        </button>
-                    </div>
-                </div>
-            )}
 
-            {/* Content (hidden when minimized) */}
-            {!isMinimized && (
-                <div className="pomodoro-content">
-                    {showSettings ? (
-                        <form className="pomodoro-settings animate-slide-up" onSubmit={handleApplyCustomTime}>
-                            <label>Tempo Customizado (min)</label>
-                            <div className="custom-time-input">
-                                <input
-                                    type="number"
-                                    value={customMinutes}
-                                    onChange={e => setCustomMinutes(e.target.value)}
-                                    min="1"
-                                    max="120"
-                                    autoFocus
-                                />
-                                <button type="submit" className="btn btn-primary btn-sm">Ok</button>
-                            </div>
-                            <button type="button" className="btn-text-sm" onClick={() => setShowSettings(false)}>Voltar</button>
-                        </form>
-                    ) : (
-                        <>
-                            <div className="pomodoro-timer-display" style={{
-                                color: getModeColor(),
-                                fontSize: `${Math.max(1.5, dimensions.width / 80)}rem`
-                            }}>
-                                {formatTime(timeLeft)}
-                            </div>
-
-                            <div className="pomodoro-progress-bar">
+                    <div className={`pomodoro-content ${isCompact ? 'compact' : ''}`}>
+                        {showSettings ? (
+                            <form className="pomodoro-settings animate-slide-up" onSubmit={handleApplyCustomTime}>
+                                <label>Tempo (min)</label>
+                                <div className="custom-time-input">
+                                    <input
+                                        type="number" value={customMinutes}
+                                        onChange={e => setCustomMinutes(e.target.value)}
+                                        min="1" max="120" autoFocus
+                                    />
+                                    <button type="submit" className="btn btn-primary btn-sm">Ok</button>
+                                </div>
+                                <button type="button" className="btn-text-sm" onClick={() => setShowSettings(false)}>Voltar</button>
+                            </form>
+                        ) : (
+                            <>
                                 <div
-                                    className="pomodoro-progress-fill"
-                                    style={{ width: `${progress()}%`, background: getModeColor() }}
-                                />
-                            </div>
+                                    className="pomodoro-timer-display"
+                                    style={{ color: getModeColor(), fontSize: `${timerFontSize}rem` }}
+                                >
+                                    {formatTime(timeLeft)}
+                                </div>
 
-                            <div className="pomodoro-actions">
-                                <button
-                                    className="btn-circle-lg"
-                                    onClick={toggleTimer}
-                                    style={{
-                                        background: getModeColor(),
-                                        width: Math.min(80, dimensions.width / 4),
-                                        height: Math.min(80, dimensions.width / 4)
-                                    }}
-                                >
-                                    {isActive ? <Pause size={dimensions.width / 12} fill="white" color="white" /> : <Play size={dimensions.width / 12} fill="white" color="white" />}
-                                </button>
-                                <button className="btn-circle-md" onClick={resetTimer}>
-                                    <RotateCcw size={18} />
-                                </button>
-                            </div>
+                                <div className="pomodoro-progress-bar">
+                                    <div
+                                        className="pomodoro-progress-fill"
+                                        style={{ width: `${progress()}%`, background: getModeColor() }}
+                                    />
+                                </div>
 
-                            <div className="pomodoro-modes">
-                                <button
-                                    className={`mode-btn ${mode === 'focus' ? 'active' : ''}`}
-                                    onClick={() => setTimerMode('focus')}
-                                >
-                                    25
-                                </button>
-                                <button
-                                    className={`mode-btn ${mode === 'short' ? 'active' : ''}`}
-                                    onClick={() => setTimerMode('short')}
-                                >
-                                    5
-                                </button>
-                                <button
-                                    className={`mode-btn ${mode === 'long' ? 'active' : ''}`}
-                                    onClick={() => setTimerMode('long')}
-                                >
-                                    15
-                                </button>
-                            </div>
-                        </>
-                    )}
-                </div>
+                                <div className="pomodoro-actions">
+                                    <button
+                                        className="btn-circle-lg"
+                                        onClick={toggleTimer}
+                                        style={{ background: getModeColor(), width: btnSize, height: btnSize }}
+                                    >
+                                        {isActive
+                                            ? <Pause size={btnSize / 2.5} fill="white" color="white" />
+                                            : <Play size={btnSize / 2.5} fill="white" color="white" />}
+                                    </button>
+                                    <button className="btn-circle-md" onClick={resetTimer}>
+                                        <RotateCcw size={16} />
+                                    </button>
+                                </div>
+
+                                <div className="pomodoro-modes">
+                                    {[['focus', '25'], ['short', '5'], ['long', '15']].map(([m, label]) => (
+                                        <button
+                                            key={m}
+                                            className={`mode-btn ${mode === m ? 'active' : ''}`}
+                                            onClick={() => setTimerMode(m)}
+                                        >{label}</button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* 3 resize handles */}
+                    <div className="pomodoro-resize-e" onMouseDown={startResize('e')} />
+                    <div className="pomodoro-resize-s" onMouseDown={startResize('s')} />
+                    <div className="pomodoro-resize-se" onMouseDown={startResize('se')} />
+                </>
             )}
 
-            {/* Minimized View - Just the timer pill */}
+            {/* ── Minimized pill ──────────────────────────────────────────── */}
             {isMinimized && (
-                <div className="pomodoro-minimized-content" onClick={handleMinimizedClick}>
-                    <span className="minimized-timer" style={{
-                        color: getModeColor(),
-                        fontSize: `${Math.max(0.8, dimensions.width / 250)}rem`
-                    }}>
-                        {formatTime(timeLeft)}
-                    </span>
-                    {isActive && <div className="minimized-active-dot" style={{ background: getModeColor() }} />}
-                </div>
+                <>
+                    <div
+                        className="pomodoro-minimized-content"
+                        onMouseDown={handleMouseDownDrag}
+                        onClick={handleMinimizedClick}
+                    >
+                        <span
+                            className="minimized-timer"
+                            style={{
+                                color: getModeColor(),
+                                fontSize: `${Math.max(1.2, Math.min(miniSize.width / 75, miniSize.height / 24))}rem`,
+                                fontWeight: '600'
+                            }}
+                        >
+                            {formatTime(timeLeft)}
+                        </span>
+                        {isActive && <div className="minimized-active-dot" style={{ background: getModeColor() }} />}
+                    </div>
+                    {/* Minimized also gets resize handles */}
+                    <div className="pomodoro-resize-e" onMouseDown={startResize('e')} />
+                    <div className="pomodoro-resize-s" onMouseDown={startResize('s')} />
+                    <div className="pomodoro-resize-se" onMouseDown={startResize('se')} />
+                </>
             )}
-
-            {/* Resize Handle */}
-            <div
-                className="pomodoro-resize-handle"
-                onMouseDown={handleResizeMouseDown}
-            />
         </div>
     );
 }

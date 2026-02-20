@@ -317,16 +317,28 @@ export async function insertBoardFull(userId, board) {
 /**
  * Atualiza um board de forma inteligente (Upsert + Diff).
  * Em vez de deletar tudo, identifica o que foi removido e atualiza o resto em batch.
+ * Timeout de 8s via AbortController: se qualquer chamada HTTP ao Supabase travar
+ * (lock de token refresh, rede idle, etc.), a função rejeita limpamente após 8s.
  */
 export async function updateBoardFull(userId, board) {
   const hasPosition = await cardsHasPositionColumn();
   const boardId = board.id;
 
+  // AbortController: cancela TODAS as requisições pendentes se o timeout bater.
+  // 8s é menor que o safety timer de 10s do AppContext, então o catch do persistBoard
+  // dispara antes do safety timer e mostra o FloatingSaveError corretamente.
+  const controller = new AbortController();
+  const signal = controller.signal;
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
   console.log(`[boardService] upsertBoardFull (Smart): board "${board.title}" (${boardId})`);
 
   try {
-    // 1. Atualizar metadados do board (usamos upsert em vez de update para ser resiliente a boards novos)
-    const { error: upErr } = await supabase
+    // Wrapper para passar o signal em cada query
+    const q = (query) => query.abortSignal(signal);
+
+    // 1. Atualizar metadados do board
+    const { error: upErr } = await q(supabase
       .from('boards')
       .upsert({
         id: boardId,
@@ -336,7 +348,7 @@ export async function updateBoardFull(userId, board) {
         emoji: board.emoji,
         position: board.position ?? 0,
         updated_at: new Date().toISOString(),
-      });
+      }));
 
     if (upErr) throw upErr;
 
@@ -367,57 +379,64 @@ export async function updateBoardFull(userId, board) {
     // 3. Identificar e deletar removidos (Sync reverso)
     // Deletar subtarefas órfãs
     if (payloadListIds.size > 0) {
-      const { data: dbCards } = await supabase.from('cards').select('id').in('list_id', Array.from(payloadListIds));
+      const { data: dbCards } = await q(supabase.from('cards').select('id').in('list_id', Array.from(payloadListIds)));
       const allDbCardIds = (dbCards ?? []).map(c => c.id);
       if (allDbCardIds.length > 0) {
-        const { data: dbSubtasks } = await supabase.from('subtasks').select('id').in('card_id', allDbCardIds);
+        const { data: dbSubtasks } = await q(supabase.from('subtasks').select('id').in('card_id', allDbCardIds));
         const subtasksToDelete = (dbSubtasks ?? []).filter(st => !payloadSubtaskIds.has(st.id)).map(st => st.id);
         if (subtasksToDelete.length > 0) {
-          await supabase.from('subtasks').delete().in('id', subtasksToDelete);
+          await q(supabase.from('subtasks').delete().in('id', subtasksToDelete));
         }
       }
     }
 
     // Deletar cards órfãos
-    const { data: dbLists } = await supabase.from('lists').select('id').eq('board_id', boardId);
+    const { data: dbLists } = await q(supabase.from('lists').select('id').eq('board_id', boardId));
     const allDbListIds = (dbLists ?? []).map(l => l.id);
     if (allDbListIds.length > 0) {
-      const { data: dbCardsForBoard } = await supabase.from('cards').select('id').in('list_id', allDbListIds);
+      const { data: dbCardsForBoard } = await q(supabase.from('cards').select('id').in('list_id', allDbListIds));
       const cardsToDelete = (dbCardsForBoard ?? []).filter(c => !payloadCardIds.has(c.id)).map(c => c.id);
       if (cardsToDelete.length > 0) {
-        await supabase.from('cards').delete().in('id', cardsToDelete);
+        await q(supabase.from('cards').delete().in('id', cardsToDelete));
       }
 
       // Deletar listas órfãs
       const listsToDelete = allDbListIds.filter(id => !payloadListIds.has(id));
       if (listsToDelete.length > 0) {
-        await supabase.from('lists').delete().in('id', listsToDelete);
+        await q(supabase.from('lists').delete().in('id', listsToDelete));
       }
     }
 
     // 4. Batch Upsert (Apenas 3 chamadas para tudo)
     if (listsToUpsert.length > 0) {
-      const { error: lErr } = await supabase.from('lists').upsert(listsToUpsert);
+      const { error: lErr } = await q(supabase.from('lists').upsert(listsToUpsert));
       if (lErr) throw lErr;
     }
 
     if (cardsToUpsert.length > 0) {
-      const { error: cErr } = await supabase.from('cards').upsert(cardsToUpsert);
+      const { error: cErr } = await q(supabase.from('cards').upsert(cardsToUpsert));
       if (cErr) throw cErr;
     }
 
     if (subtasksToUpsert.length > 0) {
-      const { error: sErr } = await supabase.from('subtasks').upsert(subtasksToUpsert);
+      const { error: sErr } = await q(supabase.from('subtasks').upsert(subtasksToUpsert));
       if (sErr) throw sErr;
     }
 
     console.log(`[boardService] upsertBoardFull OK: "${board.title}"`);
     return { success: true };
   } catch (err) {
-    console.error('[boardService] updateBoardFull error:', err);
-    return { success: false, error: err.message || String(err) };
+    const isAbort = signal.aborted || err?.name === 'AbortError';
+    const msg = isAbort
+      ? `Timeout (8s): requisição ao servidor travou. Verifique sua conexão.`
+      : (err.message || String(err));
+    console.error('[boardService] updateBoardFull error:', isAbort ? 'ABORT/TIMEOUT' : err);
+    return { success: false, error: msg };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
+
 
 // ── Save All ────────────────────────────────────────────────────────
 

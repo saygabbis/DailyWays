@@ -12,6 +12,7 @@ import {
     Edit3, Trash2, Copy, Palette, Focus, LayoutDashboard,
     MoreHorizontal
 } from 'lucide-react';
+import { useContextMenu } from '../Common/ContextMenu';
 import logoImg from '../../assets/Logo - Branco.png';
 import './Sidebar.css';
 import { useI18n } from '../../context/ThemeContext';
@@ -26,6 +27,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
     } = useApp();
     const t = useI18n();
     const { toggleOpen } = usePomodoro();
+    const { showContextMenu } = useContextMenu();
 
     const [showNewBoard, setShowNewBoard] = useState(false);
     const [newBoardTitle, setNewBoardTitle] = useState('');
@@ -217,9 +219,23 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                     type: 'danger'
                 });
                 if (confirmed) {
+                    const isActive = state.activeBoard === board.id;
+                    const boardIndex = state.boards.findIndex(b => b.id === board.id);
                     dispatch({ type: 'DELETE_BOARD', payload: board.id });
                     if (suppressRealtime) suppressRealtime(3000);
                     await deleteBoard(board.id);
+
+                    if (isActive) {
+                        const remaining = state.boards.filter(b => b.id !== board.id);
+                        if (remaining.length > 0) {
+                            // vai para o próximo, ou para o anterior se era o último
+                            const next = remaining[boardIndex] ?? remaining[boardIndex - 1];
+                            dispatch({ type: 'SET_ACTIVE_BOARD', payload: next.id });
+                            onViewChange('board');
+                        } else {
+                            onViewChange('dashboard');
+                        }
+                    }
                 }
             },
         },
@@ -311,7 +327,14 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                         onContextMenu={(e) => handleBoardContextMenu(e, board)}
                                                         onDoubleClick={() => isDesktop && handleStartRename(board)}
                                                     >
-                                                        <div className="board-drag-indicator">
+                                                        <div
+                                                            className="board-drag-indicator"
+                                                            title="Mais opções"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleBoardContextMenu(e, board);
+                                                            }}
+                                                        >
                                                             <MoreHorizontal size={14} className="rotate-90" />
                                                         </div>
 

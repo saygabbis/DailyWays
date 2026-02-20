@@ -12,15 +12,15 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider>
       <AuthProvider>
-        <AppProvider>
-          <ContextMenuProvider>
-            <PomodoroProvider>
-              <ToastProvider>
+        <ToastProvider>
+          <AppProvider>
+            <ContextMenuProvider>
+              <PomodoroProvider>
                 <App />
-              </ToastProvider>
-            </PomodoroProvider>
-          </ContextMenuProvider>
-        </AppProvider>
+              </PomodoroProvider>
+            </ContextMenuProvider>
+          </AppProvider>
+        </ToastProvider>
       </AuthProvider>
     </ThemeProvider>
   </StrictMode>,

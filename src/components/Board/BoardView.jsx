@@ -13,6 +13,7 @@ export default function BoardView({ onCardClick }) {
     const [newListTitle, setNewListTitle] = useState('');
     const [showShare, setShowShare] = useState(false);
     const [listDetails, setListDetails] = useState(null);
+    const [droppedListId, setDroppedListId] = useState(null);
 
     // Floating Toolbar State
     const [toolbarPos, setToolbarPos] = useState(null);
@@ -100,6 +101,7 @@ export default function BoardView({ onCardClick }) {
 
         // Handle List Reordering
         if (type === 'list') {
+            const movedListId = board.lists[source.index]?.id;
             dispatch({
                 type: 'MOVE_LIST',
                 payload: {
@@ -110,6 +112,11 @@ export default function BoardView({ onCardClick }) {
                 }
             });
             persistBoard(board.id);
+            // Anima a lista que foi solta
+            if (movedListId) {
+                setDroppedListId(movedListId);
+                setTimeout(() => setDroppedListId(null), 900);
+            }
             return;
         }
 
@@ -304,58 +311,74 @@ export default function BoardView({ onCardClick }) {
                                 ref={provided.innerRef}
                                 {...provided.droppableProps}
                             >
-                                {board.lists.map((list, index) => (
-                                    <Draggable key={list.id} draggableId={list.id} index={index}>
-                                        {(provided, snapshot) => (
-                                            <div
-                                                ref={provided.innerRef}
-                                                {...provided.draggableProps}
-                                                className={`board-list-wrapper ${snapshot.isDragging ? 'list-dragging' : ''}`}
-                                                style={{
-                                                    ...provided.draggableProps.style,
-                                                }}
-                                            >
-                                                {/* The entire header is the drag handle for the list */}
-                                                <BoardList
-                                                    list={list}
-                                                    boardId={board.id}
-                                                    onCardClick={onCardClick}
-                                                    index={index}
-                                                    onOpenListDetails={setListDetails}
-                                                    dragHandleProps={provided.dragHandleProps}
-                                                />
-                                            </div>
-                                        )}
-                                    </Draggable>
-                                ))}
-                                {provided.placeholder}
+                                {(() => {
+                                    // Stagger dinâmico: janela total = min(n * 55ms, 275ms).
+                                    // 55ms entre cada lista → painel vazio visível por menos tempo,
+                                    // mas ainda percetível a cascata (2 listas = 0/55ms, 6 = 0..275ms).
+                                    const n = board.lists.length;
+                                    const staggerWindow = Math.min(n * 55, 275);
+                                    const step = n > 1 ? staggerWindow / (n - 1) : 0;
+                                    const addListDelay = staggerWindow + 40;
 
-                                {/* Add List Placeholder */}
-                                <div
-                                    className="board-add-list"
-                                >
-                                    {addingList ? (
-                                        <form onSubmit={handleAddList} className="board-add-list-form animate-scale-in">
-                                            <input
-                                                type="text"
-                                                placeholder="Nome da lista..."
-                                                value={newListTitle}
-                                                onChange={e => setNewListTitle(e.target.value)}
-                                                autoFocus
-                                                onBlur={() => { if (!newListTitle.trim()) setAddingList(false); }}
-                                            />
-                                            <div className="board-add-list-actions">
-                                                <button type="submit" className="btn btn-primary btn-sm">Adicionar</button>
-                                                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAddingList(false)}>Cancelar</button>
+                                    return (
+                                        <>
+                                            {board.lists.map((list, index) => (
+                                                <Draggable key={list.id} draggableId={list.id} index={index}>
+                                                    {(provided, snapshot) => (
+                                                        <div
+                                                            ref={provided.innerRef}
+                                                            {...provided.draggableProps}
+                                                            className={`board-list-wrapper ${snapshot.isDragging ? 'list-dragging' : ''}`}
+                                                            style={{
+                                                                ...provided.draggableProps.style,
+                                                            }}
+                                                        >
+                                                            <BoardList
+                                                                list={list}
+                                                                boardId={board.id}
+                                                                onCardClick={onCardClick}
+                                                                index={index}
+                                                                onOpenListDetails={setListDetails}
+                                                                dragHandleProps={provided.dragHandleProps}
+                                                                isDropped={list.id === droppedListId}
+                                                                entryDelay={list.isNew ? 0 : Math.round(index * step)}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </Draggable>
+                                            ))}
+                                            {provided.placeholder}
+
+                                            {/* Add List Placeholder */}
+                                            <div
+                                                className="board-add-list"
+                                                style={{ animationDelay: `${addListDelay}ms` }}
+                                            >
+                                                {addingList ? (
+                                                    <form onSubmit={handleAddList} className="board-add-list-form animate-scale-in">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Nome da lista..."
+                                                            value={newListTitle}
+                                                            onChange={e => setNewListTitle(e.target.value)}
+                                                            autoFocus
+                                                            onBlur={() => { if (!newListTitle.trim()) setAddingList(false); }}
+                                                        />
+                                                        <div className="board-add-list-actions">
+                                                            <button type="submit" className="btn btn-primary btn-sm">Adicionar</button>
+                                                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAddingList(false)}>Cancelar</button>
+                                                        </div>
+                                                    </form>
+                                                ) : (
+                                                    <button className="board-add-list-btn" onClick={() => setAddingList(true)}>
+                                                        <Plus size={18} />
+                                                        <span>Adicionar lista</span>
+                                                    </button>
+                                                )}
                                             </div>
-                                        </form>
-                                    ) : (
-                                        <button className="board-add-list-btn" onClick={() => setAddingList(true)}>
-                                            <Plus size={18} />
-                                            <span>Adicionar lista</span>
-                                        </button>
-                                    )}
-                                </div>
+                                        </>
+                                    );
+                                })()}
                             </div>
                         )}
                     </Droppable>

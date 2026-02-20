@@ -560,6 +560,8 @@
 .board-add-list {
     flex-shrink: 0;
     width: 320px;
+    animation: slideUpJelly 0.55s var(--ease-out-soft) both;
+    /* animation-delay: definido dinamicamente via inline style no BoardView.jsx */
 }
 
 .board-add-list-btn {

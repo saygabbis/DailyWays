@@ -4,6 +4,7 @@ import { fetchBoards, saveBoards, insertBoardFull, updateBoardFull, updateBoards
 import { useAuth } from './AuthContext';
 import { supabase } from '../services/supabaseClient';
 import ConfirmModal from '../components/Common/ConfirmModal';
+import FloatingSaveError from '../components/Common/FloatingSaveError';
 
 const AppContext = createContext(null);
 
@@ -38,6 +39,9 @@ const initialState = {
     labels: [...LABEL_COLORS],
     savingBoardIds: [],
     pendingBoardIds: [], // boards com debounce agendado mas ainda não enviados ao servidor
+    // Erros de save: [{ boardId, boardTitle, boardSnapshot, error }]
+    // Cada entrada representa um save falho aguardando acao do usuario (retry ou revert)
+    saveErrors: [],
     showBoardToolbar: JSON.parse(localStorage.getItem('dailyways_show_toolbar') ?? 'true'),
     confirmModal: {
         show: false,
@@ -443,6 +447,22 @@ function appReducer(state, action) {
             };
         }
 
+        case 'CLEAR_SAVING':
+            return { ...state, savingBoardIds: [] };
+
+        // ── Save Errors (para o FloatingSaveError) ──
+        // Adiciona um erro de save (boardSnapshot armazenado para rollback)
+        case 'PUSH_SAVE_ERROR': {
+            const existing = state.saveErrors.filter(e => e.boardId !== action.payload.boardId);
+            return { ...state, saveErrors: [...existing, action.payload] };
+        }
+        // Remove o erro de um board (após retry com sucesso ou revert)
+        case 'DISMISS_SAVE_ERROR': {
+            return { ...state, saveErrors: state.saveErrors.filter(e => e.boardId !== action.payload) };
+        }
+        case 'CLEAR_SAVE_ERRORS':
+            return { ...state, saveErrors: [] };
+
         // ── Pending (debounce agendado, ainda não enviado ao servidor) ──
         case 'SET_PENDING_BOARD': {
             const { boardId: pbId, pending } = action.payload;
@@ -478,6 +498,11 @@ function appReducer(state, action) {
 export function AppProvider({ children }) {
     const { user } = useAuth();
     const userId = user?.id ?? null;
+    // Ref do userId: atualizado sempre que o user muda (via onAuthStateChange).
+    // Permite que os callbacks de save acessem o userId atual SEM chamar getSession(),
+    // que pode travar durante um token refresh (o Supabase client usa lock interno).
+    const userIdRef = useRef(userId);
+    useEffect(() => { userIdRef.current = userId; }, [userId]);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [recentlyAddedId, setRecentlyAddedId] = useState(null);
     const [state, dispatch] = useReducer(appReducer, initialState);
@@ -491,10 +516,27 @@ export function AppProvider({ children }) {
     // Counter de saves ativos: enquanto > 0, o Realtime NÃO deve sobrescrever o estado local.
     // Isso evita que dados stale do servidor apaguem mudanças locais quando o upsert ainda está em andamento.
     const activeSavesRef = useRef(0);
+    // Timestamp até quando aguardar antes de fazer HTTP (após TOKEN_REFRESHED).
+    // O Supabase client tem um lock interno durante o refresh que trava requisições HTTP.
+    // Após TOKEN_REFRESHED, aguardamos 2s para o lock ser liberado.
+    const tokenRefreshCooldownRef = useRef(0);
 
     useEffect(() => {
         stateRef.current = state;
     }, [state]);
+
+    // Rastreia TOKEN_REFRESHED e SIGNED_IN para aplicar cooldown antes de requisições HTTP.
+    // Ambos os eventos causam um lock interno no Supabase client que trava HTTP requests
+    // feitos logo em seguida (save imediatamente após refresh de aba minimizada, etc.).
+    useEffect(() => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+            if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+                console.log(`[AppContext] ${event}: cooldown de 2s ativado para requisições HTTP`);
+                tokenRefreshCooldownRef.current = Date.now() + 2000;
+            }
+        });
+        return () => subscription.unsubscribe();
+    }, []);
 
     // Load boards: Supabase primeiro. Se der ERRO (sessão expirada, rede), NUNCA criar defaults:
     // usar localStorage como fallback e retentar a API depois. Só criar boards padrão quando a API
@@ -509,10 +551,15 @@ export function AppProvider({ children }) {
             // Cancelar qualquer persistência pendente
             Object.values(saveTimeoutRef.current || {}).forEach((timeoutId) => clearTimeout(timeoutId));
             saveTimeoutRef.current = {};
+            // Resetar contador de saves ativos e supressão de Realtime
+            activeSavesRef.current = 0;
+            realtimeSuppressUntilRef.current = 0;
             dispatch({ type: 'SET_BOARDS', payload: [] });
             dispatch({ type: 'SET_ACTIVE_BOARD', payload: null });
-            // Limpar lista de pendências ao sair
+            // Limpar listas de pendências, saves e erros ao sair
             dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId: '__all__', pending: false } });
+            dispatch({ type: 'CLEAR_SAVING' });
+            dispatch({ type: 'CLEAR_SAVE_ERRORS' });
             console.log('[AppContext] User logout: state cleared');
             return;
         }
@@ -592,6 +639,48 @@ export function AppProvider({ children }) {
         realtimeSuppressUntilRef.current = Date.now() + ms;
     }, []);
 
+    // Helper central: retorna o userId ativo para uso nos saves.
+    // → PRIMEIRO tenta o userIdRef (atualizado pelo onAuthStateChange do Supabase —
+    //   não bloqueia durante token refresh, pois o Supabase client renova o token
+    //   automaticamente nas chamadas HTTP sem precisarmos chamar getSession()).
+    // → Fallback: chama getSession() com timeout de 8s caso o ref esteja vazio
+    //   (sessão totalmente nula / logout real).
+    const getFreshUserId = useCallback(async () => {
+        // Fast path: se já temos o userId do contexto, retorna imediatamente.
+        // O token será renovado automaticamente pelo Supabase client na chamada HTTP.
+        if (userIdRef.current) {
+            // Cooldown após TOKEN_REFRESHED: aguarda o lock interno do Supabase client ser liberado.
+            // Sem isso, requisições HTTP logo após o refresh ficam presas no lock e travam.
+            const cooldownMs = tokenRefreshCooldownRef.current - Date.now();
+            if (cooldownMs > 0) {
+                console.log(`[AppContext] getFreshUserId: aguardando cooldown pós-TOKEN_REFRESHED (${Math.round(cooldownMs)}ms)`);
+                await new Promise(resolve => setTimeout(resolve, cooldownMs));
+            }
+            return userIdRef.current;
+        }
+
+        // Slow path: sessão pode estar null (primeira carga ou logout) — verifica no servidor.
+        try {
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('getSession timeout')), 8000)
+            );
+            const { data, error } = await Promise.race([
+                supabase.auth.getSession(),
+                timeoutPromise,
+            ]);
+            if (error || !data?.session?.user?.id) {
+                console.warn('[AppContext] getFreshUserId: sessão inválida ou expirada', error?.message);
+                return null;
+            }
+            // Atualiza o ref com o valor recém obtido
+            userIdRef.current = data.session.user.id;
+            return data.session.user.id;
+        } catch (err) {
+            console.error('[AppContext] getFreshUserId error:', err.message);
+            return null;
+        }
+    }, []);
+
     // Helper para salvar um board específico de forma eficiente
     const persistBoard = useCallback(async (boardId) => {
         if (!userId || !initialLoadDone.current || !boardId) return;
@@ -612,35 +701,106 @@ export function AppProvider({ children }) {
             // Debounce disparou: sai do pending para saving
             dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: false } });
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: true } });
-            // Bloquear Realtime enquanto o upsert estiver em andamento
             activeSavesRef.current += 1;
-            suppressRealtime(8000); // Estender supressão para cobrir a duração do upsert
+            suppressRealtime(8000);
+
+            // Safety timer de 10s: se o save travar por qualquer motivo (rede, sessão, etc),
+            // libera o indicador E mostra o painel FloatingSaveError para o usuário agir.
+            const safetyTimer = setTimeout(() => {
+                console.warn('[AppContext] persistBoard: safety timeout (10s) para board', boardId);
+                const stuckBoard = stateRef.current.boards.find(b => b.id === boardId);
+                activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
+                if (activeSavesRef.current === 0) suppressRealtime(500);
+                dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
+                dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: false } });
+                delete saveTimeoutRef.current[boardId];
+                // Mostra painel de erro com snapshot atual para retry/revert
+                dispatch({
+                    type: 'PUSH_SAVE_ERROR',
+                    payload: {
+                        boardId,
+                        boardTitle: stuckBoard?.title,
+                        boardSnapshot: stuckBoard ? JSON.parse(JSON.stringify(stuckBoard)) : null,
+                        error: 'Timeout: save travou. Verifique sua conexão.',
+                    },
+                });
+            }, 10000);
+
+            let boardSnapshot = null;
             try {
                 const latestState = stateRef.current;
                 const board = latestState.boards.find(b => b.id === boardId);
-                if (!board) return;
-                console.log(`[AppContext] persistBoard (debounced): ${board.title}`);
-                await updateBoardFull(userId, board);
+                if (!board) {
+                    console.warn('[AppContext] persistBoard: board não encontrado', boardId);
+                    return;
+                }
+
+                // Captura snapshot para rollback antes de qualquer operação destrutiva
+                boardSnapshot = JSON.parse(JSON.stringify(board));
+
+                // Obtém sessão fresca — resolve o bug de token refresh:
+                // se o token foi renovado enquanto o debounce aguardava, getSession()
+                // retorna o userId da sessão ativa com o novo token já configurado.
+                const freshUserId = await getFreshUserId();
+                if (!freshUserId) {
+                    console.warn('[AppContext] persistBoard: sem sessão válida, abortando save de', boardId);
+                    // Rollback: restaura o snapshot
+                    dispatch({ type: 'SET_BOARDS', payload: stateRef.current.boards.map(b => b.id === boardId ? boardSnapshot : b) });
+                    dispatch({
+                        type: 'PUSH_SAVE_ERROR',
+                        payload: { boardId, boardTitle: boardSnapshot?.title, boardSnapshot, error: 'Sessão expirada' }
+                    });
+                    return;
+                }
+
+                console.log(`[AppContext] persistBoard: salvando "${board.title}"`);
+                // Promise.race: garante que mesmo se o AbortController do boardService
+                // não funcionar, o catch aqui dispara em 8.5s (antes do safety timer de 10s).
+                const saveTimeout = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Save timeout (8.5s): servidor não respondeu')), 8500)
+                );
+                const result = await Promise.race([updateBoardFull(freshUserId, board), saveTimeout]);
+
+                if (!result?.success) {
+                    throw new Error(result?.error || 'Falha ao salvar board');
+                }
             } catch (err) {
                 console.error('[AppContext] persistBoard error:', err);
+                // Rollback: restaura o estado do board ao snapshot capturado antes do save
+                if (boardSnapshot) {
+                    dispatch({ type: 'SET_BOARDS', payload: stateRef.current.boards.map(b => b.id === boardId ? boardSnapshot : b) });
+                    dispatch({
+                        type: 'PUSH_SAVE_ERROR',
+                        payload: { boardId, boardTitle: boardSnapshot.title, boardSnapshot, error: err?.message || 'Falha ao salvar' }
+                    });
+                }
             } finally {
+                clearTimeout(safetyTimer);
                 activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
-                // Se não há mais saves ativos, atualizar supressão para 500ms apenas
                 if (activeSavesRef.current === 0) suppressRealtime(500);
                 dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
-                // Limpar o timeout do ref
                 delete saveTimeoutRef.current[boardId];
             }
         }, 400);
 
         saveTimeoutRef.current = timeouts;
-    }, [userId, suppressRealtime]);
+    }, [userId, suppressRealtime, getFreshUserId]);
 
     // Salva todos os boards com debounce pendente imediatamente (usado pelo botão flutuante)
     const saveAllPending = useCallback(async () => {
         const timeouts = saveTimeoutRef.current;
         const pendingIds = Object.keys(timeouts);
         if (!pendingIds.length) return;
+
+        // Obtém sessão fresca — garante que token refresh não interfira
+        const freshUserId = await getFreshUserId();
+        if (!freshUserId) {
+            dispatch({
+                type: 'PUSH_SAVE_ERROR',
+                payload: { boardId: '__session__', boardTitle: null, boardSnapshot: null, error: 'Sessão expirada' }
+            });
+            return;
+        }
 
         // Cancelar todos os timers de debounce pendentes
         pendingIds.forEach(id => clearTimeout(timeouts[id]));
@@ -654,65 +814,109 @@ export function AppProvider({ children }) {
             const board = stateRef.current.boards.find(b => b.id === boardId);
             if (!board) {
                 activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
+                if (activeSavesRef.current === 0) suppressRealtime(500);
+                dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
                 return;
             }
+            const boardSnapshot = JSON.parse(JSON.stringify(board));
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: true } });
             try {
                 console.log(`[AppContext] saveAllPending: ${board.title}`);
-                await updateBoardFull(userId, board);
+                const result = await updateBoardFull(freshUserId, board);
+                if (!result?.success) throw new Error(result?.error || 'Falha ao salvar');
             } catch (err) {
                 console.error('[AppContext] saveAllPending error:', err);
+                dispatch({ type: 'SET_BOARDS', payload: stateRef.current.boards.map(b => b.id === boardId ? boardSnapshot : b) });
+                dispatch({
+                    type: 'PUSH_SAVE_ERROR',
+                    payload: { boardId, boardTitle: boardSnapshot.title, boardSnapshot, error: err?.message || 'Falha ao salvar' }
+                });
             } finally {
                 activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
                 if (activeSavesRef.current === 0) suppressRealtime(500);
                 dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
             }
         }));
-    }, [userId, suppressRealtime]);
+    }, [suppressRealtime, getFreshUserId]);
+
+    // Helper interno compartilhado para persistência imediata com rollback + token refresh
+    const persistBoardImmediate = useCallback(async (boardId, updates) => {
+        if (!boardId) return;
+        // Snapshot do estado ANTES das mudanças locais (para rollback)
+        const prevBoard = stateRef.current.boards.find(b => b.id === boardId);
+        const boardSnapshot = prevBoard ? JSON.parse(JSON.stringify(prevBoard)) : null;
+
+        dispatch({ type: 'UPDATE_BOARD', payload: { id: boardId, updates } });
+        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: true } });
+        suppressRealtime(8000);
+        activeSavesRef.current += 1;
+
+        const safetyTimer = setTimeout(() => {
+            console.warn('[AppContext] persistBoardImmediate: safety timeout (10s) para board', boardId);
+            const stuckBoard = stateRef.current.boards.find(b => b.id === boardId);
+            activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
+            if (activeSavesRef.current === 0) suppressRealtime(500);
+            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
+            // Mostra painel de erro com snapshot atual para retry/revert
+            dispatch({
+                type: 'PUSH_SAVE_ERROR',
+                payload: {
+                    boardId,
+                    boardTitle: stuckBoard?.title,
+                    boardSnapshot: stuckBoard ? JSON.parse(JSON.stringify(stuckBoard)) : null,
+                    error: 'Timeout: save travou. Verifique sua conexão.',
+                },
+            });
+        }, 10000);
+
+        try {
+            const freshUserId = await getFreshUserId();
+            if (!freshUserId) {
+                console.warn('[AppContext] persistBoardImmediate: sem sessão, abortando');
+                if (boardSnapshot) {
+                    dispatch({ type: 'SET_BOARDS', payload: stateRef.current.boards.map(b => b.id === boardId ? boardSnapshot : b) });
+                    dispatch({
+                        type: 'PUSH_SAVE_ERROR',
+                        payload: { boardId, boardTitle: boardSnapshot?.title, boardSnapshot, error: 'Sessão expirada' }
+                    });
+                }
+                return;
+            }
+            const board = stateRef.current.boards.find(b => b.id === boardId);
+            if (!board) return;
+            const saveTimeout = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Save timeout (8.5s): servidor não respondeu')), 8500)
+            );
+            const result = await Promise.race([updateBoardFull(freshUserId, { ...board, ...updates }), saveTimeout]);
+            if (!result?.success) throw new Error(result?.error || 'Falha ao salvar');
+        } catch (err) {
+            console.error('[AppContext] persistBoardImmediate error:', err);
+            if (boardSnapshot) {
+                dispatch({ type: 'SET_BOARDS', payload: stateRef.current.boards.map(b => b.id === boardId ? boardSnapshot : b) });
+                dispatch({
+                    type: 'PUSH_SAVE_ERROR',
+                    payload: { boardId, boardTitle: boardSnapshot?.title, boardSnapshot, error: err?.message || 'Falha ao salvar' }
+                });
+            }
+        } finally {
+            clearTimeout(safetyTimer);
+            activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
+            if (activeSavesRef.current === 0) suppressRealtime(500);
+            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
+        }
+    }, [suppressRealtime, getFreshUserId]);
 
     // Atualiza board no estado e persiste IMEDIATAMENTE (usado para Drag & Drop e mudanças estruturais)
     const updateBoardAndPersistImmediate = useCallback(async (boardId, updates) => {
         if (!boardId || !userId) return;
-        dispatch({ type: 'UPDATE_BOARD', payload: { id: boardId, updates } });
-        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: true } });
-        suppressRealtime(8000);
-        activeSavesRef.current += 1;
-
-        try {
-            const board = stateRef.current.boards.find(b => b.id === boardId);
-            if (board) {
-                await updateBoardFull(userId, { ...board, ...updates });
-            }
-        } catch (err) {
-            console.error('[AppContext] updateBoardAndPersistImmediate error:', err);
-        } finally {
-            activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
-            if (activeSavesRef.current === 0) suppressRealtime(500);
-            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
-        }
-    }, [userId, suppressRealtime]);
+        await persistBoardImmediate(boardId, updates);
+    }, [userId, persistBoardImmediate]);
 
     // Atualiza board no estado e persiste no banco imediatamente (otimizado para board específico).
     const updateBoardAndPersist = useCallback(async (boardId, updates) => {
         if (!boardId || !userId) return;
-        dispatch({ type: 'UPDATE_BOARD', payload: { id: boardId, updates } });
-        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: true } });
-        suppressRealtime(8000);
-        activeSavesRef.current += 1;
-
-        try {
-            const updatedBoard = stateRef.current.boards.find(b => b.id === boardId);
-            if (updatedBoard) {
-                await updateBoardFull(userId, { ...updatedBoard, ...updates });
-            }
-        } catch (err) {
-            console.error('[AppContext] updateBoardAndPersist error:', err);
-        } finally {
-            activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
-            if (activeSavesRef.current === 0) suppressRealtime(500);
-            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
-        }
-    }, [userId, suppressRealtime]);
+        await persistBoardImmediate(boardId, updates);
+    }, [userId, persistBoardImmediate]);
 
     // ── Realtime: subscribe to postgres_changes for cross-tab / multi-user sync ──
     useEffect(() => {
@@ -835,6 +1039,57 @@ export function AppProvider({ children }) {
         });
     }, []);
 
+    // ── Retry / Revert save errors ──────────────────────────────────────────────────
+
+    /**
+     * Tenta salvar novamente um board que falhou.
+     * Obtém sessão fresca (resolve token refresh) e persiste o estado atual do board.
+     * Se funcionar, dismisses o erro do painel. Se falhar, mantém para o usuário tentar de novo.
+     */
+    const retryFailedSave = useCallback(async (boardId) => {
+        if (!boardId || boardId === '__session__') {
+            dispatch({ type: 'DISMISS_SAVE_ERROR', payload: boardId });
+            return;
+        }
+        const board = stateRef.current.boards.find(b => b.id === boardId);
+        if (!board) {
+            dispatch({ type: 'DISMISS_SAVE_ERROR', payload: boardId });
+            return;
+        }
+        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: true } });
+        suppressRealtime(8000);
+        activeSavesRef.current += 1;
+        try {
+            const freshUserId = await getFreshUserId();
+            if (!freshUserId) {
+                console.warn('[AppContext] retryFailedSave: ainda sem sessão válida');
+                return; // mantém o erro no painel
+            }
+            const result = await updateBoardFull(freshUserId, board);
+            if (!result?.success) throw new Error(result?.error || 'Falha ao salvar');
+            console.log('[AppContext] retryFailedSave OK:', board.title);
+            dispatch({ type: 'DISMISS_SAVE_ERROR', payload: boardId });
+        } catch (err) {
+            console.error('[AppContext] retryFailedSave error:', err);
+            // Mantém o erro no painel; usuário pode tentar de novo ou reverter
+        } finally {
+            activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
+            if (activeSavesRef.current === 0) suppressRealtime(500);
+            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
+        }
+    }, [getFreshUserId, suppressRealtime]);
+
+    /**
+     * Descarta as alterações locais e recarrega a página para restaurar o estado
+     * salvo no servidor. Garante reconexão limpa ao banco e token fresco.
+     */
+    const revertFailedSave = useCallback(async (boardId) => {
+        dispatch({ type: 'DISMISS_SAVE_ERROR', payload: boardId });
+        // Recarregar a página: token refreshed garantido, reconexão limpa ao banco,
+        // estado recarregado do servidor sem risco de dados corrompidos localmente.
+        window.location.reload();
+    }, []);
+
     const confirmConfig = state.confirmModal;
 
     const isSavingBoard = useCallback((boardId) => state.savingBoardIds.includes(boardId), [state.savingBoardIds]);
@@ -861,6 +1116,9 @@ export function AppProvider({ children }) {
             suppressRealtime,
             savingBoardIds: state.savingBoardIds,
             pendingBoardIds: state.pendingBoardIds,
+            saveErrors: state.saveErrors,
+            retryFailedSave,
+            revertFailedSave,
             showBoardToolbar: state.showBoardToolbar,
             isSavingBoard,
             hasUnsavedChanges,
@@ -879,6 +1137,8 @@ export function AppProvider({ children }) {
                 confirmLabel={state.confirmModal.confirmLabel}
                 cancelLabel={state.confirmModal.cancelLabel}
             />
+            {/* Painel flutuante de erro de save */}
+            <FloatingSaveError />
         </AppContext.Provider>
     );
 }

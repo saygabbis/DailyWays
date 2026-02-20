@@ -7,7 +7,7 @@ import BoardCard from './BoardCard';
 import ListDetailsModal from './ListDetailsModal';
 import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy, Settings2 } from 'lucide-react';
 
-export default function BoardList({ list, boardId, onCardClick, index, onOpenListDetails, dragHandleProps }) {
+export default function BoardList({ list, boardId, onCardClick, index, onOpenListDetails, dragHandleProps, isDropped, entryDelay = 0 }) {
     const { dispatch, state, persistBoard, showConfirm } = useApp();
     const { showContextMenu } = useContextMenu();
     const [addingCard, setAddingCard] = useState(false);
@@ -111,14 +111,25 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
 
     const longPressProps = useLongPress(handleListContextMenu);
 
-    // Animation auto-cleanup for the list
+    // Animação de entrada (dispara só na montagem, com stagger por index)
     const [shouldAnimate, setShouldAnimate] = useState(true);
     useEffect(() => {
         const timer = setTimeout(() => {
             setShouldAnimate(false);
-        }, 800); // Slightly longer than cards to account for stagger delays
+        }, 1400); // stagger máx (6 * 110ms = 660ms) + duração (600ms) + margem
         return () => clearTimeout(timer);
     }, []);
+
+    // Animação de drop: re-aciona ao soltar a lista após drag
+    useEffect(() => {
+        if (!isDropped) return;
+        setShouldAnimate(true);
+        const timer = setTimeout(() => setShouldAnimate(false), 900);
+        return () => clearTimeout(timer);
+    }, [isDropped]);
+
+    // delay: 0 se solta por drag; usa entryDelay (calculado pelo BoardView) na entrada
+    const animDelay = isDropped ? '0ms' : `${entryDelay}ms`;
 
     return (
         <div
@@ -130,10 +141,8 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
             }}
         >
             <div
-                className={`board-list-inner ${shouldAnimate ? 'animate-slide-up' : ''}`}
-                style={{
-                    animationDelay: list.isNew ? '0ms' : `${Math.min(index, 6) * 50}ms`
-                }}
+                className={`board-list-inner ${shouldAnimate ? 'animate-slide-up-jelly' : ''}`}
+                style={{ animationDelay: animDelay }}
             >
                 {/* List Header */}
                 <div className="board-list-header" {...dragHandleProps}>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
 
 const AuthContext = createContext(null);
@@ -67,13 +67,17 @@ export function AuthProvider({ children }) {
   const [mfaChallengeId, setMfaChallengeId] = useState(null);
   const [authError, setAuthError] = useState('');
 
+  const profileRef = useRef(null);
+
   const refreshUser = useCallback(async (authUser) => {
     if (!authUser) {
       setUser(null);
       setProfile(null);
+      profileRef.current = null;
       return;
     }
     const prof = await ensureProfile(authUser);
+    profileRef.current = prof;
     setProfile(prof);
     setUser(buildUserData(authUser, prof));
   }, []);
@@ -136,22 +140,49 @@ export function AuthProvider({ children }) {
       console.log('[Auth] onAuthStateChange:', event);
       const session = sessionData ?? null;
 
-      if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setProfile(null);
-        setMfaChallengeId(null);
-        return;
-      }
+      // SIGNED_OUT é ignorado aqui intencionalmente.
+      // O logout do usuário é tratado exclusivamente pelo método logout() que chama
+      // setUser(null) diretamente. O Supabase emite SIGNED_OUT espuriamente durante
+      // o ciclo de token refresh (aba minimizada, tab blur, rede lenta) — se
+      // reagíssemos aqui, o usuário perderia a sessão sem ter feito logout.
+      if (event === 'SIGNED_OUT') return;
 
       cleanUrlTokens();
 
-      if (session?.user) {
-        // Se o usuário ainda não confirmou o e-mail (fluxo OTP de cadastro),
-        // não fazer login automático para que a tela de inserção do código apareça.
+      // TOKEN_REFRESHED / SIGNED_IN: aguardar 2s antes de qualquer chamada HTTP.
+      // O Supabase client JS mantém um lock interno enquanto processa esses eventos —
+      // chamadas HTTP feitas nesse intervalo (ensureProfile, etc.) travam indefinidamente.
+      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+        if (!session?.user) return;
+        // Bloqueia o OTP flow: não logar se e-mail não confirmado
         if (event === 'SIGNED_IN' && !session.user.email_confirmed_at) {
           console.log('[Auth] onAuthStateChange: SIGNED_IN ignorado — e-mail ainda não confirmado (aguardando OTP).');
           return;
         }
+
+        // Otimização crítica: se for o mesmo user.id já autenticado (token refresh),
+        // não fazemos HTTP — simplesmente atualizamos o user com o novo token usando
+        // o perfil já em cache. Evita o hang do ensureProfile durante o lock do Supabase.
+        const cachedProfile = profileRef.current;
+        if (cachedProfile && cachedProfile.id === session.user.id) {
+          console.log(`[Auth] onAuthStateChange: ${event} → mesmo usuário, silent update (sem HTTP)`);
+          setUser(buildUserData(session.user, cachedProfile));
+          return;
+        }
+
+        // Usuário diferente ou sem cache: faz o refreshUser completo
+        console.log(`[Auth] onAuthStateChange: ${event} → novo usuário, refreshUser completo`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        if (!mounted) return;
+        try {
+          await refreshUser(session.user);
+        } catch (err) {
+          console.error(`[Auth] onAuthStateChange ${event} refreshUser error:`, err);
+        }
+        return;
+      }
+
+      if (session?.user) {
         try {
           await refreshUser(session.user);
         } catch (err) {
