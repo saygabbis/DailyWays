@@ -1,13 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useContextMenu, useLongPress } from '../Common/ContextMenu';
-import { Calendar, CheckSquare, AlertCircle, Sun, Edit3, Trash2, Star, Tag, Copy, ArrowRight } from 'lucide-react';
+import { Calendar, CheckSquare, AlertCircle, Sun, Edit3, Trash2, Star, Tag, Copy, ArrowRight, Circle, CheckCircle2 } from 'lucide-react';
 import { format, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function BoardCard({ card, boardId, listId, isDragging, onClick }) {
     const { LABEL_COLORS, dispatch, showConfirm } = useApp();
     const { showContextMenu } = useContextMenu();
+    const isCompleted = card.completed || false;
+
+    const handleToggleComplete = (e) => {
+        e.stopPropagation();
+        dispatch({
+            type: 'UPDATE_CARD',
+            payload: { boardId, listId, cardId: card.id, updates: { completed: !isCompleted } },
+        });
+    };
 
     const doneSubtasks = card.subtasks.filter(st => st.done).length;
     const totalSubtasks = card.subtasks.length;
@@ -111,7 +120,7 @@ export default function BoardCard({ card, boardId, listId, isDragging, onClick }
 
     return (
         <div
-            className={`board-card ${isDragging ? 'board-card-dragging' : ''} ${allDone ? 'board-card-done' : ''}`}
+            className={`board-card ${isDragging ? 'board-card-dragging' : ''} ${isCompleted ? 'board-card-done-state' : ''} ${allDone ? 'board-card-all-subtasks-done' : ''}`}
             onClick={onClick}
             onContextMenu={handleContextMenu}
             {...longPressProps}
@@ -134,8 +143,17 @@ export default function BoardCard({ card, boardId, listId, isDragging, onClick }
                     </div>
                 )}
 
-                {/* Title */}
-                <div className="board-card-title">{card.title}</div>
+                {/* Title and Checkbox */}
+                <div className="board-card-header">
+                    <button
+                        className={`board-card-check ${isCompleted ? 'completed' : ''}`}
+                        onClick={handleToggleComplete}
+                        title={isCompleted ? 'Marcar como não concluída' : 'Marcar como concluída'}
+                    >
+                        {isCompleted ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                    </button>
+                    <div className="board-card-title">{card.title}</div>
+                </div>
 
                 {/* Meta */}
                 <div className="board-card-meta">

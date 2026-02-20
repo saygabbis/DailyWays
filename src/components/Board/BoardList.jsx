@@ -5,7 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { useContextMenu, useLongPress } from '../Common/ContextMenu';
 import BoardCard from './BoardCard';
 import ListDetailsModal from './ListDetailsModal';
-import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy, Settings2 } from 'lucide-react';
+import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy, Settings2, CheckCircle } from 'lucide-react';
 
 export default function BoardList({ list, boardId, onCardClick, index, onOpenListDetails, dragHandleProps, isDropped, entryDelay = 0 }) {
     const { dispatch, state, persistBoard, showConfirm } = useApp();
@@ -157,6 +157,7 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
                         </form>
                     ) : (
                         <h3 className="board-list-title" onClick={() => setEditing(true)} style={{ cursor: 'pointer' }}>
+                            {list.isCompletionList && <CheckCircle size={14} className="list-completion-icon" />}
                             {list.title}
                             <span className="board-list-count">{list.cards.length}</span>
                         </h3>

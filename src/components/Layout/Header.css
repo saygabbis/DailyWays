@@ -58,36 +58,59 @@
 }
 
 /* ── Search ── */
-.header-search {
-    position: relative;
-    width: 220px;
-    transition: width var(--transition-base);
-}
-
-.header-search-open {
-    width: 320px;
-}
-
-.header-search-icon {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--text-tertiary);
-    pointer-events: none;
-}
-
-.header-search input {
+.header-search-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
     height: 40px;
-    padding-left: 38px;
-    border-radius: var(--radius-full);
-    background: var(--bg-tertiary);
+    min-width: 280px;
+    background: rgba(255, 255, 255, 0.03);
     border: 1.5px solid var(--border-color);
-    font-size: var(--font-size-sm);
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    color: var(--text-tertiary);
+    font-family: inherit;
+    gap: var(--space-md);
 }
 
-.header-search input:focus {
-    background: var(--bg-secondary);
+.header-search-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary-alpha);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.header-search-btn-content {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex: 1;
+}
+
+.header-search-btn span {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+}
+
+.header-search-kbd {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.header-search-btn-icon {
+    color: var(--text-tertiary);
+    transition: color var(--transition-fast);
+}
+
+.header-search-btn:hover .header-search-btn-icon {
+    color: var(--accent-primary);
 }
 
 /* ── Icon Buttons ── */
@@ -292,13 +315,15 @@
         gap: var(--space-sm);
     }
 
-    .header-search {
-        width: 0;
-        overflow: hidden;
+    .header-search-btn {
+        min-width: unset;
+        width: 42px;
+        padding: 0;
+        justify-content: center;
     }
 
-    .header-search-open {
-        width: 160px;
+    .header-search-btn-content {
+        display: none;
     }
 
     .header-title {

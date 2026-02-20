@@ -19,29 +19,61 @@ export default function SearchOverlay({ onClose, onCardClick }) {
         return () => document.removeEventListener('keydown', handleKey);
     }, [onClose]);
 
-    // Gather all cards from all boards with board/list context
-    const allCards = useMemo(() => {
-        const cards = [];
+    // Gather all searchable items (cards and subtasks)
+    const allSearchableItems = useMemo(() => {
+        const items = [];
         state.boards.forEach(board => {
             board.lists.forEach(list => {
                 list.cards.forEach(card => {
-                    cards.push({ ...card, boardId: board.id, listId: list.id, boardTitle: board.title, boardEmoji: board.emoji, listTitle: list.title });
+                    // Add the card itself
+                    const cardItem = {
+                        type: 'card',
+                        ...card,
+                        boardId: board.id,
+                        listId: list.id,
+                        boardTitle: board.title,
+                        boardEmoji: board.emoji,
+                        listTitle: list.title
+                    };
+                    items.push(cardItem);
+
+                    // Add subtasks as separate searchable items
+                    card.subtasks?.forEach(st => {
+                        items.push({
+                            type: 'subtask',
+                            id: st.id,
+                            title: st.title,
+                            completed: st.done,
+                            parentCardId: card.id,
+                            parentCardTitle: card.title,
+                            boardId: board.id,
+                            listId: list.id,
+                            boardTitle: board.title,
+                            boardEmoji: board.emoji,
+                            listTitle: list.title,
+                            // Inherit useful meta for filtering
+                            important: card.important,
+                            myDay: card.myDay,
+                            dueDate: card.dueDate,
+                            priority: card.priority
+                        });
+                    });
                 });
             });
         });
-        return cards;
+        return items;
     }, [state.boards]);
 
     // Filter + search
     const results = useMemo(() => {
-        let filtered = allCards;
+        let filtered = allSearchableItems;
 
         // Apply filter
         if (filter === 'today') {
             const today = new Date().toISOString().split('T')[0];
             filtered = filtered.filter(c => c.myDay || c.dueDate === today);
         } else if (filter === 'important') {
-            filtered = filtered.filter(c => c.important);
+            filtered = filtered.filter(c => c.important || (c.type === 'card' && c.priority === 'high'));
         } else if (filter === 'completed') {
             filtered = filtered.filter(c => c.completed);
         }
@@ -51,13 +83,16 @@ export default function SearchOverlay({ onClose, onCardClick }) {
             const q = query.toLowerCase();
             filtered = filtered.filter(c =>
                 c.title?.toLowerCase().includes(q) ||
-                c.description?.toLowerCase().includes(q) ||
-                c.labels?.some(l => l.toLowerCase().includes(q))
+                (c.type === 'card' && (
+                    c.description?.toLowerCase().includes(q) ||
+                    c.labels?.some(l => l.toLowerCase().includes(q))
+                )) ||
+                (c.type === 'subtask' && c.parentCardTitle?.toLowerCase().includes(q))
             );
         }
 
         return filtered.slice(0, 20); // max 20 results
-    }, [allCards, query, filter]);
+    }, [allSearchableItems, query, filter]);
 
     const filters = [
         { id: 'all', label: 'Todos', icon: Search },
@@ -116,26 +151,30 @@ export default function SearchOverlay({ onClose, onCardClick }) {
                             <p>{query ? 'Nenhum resultado encontrado' : 'Digite para buscar tarefas'}</p>
                         </div>
                     )}
-                    {results.map(card => (
-                        <button key={card.id} className="search-result-item" onClick={() => handleCardSelect(card)}>
+                    {results.map(item => (
+                        <button key={item.id} className={`search-result-item ${item.type === 'subtask' ? 'is-subtask' : ''}`} onClick={() => handleCardSelect(item.type === 'card' ? item : { id: item.parentCardId, boardId: item.boardId, listId: item.listId })}>
                             <div className="search-result-main">
                                 <div className="search-result-title">
-                                    {card.completed && <CheckCircle2 size={14} className="search-result-check" />}
-                                    <span className={card.completed ? 'completed-text' : ''}>{card.title}</span>
-                                    {card.important && <Star size={12} className="search-result-star" />}
+                                    {item.completed && <CheckCircle2 size={14} className="search-result-check" />}
+                                    <span className={item.completed ? 'completed-text' : ''}>
+                                        {item.type === 'subtask' && <span className="search-subtask-indicator">↳</span>}
+                                        {item.title}
+                                    </span>
+                                    {item.important && <Star size={12} className="search-result-star" />}
                                 </div>
                                 <div className="search-result-meta">
-                                    <span className="search-result-board">{card.boardEmoji} {card.boardTitle}</span>
-                                    <ArrowRight size={10} />
-                                    <span>{card.listTitle}</span>
-                                    {card.priority && card.priority !== 'none' && (
-                                        <span className="search-result-priority" style={{ color: getPriorityColor(card.priority) }}>
-                                            ● {card.priority}
-                                        </span>
+                                    {item.type === 'subtask' && (
+                                        <>
+                                            <span className="search-parent-card">Em: {item.parentCardTitle}</span>
+                                            <span className="dot-separator">•</span>
+                                        </>
                                     )}
-                                    {card.dueDate && (
-                                        <span className="search-result-date">
-                                            <Calendar size={10} /> {card.dueDate}
+                                    <span className="search-result-board">{item.boardEmoji} {item.boardTitle}</span>
+                                    <ArrowRight size={10} />
+                                    <span>{item.listTitle}</span>
+                                    {item.priority && item.priority !== 'none' && (
+                                        <span className="search-result-priority" style={{ color: getPriorityColor(item.priority) }}>
+                                            ● {item.priority}
                                         </span>
                                     )}
                                 </div>

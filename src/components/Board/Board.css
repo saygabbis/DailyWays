@@ -294,6 +294,11 @@
     color: var(--text-primary);
 }
 
+.list-completion-icon {
+    color: var(--success);
+    flex-shrink: 0;
+}
+
 .board-list-count {
     font-size: var(--font-size-xs);
     font-weight: 700;
@@ -427,8 +432,23 @@
     z-index: 9999;
 }
 
-.board-card-done {
-    opacity: 1;
+.board-card-done-state {
+    opacity: 0.65 !important;
+    border-color: var(--border-color) !important;
+}
+
+.board-card-done-state .board-card-title {
+    text-decoration: line-through;
+    color: var(--text-tertiary);
+}
+
+.board-card-done-state:hover {
+    opacity: 0.85 !important;
+}
+
+.board-card-all-subtasks-done {
+    border-color: var(--success-alpha) !important;
+    background: rgba(34, 197, 94, 0.02);
 }
 
 .board-card-done .board-card-title {
@@ -440,10 +460,34 @@
     opacity: 0.8;
 }
 
-.board-card-labels {
+.board-card-header {
     display: flex;
-    gap: 4px;
-    margin-bottom: var(--space-sm);
+    align-items: flex-start;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-xs);
+}
+
+.board-card-check {
+    background: transparent;
+    border: none;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.board-card-check:hover {
+    color: var(--accent-primary);
+    transform: scale(1.15);
+}
+
+.board-card-check.completed {
+    color: var(--success);
 }
 
 .board-card-label {
@@ -451,14 +495,6 @@
     height: 6px;
     border-radius: var(--radius-full);
     display: inline-block;
-}
-
-.board-card-title {
-    font-size: var(--font-size-base);
-    font-weight: 700;
-    line-height: 1.4;
-    margin-bottom: var(--space-sm);
-    color: var(--text-primary);
 }
 
 .board-card-meta {

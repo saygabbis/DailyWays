@@ -71,17 +71,22 @@ export default function ListDetailsModal({ list, boardId, onSave, onClose }) {
                         </div>
                     </label>
 
-                    <label className="list-details-checkbox">
-                        <input
-                            type="checkbox"
-                            checked={isCompletionList}
-                            onChange={e => setIsCompletionList(e.target.checked)}
-                        />
-                        <span><CheckCircle size={16} /> Lista de conclusão</span>
-                    </label>
-                    <p className="list-details-hint">
-                        Se ativado, cards nesta lista contam como concluídos no Overview e, ao mover um card para cá, todas as subtarefas são marcadas automaticamente.
-                    </p>
+                    <div className="list-details-row">
+                        <div className="list-details-info">
+                            <span className="list-details-checkbox-label"><CheckCircle size={16} /> Lista de conclusão</span>
+                            <p className="list-details-hint">
+                                Cards nesta lista são marcados como concluídos automaticamente no Overview e busca.
+                            </p>
+                        </div>
+                        <label className="list-toggle-switch">
+                            <input
+                                type="checkbox"
+                                checked={isCompletionList}
+                                onChange={e => setIsCompletionList(e.target.checked)}
+                            />
+                            <span className="list-toggle-slider" />
+                        </label>
+                    </div>
 
                     <div className="list-details-actions">
                         <button type="button" className="btn btn-ghost" onClick={onClose}>Cancelar</button>

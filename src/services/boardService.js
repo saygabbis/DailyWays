@@ -29,6 +29,7 @@ function cardToRow(card, listId, position = 0) {
     my_day: card.myDay ?? false,
     labels: Array.isArray(card.labels) ? card.labels : [],
     created_at: card.createdAt ?? new Date().toISOString(),
+    completed: card.completed ?? false,
     position,
   };
 }
@@ -64,6 +65,7 @@ function rowToCard(row, subtasks = []) {
     dueDate: row.due_date ?? null,
     myDay: row.my_day ?? false,
     subtasks: subtasks.map(s => ({ id: s.id, title: s.title, done: s.done })),
+    completed: row.completed ?? false,
     createdAt: row.created_at,
   };
 }

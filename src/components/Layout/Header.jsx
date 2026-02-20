@@ -56,9 +56,11 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
 
             <div className="header-right">
                 <button className="header-search-btn" onClick={onOpenSearch}>
-                    <Search size={18} />
-                    <span>{t.search}</span>
-                    <kbd className="header-search-kbd">Ctrl+K</kbd>
+                    <div className="header-search-btn-content">
+                        <span>{t.search}</span>
+                        <kbd className="header-search-kbd">Ctrl+K</kbd>
+                    </div>
+                    <Search size={18} className="header-search-btn-icon" />
                 </button>
 
                 <div className="header-icons">

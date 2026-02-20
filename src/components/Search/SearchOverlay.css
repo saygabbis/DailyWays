@@ -129,6 +129,40 @@
     background: var(--bg-hover);
 }
 
+/* Subtask specific styles */
+.search-result-item.is-subtask {
+    padding-left: calc(var(--space-lg) + 24px);
+    position: relative;
+}
+
+.search-result-item.is-subtask::before {
+    content: '';
+    position: absolute;
+    left: var(--space-lg);
+    top: calc(var(--space-md) + 4px);
+    bottom: var(--space-md);
+    width: 2px;
+    background: var(--border-color);
+    border-radius: 4px;
+    opacity: 0.5;
+}
+
+.search-subtask-indicator {
+    margin-right: 6px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+}
+
+.search-parent-card {
+    font-weight: 600;
+    color: var(--text-tertiary);
+}
+
+.dot-separator {
+    color: var(--text-tertiary);
+    opacity: 0.5;
+}
+
 .search-result-main {
     flex: 1;
 }

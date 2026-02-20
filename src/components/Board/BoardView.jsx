@@ -136,9 +136,9 @@ export default function BoardView({ onCardClick }) {
             },
         });
 
-        if (destList?.isCompletionList && movedCard?.subtasks?.length > 0) {
-            const allDone = movedCard.subtasks.every(st => st.done);
-            if (!allDone) {
+        if (destList?.isCompletionList && movedCard) {
+            const allSubtasksDone = movedCard.subtasks?.every(st => st.done);
+            if (!movedCard.completed || !allSubtasksDone) {
                 dispatch({
                     type: 'UPDATE_CARD',
                     payload: {
@@ -146,7 +146,8 @@ export default function BoardView({ onCardClick }) {
                         listId: destination.droppableId,
                         cardId: movedCard.id,
                         updates: {
-                            subtasks: movedCard.subtasks.map(st => ({ ...st, done: true })),
+                            completed: true,
+                            subtasks: (movedCard.subtasks || []).map(st => ({ ...st, done: true })),
                         },
                     },
                 });
@@ -275,9 +276,8 @@ export default function BoardView({ onCardClick }) {
                     </div>
                     <div className="board-toolbar-delim"></div>
                     {isSavingBoard(board.id) && (
-                        <span className="board-saving-indicator">
+                        <span className="board-saving-indicator" title="Salvando alterações no servidor...">
                             <Loader2 size={13} className="spinning" />
-                            Salvando...
                         </span>
                     )}
                     <button className="btn btn-primary btn-sm" onClick={() => setShowShare(true)}>

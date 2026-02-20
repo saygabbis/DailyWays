@@ -9,8 +9,17 @@ import './FloatingSaveButton.css';
  * - Estado limpo: oculto
  */
 export default function FloatingSaveButton() {
-    const { hasUnsavedChanges, saveAllPending, savingBoardIds } = useApp();
+    const { hasUnsavedChanges, saveAllPending, savingBoardIds, state } = useApp();
     const isSaving = savingBoardIds.length > 0;
+
+    const getSavingText = () => {
+        if (!isSaving) return 'Alterações não salvas';
+        if (savingBoardIds.length === 1) {
+            const board = state.boards.find(b => b.id === savingBoardIds[0]);
+            return board ? `Salvando: ${board.title}` : 'Salvando...';
+        }
+        return `Salvando ${savingBoardIds.length} boards...`;
+    };
 
     if (!hasUnsavedChanges) return null;
 
@@ -21,7 +30,7 @@ export default function FloatingSaveButton() {
                     ? <Loader2 size={14} className="spinning" />
                     : <CloudOff size={14} />
                 }
-                <span>{isSaving ? 'Salvando...' : 'Alterações não salvas'}</span>
+                <span>{getSavingText()}</span>
             </div>
             {!isSaving && (
                 <button
