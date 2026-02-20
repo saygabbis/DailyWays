@@ -2,27 +2,29 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { insertBoardFull, deleteBoard } from '../../services/boardService';
-import { useContextMenu, useLongPress } from '../Common/ContextMenu';
+
 import { usePomodoro } from '../../context/PomodoroContext';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import {
     Sun, Star, CalendarDays, LayoutGrid, Plus, LogOut,
-    ChevronLeft, Sparkles, Settings, HelpCircle,
+    ChevronLeft, Settings, HelpCircle,
     Edit3, Trash2, Copy, Palette, Focus, LayoutDashboard,
     MoreHorizontal
 } from 'lucide-react';
+import logoImg from '../../assets/Logo - Branco.png';
 import './Sidebar.css';
+import { useI18n } from '../../context/ThemeContext';
 
 export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isDesktop }) {
-    const { user, confirmLogout } = useAuth();
+    const { user, logout } = useAuth();
     const {
         state, dispatch, getMyDayCards, getImportantCards, getPlannedCards,
         DEFAULT_BOARD_COLORS, updateBoardAndPersist, updateBoardAndPersistImmediate,
         updateBoardsOrder, persistBoard, getActiveBoard, isSavingBoard, suppressRealtime,
         showConfirm,
     } = useApp();
-    const { showContextMenu } = useContextMenu();
+    const t = useI18n();
     const { toggleOpen } = usePomodoro();
 
     const [showNewBoard, setShowNewBoard] = useState(false);
@@ -69,15 +71,15 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
     }, [sidebarWidth]);
 
     const generalItems = [
-        { id: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard },
-        { id: 'myday', label: 'Meu Dia', icon: Sun, count: getMyDayCards().length },
-        { id: 'important', label: 'Importante', icon: Star, count: getImportantCards().length },
-        { id: 'planned', label: 'Planejado', icon: CalendarDays, count: getPlannedCards().length },
+        { id: 'dashboard', label: t.dashboard, icon: LayoutDashboard },
+        { id: 'myday', label: t.myday, icon: Sun, count: getMyDayCards().length },
+        { id: 'important', label: t.important, icon: Star, count: getImportantCards().length },
+        { id: 'planned', label: t.planned, icon: CalendarDays, count: getPlannedCards().length },
     ];
 
     const othersItems = [
-        { id: 'settings', label: 'Configurações', icon: Settings },
-        { id: 'help', label: 'Central de Ajuda', icon: HelpCircle },
+        { id: 'settings', label: t.settings, icon: Settings },
+        { id: 'help', label: t.help, icon: HelpCircle },
     ];
 
     const handleAddBoard = async (e) => {
@@ -121,12 +123,11 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
     };
 
     const handleLogout = async () => {
-        onClose?.();
         const confirmed = await showConfirm({
-            title: 'Sair da Conta',
-            message: 'Tem certeza que deseja encerrar sua sessão?',
-            confirmLabel: 'Sair',
-            cancelLabel: 'Manter conectado',
+            title: t.logoutConfirmTitle,
+            message: t.logoutConfirmMsg,
+            confirmLabel: t.logoutConfirmBtn,
+            cancelLabel: t.logoutCancelBtn,
             type: 'danger'
         });
         if (confirmed) logout();
@@ -239,8 +240,8 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 {/* Header */}
                 <div className="sidebar-header">
                     <div className="sidebar-logo">
-                        <Sparkles size={24} />
-                        <span>DailyWays</span>
+                        <img src={logoImg} alt="DailyWays" className="sidebar-logo-img" />
+                        <span className="sidebar-logo-name">DailyWays</span>
                     </div>
                     <button className="btn-icon sidebar-close" onClick={onClose}>
                         <ChevronLeft size={20} />
@@ -250,7 +251,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 <div className="sidebar-body">
                     {/* GENERAL section */}
                     <nav className="sidebar-nav">
-                        <div className="sidebar-section-label">GERAL</div>
+                        <div className="sidebar-section-label">{t.general}</div>
                         {generalItems.map(item => (
                             <button
                                 key={item.id}
@@ -270,9 +271,9 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                     <div className="sidebar-boards-section">
                         <div className="sidebar-section-header">
                             <span className="sidebar-section-label">
-                                <LayoutGrid size={13} /> BOARDS
+                                <LayoutGrid size={13} /> {t.boards}
                             </span>
-                            <button className="btn-icon btn-sm" onClick={() => setShowNewBoard(true)} title="Novo Board">
+                            <button className="btn-icon btn-sm" onClick={() => setShowNewBoard(true)} title={t.newBoard}>
                                 <Plus size={16} />
                             </button>
                         </div>
@@ -346,7 +347,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
 
                     {/* RECURSOS section */}
                     <nav className="sidebar-nav">
-                        <div className="sidebar-section-label">RECURSOS</div>
+                        <div className="sidebar-section-label">{t.resources}</div>
                         <button
                             className="sidebar-item"
                             onClick={toggleOpen}
@@ -354,13 +355,13 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                             <span className="sidebar-item-icon">
                                 <Focus size={18} />
                             </span>
-                            <span>Modo Foco</span>
+                            <span>{t.focusMode}</span>
                         </button>
                     </nav>
 
                     {/* OTHERS section */}
                     <nav className="sidebar-nav sidebar-others">
-                        <div className="sidebar-section-label">OUTROS</div>
+                        <div className="sidebar-section-label">{t.others}</div>
                         {othersItems.map(item => (
                             <button
                                 key={item.id}
@@ -379,7 +380,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                             <span className="sidebar-item-icon">
                                 <LogOut size={18} />
                             </span>
-                            <span>Sair</span>
+                            <span>{t.logout}</span>
                         </button>
                     </nav>
                 </div>
@@ -389,7 +390,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 )}
             </aside>
 
-            {/* Modals */}
+            {/* Board details modal */}
             {detailsBoard && (
                 <BoardDetailsModal
                     board={detailsBoard}

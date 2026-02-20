@@ -1,6 +1,6 @@
 /* ===== TaskFlow Design System — Light & Dark Themes ===== */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&family=Nunito:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700;800&family=Raleway:wght@300;400;500;600;700;800&display=swap');
 
 /* ══════════════════════════════════════════════
    LIGHT THEME (default, inspired by Taskia)
@@ -178,4 +178,24 @@
   --z-modal: 210;
   --z-dropdown: 150;
   --z-tooltip: 300;
+}
+
+/* ══════════════════════════════════════════════
+   FLAT ANIMATION MODE (data-anim="flat")
+   Disables transitions and motion effects
+   ══════════════════════════════════════════════ */
+[data-anim="flat"] *,
+[data-anim="flat"] *::before,
+[data-anim="flat"] *::after {
+  transition-duration: 0ms !important;
+  animation-duration: 0ms !important;
+  animation-delay: 0ms !important;
+}
+
+[data-anim="flat"] .sidebar,
+[data-anim="flat"] .task-card,
+[data-anim="flat"] .board-list,
+[data-anim="flat"] .btn,
+[data-anim="flat"] .btn-icon {
+  transform: none !important;
 }

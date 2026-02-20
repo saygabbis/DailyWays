@@ -2,12 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import { Search, Menu, X, Bell, Settings, User, LogOut, ChevronDown, Layout } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
+import { useI18n } from '../../context/ThemeContext';
 import NotificationDropdown from '../Notifications/NotificationDropdown';
 import './Header.css';
 
 export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOpenSettings, onOpenSearch }) {
-    const { user, confirmLogout } = useAuth();
-    const { getActiveBoard, showBoardToolbar, dispatch } = useApp();
+    const { user, logout } = useAuth();
+    const { getActiveBoard, showBoardToolbar, dispatch, showConfirm } = useApp();
+    const t = useI18n();
     const [showProfile, setShowProfile] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
     const profileRef = useRef(null);
@@ -15,6 +17,18 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
     const activeBoard = getActiveBoard();
 
     const firstName = user?.name?.split(' ')[0] || 'Usuário';
+
+    const handleLogout = async () => {
+        setShowProfile(false);
+        const confirmed = await showConfirm({
+            title: 'Sair da Conta',
+            message: 'Tem certeza que deseja encerrar sua sessão?',
+            confirmLabel: 'Sair',
+            cancelLabel: 'Manter conectado',
+            type: 'danger'
+        });
+        if (confirmed) logout();
+    };
 
     // Close profile dropdown on click outside
     useEffect(() => {
@@ -43,7 +57,7 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
             <div className="header-right">
                 <button className="header-search-btn" onClick={onOpenSearch}>
                     <Search size={18} />
-                    <span>Buscar tarefas...</span>
+                    <span>{t.search}</span>
                     <kbd className="header-search-kbd">Ctrl+K</kbd>
                 </button>
 
@@ -62,7 +76,13 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                 {/* User profile dropdown */}
                 <div className="header-user" ref={profileRef}>
                     <button className="header-user-btn" onClick={() => setShowProfile(!showProfile)}>
-                        <div className="header-avatar">{user?.avatar || firstName[0]}</div>
+                        <div className="header-avatar">
+                            {user?.photo_url ? (
+                                <img src={user.photo_url} alt={user.name} className="header-avatar-img" />
+                            ) : (
+                                user?.avatar || firstName[0]
+                            )}
+                        </div>
                         <div className="header-user-info">
                             <span className="header-greeting-name">{firstName}</span>
                         </div>
@@ -72,7 +92,13 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                     {showProfile && (
                         <div className="header-profile-dropdown animate-pop-in">
                             <div className="header-profile-header">
-                                <div className="header-profile-avatar">{user?.avatar || firstName[0]}</div>
+                                <div className="header-profile-avatar">
+                                    {user?.photo_url ? (
+                                        <img src={user.photo_url} alt={user.name} className="header-avatar-img" />
+                                    ) : (
+                                        user?.avatar || firstName[0]
+                                    )}
+                                </div>
                                 <div>
                                     <div className="header-profile-name">{user?.name}</div>
                                     <div className="header-profile-email">{user?.email}</div>
@@ -94,7 +120,7 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                                 </button>
                             )}
                             <div className="header-profile-divider" />
-                            <button className="header-profile-item header-profile-logout" onClick={confirmLogout}>
+                            <button className="header-profile-item header-profile-logout" onClick={handleLogout}>
                                 <LogOut size={16} />
                                 <span>Sair</span>
                             </button>

@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ENABLE_MICROSOFT_LOGIN } from '../../config';
-import { Lock, Mail, User, ArrowRight, Sparkles, Chrome, Command, Github, Shield } from 'lucide-react';
+import { Lock, Mail, User, ArrowRight, Chrome, Command, Github, Shield } from 'lucide-react';
+import logoImg from '../../assets/Logo - Branco.png';
 import './Auth.css';
 
 function getOAuthErrorFromUrl() {
@@ -206,8 +207,8 @@ export default function AuthPage() {
         <div className="auth-container auth-container-success animate-scale-in">
           <div className="auth-header">
             <div className="auth-logo">
-              <Sparkles size={32} />
-              <span>DailyWays</span>
+              <img src={logoImg} alt="DailyWays" className="auth-logo-img" />
+              <span className="auth-logo-name">DailyWays</span>
             </div>
             <h1 className="auth-success-title">Conta criada!</h1>
             <p className="auth-subtitle">Redirecionando você para o app…</p>
@@ -232,8 +233,8 @@ export default function AuthPage() {
       <div className="auth-container animate-scale-in">
         <div className="auth-header">
           <div className="auth-logo">
-            <Sparkles size={32} />
-            <span>DailyWays</span>
+            <img src={logoImg} alt="DailyWays" className="auth-logo-img" />
+            <span className="auth-logo-name">DailyWays</span>
           </div>
           <p className="auth-subtitle">
             {showMfaStep

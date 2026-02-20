@@ -169,6 +169,15 @@
     font-size: var(--font-size-sm);
     color: white;
     flex-shrink: 0;
+    overflow: hidden;
+}
+
+.header-avatar img,
+.header-profile-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
 .header-chevron {
@@ -218,6 +227,7 @@
     font-size: 1.1rem;
     color: white;
     flex-shrink: 0;
+    overflow: hidden;
 }
 
 .header-profile-name {

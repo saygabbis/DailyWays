@@ -16,6 +16,13 @@ function buildUserData(authUser, profile) {
     avatar,
     bio: profile?.bio ?? '',
     has_password: profile?.has_password ?? false,
+    photo_url: profile?.photo_url ?? null,
+    // Preferences (for ThemeContext sync)
+    theme: profile?.theme ?? null,
+    accent: profile?.accent ?? null,
+    font_id: profile?.font_id ?? null,
+    language: profile?.language ?? null,
+    anim_style: profile?.anim_style ?? null,
   };
 }
 
@@ -434,6 +441,25 @@ export function AuthProvider({ children }) {
     return { success: true };
   };
 
+  const uploadAvatar = async (blob) => {
+    if (!user?.id) return { success: false, error: 'Não autenticado.' };
+    const ext = blob.type === 'image/png' ? 'png' : 'jpg';
+    const path = `${user.id}/avatar.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(path, blob, { upsert: true, contentType: blob.type });
+    if (uploadError) return { success: false, error: uploadError.message };
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+    // Add cache-busting timestamp so browser fetches the new image
+    const photo_url = `${data.publicUrl}?t=${Date.now()}`;
+    const result = await updateProfile({ photo_url });
+    return result;
+  };
+
+  const removeAvatar = async () => {
+    return updateProfile({ photo_url: null });
+  };
+
   const value = {
     user,
     profile,
@@ -448,6 +474,8 @@ export function AuthProvider({ children }) {
     logout,
     confirmLogout,
     updateProfile,
+    uploadAvatar,
+    removeAvatar,
     loginWithProvider,
     startMfaEnrollment,
     verifyMfaEnrollment,

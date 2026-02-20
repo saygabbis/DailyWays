@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './context/AuthContext';
 import { useApp } from './context/AppContext';
+import { useTheme } from './context/ThemeContext';
 import AuthPage from './components/Auth/AuthPage';
 import Sidebar from './components/Layout/Sidebar';
 import Header from './components/Layout/Header';
@@ -12,7 +13,7 @@ import DashboardView from './components/Dashboard/DashboardView';
 import TaskDetailModal from './components/TaskDetail/TaskDetailModal';
 import SettingsModal from './components/Settings/SettingsView';
 import SearchOverlay from './components/Search/SearchOverlay';
-import ConfirmModal from './components/Common/ConfirmModal';
+
 import PomodoroTimer from './components/Pomodoro/PomodoroTimer';
 import FloatingSaveButton from './components/Common/FloatingSaveButton';
 import { useContextMenu } from './components/Common/ContextMenu';
@@ -21,10 +22,22 @@ import './styles/global.css';
 import './App.css';
 
 function AppContent() {
+  const { user, profile } = useAuth();
   const { getActiveBoard, confirmConfig } = useApp();
+  const { initPreferences } = useTheme();
   const [activeView, setActiveView] = useState(() => localStorage.getItem('dailyways_active_view') || 'myday');
   const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
+
+  // Sync DB preferences (theme, font, accent, language, anim) to ThemeContext on login
+  useEffect(() => {
+    if (user?.id && profile) {
+      initPreferences(user.id, profile);
+    } else if (!user) {
+      initPreferences(null, null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // Persist view change
   useEffect(() => {
@@ -211,8 +224,7 @@ function AppContent() {
         />
       )}
 
-      {/* Global Confirmation Modal */}
-      {confirmConfig && <ConfirmModal {...confirmConfig} />}
+
     </div>
   );
 }
