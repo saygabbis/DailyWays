@@ -136,9 +136,8 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
             className="board-list"
             onContextMenu={handleListContextMenu}
             {...longPressProps}
-            style={{
-                ...list.color ? { borderLeftColor: list.color, borderLeftWidth: 4, borderLeftStyle: 'solid' } : {}
-            }}
+            style={list.color ? { '--list-accent': list.color } : {}}
+            data-colored={list.color ? 'true' : undefined}
         >
             <div
                 className={`board-list-inner ${shouldAnimate ? 'animate-slide-up-jelly' : ''}`}

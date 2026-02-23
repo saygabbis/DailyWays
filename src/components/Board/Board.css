@@ -275,6 +275,46 @@
     box-shadow: var(--shadow-md);
 }
 
+/* ── Colored List: full background theming ── */
+/* Light theme: soft warm tint */
+.board-list[data-colored="true"] {
+    background: color-mix(in srgb, var(--list-accent) 10%, var(--bg-secondary));
+    border-color: color-mix(in srgb, var(--list-accent) 35%, var(--border-color));
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--list-accent) 15%, transparent);
+}
+
+.board-list[data-colored="true"] .board-list-header {
+    background: color-mix(in srgb, var(--list-accent) 16%, var(--bg-secondary));
+    border-bottom-color: color-mix(in srgb, var(--list-accent) 30%, var(--border-color));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.board-list[data-colored="true"] .board-list-footer {
+    border-top-color: color-mix(in srgb, var(--list-accent) 25%, var(--border-color));
+}
+
+/* Dark theme: even more subtle so it doesn't blind */
+[data-theme="dark"] .board-list[data-colored="true"] {
+    background: color-mix(in srgb, var(--list-accent) 8%, var(--bg-secondary));
+    border-color: color-mix(in srgb, var(--list-accent) 25%, var(--border-color));
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--list-accent) 12%, transparent);
+}
+
+[data-theme="dark"] .board-list[data-colored="true"] .board-list-header {
+    background: color-mix(in srgb, var(--list-accent) 12%, var(--bg-secondary));
+    border-bottom-color: color-mix(in srgb, var(--list-accent) 20%, var(--border-color));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+[data-theme="dark"] .board-list[data-colored="true"] .board-list-footer {
+    border-top-color: color-mix(in srgb, var(--list-accent) 18%, var(--border-color));
+}
+
+/* Dragging-over uses the accent tint instead of global accent-light */
+.board-list[data-colored="true"] .board-list-cards.dragging-over {
+    background: color-mix(in srgb, var(--list-accent) 18%, transparent);
+}
+
 .board-list-header {
     display: flex;
     align-items: center;

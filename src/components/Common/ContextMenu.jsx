@@ -45,22 +45,43 @@ export function ContextMenuProvider({ children }) {
         }
     }, [menu?.items]);
 
-    // Close on click outside / scroll / escape
+    // Close on any outside interaction: click, mousedown (drag start),
+    // touchstart (mobile), scroll, resize, escape, or new context menu
     useEffect(() => {
         if (!menu) return;
 
         const handleClose = () => hideContextMenu();
         const handleKey = (e) => { if (e.key === 'Escape') hideContextMenu(); };
 
+        // mousedown catches drag starts before click fires
+        const handleMouseDown = (e) => {
+            if (menuRef.current && !menuRef.current.contains(e.target)) {
+                hideContextMenu();
+            }
+        };
+
+        // touchstart for mobile taps outside
+        const handleTouchStart = (e) => {
+            if (menuRef.current && !menuRef.current.contains(e.target)) {
+                hideContextMenu();
+            }
+        };
+
         document.addEventListener('click', handleClose);
+        document.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('touchstart', handleTouchStart, { passive: true });
         document.addEventListener('scroll', handleClose, true);
         document.addEventListener('keydown', handleKey);
+        document.addEventListener('contextmenu', handleClose);
         window.addEventListener('resize', handleClose);
 
         return () => {
             document.removeEventListener('click', handleClose);
+            document.removeEventListener('mousedown', handleMouseDown);
+            document.removeEventListener('touchstart', handleTouchStart);
             document.removeEventListener('scroll', handleClose, true);
             document.removeEventListener('keydown', handleKey);
+            document.removeEventListener('contextmenu', handleClose);
             window.removeEventListener('resize', handleClose);
         };
     }, [menu, hideContextMenu]);

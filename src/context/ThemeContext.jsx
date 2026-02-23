@@ -5,14 +5,39 @@ import { supabase } from '../services/supabaseClient';
 const ThemeContext = createContext(null);
 
 const ACCENT_PRESETS = [
+    // ── Sólidas ──
     { id: 'purple', name: 'Roxo', color: '#7c3aed', secondary: '#6d28d9' },
     { id: 'blue', name: 'Azul', color: '#3b82f6', secondary: '#2563eb' },
-    { id: 'green', name: 'Verde', color: '#10b981', secondary: '#059669' },
-    { id: 'rose', name: 'Rosa', color: '#f43f5e', secondary: '#e11d48' },
-    { id: 'orange', name: 'Laranja', color: '#f97316', secondary: '#ea580c' },
+    { id: 'sky', name: 'Céu', color: '#0ea5e9', secondary: '#0284c7' },
+    { id: 'cyan', name: 'Ciano', color: '#06b6d4', secondary: '#0891b2' },
     { id: 'teal', name: 'Turquesa', color: '#14b8a6', secondary: '#0d9488' },
-    { id: 'indigo', name: 'Índigo', color: '#6366f1', secondary: '#4f46e5' },
+    { id: 'green', name: 'Verde', color: '#10b981', secondary: '#059669' },
+    { id: 'lime', name: 'Lima', color: '#84cc16', secondary: '#65a30d' },
     { id: 'amber', name: 'Âmbar', color: '#f59e0b', secondary: '#d97706' },
+    { id: 'orange', name: 'Laranja', color: '#f97316', secondary: '#ea580c' },
+    { id: 'rose', name: 'Rosa', color: '#f43f5e', secondary: '#e11d48' },
+    { id: 'crimson', name: 'Carmesim', color: '#dc2626', secondary: '#b91c1c' },
+    { id: 'pink', name: 'Rosa Claro', color: '#ec4899', secondary: '#db2777' },
+    { id: 'fuchsia', name: 'Fúcsia', color: '#d946ef', secondary: '#c026d3' },
+    { id: 'violet', name: 'Violeta', color: '#8b5cf6', secondary: '#7c3aed' },
+    { id: 'indigo', name: 'Índigo', color: '#6366f1', secondary: '#4f46e5' },
+    { id: 'slate', name: 'Ardósia', color: '#64748b', secondary: '#475569' },
+    // ── Gradientes ──
+    { id: 'grad-aurora', name: 'Aurora', color: '#a855f7', secondary: '#06b6d4', gradient: 'linear-gradient(135deg, #a855f7 0%, #06b6d4 100%)' },
+    { id: 'grad-sunset', name: 'Pôr do Sol', color: '#f97316', secondary: '#e11d48', gradient: 'linear-gradient(135deg, #f97316 0%, #e11d48 100%)' },
+    { id: 'grad-ocean', name: 'Oceano', color: '#3b82f6', secondary: '#06b6d4', gradient: 'linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)' },
+    { id: 'grad-forest', name: 'Floresta', color: '#10b981', secondary: '#84cc16', gradient: 'linear-gradient(135deg, #10b981 0%, #84cc16 100%)' },
+    { id: 'grad-candy', name: 'Candy', color: '#ec4899', secondary: '#a855f7', gradient: 'linear-gradient(135deg, #ec4899 0%, #a855f7 100%)' },
+    { id: 'grad-fire', name: 'Chamas', color: '#dc2626', secondary: '#f97316', gradient: 'linear-gradient(135deg, #dc2626 0%, #f97316 100%)' },
+    { id: 'grad-midnight', name: 'Meia-Noite', color: '#1e1b4b', secondary: '#4f46e5', gradient: 'linear-gradient(135deg, #1e1b4b 0%, #4f46e5 100%)' },
+    { id: 'grad-rose-gold', name: 'Ouro Rosé', color: '#f43f5e', secondary: '#f59e0b', gradient: 'linear-gradient(135deg, #f43f5e 0%, #f59e0b 100%)' },
+];
+
+const THEME_PRESETS = [
+    { id: 'light', name: 'Claro', icon: 'sun' },
+    { id: 'dark', name: 'Escuro', icon: 'moon' },
+    { id: 'dim', name: 'Dim', icon: 'dim' },
+    { id: 'oled', name: 'OLED', icon: 'oled' },
 ];
 
 const FONT_PRESETS = [
@@ -29,7 +54,7 @@ const TRANSLATIONS = {
     'pt-br': {
         myday: 'Meu Dia', important: 'Importante', planned: 'Planejado',
         dashboard: 'Visão Geral', boards: 'BOARDS', general: 'GERAL',
-        resources: 'RECURSOS', others: 'OUTROS', focusMode: 'Modo Foco',
+        resources: 'WIDGETS', others: 'OUTROS', focusMode: 'Modo Foco',
         settings: 'Configurações', help: 'Central de Ajuda', logout: 'Sair',
         search: 'Buscar tarefas...', notifications: 'Notificações', newBoard: 'Novo Board',
         stAccount: 'Conta', stSecurity: 'Segurança', stAppearance: 'Aparência', stApp: 'Aplicativo', stLanguage: 'Idioma',
@@ -87,7 +112,7 @@ const TRANSLATIONS = {
     'en': {
         myday: 'My Day', important: 'Important', planned: 'Planned',
         dashboard: 'Overview', boards: 'BOARDS', general: 'GENERAL',
-        resources: 'RESOURCES', others: 'OTHERS', focusMode: 'Focus Mode',
+        resources: 'WIDGETS', others: 'OTHERS', focusMode: 'Focus Mode',
         settings: 'Settings', help: 'Help Center', logout: 'Sign Out',
         search: 'Search tasks...', notifications: 'Notifications', newBoard: 'New Board',
         stAccount: 'Account', stSecurity: 'Security', stAppearance: 'Appearance', stApp: 'Application', stLanguage: 'Language',
@@ -145,7 +170,7 @@ const TRANSLATIONS = {
     'es': {
         myday: 'Mi Día', important: 'Importante', planned: 'Planificado',
         dashboard: 'Vista General', boards: 'TABLEROS', general: 'GENERAL',
-        resources: 'RECURSOS', others: 'OTROS', focusMode: 'Modo Enfoque',
+        resources: 'WIDGETS', others: 'OTROS', focusMode: 'Modo Enfoque',
         settings: 'Configuración', help: 'Centro de Ayuda', logout: 'Salir',
         search: 'Buscar tareas...', notifications: 'Notificaciones', newBoard: 'Nuevo Tablero',
         stAccount: 'Cuenta', stSecurity: 'Seguridad', stAppearance: 'Apariencia', stApp: 'Aplicación', stLanguage: 'Idioma',
@@ -203,7 +228,7 @@ const TRANSLATIONS = {
     'fr': {
         myday: 'Ma Journée', important: 'Important', planned: 'Planifié',
         dashboard: 'Vue générale', boards: 'TABLEAUX', general: 'GÉNÉRAL',
-        resources: 'RESSOURCES', others: 'AUTRES', focusMode: 'Mode Focus',
+        resources: 'WIDGETS', others: 'AUTRES', focusMode: 'Mode Focus',
         settings: 'Paramètres', help: "Centre d'aide", logout: 'Se déconnecter',
         search: 'Rechercher des tâches...', notifications: 'Notifications', newBoard: 'Nouveau Tableau',
         stAccount: 'Compte', stSecurity: 'Sécurité', stAppearance: 'Apparence', stApp: 'Application', stLanguage: 'Langue',
@@ -261,7 +286,7 @@ const TRANSLATIONS = {
     'de': {
         myday: 'Mein Tag', important: 'Wichtig', planned: 'Geplant',
         dashboard: 'Übersicht', boards: 'BOARDS', general: 'ALLGEMEIN',
-        resources: 'RESSOURCEN', others: 'SONSTIGES', focusMode: 'Fokusmodus',
+        resources: 'WIDGETS', others: 'SONSTIGES', focusMode: 'Fokusmodus',
         settings: 'Einstellungen', help: 'Hilfe', logout: 'Abmelden',
         search: 'Aufgaben suchen...', notifications: 'Benachrichtigungen', newBoard: 'Neues Board',
         stAccount: 'Konto', stSecurity: 'Sicherheit', stAppearance: 'Erscheinungsbild', stApp: 'Anwendung', stLanguage: 'Sprache',
@@ -319,7 +344,7 @@ const TRANSLATIONS = {
     'ja': {
         myday: '今日', important: '重要', planned: '計画中',
         dashboard: '概要', boards: 'ボード', general: '一般',
-        resources: 'リソース', others: 'その他', focusMode: 'フォーカスモード',
+        resources: 'ウィジェット', others: 'その他', focusMode: 'フォーカスモード',
         settings: '設定', help: 'ヘルプ', logout: 'ログアウト',
         search: 'タスクを検索...', notifications: '通知', newBoard: '新規ボード',
         stAccount: 'アカウント', stSecurity: 'セキュリティ', stAppearance: '外観', stApp: 'アプリ', stLanguage: '言語',
@@ -383,7 +408,7 @@ export const useI18n = () => {
 };
 
 export function ThemeProvider({ children }) {
-    const [theme, setTheme] = useState(() =>
+    const [theme, setThemeState] = useState(() =>
         storageService.load('dailyways_theme') || 'light'
     );
 
@@ -430,7 +455,7 @@ export function ThemeProvider({ children }) {
         const l = profile.language || storageService.load('dailyways_language') || 'pt-br';
         const an = profile.anim_style || storageService.load('dailyways_anim') || 'default';
         // Apply silently (no DB save triggered)
-        setTheme(t); storageService.save('dailyways_theme', t);
+        setThemeState(t); storageService.save('dailyways_theme', t);
         setAccentId(a); storageService.save('dailyways_accent', a);
         setFontId(f); storageService.save('dailyways_font', f);
         setLanguageState(l); storageService.save('dailyways_language', l);
@@ -447,11 +472,13 @@ export function ThemeProvider({ children }) {
         storageService.save('dailyways_theme', theme);
     }, [theme]);
 
+
     useEffect(() => {
         const root = document.documentElement;
+        const grad = accent.gradient || `linear-gradient(135deg, ${accent.color} 0%, ${accent.secondary} 100%)`;
         root.style.setProperty('--accent-primary', accent.color);
         root.style.setProperty('--accent-secondary', accent.secondary);
-        root.style.setProperty('--accent-gradient', `linear-gradient(135deg, ${accent.color} 0%, ${accent.secondary} 100%)`);
+        root.style.setProperty('--accent-gradient', grad);
         root.style.setProperty('--accent-gradient-hover', `linear-gradient(135deg, ${accent.color}dd 0%, ${accent.color} 100%)`);
         root.style.setProperty('--accent-glow', `0 4px 16px ${accent.color}40`);
 
@@ -495,8 +522,13 @@ export function ThemeProvider({ children }) {
         saveToDb({ anim_style: id });
     };
 
+    const setTheme = (val) => {
+        setThemeState(val);
+        saveToDb({ theme: val });
+    };
+
     const toggleTheme = () => {
-        setTheme(prev => {
+        setThemeState(prev => {
             const next = prev === 'light' ? 'dark' : 'light';
             saveToDb({ theme: next });
             return next;
@@ -514,7 +546,7 @@ export function ThemeProvider({ children }) {
     };
 
     const ctxValue = useMemo(() => ({
-        theme, toggleTheme, accentId, setAccent, accent, ACCENT_PRESETS,
+        theme, toggleTheme, setTheme, accentId, setAccent, accent, ACCENT_PRESETS, THEME_PRESETS,
         fontId, setFont, FONT_PRESETS, language, setLanguage,
         animStyle, setAnimStyle, initPreferences,
         // eslint-disable-next-line react-hooks/exhaustive-deps

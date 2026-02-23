@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
+import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { useApp } from '../../context/AppContext';
 import BoardList from './BoardList';
 import ShareModal from './ShareModal';
@@ -7,7 +7,7 @@ import ListDetailsModal from './ListDetailsModal';
 import { Plus, UserPlus, Loader2, X, GripVertical } from 'lucide-react';
 import './Board.css';
 
-export default function BoardView({ onCardClick }) {
+function BoardView({ onCardClick }, ref) {
     const { state, getActiveBoard, dispatch, persistBoard, isSavingBoard, showBoardToolbar } = useApp();
     const [addingList, setAddingList] = useState(false);
     const [newListTitle, setNewListTitle] = useState('');
@@ -158,6 +158,11 @@ export default function BoardView({ onCardClick }) {
         persistBoard(board.id);
     };
 
+    // Expose handleDragEnd so the parent App can call it from a unified DragDropContext
+    useImperativeHandle(ref, () => ({
+        handleDragEnd,
+    }));
+
     const handleSaveListDetails = (updates) => {
         if (!listDetails) return;
         dispatch({ type: 'UPDATE_LIST', payload: { boardId: board.id, listId: listDetails.id, updates } });
@@ -303,7 +308,7 @@ export default function BoardView({ onCardClick }) {
                 onMouseLeave={handleMouseLeave}
                 onContextMenu={handleContextMenu}
             >
-                <DragDropContext onDragEnd={handleDragEnd}>
+                <>
                     <Droppable droppableId="board" direction="horizontal" type="list">
                         {(provided) => (
                             <div
@@ -382,7 +387,7 @@ export default function BoardView({ onCardClick }) {
                             </div>
                         )}
                     </Droppable>
-                </DragDropContext>
+                </>
             </div>
 
             {showShare && <ShareModal boardTitle={board.title} onClose={() => setShowShare(false)} />}
@@ -398,3 +403,5 @@ export default function BoardView({ onCardClick }) {
         </div>
     );
 }
+
+export default forwardRef(BoardView);

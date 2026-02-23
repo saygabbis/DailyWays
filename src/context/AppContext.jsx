@@ -1003,7 +1003,7 @@ export function AppProvider({ children }) {
 
     const getMyDayCards = () => getAllCards().filter(c => c.myDay);
 
-    const getImportantCards = () => getAllCards().filter(c => c.priority === 'high' || c.priority === 'urgent');
+    const getImportantCards = () => getAllCards().filter(c => c.important || c.priority === 'high' || c.priority === 'urgent');
 
     const getPlannedCards = () => getAllCards().filter(c => c.dueDate);
 

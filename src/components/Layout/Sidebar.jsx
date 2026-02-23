@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { insertBoardFull, deleteBoard } from '../../services/boardService';
 
 import { usePomodoro } from '../../context/PomodoroContext';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { Droppable, Draggable } from '@hello-pangea/dnd';
 import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import {
     Sun, Star, CalendarDays, LayoutGrid, Plus, LogOut,
@@ -74,9 +74,9 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
 
     const generalItems = [
         { id: 'dashboard', label: t.dashboard, icon: LayoutDashboard },
-        { id: 'myday', label: t.myday, icon: Sun, count: getMyDayCards().length },
-        { id: 'important', label: t.important, icon: Star, count: getImportantCards().length },
-        { id: 'planned', label: t.planned, icon: CalendarDays, count: getPlannedCards().length },
+        { id: 'myday', label: t.myday, icon: Sun, count: getMyDayCards().length, droppableId: 'sidebar-myday' },
+        { id: 'important', label: t.important, icon: Star, count: getImportantCards().length, droppableId: 'sidebar-important' },
+        { id: 'planned', label: t.planned, icon: CalendarDays, count: getPlannedCards().length, droppableId: 'sidebar-planned' },
     ];
 
     const othersItems = [
@@ -104,13 +104,20 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
 
         // Estado local imediato (otimismo) — ADD_BOARD usará o mesmo id e listas
         dispatch({ type: 'ADD_BOARD', payload: newBoard });
+        // SET_ACTIVE_BOARD persiste o id no localStorage (ADD_BOARD não faz isso)
+        dispatch({ type: 'SET_ACTIVE_BOARD', payload: newBoard.id });
         setNewBoardTitle('');
         setShowNewBoard(false);
         onViewChange('board');
 
-        // Persistir no servidor
+        // Ativa o floating save durante a operação no servidor
+        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: true } });
         if (suppressRealtime) suppressRealtime(3000);
-        await insertBoardFull(user.id, { ...newBoard, position: state.boards.length });
+        try {
+            await insertBoardFull(user.id, { ...newBoard, position: state.boards.length });
+        } finally {
+            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: false } });
+        }
     };
 
     const handleBoardClick = (boardId) => {
@@ -135,23 +142,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         if (confirmed) logout();
     };
 
-    const handleDragEnd = async (result) => {
-        const { source, destination } = result;
-        if (!destination || source.index === destination.index) return;
 
-        dispatch({
-            type: 'REORDER_BOARDS',
-            payload: { sourceIndex: source.index, destIndex: destination.index },
-            userId: user.id
-        });
-
-        // Persistir nova ordem imediatamente
-        const newBoards = [...state.boards];
-        const [moved] = newBoards.splice(source.index, 1);
-        newBoards.splice(destination.index, 0, moved);
-        const payloads = newBoards.map((b, i) => ({ id: b.id, position: i }));
-        await updateBoardsOrder(user.id, payloads);
-    };
 
     const handleStartRename = (board) => {
         setEditingBoardId(board.id);
@@ -202,8 +193,16 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 };
                 // ADD_BOARD com os IDs já definidos (não gera novos IDs internamente)
                 dispatch({ type: 'ADD_BOARD', payload: dup });
+                // SET_ACTIVE_BOARD persiste o id no localStorage (ADD_BOARD não faz isso)
+                dispatch({ type: 'SET_ACTIVE_BOARD', payload: dup.id });
                 if (suppressRealtime) suppressRealtime(3000);
-                await insertBoardFull(user.id, { ...dup, position: state.boards.length + 1 });
+                // Ativa o floating save durante a operação no servidor
+                dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: true } });
+                try {
+                    await insertBoardFull(user.id, { ...dup, position: state.boards.length + 1 });
+                } finally {
+                    dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: false } });
+                }
             },
         },
         { type: 'divider' },
@@ -223,7 +222,14 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                     const boardIndex = state.boards.findIndex(b => b.id === board.id);
                     dispatch({ type: 'DELETE_BOARD', payload: board.id });
                     if (suppressRealtime) suppressRealtime(3000);
-                    await deleteBoard(board.id);
+
+                    // Ativa o floating save durante a operação no servidor
+                    dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: true } });
+                    try {
+                        await deleteBoard(board.id);
+                    } finally {
+                        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: false } });
+                    }
 
                     if (isActive) {
                         const remaining = state.boards.filter(b => b.id !== board.id);
@@ -269,17 +275,38 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                     <nav className="sidebar-nav">
                         <div className="sidebar-section-label">{t.general}</div>
                         {generalItems.map(item => (
-                            <button
-                                key={item.id}
-                                className={`sidebar-item ${activeView === item.id ? 'sidebar-item-active' : ''}`}
-                                onClick={() => handleNavClick(item.id)}
-                            >
-                                <span className="sidebar-item-icon">
-                                    <item.icon size={18} />
-                                </span>
-                                <span>{item.label}</span>
-                                {item.count > 0 && <span className="sidebar-badge">{item.count}</span>}
-                            </button>
+                            item.droppableId ? (
+                                <Droppable key={item.id} droppableId={item.droppableId} type="card" isDropDisabled={false}>
+                                    {(provided, snapshot) => (
+                                        <div ref={provided.innerRef} {...provided.droppableProps}>
+                                            <button
+                                                className={`sidebar-item ${activeView === item.id ? 'sidebar-item-active' : ''} ${snapshot.isDraggingOver ? 'sidebar-item-drop-active' : ''}`}
+                                                onClick={() => handleNavClick(item.id)}
+                                            >
+                                                <span className="sidebar-item-icon">
+                                                    <item.icon size={18} />
+                                                </span>
+                                                <span>{item.label}</span>
+                                                {snapshot.isDraggingOver && <span className="sidebar-drop-hint">Soltar aqui</span>}
+                                                {!snapshot.isDraggingOver && item.count > 0 && <span className="sidebar-badge">{item.count}</span>}
+                                            </button>
+                                            <div style={{ display: 'none' }}>{provided.placeholder}</div>
+                                        </div>
+                                    )}
+                                </Droppable>
+                            ) : (
+                                <button
+                                    key={item.id}
+                                    className={`sidebar-item ${activeView === item.id ? 'sidebar-item-active' : ''}`}
+                                    onClick={() => handleNavClick(item.id)}
+                                >
+                                    <span className="sidebar-item-icon">
+                                        <item.icon size={18} />
+                                    </span>
+                                    <span>{item.label}</span>
+                                    {item.count > 0 && <span className="sidebar-badge">{item.count}</span>}
+                                </button>
+                            )
                         ))}
                     </nav>
 
@@ -307,65 +334,63 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                             </form>
                         )}
 
-                        <DragDropContext onDragEnd={handleDragEnd}>
-                            <Droppable droppableId="boards">
-                                {(provided) => (
-                                    <div
-                                        className="sidebar-board-list"
-                                        {...provided.droppableProps}
-                                        ref={provided.innerRef}
-                                    >
-                                        {state.boards.map((board, index) => (
-                                            <Draggable key={board.id} draggableId={board.id} index={index}>
-                                                {(provided, snapshot) => (
+                        <Droppable droppableId="boards" type="board">
+                            {(provided) => (
+                                <div
+                                    className="sidebar-board-list"
+                                    {...provided.droppableProps}
+                                    ref={provided.innerRef}
+                                >
+                                    {state.boards.map((board, index) => (
+                                        <Draggable key={board.id} draggableId={board.id} index={index}>
+                                            {(provided, snapshot) => (
+                                                <div
+                                                    ref={provided.innerRef}
+                                                    {...provided.draggableProps}
+                                                    {...provided.dragHandleProps}
+                                                    className={`sidebar-item board-item ${activeView === 'board' && state.activeBoard === board.id ? 'sidebar-item-active' : ''} ${snapshot.isDragging ? 'dragging' : ''}`}
+                                                    onClick={() => handleBoardClick(board.id)}
+                                                    onContextMenu={(e) => handleBoardContextMenu(e, board)}
+                                                    onDoubleClick={() => isDesktop && handleStartRename(board)}
+                                                >
                                                     <div
-                                                        ref={provided.innerRef}
-                                                        {...provided.draggableProps}
-                                                        {...provided.dragHandleProps}
-                                                        className={`sidebar-item board-item ${activeView === 'board' && state.activeBoard === board.id ? 'sidebar-item-active' : ''} ${snapshot.isDragging ? 'dragging' : ''}`}
-                                                        onClick={() => handleBoardClick(board.id)}
-                                                        onContextMenu={(e) => handleBoardContextMenu(e, board)}
-                                                        onDoubleClick={() => isDesktop && handleStartRename(board)}
+                                                        className="board-drag-indicator"
+                                                        title="Mais opções"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleBoardContextMenu(e, board);
+                                                        }}
                                                     >
-                                                        <div
-                                                            className="board-drag-indicator"
-                                                            title="Mais opções"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleBoardContextMenu(e, board);
-                                                            }}
-                                                        >
-                                                            <MoreHorizontal size={14} className="rotate-90" />
-                                                        </div>
-
-                                                        <span className="sidebar-board-dot" style={{ background: board.color }} />
-
-                                                        {editingBoardId === board.id ? (
-                                                            <form onSubmit={(e) => handleRenameSubmit(e, board.id)} className="sidebar-rename-form">
-                                                                <input
-                                                                    autoFocus
-                                                                    value={editBoardTitle}
-                                                                    onChange={e => setEditBoardTitle(e.target.value)}
-                                                                    onBlur={(e) => handleRenameSubmit(e, board.id)}
-                                                                    onKeyDown={e => e.key === 'Escape' && setEditingBoardId(null)}
-                                                                />
-                                                            </form>
-                                                        ) : (
-                                                            <span className="truncate">{board.emoji} {board.title}</span>
-                                                        )}
-
-                                                        <span className="sidebar-badge-subtle">
-                                                            {board.lists.reduce((acc, l) => acc + l.cards.length, 0)}
-                                                        </span>
+                                                        <MoreHorizontal size={14} className="rotate-90" />
                                                     </div>
-                                                )}
-                                            </Draggable>
-                                        ))}
-                                        {provided.placeholder}
-                                    </div>
-                                )}
-                            </Droppable>
-                        </DragDropContext>
+
+                                                    <span className="sidebar-board-dot" style={{ background: board.color }} />
+
+                                                    {editingBoardId === board.id ? (
+                                                        <form onSubmit={(e) => handleRenameSubmit(e, board.id)} className="sidebar-rename-form">
+                                                            <input
+                                                                autoFocus
+                                                                value={editBoardTitle}
+                                                                onChange={e => setEditBoardTitle(e.target.value)}
+                                                                onBlur={(e) => handleRenameSubmit(e, board.id)}
+                                                                onKeyDown={e => e.key === 'Escape' && setEditingBoardId(null)}
+                                                            />
+                                                        </form>
+                                                    ) : (
+                                                        <span className="truncate">{board.emoji} {board.title}</span>
+                                                    )}
+
+                                                    <span className="sidebar-badge-subtle">
+                                                        {board.lists.reduce((acc, l) => acc + l.cards.length, 0)}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </Draggable>
+                                    ))}
+                                    {provided.placeholder}
+                                </div>
+                            )}
+                        </Droppable>
                     </div>
 
                     {/* RECURSOS section */}

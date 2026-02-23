@@ -246,6 +246,13 @@
     gap: var(--space-md);
 }
 
+/* 4-column variant for 4 themes */
+.settings-theme-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-sm);
+}
+
 .settings-theme-card {
     padding: var(--space-sm);
     border-radius: var(--radius-lg);
@@ -281,16 +288,9 @@
     background: #0f0b1a;
 }
 
-.settings-theme-light .stp-sidebar {
+.stp-sidebar {
     width: 30%;
-    background: #ffffff;
-    border-right: 1px solid #e8e4f0;
-}
-
-.settings-theme-dark .stp-sidebar {
-    width: 30%;
-    background: #1a1429;
-    border-right: 1px solid rgba(139, 92, 246, 0.12);
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .stp-content {
@@ -301,18 +301,10 @@
     gap: 6px;
 }
 
-.settings-theme-light .stp-header {
+.stp-header {
     height: 10px;
-    background: #ffffff;
     border-radius: 4px;
-    border: 1px solid #e8e4f0;
-}
-
-.settings-theme-dark .stp-header {
-    height: 10px;
-    background: #1a1429;
-    border-radius: 4px;
-    border: 1px solid rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .stp-cards {
@@ -321,18 +313,19 @@
     flex: 1;
 }
 
-.settings-theme-light .stp-card {
+.stp-card {
     flex: 1;
-    background: #ffffff;
     border-radius: 6px;
-    border: 1px solid #e8e4f0;
+    border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.settings-theme-dark .stp-card {
-    flex: 1;
-    background: #231d35;
-    border-radius: 6px;
-    border: 1px solid rgba(139, 92, 246, 0.12);
+/* legacy selectors kept for backwards compat */
+.settings-theme-light {
+    background: #f5f3ff;
+}
+
+.settings-theme-dark {
+    background: #0f0b1a;
 }
 
 .settings-theme-label {
@@ -351,23 +344,56 @@
 }
 
 /* ── Accent Colors ── */
+.settings-accent-carousel {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.settings-accent-arrow {
+    flex-shrink: 0;
+    border: 1.5px solid var(--border-color) !important;
+    background: var(--bg-secondary) !important;
+    transition: all var(--transition-fast) !important;
+}
+
+.settings-accent-arrow:hover:not(:disabled) {
+    border-color: var(--accent-primary) !important;
+    color: var(--accent-primary) !important;
+}
+
+.settings-accent-arrow:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
 .settings-accent-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: var(--space-sm);
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--space-xs);
+    flex: 1;
+    min-width: 0;
+}
+
+.settings-accent-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding-top: var(--space-sm);
 }
 
 .settings-accent-btn {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--space-xs);
-    padding: var(--space-md);
+    gap: 4px;
+    padding: var(--space-sm) 4px;
     border-radius: var(--radius-md);
     border: 2px solid transparent;
     background: var(--bg-tertiary);
     cursor: pointer;
     transition: all var(--transition-fast);
+    min-width: 0;
 }
 
 .settings-accent-btn:hover {
@@ -380,17 +406,23 @@
 }
 
 .settings-accent-color {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: var(--radius-full);
     display: block;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    flex-shrink: 0;
 }
 
 .settings-accent-name {
-    font-size: var(--font-size-xs);
+    font-size: 0.6rem;
     font-weight: 600;
     color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    text-align: center;
 }
 
 .settings-accent-btn.active .settings-accent-name {

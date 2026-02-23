@@ -78,10 +78,20 @@ export function PomodoroProvider({ children }) {
 
     const toggleOpen = () => {
         if (!isOpen) {
+            // Was closed → open it
             setIsOpen(true);
             setIsMinimized(false);
         } else {
-            setIsMinimized(!isMinimized);
+            // Was open → check if any timer is actively running
+            const anyRunning = Object.values(timers).some(t => t.isActive);
+            if (anyRunning) {
+                // Timer running → minimize instead of closing
+                setIsMinimized(prev => !prev);
+            } else {
+                // Nothing running → just close
+                setIsOpen(false);
+                setIsMinimized(false);
+            }
         }
     };
 

@@ -158,6 +158,10 @@
     color: var(--warning);
 }
 
+.smart-task-action-btn.active-myday {
+    color: var(--accent-primary);
+}
+
 /* Mobile adjustments */
 @media (max-width: 600px) {
     .smart-task-meta {

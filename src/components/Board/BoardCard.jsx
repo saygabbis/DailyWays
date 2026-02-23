@@ -6,7 +6,7 @@ import { format, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function BoardCard({ card, boardId, listId, isDragging, onClick }) {
-    const { LABEL_COLORS, dispatch, showConfirm } = useApp();
+    const { LABEL_COLORS, dispatch, persistBoard, showConfirm } = useApp();
     const { showContextMenu } = useContextMenu();
     const isCompleted = card.completed || false;
 
@@ -98,6 +98,7 @@ export default function BoardCard({ card, boardId, listId, isDragging, onClick }
                         type: 'DELETE_CARD',
                         payload: { boardId, listId, cardId: card.id },
                     });
+                    persistBoard(boardId);
                 }
             },
         },

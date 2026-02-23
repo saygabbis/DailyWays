@@ -1,6 +1,6 @@
 import { useApp } from '../../context/AppContext';
 import {
-    Calendar, Star, CheckCircle2, Circle, AlertCircle,
+    Calendar, Star, Sun, CheckCircle2, Circle, AlertCircle,
     ArrowRight, CheckSquare, Clock
 } from 'lucide-react';
 import { format, isPast, isToday, isTomorrow } from 'date-fns';
@@ -8,7 +8,7 @@ import { ptBR } from 'date-fns/locale';
 import './SmartTaskItem.css';
 
 export default function SmartTaskItem({ card, board, list, onClick, onToggleMyDay, onToggleImportant, showLocation = true }) {
-    const { dispatch, LABEL_COLORS } = useApp();
+    const { dispatch, LABEL_COLORS, persistBoard } = useApp();
 
     const handleToggleComplete = (e) => {
         e.stopPropagation();
@@ -21,6 +21,7 @@ export default function SmartTaskItem({ card, board, list, onClick, onToggleMyDa
                 updates: { completed: !card.completed }
             }
         });
+        persistBoard(board.id);
     };
 
     const priorityColor = {
@@ -93,12 +94,22 @@ export default function SmartTaskItem({ card, board, list, onClick, onToggleMyDa
             </div>
 
             <div className="smart-task-actions">
+                {onToggleMyDay && (
+                    <button
+                        className={`smart-task-action-btn ${card.myDay ? 'active-myday' : ''}`}
+                        onClick={(e) => { e.stopPropagation(); onToggleMyDay(card); }}
+                        title={card.myDay ? 'Remover de Meu Dia' : 'Adicionar a Meu Dia'}
+                    >
+                        <Sun size={16} fill={card.myDay ? 'currentColor' : 'none'} />
+                    </button>
+                )}
                 {onToggleImportant && (
                     <button
                         className={`smart-task-action-btn ${card.important ? 'active-star' : ''}`}
                         onClick={(e) => { e.stopPropagation(); onToggleImportant(card); }}
+                        title={card.important ? 'Remover importância' : 'Marcar como importante'}
                     >
-                        <Star size={18} fill={card.important ? 'currentColor' : 'none'} />
+                        <Star size={16} fill={card.important ? 'currentColor' : 'none'} />
                     </button>
                 )}
             </div>

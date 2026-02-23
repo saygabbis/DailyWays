@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './context/AuthContext';
 import { useApp } from './context/AppContext';
 import { useTheme } from './context/ThemeContext';
@@ -15,15 +15,17 @@ import SettingsModal from './components/Settings/SettingsView';
 import SearchOverlay from './components/Search/SearchOverlay';
 
 import PomodoroTimer from './components/Pomodoro/PomodoroTimer';
+import PlannedDropPopover from './components/Common/PlannedDropPopover';
 import FloatingSaveButton from './components/Common/FloatingSaveButton';
 import { useContextMenu } from './components/Common/ContextMenu';
+import { DragDropContext } from '@hello-pangea/dnd';
 import { LayoutDashboard, Sun, Star, CalendarDays, Search, Settings, PanelLeft, Maximize, Plus } from 'lucide-react';
 import './styles/global.css';
 import './App.css';
 
 function AppContent() {
   const { user, profile } = useAuth();
-  const { getActiveBoard, confirmConfig } = useApp();
+  const { getActiveBoard, confirmConfig, dispatch, persistBoard, getAllCards, state, updateBoardsOrder } = useApp();
   const { initPreferences } = useTheme();
   const [activeView, setActiveView] = useState(() => localStorage.getItem('dailyways_active_view') || 'myday');
   const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
@@ -47,6 +49,82 @@ function AppContent() {
   const [showSettings, setShowSettings] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const { showContextMenu } = useContextMenu();
+  const boardViewRef = useRef(null);
+  const [plannedDropCard, setPlannedDropCard] = useState(null);
+
+  // Global DragDropContext handler — intercepts sidebar drops, delegates the rest
+  const handleGlobalDragEnd = useCallback((result) => {
+    const { source, destination, draggableId, type } = result;
+    if (!destination) return;
+
+    // Sidebar smart drop zones
+    if (destination.droppableId.startsWith('sidebar-')) {
+      // Find the card across all boards
+      let card = null, boardId = null, listId = null;
+      for (const b of state.boards) {
+        for (const l of b.lists) {
+          const found = l.cards.find(c => c.id === draggableId);
+          if (found) {
+            card = found;
+            boardId = b.id;
+            listId = l.id;
+            break;
+          }
+        }
+        if (card) break;
+      }
+      if (!card) return;
+
+      if (destination.droppableId === 'sidebar-myday') {
+        dispatch({
+          type: 'UPDATE_CARD',
+          payload: { boardId, listId, cardId: card.id, updates: { myDay: true } },
+        });
+        persistBoard(boardId);
+      } else if (destination.droppableId === 'sidebar-important') {
+        dispatch({
+          type: 'UPDATE_CARD',
+          payload: { boardId, listId, cardId: card.id, updates: { important: true } },
+        });
+        persistBoard(boardId);
+      } else if (destination.droppableId === 'sidebar-planned') {
+        setPlannedDropCard({ card, boardId, listId });
+      }
+      return;
+    }
+
+    // Board reordering in sidebar
+    if (type === 'board' && destination.droppableId === 'boards') {
+      if (source.index === destination.index) return;
+      dispatch({
+        type: 'REORDER_BOARDS',
+        payload: { sourceIndex: source.index, destIndex: destination.index },
+        userId: user?.id,
+      });
+      const newBoards = [...state.boards];
+      const [moved] = newBoards.splice(source.index, 1);
+      newBoards.splice(destination.index, 0, moved);
+      const payloads = newBoards.map((b, i) => ({ id: b.id, position: i }));
+      updateBoardsOrder(user?.id, payloads);
+      return;
+    }
+
+    // Board card / list DnD — delegate to BoardView
+    if (boardViewRef.current?.handleDragEnd) {
+      boardViewRef.current.handleDragEnd(result);
+    }
+  }, [state.boards, dispatch, persistBoard, user?.id, updateBoardsOrder]);
+
+  const handlePlannedDateSelect = (date) => {
+    if (!plannedDropCard) return;
+    const { boardId, listId, card } = plannedDropCard;
+    dispatch({
+      type: 'UPDATE_CARD',
+      payload: { boardId, listId, cardId: card.id, updates: { dueDate: date } },
+    });
+    persistBoard(boardId);
+    setPlannedDropCard(null);
+  };
 
   useEffect(() => {
     const handleResize = () => setIsDesktop(window.innerWidth > 768);
@@ -168,64 +246,75 @@ function AppContent() {
   }, [activeView, activeBoard, sidebarOpen, showContextMenu, toggleSidebar]);
 
   return (
-    <div className="app-layout" onContextMenu={handleGlobalContextMenu}>
-      <Sidebar
-        activeView={activeView}
-        onViewChange={handleViewChange}
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        isDesktop={isDesktop}
-      />
-
-      <main className={mainClass}>
-        <Header
-          title={getTitle()}
-          subtitle={getSubtitle()}
-          onMenuClick={toggleSidebar}
-          sidebarOpen={sidebarOpen}
-          onOpenSettings={() => setShowSettings(true)}
-          onOpenSearch={() => setShowSearch(true)}
+    <DragDropContext onDragEnd={handleGlobalDragEnd}>
+      <div className="app-layout" onContextMenu={handleGlobalContextMenu}>
+        <Sidebar
+          activeView={activeView}
+          onViewChange={handleViewChange}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          isDesktop={isDesktop}
         />
 
-        <div className="app-content">
-          {activeView === 'dashboard' && <DashboardView key="dashboard" />}
-          {activeView === 'myday' && <MyDayView key="myday" onCardClick={handleCardClick} />}
-          {activeView === 'important' && <ImportantView key="important" onCardClick={handleCardClick} />}
-          {activeView === 'planned' && <PlannedView key="planned" onCardClick={handleCardClick} />}
-          {activeView === 'board' && activeBoard && <BoardView key={`board-${activeBoard.id}`} onCardClick={handleCardClick} />}
-          {activeView === 'help' && (
-            <div style={{ padding: 'var(--space-xl)', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '80px' }}>
-              <h2 style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🤝 Central de Ajuda</h2>
-              <p>Em breve! Estamos preparando dicas e tutoriais para você.</p>
-            </div>
-          )}
-        </div>
-      </main>
+        <main className={mainClass}>
+          <Header
+            title={getTitle()}
+            subtitle={getSubtitle()}
+            onMenuClick={toggleSidebar}
+            sidebarOpen={sidebarOpen}
+            onOpenSettings={() => setShowSettings(true)}
+            onOpenSearch={() => setShowSearch(true)}
+          />
 
-      {/* Settings floating modal */}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+          <div className="app-content">
+            {activeView === 'dashboard' && <DashboardView key="dashboard" />}
+            {activeView === 'myday' && <MyDayView key="myday" onCardClick={handleCardClick} />}
+            {activeView === 'important' && <ImportantView key="important" onCardClick={handleCardClick} />}
+            {activeView === 'planned' && <PlannedView key="planned" onCardClick={handleCardClick} />}
+            {activeView === 'board' && activeBoard && <BoardView key={`board-${activeBoard.id}`} ref={boardViewRef} onCardClick={handleCardClick} />}
+            {activeView === 'help' && (
+              <div style={{ padding: 'var(--space-xl)', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '80px' }}>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🤝 Central de Ajuda</h2>
+                <p>Em breve! Estamos preparando dicas e tutoriais para você.</p>
+              </div>
+            )}
+          </div>
+        </main>
 
-      {/* Search floating modal */}
-      {showSearch && <SearchOverlay onClose={() => setShowSearch(false)} onCardClick={handleCardClick} />}
+        {/* Settings floating modal */}
+        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
-      {/* Pomodoro Focus Timer */}
-      <PomodoroTimer />
+        {/* Search floating modal */}
+        {showSearch && <SearchOverlay onClose={() => setShowSearch(false)} onCardClick={handleCardClick} />}
 
-      {/* Floating save button — shown when there are unsaved local changes */}
-      <FloatingSaveButton />
+        {/* Pomodoro Focus Timer */}
+        <PomodoroTimer />
 
-      {/* Task detail floating modal */}
-      {selectedCard && (
-        <TaskDetailModal
-          card={selectedCard.card}
-          boardId={selectedCard.boardId}
-          listId={selectedCard.listId}
-          onClose={() => setSelectedCard(null)}
-        />
-      )}
+        {/* Floating save button — shown when there are unsaved local changes */}
+        <FloatingSaveButton />
+
+        {/* Task detail floating modal */}
+        {selectedCard && (
+          <TaskDetailModal
+            card={selectedCard.card}
+            boardId={selectedCard.boardId}
+            listId={selectedCard.listId}
+            onClose={() => setSelectedCard(null)}
+          />
+        )}
 
 
-    </div>
+        {/* Planned drop date popover */}
+        {plannedDropCard && (
+          <PlannedDropPopover
+            cardTitle={plannedDropCard.card.title}
+            onSelectDate={handlePlannedDateSelect}
+            onClose={() => setPlannedDropCard(null)}
+          />
+        )}
+
+      </div>
+    </DragDropContext>
   );
 }
 

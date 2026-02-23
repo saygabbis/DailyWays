@@ -141,7 +141,6 @@
     text-transform: uppercase;
 }
 
-.task-detail-field input[type="date"],
 .task-detail-select {
     padding: 8px 12px;
     border-radius: var(--radius-md);
@@ -155,7 +154,6 @@
     font-family: inherit;
 }
 
-.task-detail-field input[type="date"]:focus,
 .task-detail-select:focus {
     border-color: var(--accent-primary);
 }

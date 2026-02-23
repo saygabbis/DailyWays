@@ -438,11 +438,23 @@ const SecurityPanel = memo(function SecurityPanel({ user, startMfaEnrollment, ve
 // ─────────────────────────────────────────────
 // APPEARANCE PANEL
 // ─────────────────────────────────────────────
-const AppearancePanel = memo(function AppearancePanel({ theme, toggleTheme, accentId, setAccent, ACCENT_PRESETS, fontId, setFont, FONT_PRESETS, animStyle, setAnimStyle, t }) {
+const ITEMS_PER_PAGE = 10; // 2 rows × 5 columns
+
+const AppearancePanel = memo(function AppearancePanel({ theme, toggleTheme, setTheme, THEME_PRESETS, accentId, setAccent, ACCENT_PRESETS, fontId, setFont, FONT_PRESETS, animStyle, setAnimStyle, t }) {
     const [zoom, setZoom] = useState(() => {
         const stored = localStorage.getItem('dailyways_zoom');
         return stored ? parseInt(stored) : 100;
     });
+    const [accentPage, setAccentPage] = useState(0);
+    const totalPages = Math.ceil(ACCENT_PRESETS.length / ITEMS_PER_PAGE);
+    const pageItems = ACCENT_PRESETS.slice(accentPage * ITEMS_PER_PAGE, (accentPage + 1) * ITEMS_PER_PAGE);
+
+    // Jump to the page containing current accent
+    useEffect(() => {
+        const idx = ACCENT_PRESETS.findIndex(p => p.id === accentId);
+        if (idx >= 0) setAccentPage(Math.floor(idx / ITEMS_PER_PAGE));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleZoom = useCallback((value) => {
         const clamped = Math.min(150, Math.max(75, value));
@@ -452,6 +464,21 @@ const AppearancePanel = memo(function AppearancePanel({ theme, toggleTheme, acce
     }, []);
 
     const currentFont = FONT_PRESETS.find(f => f.id === fontId);
+
+    // Theme preview colors map
+    const THEME_VISUALS = {
+        light: { bg: '#f5f3ff', sidebar: '#ffffff', header: '#ffffff', card: '#ffffff', cardBorder: '#e8e4f0' },
+        dark: { bg: '#0f0b1a', sidebar: '#1a1429', header: '#1a1429', card: '#1a1429', cardBorder: '#2d2542' },
+        dim: { bg: '#15202b', sidebar: '#1e2c3a', header: '#1e2c3a', card: '#1e2c3a', cardBorder: '#2d3d4e' },
+        oled: { bg: '#000000', sidebar: '#000000', header: '#0a0a0a', card: '#0d0d0d', cardBorder: '#1a1a1a' },
+    };
+    const THEME_ICONS = {
+        light: <Sun size={14} />,
+        dark: <Moon size={14} />,
+        dim: <span style={{ fontSize: 13 }}>🌙</span>,
+        oled: <span style={{ fontSize: 13 }}>⚫</span>,
+    };
+    const THEME_LABELS = { light: t.sThemeLight, dark: t.sThemeDark, dim: 'Dim', oled: 'OLED' };
 
     return (
         <div className="settings-panel animate-fade-in">
@@ -463,19 +490,31 @@ const AppearancePanel = memo(function AppearancePanel({ theme, toggleTheme, acce
             {/* Theme */}
             <div className="settings-section">
                 <h3 className="settings-section-title">{t.sTheme}</h3>
-                <div className="settings-theme-grid">
-                    <button className={`settings-theme-card ${theme === 'light' ? 'active' : ''}`} onClick={() => { if (theme !== 'light') toggleTheme(); }}>
-                        <div className="settings-theme-preview settings-theme-light">
-                            <div className="stp-sidebar" /><div className="stp-content"><div className="stp-header" /><div className="stp-cards"><div className="stp-card" /><div className="stp-card" /></div></div>
-                        </div>
-                        <div className="settings-theme-label"><Sun size={16} /><span>{t.sThemeLight}</span></div>
-                    </button>
-                    <button className={`settings-theme-card ${theme === 'dark' ? 'active' : ''}`} onClick={() => { if (theme !== 'dark') toggleTheme(); }}>
-                        <div className="settings-theme-preview settings-theme-dark">
-                            <div className="stp-sidebar" /><div className="stp-content"><div className="stp-header" /><div className="stp-cards"><div className="stp-card" /><div className="stp-card" /></div></div>
-                        </div>
-                        <div className="settings-theme-label"><Moon size={16} /><span>{t.sThemeDark}</span></div>
-                    </button>
+                <div className="settings-theme-grid settings-theme-grid-4">
+                    {(THEME_PRESETS || [
+                        { id: 'light' }, { id: 'dark' }, { id: 'dim' }, { id: 'oled' }
+                    ]).map(({ id }) => {
+                        const v = THEME_VISUALS[id] || THEME_VISUALS.dark;
+                        return (
+                            <button
+                                key={id}
+                                className={`settings-theme-card ${theme === id ? 'active' : ''}`}
+                                onClick={() => setTheme(id)}
+                            >
+                                <div className="settings-theme-preview" style={{ background: v.bg }}>
+                                    <div className="stp-sidebar" style={{ background: v.sidebar }} />
+                                    <div className="stp-content">
+                                        <div className="stp-header" style={{ background: v.header }} />
+                                        <div className="stp-cards">
+                                            <div className="stp-card" style={{ background: v.card, borderColor: v.cardBorder }} />
+                                            <div className="stp-card" style={{ background: v.card, borderColor: v.cardBorder }} />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="settings-theme-label">{THEME_ICONS[id]}<span>{THEME_LABELS[id]}</span></div>
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
 
@@ -483,12 +522,45 @@ const AppearancePanel = memo(function AppearancePanel({ theme, toggleTheme, acce
             <div className="settings-section">
                 <h3 className="settings-section-title">{t.sAccentColor}</h3>
                 <p className="settings-section-desc">{t.sAccentDesc}</p>
-                <div className="settings-accent-grid">
-                    {ACCENT_PRESETS.map(preset => (
-                        <button key={preset.id} className={`settings-accent-btn ${accentId === preset.id ? 'active' : ''}`} onClick={() => setAccent(preset.id)} title={preset.name}>
-                            <span className="settings-accent-color" style={{ background: `linear-gradient(135deg, ${preset.color}, ${preset.secondary})` }} />
-                            <span className="settings-accent-name">{preset.name}</span>
-                        </button>
+                <div className="settings-accent-carousel">
+                    <button
+                        className="btn-icon settings-accent-arrow"
+                        onClick={() => setAccentPage(p => Math.max(0, p - 1))}
+                        disabled={accentPage === 0}
+                    >
+                        <ChevLeft size={20} />
+                    </button>
+                    <div className="settings-accent-grid">
+                        {pageItems.map(preset => (
+                            <button
+                                key={preset.id}
+                                className={`settings-accent-btn ${accentId === preset.id ? 'active' : ''}`}
+                                onClick={() => setAccent(preset.id)}
+                                title={preset.name}
+                            >
+                                <span
+                                    className="settings-accent-color"
+                                    style={{ background: preset.gradient || `linear-gradient(135deg, ${preset.color}, ${preset.secondary})` }}
+                                />
+                                <span className="settings-accent-name">{preset.name}</span>
+                            </button>
+                        ))}
+                    </div>
+                    <button
+                        className="btn-icon settings-accent-arrow"
+                        onClick={() => setAccentPage(p => Math.min(totalPages - 1, p + 1))}
+                        disabled={accentPage === totalPages - 1}
+                    >
+                        <ChevRight size={20} />
+                    </button>
+                </div>
+                <div className="settings-accent-dots">
+                    {Array.from({ length: totalPages }).map((_, i) => (
+                        <button
+                            key={i}
+                            className={`settings-font-dot ${i === accentPage ? 'active' : ''}`}
+                            onClick={() => setAccentPage(i)}
+                        />
                     ))}
                 </div>
             </div>
@@ -635,7 +707,7 @@ export default function SettingsModal({ onClose }) {
         getLinkedIdentities, linkIdentity, unlinkIdentity,
         setPassword, uploadAvatar, removeAvatar,
     } = useAuth();
-    const { theme, toggleTheme, accentId, setAccent, ACCENT_PRESETS, fontId, setFont, FONT_PRESETS, language, setLanguage, animStyle, setAnimStyle } = useTheme();
+    const { theme, toggleTheme, setTheme, accentId, setAccent, ACCENT_PRESETS, THEME_PRESETS, fontId, setFont, FONT_PRESETS, language, setLanguage, animStyle, setAnimStyle } = useTheme();
     const t = useI18n();
 
     const [activeTab, setActiveTab] = useState('account');
@@ -710,7 +782,7 @@ export default function SettingsModal({ onClose }) {
                         )}
                         {activeTab === 'appearance' && (
                             <AppearancePanel
-                                theme={theme} toggleTheme={toggleTheme}
+                                theme={theme} toggleTheme={toggleTheme} setTheme={setTheme} THEME_PRESETS={THEME_PRESETS}
                                 accentId={accentId} setAccent={setAccent} ACCENT_PRESETS={ACCENT_PRESETS}
                                 fontId={fontId} setFont={setFont} FONT_PRESETS={FONT_PRESETS}
                                 animStyle={animStyle} setAnimStyle={setAnimStyle}

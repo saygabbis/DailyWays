@@ -4,6 +4,7 @@ import {
     X, Calendar, Tag, AlertCircle, Sun, CheckSquare,
     Plus, Trash2, Edit3, GripVertical, Repeat, Clock
 } from 'lucide-react';
+import DatePicker from '../Common/DatePicker';
 import './TaskDetail.css';
 
 export default function TaskDetailModal({ card, boardId, listId, onClose }) {
@@ -223,20 +224,20 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                         {/* Due Date */}
                         <div className="task-detail-field">
                             <label><Calendar size={15} /> Vencimento</label>
-                            <input
-                                type="date"
+                            <DatePicker
                                 value={dueDate}
-                                onChange={e => setDueDate(e.target.value)}
+                                onChange={setDueDate}
+                                placeholder="dd/mm/aaaa"
                             />
                         </div>
 
                         {/* Start Date */}
                         <div className="task-detail-field">
                             <label><Clock size={15} /> Iniciar em</label>
-                            <input
-                                type="date"
+                            <DatePicker
                                 value={startDate}
-                                onChange={e => setStartDate(e.target.value)}
+                                onChange={setStartDate}
+                                placeholder="dd/mm/aaaa"
                             />
                         </div>
 

@@ -121,6 +121,82 @@
 }
 
 /* ══════════════════════════════════════════════
+   DIM THEME — cinza-azulado escuro, mais suave que o dark
+   ══════════════════════════════════════════════ */
+[data-theme="dim"] {
+  --bg-primary: #15202b;
+  --bg-secondary: #1e2c3a;
+  --bg-tertiary: #253341;
+  --bg-elevated: #2d3d4e;
+  --bg-hover: rgba(139, 92, 246, 0.08);
+  --bg-active: rgba(139, 92, 246, 0.15);
+  --bg-sidebar: #1e2c3a;
+  --bg-card: #1e2c3a;
+  --bg-input: #253341;
+
+  --glass-bg: rgba(21, 32, 43, 0.88);
+  --glass-border: rgba(139, 92, 246, 0.14);
+  --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+
+  --text-primary: #e7e9ea;
+  --text-secondary: #8b98a5;
+  --text-tertiary: #536471;
+  --text-inverse: #15202b;
+
+  --accent-light: rgba(139, 92, 246, 0.14);
+
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-color-strong: rgba(255, 255, 255, 0.14);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-card-hover: 0 8px 24px rgba(139, 92, 246, 0.18);
+  --accent-glow: 0 4px 20px rgba(139, 92, 246, 0.3);
+
+  color-scheme: dark;
+}
+
+/* ══════════════════════════════════════════════
+   OLED THEME — preto puro para telas OLED
+   ══════════════════════════════════════════════ */
+[data-theme="oled"] {
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-tertiary: #111111;
+  --bg-elevated: #1a1a1a;
+  --bg-hover: rgba(139, 92, 246, 0.10);
+  --bg-active: rgba(139, 92, 246, 0.18);
+  --bg-sidebar: #000000;
+  --bg-card: #0d0d0d;
+  --bg-input: #111111;
+
+  --glass-bg: rgba(0, 0, 0, 0.92);
+  --glass-border: rgba(255, 255, 255, 0.07);
+  --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.8);
+
+  --text-primary: #e7e9ea;
+  --text-secondary: #71767b;
+  --text-tertiary: #3e4144;
+  --text-inverse: #000000;
+
+  --accent-light: rgba(139, 92, 246, 0.14);
+
+  --border-color: rgba(255, 255, 255, 0.06);
+  --border-color-strong: rgba(255, 255, 255, 0.10);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.8);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.8);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.6);
+  --shadow-card-hover: 0 8px 24px rgba(139, 92, 246, 0.2);
+  --accent-glow: 0 4px 20px rgba(139, 92, 246, 0.35);
+
+  color-scheme: dark;
+}
+
+/* ══════════════════════════════════════════════
    SHARED TOKENS
    ══════════════════════════════════════════════ */
 :root {
