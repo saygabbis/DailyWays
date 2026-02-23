@@ -15,6 +15,7 @@ import SettingsModal from './components/Settings/SettingsView';
 import SearchOverlay from './components/Search/SearchOverlay';
 
 import PomodoroTimer from './components/Pomodoro/PomodoroTimer';
+import RadioWidget from './components/Radio/RadioWidget';
 import PlannedDropPopover from './components/Common/PlannedDropPopover';
 import FloatingSaveButton from './components/Common/FloatingSaveButton';
 import { useContextMenu } from './components/Common/ContextMenu';
@@ -289,6 +290,9 @@ function AppContent() {
 
         {/* Pomodoro Focus Timer */}
         <PomodoroTimer />
+
+        {/* Radio Widget */}
+        <RadioWidget />
 
         {/* Floating save button — shown when there are unsaved local changes */}
         <FloatingSaveButton />

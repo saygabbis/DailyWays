@@ -507,6 +507,14 @@
     margin-bottom: var(--space-xs);
 }
 
+.board-card-title {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.4;
+    word-break: break-word;
+}
+
 .board-card-check {
     background: transparent;
     border: none;

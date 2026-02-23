@@ -4,13 +4,14 @@ import { useTheme, useI18n } from '../../context/ThemeContext';
 import {
     User, Palette, Globe, Smartphone, Sun, Moon,
     ChevronRight, Save, Shield, Bell, LogOut,
-    X, ZoomIn, ZoomOut, ShieldCheck, Link2, Unlink,
+    X, ZoomIn, ZoomOut, ShieldCheck, Link2, Unlink, Cloud,
     ChevronLeft as ChevLeft, ChevronRight as ChevRight,
     Camera, Trash2,
 } from 'lucide-react';
 import { Chrome, Command, Github } from 'lucide-react';
 import { ENABLE_MICROSOFT_LOGIN } from '../../config';
-import logoImg from '../../assets/Logo.png';
+import logoWhite from '../../assets/Logo - Branco.png';
+import logoBlack from '../../assets/Logo - Preto.png';
 import './Settings.css';
 import './AvatarCropper.css';
 const AvatarCropper = lazy(() => import('./AvatarCropper'));
@@ -467,18 +468,35 @@ const AppearancePanel = memo(function AppearancePanel({ theme, toggleTheme, setT
 
     // Theme preview colors map
     const THEME_VISUALS = {
-        light: { bg: '#f5f3ff', sidebar: '#ffffff', header: '#ffffff', card: '#ffffff', cardBorder: '#e8e4f0' },
+        light: { bg: '#f8f8f8', sidebar: '#ffffff', header: '#ffffff', card: '#ffffff', cardBorder: '#e5e7eb' },
+        latte: { bg: '#faf7f2', sidebar: '#ffffff', header: '#f5f1ea', card: '#ffffff', cardBorder: '#e3d5ca' },
+        ocean: { bg: '#f0f7ff', sidebar: '#ffffff', header: '#e6f1ff', card: '#ffffff', cardBorder: '#e2e8f0' },
+        nord: { bg: '#d8d5d5', sidebar: '#e9e9e9', header: '#e9e9e9', card: '#e9e9e9', cardBorder: 'rgba(0,0,0,0.08)' },
         dark: { bg: '#0f0b1a', sidebar: '#1a1429', header: '#1a1429', card: '#1a1429', cardBorder: '#2d2542' },
-        dim: { bg: '#15202b', sidebar: '#1e2c3a', header: '#1e2c3a', card: '#1e2c3a', cardBorder: '#2d3d4e' },
+        midnight: { bg: '#050510', sidebar: '#050510', header: '#0a0a1a', card: '#0a0a1a', cardBorder: '#161630' },
+        dim: { bg: '#1a1715', sidebar: '#231f1d', header: '#231f1d', card: '#231f1d', cardBorder: 'rgba(237,228,217,0.1)' },
         oled: { bg: '#000000', sidebar: '#000000', header: '#0a0a0a', card: '#0d0d0d', cardBorder: '#1a1a1a' },
     };
     const THEME_ICONS = {
         light: <Sun size={14} />,
+        latte: <span style={{ fontSize: 13 }}>☕</span>,
+        ocean: <span style={{ fontSize: 13 }}>🌊</span>,
+        nord: <Cloud size={14} />,
         dark: <Moon size={14} />,
+        midnight: <span style={{ fontSize: 13 }}>✨</span>,
         dim: <span style={{ fontSize: 13 }}>🌙</span>,
         oled: <span style={{ fontSize: 13 }}>⚫</span>,
     };
-    const THEME_LABELS = { light: t.sThemeLight, dark: t.sThemeDark, dim: 'Dim', oled: 'OLED' };
+    const THEME_LABELS = {
+        light: t.sThemeLight,
+        latte: 'Latte',
+        ocean: 'Ocean',
+        nord: 'Nord',
+        dark: t.sThemeDark,
+        midnight: 'Midnight',
+        dim: 'Dim',
+        oled: 'OLED'
+    };
 
     return (
         <div className="settings-panel animate-fade-in">
@@ -739,7 +757,7 @@ export default function SettingsModal({ onClose }) {
                     {/* Tabs Sidebar */}
                     <div className="settings-tabs">
                         <div className="settings-tabs-title">
-                            <img src={logoImg} alt="DailyWays" className="settings-logo-img" />
+                            <img src={['light', 'latte', 'ocean', 'nord'].includes(theme) ? logoBlack : logoWhite} alt="DailyWays" className="settings-logo-img" />
                             {t.settings}
                         </div>
                         {tabs.map(tab => (

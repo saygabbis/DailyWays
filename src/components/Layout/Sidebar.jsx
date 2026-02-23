@@ -4,18 +4,20 @@ import { useApp } from '../../context/AppContext';
 import { insertBoardFull, deleteBoard } from '../../services/boardService';
 
 import { usePomodoro } from '../../context/PomodoroContext';
+import { useRadio } from '../../context/RadioContext';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import {
     Sun, Star, CalendarDays, LayoutGrid, Plus, LogOut,
     ChevronLeft, Settings, HelpCircle,
     Edit3, Trash2, Copy, Palette, Focus, LayoutDashboard,
-    MoreHorizontal
+    MoreHorizontal, Music
 } from 'lucide-react';
 import { useContextMenu } from '../Common/ContextMenu';
-import logoImg from '../../assets/Logo - Branco.png';
+import logoWhite from '../../assets/Logo - Branco.png';
+import logoBlack from '../../assets/Logo - Preto.png';
 import './Sidebar.css';
-import { useI18n } from '../../context/ThemeContext';
+import { useI18n, useTheme } from '../../context/ThemeContext';
 
 export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isDesktop }) {
     const { user, logout } = useAuth();
@@ -26,7 +28,11 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         showConfirm,
     } = useApp();
     const t = useI18n();
-    const { toggleOpen } = usePomodoro();
+    const { theme } = useTheme();
+    const isLightTheme = ['light', 'latte', 'ocean', 'nord'].includes(theme);
+    const logoImg = isLightTheme ? logoBlack : logoWhite;
+    const { toggleOpen: togglePomodoro } = usePomodoro();
+    const { toggleOpen: toggleRadio } = useRadio();
     const { showContextMenu } = useContextMenu();
 
     const [showNewBoard, setShowNewBoard] = useState(false);
@@ -398,12 +404,21 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                         <div className="sidebar-section-label">{t.resources}</div>
                         <button
                             className="sidebar-item"
-                            onClick={toggleOpen}
+                            onClick={togglePomodoro}
                         >
                             <span className="sidebar-item-icon">
                                 <Focus size={18} />
                             </span>
                             <span>{t.focusMode}</span>
+                        </button>
+                        <button
+                            className="sidebar-item"
+                            onClick={toggleRadio}
+                        >
+                            <span className="sidebar-item-icon">
+                                <Music size={18} />
+                            </span>
+                            <span>{t.radio}</span>
                         </button>
                     </nav>
 

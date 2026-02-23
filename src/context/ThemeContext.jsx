@@ -35,8 +35,12 @@ const ACCENT_PRESETS = [
 
 const THEME_PRESETS = [
     { id: 'light', name: 'Claro', icon: 'sun' },
-    { id: 'dark', name: 'Escuro', icon: 'moon' },
+    { id: 'latte', name: 'Latte', icon: 'coffee' },
+    { id: 'ocean', name: 'Ocean', icon: 'cloud' },
+    { id: 'nord', name: 'Nord', icon: 'cloud' },
     { id: 'dim', name: 'Dim', icon: 'dim' },
+    { id: 'dark', name: 'Escuro', icon: 'moon' },
+    { id: 'midnight', name: 'Midnight', icon: 'sparkle' },
     { id: 'oled', name: 'OLED', icon: 'oled' },
 ];
 
@@ -54,7 +58,7 @@ const TRANSLATIONS = {
     'pt-br': {
         myday: 'Meu Dia', important: 'Importante', planned: 'Planejado',
         dashboard: 'Visão Geral', boards: 'BOARDS', general: 'GERAL',
-        resources: 'WIDGETS', others: 'OUTROS', focusMode: 'Modo Foco',
+        resources: 'WIDGETS', others: 'OUTROS', focusMode: 'Modo Foco', radio: 'Rádio',
         settings: 'Configurações', help: 'Central de Ajuda', logout: 'Sair',
         search: 'Buscar tarefas...', notifications: 'Notificações', newBoard: 'Novo Board',
         stAccount: 'Conta', stSecurity: 'Segurança', stAppearance: 'Aparência', stApp: 'Aplicativo', stLanguage: 'Idioma',
@@ -112,7 +116,7 @@ const TRANSLATIONS = {
     'en': {
         myday: 'My Day', important: 'Important', planned: 'Planned',
         dashboard: 'Overview', boards: 'BOARDS', general: 'GENERAL',
-        resources: 'WIDGETS', others: 'OTHERS', focusMode: 'Focus Mode',
+        resources: 'WIDGETS', others: 'OTHERS', focusMode: 'Focus Mode', radio: 'Radio',
         settings: 'Settings', help: 'Help Center', logout: 'Sign Out',
         search: 'Search tasks...', notifications: 'Notifications', newBoard: 'New Board',
         stAccount: 'Account', stSecurity: 'Security', stAppearance: 'Appearance', stApp: 'Application', stLanguage: 'Language',
@@ -170,7 +174,7 @@ const TRANSLATIONS = {
     'es': {
         myday: 'Mi Día', important: 'Importante', planned: 'Planificado',
         dashboard: 'Vista General', boards: 'TABLEROS', general: 'GENERAL',
-        resources: 'WIDGETS', others: 'OTROS', focusMode: 'Modo Enfoque',
+        resources: 'WIDGETS', others: 'OTROS', focusMode: 'Modo Enfoque', radio: 'Radio',
         settings: 'Configuración', help: 'Centro de Ayuda', logout: 'Salir',
         search: 'Buscar tareas...', notifications: 'Notificaciones', newBoard: 'Nuevo Tablero',
         stAccount: 'Cuenta', stSecurity: 'Seguridad', stAppearance: 'Apariencia', stApp: 'Aplicación', stLanguage: 'Idioma',
@@ -483,7 +487,8 @@ export function ThemeProvider({ children }) {
         root.style.setProperty('--accent-glow', `0 4px 16px ${accent.color}40`);
 
         // Light-specific accent derivatives
-        if (document.documentElement.getAttribute('data-theme') === 'light') {
+        const isLightTheme = ['light', 'latte', 'ocean', 'nord'].includes(theme);
+        if (isLightTheme) {
             root.style.setProperty('--accent-light', `${accent.color}18`);
             root.style.setProperty('--bg-hover', `${accent.color}0d`);
             root.style.setProperty('--bg-active', `${accent.color}1a`);

@@ -59,7 +59,7 @@
 .sidebar-logo-name {
     font-size: 1.1rem;
     font-weight: 700;
-    color: rgba(255, 255, 255, 0.92);
+    color: var(--text-primary);
     letter-spacing: -0.01em;
     white-space: nowrap;
 }

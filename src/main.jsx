@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext'
 import { AppProvider } from './context/AppContext'
 import { ContextMenuProvider } from './components/Common/ContextMenu'
 import { PomodoroProvider } from './context/PomodoroContext'
+import { RadioProvider } from './context/RadioContext'
 import { ToastProvider } from './context/ToastContext'
 import App from './App.jsx'
 
@@ -16,7 +17,9 @@ createRoot(document.getElementById('root')).render(
           <AppProvider>
             <ContextMenuProvider>
               <PomodoroProvider>
-                <App />
+                <RadioProvider>
+                  <App />
+                </RadioProvider>
               </PomodoroProvider>
             </ContextMenuProvider>
           </AppProvider>

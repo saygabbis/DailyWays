@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ENABLE_MICROSOFT_LOGIN } from '../../config';
 import { Lock, Mail, User, ArrowRight, Chrome, Command, Github, Shield } from 'lucide-react';
-import logoImg from '../../assets/Logo - Branco.png';
+import { useTheme } from '../../context/ThemeContext';
+import logoWhite from '../../assets/Logo - Branco.png';
+import logoBlack from '../../assets/Logo - Preto.png';
 import './Auth.css';
 
 function getOAuthErrorFromUrl() {
@@ -27,6 +29,9 @@ export default function AuthPage() {
     authError: contextAuthError,
     clearAuthError,
   } = useAuth();
+  const { theme } = useTheme();
+  const isLightTheme = ['light', 'latte', 'ocean', 'nord'].includes(theme);
+  const logoImg = isLightTheme ? logoBlack : logoWhite;
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
