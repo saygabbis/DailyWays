@@ -6,15 +6,30 @@ import { useI18n } from '../../context/ThemeContext';
 import NotificationDropdown from '../Notifications/NotificationDropdown';
 import './Header.css';
 
-export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOpenSettings, onOpenSearch }) {
+export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOpenSettings, onOpenSearch, editableBoardTitle }) {
     const { user, logout } = useAuth();
     const { getActiveBoard, showBoardToolbar, dispatch, showConfirm } = useApp();
     const t = useI18n();
     const [showProfile, setShowProfile] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
+    const [editingBoardTitle, setEditingBoardTitle] = useState(false);
+    const [editBoardTitleValue, setEditBoardTitleValue] = useState('');
     const profileRef = useRef(null);
 
     const activeBoard = getActiveBoard();
+
+    const handleStartEditBoardTitle = () => {
+        if (!editableBoardTitle?.board) return;
+        setEditBoardTitleValue(editableBoardTitle.board.title);
+        setEditingBoardTitle(true);
+    };
+
+    const handleSaveBoardTitle = (e) => {
+        if (e) e.preventDefault();
+        const trimmed = editBoardTitleValue.trim();
+        setEditingBoardTitle(false);
+        if (trimmed && editableBoardTitle?.onSave) editableBoardTitle.onSave(trimmed);
+    };
 
     const firstName = user?.name?.split(' ')[0] || 'Usuário';
 
@@ -49,7 +64,30 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                     {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
                 </button>
                 <div className="header-title-group">
-                    <h1 className="header-title">{title}</h1>
+                    {editableBoardTitle && editingBoardTitle ? (
+                        <form onSubmit={handleSaveBoardTitle} className="header-title-edit-form">
+                            <input
+                                type="text"
+                                className="header-title-edit-input"
+                                value={editBoardTitleValue}
+                                onChange={e => setEditBoardTitleValue(e.target.value)}
+                                onBlur={handleSaveBoardTitle}
+                                onKeyDown={e => e.key === 'Escape' && setEditingBoardTitle(false)}
+                                autoFocus
+                                aria-label="Nome do board"
+                            />
+                        </form>
+                    ) : editableBoardTitle ? (
+                        <h1
+                            className="header-title header-title-editable"
+                            onClick={handleStartEditBoardTitle}
+                            title="Clique para renomear o board"
+                        >
+                            {title}
+                        </h1>
+                    ) : (
+                        <h1 className="header-title">{title}</h1>
+                    )}
                     {subtitle && <span className="header-subtitle">{subtitle}</span>}
                 </div>
             </div>

@@ -26,7 +26,7 @@ import './App.css';
 
 function AppContent() {
   const { user, profile } = useAuth();
-  const { getActiveBoard, confirmConfig, dispatch, persistBoard, getAllCards, state, updateBoardsOrder } = useApp();
+  const { getActiveBoard, confirmConfig, dispatch, persistBoard, getAllCards, state, updateBoardsOrder, suppressRealtime, updateBoardAndPersist } = useApp();
   const { initPreferences } = useTheme();
   const [activeView, setActiveView] = useState(() => localStorage.getItem('dailyways_active_view') || 'myday');
   const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
@@ -94,7 +94,7 @@ function AppContent() {
       return;
     }
 
-    // Board reordering in sidebar
+    // Board reordering in sidebar — show floating-save while saving order
     if (type === 'board' && destination.droppableId === 'boards') {
       if (source.index === destination.index) return;
       dispatch({
@@ -106,7 +106,12 @@ function AppContent() {
       const [moved] = newBoards.splice(source.index, 1);
       newBoards.splice(destination.index, 0, moved);
       const payloads = newBoards.map((b, i) => ({ id: b.id, position: i }));
-      updateBoardsOrder(user?.id, payloads);
+      dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__boards_order__', saving: true } });
+      if (suppressRealtime) suppressRealtime(3000);
+      updateBoardsOrder(user?.id, payloads)
+        .finally(() => {
+          dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__boards_order__', saving: false } });
+        });
       return;
     }
 
@@ -114,7 +119,7 @@ function AppContent() {
     if (boardViewRef.current?.handleDragEnd) {
       boardViewRef.current.handleDragEnd(result);
     }
-  }, [state.boards, dispatch, persistBoard, user?.id, updateBoardsOrder]);
+  }, [state.boards, dispatch, persistBoard, user?.id, updateBoardsOrder, suppressRealtime]);
 
   const handlePlannedDateSelect = (date) => {
     if (!plannedDropCard) return;
@@ -265,6 +270,7 @@ function AppContent() {
             sidebarOpen={sidebarOpen}
             onOpenSettings={() => setShowSettings(true)}
             onOpenSearch={() => setShowSearch(true)}
+            editableBoardTitle={activeView === 'board' && activeBoard ? { board: activeBoard, onSave: (newTitle) => updateBoardAndPersist(activeBoard.id, { title: newTitle }) } : null}
           />
 
           <div className="app-content">

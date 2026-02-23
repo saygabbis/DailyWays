@@ -44,6 +44,37 @@
     color: var(--text-primary);
 }
 
+.header-title-editable {
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    padding: 2px 6px;
+    margin: -2px -6px 0;
+}
+.header-title-editable:hover {
+    background: var(--bg-hover);
+}
+
+.header-title-edit-form {
+    min-width: 0;
+    flex: 1;
+}
+.header-title-edit-input {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    border: 1.5px solid var(--accent-primary-alpha);
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    width: 100%;
+    min-width: 120px;
+    font-family: inherit;
+}
+.header-title-edit-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
 .header-subtitle {
     font-size: var(--font-size-sm);
     color: var(--text-tertiary);
