@@ -429,6 +429,30 @@
     color: var(--accent-primary);
 }
 
+.settings-accent-btn-custom .settings-accent-custom-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    border: 2px dashed var(--border-color-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+}
+
+.settings-accent-btn-custom:hover .settings-accent-custom-dot {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.settings-accent-btn-custom.active .settings-accent-custom-dot {
+    border-color: var(--accent-primary);
+    border-style: solid;
+    background: var(--accent-light);
+    color: var(--accent-primary);
+}
+
 /* ── Zoom Control ── */
 .settings-zoom-control {
     display: flex;

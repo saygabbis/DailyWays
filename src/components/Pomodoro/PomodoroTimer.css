@@ -1,6 +1,6 @@
 .pomodoro-widget {
     position: fixed;
-    z-index: 120;
+    z-index: 1000;
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
     background: rgba(var(--bg-card-rgb), 0.82);

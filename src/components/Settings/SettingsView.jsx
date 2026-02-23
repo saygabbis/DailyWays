@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, memo, lazy, Suspense } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, memo, lazy, Suspense } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, useI18n } from '../../context/ThemeContext';
 import {
@@ -8,10 +8,12 @@ import {
     ChevronLeft as ChevLeft, ChevronRight as ChevRight,
     Camera, Trash2,
 } from 'lucide-react';
-import { Chrome, Command, Github } from 'lucide-react';
+import { Chrome, Command, Github, Plus } from 'lucide-react';
 import { ENABLE_MICROSOFT_LOGIN } from '../../config';
 import logoWhite from '../../assets/Logo - Branco.png';
 import logoBlack from '../../assets/Logo - Preto.png';
+import CustomAccentPopover from './CustomAccentPopover';
+import { CUSTOM_ACCENT_ID } from '../../context/ThemeContext';
 import './Settings.css';
 import './AvatarCropper.css';
 const AvatarCropper = lazy(() => import('./AvatarCropper'));
@@ -441,21 +443,23 @@ const SecurityPanel = memo(function SecurityPanel({ user, startMfaEnrollment, ve
 // ─────────────────────────────────────────────
 const ITEMS_PER_PAGE = 10; // 2 rows × 5 columns
 
-const AppearancePanel = memo(function AppearancePanel({ theme, toggleTheme, setTheme, THEME_PRESETS, accentId, setAccent, ACCENT_PRESETS, fontId, setFont, FONT_PRESETS, animStyle, setAnimStyle, t }) {
+const AppearancePanel = memo(function AppearancePanel({ theme, toggleTheme, setTheme, THEME_PRESETS, accentId, setAccent, ACCENT_PRESETS, customAccentValue, setCustomAccent, fontId, setFont, FONT_PRESETS, animStyle, setAnimStyle, t }) {
+    const accentItemsWithCustom = useMemo(() => [...ACCENT_PRESETS, { id: CUSTOM_ACCENT_ID, isCustom: true }], [ACCENT_PRESETS]);
     const [zoom, setZoom] = useState(() => {
         const stored = localStorage.getItem('dailyways_zoom');
         return stored ? parseInt(stored) : 100;
     });
     const [accentPage, setAccentPage] = useState(0);
-    const totalPages = Math.ceil(ACCENT_PRESETS.length / ITEMS_PER_PAGE);
-    const pageItems = ACCENT_PRESETS.slice(accentPage * ITEMS_PER_PAGE, (accentPage + 1) * ITEMS_PER_PAGE);
+    const [customPopoverOpen, setCustomPopoverOpen] = useState(false);
+    const customButtonRef = useRef(null);
+    const totalPages = Math.ceil(accentItemsWithCustom.length / ITEMS_PER_PAGE);
+    const pageItems = accentItemsWithCustom.slice(accentPage * ITEMS_PER_PAGE, (accentPage + 1) * ITEMS_PER_PAGE);
 
     // Jump to the page containing current accent
     useEffect(() => {
-        const idx = ACCENT_PRESETS.findIndex(p => p.id === accentId);
+        const idx = accentItemsWithCustom.findIndex(p => p.id === accentId);
         if (idx >= 0) setAccentPage(Math.floor(idx / ITEMS_PER_PAGE));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [accentId, accentItemsWithCustom]);
 
     const handleZoom = useCallback((value) => {
         const clamped = Math.min(150, Math.max(75, value));
@@ -549,7 +553,20 @@ const AppearancePanel = memo(function AppearancePanel({ theme, toggleTheme, setT
                         <ChevLeft size={20} />
                     </button>
                     <div className="settings-accent-grid">
-                        {pageItems.map(preset => (
+                        {pageItems.map(preset => preset.isCustom ? (
+                            <button
+                                key={preset.id}
+                                ref={customButtonRef}
+                                className={`settings-accent-btn settings-accent-btn-custom ${accentId === CUSTOM_ACCENT_ID ? 'active' : ''}`}
+                                onClick={() => setCustomPopoverOpen(true)}
+                                title="Personalizado"
+                            >
+                                <span className="settings-accent-custom-dot">
+                                    <Plus size={16} strokeWidth={2.5} />
+                                </span>
+                                <span className="settings-accent-name">Personalizado</span>
+                            </button>
+                        ) : (
                             <button
                                 key={preset.id}
                                 className={`settings-accent-btn ${accentId === preset.id ? 'active' : ''}`}
@@ -581,6 +598,14 @@ const AppearancePanel = memo(function AppearancePanel({ theme, toggleTheme, setT
                         />
                     ))}
                 </div>
+                {customPopoverOpen && (
+                    <CustomAccentPopover
+                        anchorRef={customButtonRef}
+                        value={customAccentValue}
+                        onApply={(v) => { setCustomAccent(v); }}
+                        onClose={() => setCustomPopoverOpen(false)}
+                    />
+                )}
             </div>
 
             {/* Zoom */}
@@ -725,7 +750,7 @@ export default function SettingsModal({ onClose }) {
         getLinkedIdentities, linkIdentity, unlinkIdentity,
         setPassword, uploadAvatar, removeAvatar,
     } = useAuth();
-    const { theme, toggleTheme, setTheme, accentId, setAccent, ACCENT_PRESETS, THEME_PRESETS, fontId, setFont, FONT_PRESETS, language, setLanguage, animStyle, setAnimStyle } = useTheme();
+    const { theme, toggleTheme, setTheme, accentId, setAccent, ACCENT_PRESETS, THEME_PRESETS, fontId, setFont, FONT_PRESETS, language, setLanguage, animStyle, setAnimStyle, CUSTOM_ACCENT_ID, customAccentValue, setCustomAccent } = useTheme();
     const t = useI18n();
 
     const [activeTab, setActiveTab] = useState('account');
@@ -802,6 +827,7 @@ export default function SettingsModal({ onClose }) {
                             <AppearancePanel
                                 theme={theme} toggleTheme={toggleTheme} setTheme={setTheme} THEME_PRESETS={THEME_PRESETS}
                                 accentId={accentId} setAccent={setAccent} ACCENT_PRESETS={ACCENT_PRESETS}
+                                customAccentValue={customAccentValue} setCustomAccent={setCustomAccent}
                                 fontId={fontId} setFont={setFont} FONT_PRESETS={FONT_PRESETS}
                                 animStyle={animStyle} setAnimStyle={setAnimStyle}
                                 t={t}

@@ -1,0 +1,201 @@
+/* Popover tematizado com o site */
+.custom-accent-popover {
+    position: fixed;
+    z-index: 1002;
+    min-width: 280px;
+    max-width: 320px;
+    background: var(--bg-elevated);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: var(--space-md);
+}
+
+.custom-accent-popover-header {
+    margin-bottom: var(--space-sm);
+}
+
+.custom-accent-popover-title {
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.custom-accent-popover-tabs {
+    display: flex;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-md);
+}
+
+.custom-accent-popover-tabs button {
+    flex: 1;
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-md);
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.custom-accent-popover-tabs button:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.custom-accent-popover-tabs button.active {
+    border-color: var(--accent-primary);
+    background: var(--accent-light);
+    color: var(--accent-primary);
+}
+
+.custom-accent-popover-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.custom-accent-row,
+.custom-accent-rgb {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.custom-accent-row label,
+.custom-accent-rgb label {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.custom-accent-color-input {
+    width: 100%;
+    height: 44px;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    background: transparent;
+}
+
+.custom-accent-rgb-inputs {
+    display: flex;
+    gap: var(--space-xs);
+}
+
+.custom-accent-rgb-inputs input {
+    flex: 1;
+    padding: var(--space-xs) var(--space-sm);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+}
+
+.custom-accent-rgb-inputs input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+/* Stops (gradiente) */
+.custom-accent-stop {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.custom-accent-stop-color {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.custom-accent-stop-color input[type="color"] {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    background: transparent;
+}
+
+.custom-accent-stop-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+}
+
+.custom-accent-stop-pos {
+    flex: 1;
+    min-width: 100px;
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.custom-accent-stop-pos input[type="range"] {
+    flex: 1;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--bg-elevated);
+    border-radius: 3px;
+}
+
+.custom-accent-stop-pos input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    cursor: pointer;
+}
+
+.custom-accent-stop-pos span {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    min-width: 28px;
+}
+
+.custom-accent-remove-stop {
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: var(--radius-full);
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.custom-accent-remove-stop:hover {
+    background: var(--danger-alpha, rgba(220, 38, 38, 0.15));
+    color: var(--danger, #dc2626);
+}
+
+.custom-accent-add-stop {
+    padding: var(--space-xs) var(--space-sm);
+    border: 1.5px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.custom-accent-add-stop:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: var(--accent-light);
+}

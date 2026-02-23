@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import storageService from '../services/storageService';
 import { supabase } from '../services/supabaseClient';
+import logoFaviconLight from '../assets/logo.png';
+import logoFaviconDark from '../assets/Logo - Branco.png';
 
 const ThemeContext = createContext(null);
 
@@ -31,7 +33,30 @@ const ACCENT_PRESETS = [
     { id: 'grad-fire', name: 'Chamas', color: '#dc2626', secondary: '#f97316', gradient: 'linear-gradient(135deg, #dc2626 0%, #f97316 100%)' },
     { id: 'grad-midnight', name: 'Meia-Noite', color: '#1e1b4b', secondary: '#4f46e5', gradient: 'linear-gradient(135deg, #1e1b4b 0%, #4f46e5 100%)' },
     { id: 'grad-rose-gold', name: 'Ouro Rosé', color: '#f43f5e', secondary: '#f59e0b', gradient: 'linear-gradient(135deg, #f43f5e 0%, #f59e0b 100%)' },
+    // ── 5 novas cores (total 19 presets sólidos+gradientes antes do custom) ──
+    { id: 'mint', name: 'Menta', color: '#34d399', secondary: '#10b981' },
+    { id: 'coral', name: 'Coral', color: '#fb7185', secondary: '#f43f5e' },
+    { id: 'gold', name: 'Dourado', color: '#eab308', secondary: '#ca8a04' },
+    { id: 'grad-lavender', name: 'Lavanda', color: '#a78bfa', secondary: '#c084fc', gradient: 'linear-gradient(135deg, #a78bfa 0%, #c084fc 50%, #e879f9 100%)' },
+    { id: 'grad-peach', name: 'Pêssego', color: '#fdba74', secondary: '#fb923c', gradient: 'linear-gradient(135deg, #fdba74 0%, #fb923c 100%)' },
 ];
+
+export const CUSTOM_ACCENT_ID = 'custom';
+const DEFAULT_CUSTOM_ACCENT = { type: 'solid', color: '#7c3aed' };
+
+function buildAccentFromCustom(custom) {
+    if (!custom || custom.type === 'solid') {
+        const c = custom?.color || DEFAULT_CUSTOM_ACCENT.color;
+        return { color: c, secondary: c, gradient: `linear-gradient(135deg, ${c} 0%, ${c} 100%)` };
+    }
+    const stops = custom.stops && custom.stops.length >= 2
+        ? [...custom.stops].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+        : [{ color: '#7c3aed', position: 0 }, { color: '#06b6d4', position: 100 }];
+    const grad = `linear-gradient(135deg, ${stops.map(s => `${s.color} ${s.position ?? 0}%`).join(', ')})`;
+    const color = stops[0].color;
+    const secondary = stops[stops.length - 1].color;
+    return { color, secondary, gradient: grad };
+}
 
 const THEME_PRESETS = [
     { id: 'light', name: 'Claro', icon: 'sun' },
@@ -420,6 +445,17 @@ export function ThemeProvider({ children }) {
         storageService.load('dailyways_accent') || 'purple'
     );
 
+    const [customAccentValue, setCustomAccentValueState] = useState(() => {
+        const raw = storageService.load('dailyways_custom_accent');
+        if (!raw) return DEFAULT_CUSTOM_ACCENT;
+        try {
+            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (parsed.type === 'gradient' && Array.isArray(parsed.stops) && parsed.stops.length >= 2) return parsed;
+            if (parsed.type === 'solid' && parsed.color) return parsed;
+        } catch (_) { /* ignore */ }
+        return DEFAULT_CUSTOM_ACCENT;
+    });
+
     const [fontId, setFontId] = useState(() =>
         storageService.load('dailyways_font') || 'poppins'
     );
@@ -466,7 +502,10 @@ export function ThemeProvider({ children }) {
         setAnimStyleState(an); storageService.save('dailyways_anim', an);
     }, []);
 
-    const accent = ACCENT_PRESETS.find(a => a.id === accentId) || ACCENT_PRESETS[0];
+    const accent = useMemo(() => {
+        if (accentId === CUSTOM_ACCENT_ID) return buildAccentFromCustom(customAccentValue);
+        return ACCENT_PRESETS.find(a => a.id === accentId) || ACCENT_PRESETS[0];
+    }, [accentId, customAccentValue]);
     const font = FONT_PRESETS.find(f => f.id === fontId) || FONT_PRESETS[0];
 
     // Apply theme + accent to DOM
@@ -474,6 +513,20 @@ export function ThemeProvider({ children }) {
         const root = document.documentElement;
         root.setAttribute('data-theme', theme);
         storageService.save('dailyways_theme', theme);
+    }, [theme]);
+
+    // Favicon: branco em dark mode, padrão (preto) em light mode
+    useEffect(() => {
+        const isLightTheme = ['light', 'latte', 'ocean', 'nord'].includes(theme);
+        const faviconHref = isLightTheme ? logoFaviconLight : logoFaviconDark;
+        let link = document.querySelector('link[rel="icon"]');
+        if (!link) {
+            link = document.createElement('link');
+            link.rel = 'icon';
+            link.type = 'image/png';
+            document.head.appendChild(link);
+        }
+        link.href = faviconHref;
     }, [theme]);
 
 
@@ -545,6 +598,18 @@ export function ThemeProvider({ children }) {
         saveToDb({ accent: id });
     };
 
+    const setCustomAccent = useCallback((value) => {
+        setCustomAccentValueState(value);
+        storageService.save('dailyways_custom_accent', JSON.stringify(value));
+        setAccentId(CUSTOM_ACCENT_ID);
+        saveToDb({ accent: CUSTOM_ACCENT_ID });
+    }, []);
+
+    const setCustomAccentValue = useCallback((value) => {
+        setCustomAccentValueState(value);
+        storageService.save('dailyways_custom_accent', JSON.stringify(value));
+    }, []);
+
     const setFont = (id) => {
         setFontId(id);
         saveToDb({ font_id: id });
@@ -552,10 +617,11 @@ export function ThemeProvider({ children }) {
 
     const ctxValue = useMemo(() => ({
         theme, toggleTheme, setTheme, accentId, setAccent, accent, ACCENT_PRESETS, THEME_PRESETS,
+        CUSTOM_ACCENT_ID, customAccentValue, setCustomAccent, setCustomAccentValue,
         fontId, setFont, FONT_PRESETS, language, setLanguage,
         animStyle, setAnimStyle, initPreferences,
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }), [theme, accentId, accent, fontId, language, animStyle, initPreferences]);
+    }), [theme, accentId, accent, customAccentValue, setCustomAccent, setCustomAccentValue, fontId, language, animStyle, initPreferences]);
 
     return (
         <ThemeContext.Provider value={ctxValue}>
