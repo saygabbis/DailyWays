@@ -2,48 +2,7 @@ import { useState } from 'react';
 import { Bell, Check, Clock, MessageSquare, User } from 'lucide-react';
 import './Notification.css';
 
-const MOCK_NOTIFICATIONS = [
-    {
-        id: 1,
-        type: 'mention',
-        user: 'Alice Silva',
-        avatar: 'AS',
-        text: 'mencionou você em',
-        target: 'Design System',
-        time: '2 min atrás',
-        read: false,
-    },
-    {
-        id: 2,
-        type: 'assignment',
-        user: 'Bob Jones',
-        avatar: 'BJ',
-        text: 'atribuiu a você',
-        target: 'API Integration',
-        time: '1h atrás',
-        read: false,
-    },
-    {
-        id: 3,
-        type: 'reminder',
-        user: 'System',
-        avatar: <Clock size={14} />,
-        text: 'Lembrete: vencer hoje',
-        target: 'Revisão Mensal',
-        time: '3h atrás',
-        read: true,
-    },
-    {
-        id: 4,
-        type: 'comment',
-        user: 'Alice Silva',
-        avatar: 'AS',
-        text: 'comentou em',
-        target: 'Bug #124',
-        time: 'Ontem',
-        read: true,
-    }
-];
+const MOCK_NOTIFICATIONS = [];
 
 export default function NotificationDropdown({ onClose }) {
     const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);

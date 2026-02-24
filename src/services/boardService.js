@@ -77,6 +77,7 @@ function rowToBoard(row) {
     color: row.color,
     emoji: row.emoji,
     position: row.position ?? 0,
+    groupId: row.group_id ?? null,
     createdAt: row.created_at,
     lists: [],
   };
@@ -260,6 +261,7 @@ export async function insertBoardFull(userId, board) {
     color: board.color ?? null,
     emoji: board.emoji ?? '📋',
     position: board.position ?? 0,
+    group_id: board.groupId ?? null,
     created_at: board.createdAt ?? new Date().toISOString(),
     updated_at: new Date().toISOString(),
   });
@@ -349,6 +351,7 @@ export async function updateBoardFull(userId, board) {
         color: board.color,
         emoji: board.emoji,
         position: board.position ?? 0,
+        group_id: board.groupId ?? null,
         updated_at: new Date().toISOString(),
       }));
 

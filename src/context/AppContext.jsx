@@ -1,6 +1,7 @@
 import { createContext, useContext, useReducer, useState, useEffect, useRef, useCallback } from 'react';
 import storageService, { STORAGE_KEYS } from '../services/storageService';
 import { fetchBoards, saveBoards, insertBoardFull, updateBoardFull, updateBoardsOrder } from '../services/boardService';
+import { fetchGroups, fetchSpaces } from '../services/workspaceService';
 import { useAuth } from './AuthContext';
 import { supabase } from '../services/supabaseClient';
 import ConfirmModal from '../components/Common/ConfirmModal';
@@ -32,7 +33,11 @@ const DEFAULT_BOARD_COLORS = [
 
 const initialState = {
     boards: [],
+    groups: [],
+    spaces: [],
     activeBoard: null,
+    selectedItems: [],
+    selectionType: null, // 'board' | 'space' | null
     searchQuery: '',
     filterPriority: 'all',
     filterLabel: 'all',
@@ -42,6 +47,7 @@ const initialState = {
     // Erros de save: [{ boardId, boardTitle, boardSnapshot, error }]
     // Cada entrada representa um save falho aguardando acao do usuario (retry ou revert)
     saveErrors: [],
+    isDraggingBulk: false,
     showBoardToolbar: JSON.parse(localStorage.getItem('dailyways_show_toolbar') ?? 'true'),
     confirmModal: {
         show: false,
@@ -111,6 +117,74 @@ function appReducer(state, action) {
         case 'SET_BOARDS':
             return { ...state, boards: action.payload };
 
+        // ── Groups ──
+        case 'SET_GROUPS':
+            return { ...state, groups: action.payload };
+        case 'ADD_GROUP':
+            return { ...state, groups: [...state.groups, action.payload] };
+        case 'UPDATE_GROUP':
+            return {
+                ...state,
+                groups: state.groups.map(g => g.id === action.payload.id ? { ...g, ...action.payload.updates } : g)
+            };
+        case 'DELETE_GROUP':
+            return { ...state, groups: state.groups.filter(g => g.id !== action.payload) };
+
+        // ── Spaces ──
+        case 'SET_SPACES':
+            return { ...state, spaces: action.payload };
+        case 'ADD_SPACE':
+            return { ...state, spaces: [...state.spaces, action.payload] };
+        case 'UPDATE_SPACE':
+            return {
+                ...state,
+                spaces: state.spaces.map(s => s.id === action.payload.id ? { ...s, ...action.payload.updates } : s)
+            };
+        case 'DELETE_SPACE':
+            return { ...state, spaces: state.spaces.filter(s => s.id !== action.payload) };
+
+        // ── Selection ──
+        case 'SET_SELECTION':
+            return { ...state, selectedItems: action.payload.items, selectionType: action.payload.type };
+        case 'CLEAR_SELECTION':
+            return { ...state, selectedItems: [], selectionType: null };
+        case 'TOGGLE_SELECTION': {
+            const { id, type } = action.payload;
+            if (state.selectionType && state.selectionType !== type) {
+                // Se o tipo mudou (ex: board pra space), recomeça a seleção
+                return { ...state, selectedItems: [id], selectionType: type };
+            }
+            const isSelected = state.selectedItems.includes(id);
+            const newSelected = isSelected ? state.selectedItems.filter(i => i !== id) : [...state.selectedItems, id];
+            return { ...state, selectedItems: newSelected, selectionType: newSelected.length > 0 ? type : null };
+        }
+        case 'DELETE_SELECTED_ITEMS': {
+            if (state.selectionType === 'board') {
+                return {
+                    ...state,
+                    boards: state.boards.filter(b => !state.selectedItems.includes(b.id)),
+                    selectedItems: [],
+                    selectionType: null,
+                    activeBoard: state.selectedItems.includes(state.activeBoard) ? null : state.activeBoard
+                };
+            } else if (state.selectionType === 'space') {
+                return {
+                    ...state,
+                    spaces: state.spaces.filter(s => !state.selectedItems.includes(s.id)),
+                    selectedItems: [],
+                    selectionType: null
+                };
+            } else if (state.selectionType === 'group') {
+                return {
+                    ...state,
+                    groups: state.groups.filter(g => !state.selectedItems.includes(g.id)),
+                    selectedItems: [],
+                    selectionType: null
+                };
+            }
+            return state;
+        }
+
         case 'ADD_BOARD': {
             const newBoard = {
                 // Aceita id pré-gerado (para consistência com o que foi salvo no servidor)
@@ -140,6 +214,7 @@ function appReducer(state, action) {
                 ...state,
                 boards: state.boards.filter(b => b.id !== action.payload),
                 activeBoard: state.activeBoard === action.payload ? null : state.activeBoard,
+                selectedItems: state.selectedItems.filter(id => id !== action.payload)
             };
 
         case 'SET_ACTIVE_BOARD':
@@ -148,15 +223,40 @@ function appReducer(state, action) {
             }
             return { ...state, activeBoard: action.payload };
 
-        case 'REORDER_BOARDS': {
-            const { sourceIndex, destIndex } = action.payload;
-            const newBoards = [...state.boards];
-            const [moved] = newBoards.splice(sourceIndex, 1);
-            newBoards.splice(destIndex, 0, moved);
+        case 'MOVE_WORKSPACE_ITEM': {
+            const { itemType, itemIds, destGroupId, destIndex } = action.payload;
+            // itemType = 'boards' | 'spaces' | 'groups'
+            const list = [...state[itemType]];
 
-            // Update position fields to match new index
-            const updatedBoards = newBoards.map((b, i) => ({ ...b, position: i }));
-            return { ...state, boards: updatedBoards };
+            // Extract all moved items
+            const movedItems = [];
+            for (const id of itemIds) {
+                const idx = list.findIndex(i => i.id === id);
+                if (idx >= 0) {
+                    movedItems.push(list.splice(idx, 1)[0]);
+                }
+            }
+            if (movedItems.length === 0) return state;
+
+            // update groupId if applicable
+            if (itemType !== 'groups') {
+                movedItems.forEach(item => item.groupId = destGroupId);
+            }
+
+            // Insert at the correct calculated position based on other items in that group
+            const itemsInDest = list.filter(i => (itemType === 'groups' ? true : i.groupId === destGroupId)).sort((a, b) => a.position - b.position);
+            itemsInDest.splice(destIndex, 0, ...movedItems);
+
+            // Update positions for all items in that dest group
+            itemsInDest.forEach((item, i) => {
+                item.position = i;
+            });
+
+            // Re-merge itemsInDest with the rest of the list
+            const rest = list.filter(i => (itemType === 'groups' ? false : i.groupId !== destGroupId));
+            const newList = [...rest, ...itemsInDest];
+
+            return { ...state, [itemType]: newList };
         }
 
         case 'DUPLICATE_BOARD': {
@@ -490,6 +590,12 @@ function appReducer(state, action) {
                 confirmModal: { ...state.confirmModal, show: false }
             };
 
+        case 'SET_DRAGGING_BULK':
+            return {
+                ...state,
+                isDraggingBulk: action.payload
+            };
+
         default:
             return state;
     }
@@ -555,6 +661,9 @@ export function AppProvider({ children }) {
             activeSavesRef.current = 0;
             realtimeSuppressUntilRef.current = 0;
             dispatch({ type: 'SET_BOARDS', payload: [] });
+            dispatch({ type: 'SET_GROUPS', payload: [] });
+            dispatch({ type: 'SET_SPACES', payload: [] });
+            dispatch({ type: 'CLEAR_SELECTION' });
             dispatch({ type: 'SET_ACTIVE_BOARD', payload: null });
             // Limpar listas de pendências, saves e erros ao sair
             dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId: '__all__', pending: false } });
@@ -590,9 +699,12 @@ export function AppProvider({ children }) {
         const loadFromApi = async (isRetry = false) => {
             console.log(`[AppContext] loadFromApi (retry=${isRetry}) for user ${userId.slice(0, 8)}...`);
             const { data: fromDb, error: fetchError } = await fetchBoards(userId);
+            const { data: dbGroups, error: groupErr } = await fetchGroups(userId);
+            const { data: dbSpaces, error: spaceErr } = await fetchSpaces(userId);
+
             if (cancelled) return { ok: false };
-            if (fetchError) {
-                console.error('[AppContext] fetchBoards error:', fetchError);
+            if (fetchError || groupErr || spaceErr) {
+                console.error('[AppContext] fetch error:', fetchError || groupErr || spaceErr);
                 // Erro de rede/sessão: boards ficam como estão na memória.
                 // Retry automático após 2s na primeira falha.
                 if (!isRetry) {
@@ -600,6 +712,10 @@ export function AppProvider({ children }) {
                 }
                 return { ok: false };
             }
+
+            dispatch({ type: 'SET_GROUPS', payload: dbGroups || [] });
+            dispatch({ type: 'SET_SPACES', payload: dbSpaces || [] });
+
             if (fromDb.length > 0) {
                 applyBoards(fromDb, 'supabase');
                 return { ok: true };
@@ -928,7 +1044,11 @@ export function AppProvider({ children }) {
         let debounceTimer = null;
 
         const waitAndSubscribe = () => {
-            if (cancelled) return;
+            if (activeSavesRef.current > 0) {
+                setTimeout(waitAndSubscribe, 200);
+                return;
+            }
+
             if (!initialLoadDone.current) {
                 // Initial load not done yet — retry in 200ms
                 setTimeout(waitAndSubscribe, 200);
@@ -938,11 +1058,9 @@ export function AppProvider({ children }) {
             const localKey = STORAGE_KEYS.BOARDS + '_' + userId;
 
             const handleChange = (payload) => {
-                console.log('[AppContext] Realtime event:', payload.eventType, payload.table);
                 // If THIS tab triggered this write, skip the echo to avoid overwriting
                 // optimistic local state with potentially stale server data.
                 if (Date.now() < realtimeSuppressUntilRef.current || activeSavesRef.current > 0) {
-                    console.log('[AppContext] Realtime echo suppressed (local write in progress)');
                     return;
                 }
                 if (debounceTimer) clearTimeout(debounceTimer);
@@ -953,7 +1071,7 @@ export function AppProvider({ children }) {
                     if (cancelled || error || !data?.length) return;
                     dispatch({ type: 'SET_BOARDS', payload: data });
                     // Sem localStorage — servidor é a fonte de verdade
-                }, 350);
+                }, 1000); // Increased debounce to 1s to prevent spam
             };
 
             realtimeChannel = supabase
@@ -962,9 +1080,7 @@ export function AppProvider({ children }) {
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'lists' }, handleChange)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'cards' }, handleChange)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'subtasks' }, handleChange)
-                .subscribe((status) => {
-                    console.log('[AppContext] Realtime channel status:', status);
-                });
+                .subscribe();
         };
 
         waitAndSubscribe();
@@ -978,12 +1094,58 @@ export function AppProvider({ children }) {
         };
     }, [userId]);
 
-    const updateBoardsOrderAndPersist = async (newBoards) => {
+    const updateWorkspaceOrder = async (itemType, itemId, sourceGroupId, destGroupId, destIndex) => {
         if (!userId) return;
+
+        const currentSelected = stateRef.current.selectedItems || [];
+        // Only trigger bulk drag if the dragged item is part of the selection, and the type matches
+        const matchesType = stateRef.current.selectionType === (itemType === 'spaces' ? 'space' : 'board');
+        const isBulk = currentSelected.includes(itemId) && itemType !== 'groups' && matchesType;
+        const itemIds = isBulk ? currentSelected : [itemId];
+
+        dispatch({
+            type: 'MOVE_WORKSPACE_ITEM',
+            payload: { itemType, itemIds, destGroupId, destIndex }
+        });
+
+        if (isBulk) {
+            dispatch({ type: 'CLEAR_SELECTION' });
+        }
+
         suppressRealtime(2000);
-        // Map current array order to positions
-        const payloads = newBoards.map((b, i) => ({ id: b.id, position: i }));
-        await updateBoardsOrder(userId, payloads);
+        // Compute the new order locally because stateRef.current is strictly stale right after dispatch
+        const currentList = [...stateRef.current[itemType]];
+
+        const movedItems = [];
+        for (const id of itemIds) {
+            const idx = currentList.findIndex(i => i.id === id);
+            if (idx >= 0) movedItems.push(currentList.splice(idx, 1)[0]);
+        }
+
+        if (itemType !== 'groups') {
+            movedItems.forEach(item => item.groupId = destGroupId);
+        }
+
+        const itemsToUpdate = currentList.filter(i => (itemType === 'groups' ? true : i.groupId === destGroupId)).sort((a, b) => a.position - b.position);
+        itemsToUpdate.splice(destIndex, 0, ...movedItems);
+        itemsToUpdate.forEach((item, i) => { item.position = i; });
+
+        let table = itemType; // 'boards', 'spaces', 'groups'
+        const payloads = itemsToUpdate.map(item => ({
+            id: item.id,
+            position: item.position,
+            groupId: itemType !== 'groups' ? item.groupId : undefined
+        }));
+
+        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__workspace_order__', saving: true } });
+        try {
+            const { updateEntitiesOrder } = await import('../services/workspaceService');
+            await updateEntitiesOrder(table, payloads);
+        } catch (err) {
+            console.error('[AppContext] Error updating order:', err);
+        } finally {
+            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__workspace_order__', saving: false } });
+        }
     };
 
     // Helpers
@@ -1124,6 +1286,7 @@ export function AppProvider({ children }) {
             hasUnsavedChanges,
             LABEL_COLORS: state.labels,
             DEFAULT_BOARD_COLORS,
+            updateWorkspaceOrder,
         }}>
             {children}
             {/* Global Confirm Modal */}

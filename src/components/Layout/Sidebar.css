@@ -146,23 +146,31 @@
 .sidebar-item {
     display: flex;
     align-items: center;
-    gap: var(--space-md);
+    gap: 8px;
     width: 100%;
-    padding: 10px 14px;
+    padding: 6px 10px;
     border-radius: var(--radius-md);
     font-size: var(--font-size-base);
     font-weight: 500;
     color: var(--text-secondary);
-    transition: all var(--transition-fast);
+    transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
     text-align: left;
     margin-bottom: 2px;
     position: relative;
+    cursor: pointer;
+    border: 1px solid transparent;
 }
 
 .sidebar-item:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
     transform: translateX(4px);
+    border-color: rgba(255, 255, 255, 0.05);
+    /* very subtle border on hover */
+}
+
+.sidebar-item:active {
+    transform: scale(0.98);
 }
 
 .sidebar-item-icon {
@@ -195,6 +203,83 @@
 
 .sidebar-item-active .sidebar-badge-subtle {
     color: rgba(255, 255, 255, 0.7);
+}
+
+.sidebar-item.selected {
+    background: var(--accent-primary) !important;
+    color: white !important;
+}
+
+.sidebar-item.selected .sidebar-board-checkbox {
+    border-color: white;
+    opacity: 1;
+}
+
+.sidebar-item.selected .sidebar-board-dot {
+    box-shadow: 0 0 0 2px white;
+}
+
+.sidebar-item.selected .sidebar-badge-subtle,
+.sidebar-item.selected .board-drag-indicator {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.sidebar-item.bulk-hidden {
+    opacity: 0.001 !important;
+    pointer-events: none;
+    transition: opacity 0.2s;
+}
+
+.group-content-hidden {
+    display: none !important;
+}
+
+.bulk-drag-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: var(--danger, #ef4444);
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    z-index: 999;
+}
+
+/* Multi-drag stack effect */
+.dragging-bulk-stack {
+    position: relative;
+}
+
+.dragging-bulk-stack::before,
+.dragging-bulk-stack::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-hover) !important;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    z-index: -1;
+    pointer-events: none;
+    transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.dragging-bulk-stack::before {
+    transform: rotate(2deg) translate(4px, 4px);
+}
+
+.dragging-bulk-stack::after {
+    transform: rotate(-2deg) translate(-2px, 8px);
+    z-index: -2;
 }
 
 /* ── Drop Zone Active (DnD) ── */
@@ -249,6 +334,7 @@
     color: var(--text-tertiary);
     font-size: var(--font-size-xs);
     font-weight: 600;
+    transition: opacity var(--transition-fast);
 }
 
 /* ── Boards ── */
@@ -267,6 +353,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-height: 10px;
 }
 
 .sidebar-board-dot {
@@ -314,18 +401,51 @@
 }
 
 .board-drag-indicator {
+    position: absolute;
+    right: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 2px;
-    margin-right: 4px;
-    color: var(--text-tertiary);
+    padding: 4px;
+    background: var(--bg-hover);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
     opacity: 0;
     transition: opacity var(--transition-fast), color var(--transition-fast);
 }
 
+.sidebar-board-checkbox {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--text-tertiary);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+    opacity: 0;
+    transition: all var(--transition-fast);
+}
+
+.board-item:hover .sidebar-board-checkbox,
+.group-header-item:hover .sidebar-board-checkbox,
+.sidebar-board-checkbox.selected {
+    opacity: 1;
+}
+
+.sidebar-board-checkbox.selected {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: white;
+}
+
 .board-item:hover .board-drag-indicator {
     opacity: 1;
+}
+
+.board-item:hover .sidebar-badge-subtle {
+    opacity: 0;
 }
 
 .board-item {
@@ -393,6 +513,157 @@
 .sidebar-resize-handle:active {
     background: var(--accent-primary);
     opacity: 0.5;
+}
+
+/* ── Groups (Folders) ── */
+.sidebar-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 2px;
+}
+
+.sidebar-group-header {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.sidebar-group-icon {
+    display: flex;
+    align-items: center;
+    color: var(--text-tertiary);
+}
+
+.sidebar-group-content {
+    margin-left: 16px;
+    padding-left: 4px;
+    border-left: 1px dashed var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 26px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    transition: background var(--transition-fast);
+}
+
+.sidebar-group-droppable {
+    min-height: 38px;
+    display: flex;
+    flex-direction: column;
+    padding-top: 0px;
+    padding-bottom: 6px;
+}
+
+/* ── Bulk Drag Followers ── */
+.bulk-drag-followers {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: -1;
+    border-radius: inherit;
+}
+
+.bulk-follower-card {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--bg-hover) !important;
+    border-radius: inherit;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    box-shadow: var(--shadow-md);
+    opacity: 0.95;
+    /* Staggered stack effect and animation */
+    /* Only 2px horizontal, but 8px vertical so they stack downwards */
+    transform: translate(calc(var(--idx) * 2px + 2px), calc(var(--idx) * 8px + 8px));
+    animation: followerFlyIn 0.35s cubic-bezier(0.2, 0, 0, 1) backwards;
+    animation-delay: calc(var(--idx) * 40ms);
+}
+
+@keyframes followerFlyIn {
+    from {
+        opacity: 0;
+        transform: translate(0, 0) scale(0.95);
+    }
+}
+
+.group-drag-over {
+    background: rgba(120, 120, 150, 0.05);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.sidebar-empty-group-text {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    text-align: center;
+    padding: 4px 0;
+    pointer-events: none;
+}
+
+/* ── Utilities and Polish ── */
+
+@keyframes slideUpFade {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-slide-up {
+    animation: slideUpFade 0.25s cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+.sidebar-new-board,
+.sidebar-rename-form {
+    padding: 0 var(--space-md);
+    margin-bottom: var(--space-xs);
+    width: 100%;
+}
+
+.sidebar-new-board input,
+.sidebar-rename-form input {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    outline: none;
+    transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.sidebar-new-board input:focus,
+.sidebar-rename-form input:focus {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 120, 120, 120), 0.2);
+    background: var(--bg-primary);
+}
+
+.sidebar-rename-form {
+    padding: 0;
+    margin: 0;
+    flex: 1;
+}
+
+.sidebar-rename-form input {
+    padding: 4px 8px;
+    background: var(--bg-elevated);
+    box-shadow: none;
 }
 
 /* ── Mobile ── */

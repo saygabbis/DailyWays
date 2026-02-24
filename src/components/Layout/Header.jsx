@@ -108,7 +108,6 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                         onClick={() => setShowNotifications(!showNotifications)}
                     >
                         <Bell size={18} />
-                        <span className="header-notification-dot" />
                     </button>
                     {showNotifications && <NotificationDropdown onClose={() => setShowNotifications(false)} />}
                 </div>

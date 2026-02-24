@@ -2,16 +2,14 @@ import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardR
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { useApp } from '../../context/AppContext';
 import BoardList from './BoardList';
-import ShareModal from './ShareModal';
 import ListDetailsModal from './ListDetailsModal';
-import { Plus, UserPlus, Loader2, X, GripVertical } from 'lucide-react';
+import { Plus, Loader2, X, GripVertical } from 'lucide-react';
 import './Board.css';
 
 function BoardView({ onCardClick }, ref) {
     const { state, getActiveBoard, dispatch, persistBoard, isSavingBoard, showBoardToolbar } = useApp();
     const [addingList, setAddingList] = useState(false);
     const [newListTitle, setNewListTitle] = useState('');
-    const [showShare, setShowShare] = useState(false);
     const [listDetails, setListDetails] = useState(null);
     const [droppedListId, setDroppedListId] = useState(null);
 
@@ -274,21 +272,13 @@ function BoardView({ onCardClick }, ref) {
                     <div className="board-toolbar-handle">
                         <GripVertical size={14} />
                     </div>
-                    <div className="board-members">
-                        <div className="board-avatar" title="Você">Me</div>
-                        <div className="board-avatar" title="Alice Silva">AS</div>
-                        <div className="board-avatar-more" title="+2 outros">+2</div>
-                    </div>
-                    <div className="board-toolbar-delim"></div>
                     {isSavingBoard(board.id) && (
-                        <span className="board-saving-indicator" title="Salvando alterações no servidor...">
-                            <Loader2 size={13} className="spinning" />
-                        </span>
+                        <div className="board-toolbar-section">
+                            <span className="board-saving-indicator" title="Salvando alterações no servidor...">
+                                <Loader2 size={13} className="spinning" />
+                            </span>
+                        </div>
                     )}
-                    <button className="btn btn-primary btn-sm" onClick={() => setShowShare(true)}>
-                        <UserPlus size={16} />
-                        <span>Compartilhar</span>
-                    </button>
                     <button
                         className="btn-icon-xs toolbar-close-btn"
                         onClick={() => dispatch({ type: 'TOGGLE_BOARD_TOOLBAR', payload: false })}
@@ -390,7 +380,6 @@ function BoardView({ onCardClick }, ref) {
                 </>
             </div>
 
-            {showShare && <ShareModal boardTitle={board.title} onClose={() => setShowShare(false)} />}
 
             {listDetails && (
                 <ListDetailsModal

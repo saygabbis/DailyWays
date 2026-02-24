@@ -13,6 +13,7 @@ import DashboardView from './components/Dashboard/DashboardView';
 import TaskDetailModal from './components/TaskDetail/TaskDetailModal';
 import SettingsModal from './components/Settings/SettingsView';
 import SearchOverlay from './components/Search/SearchOverlay';
+import SpaceView from './components/Spaces/SpaceView';
 
 import PomodoroTimer from './components/Pomodoro/PomodoroTimer';
 import RadioWidget from './components/Radio/RadioWidget';
@@ -26,7 +27,7 @@ import './App.css';
 
 function AppContent() {
   const { user, profile } = useAuth();
-  const { getActiveBoard, confirmConfig, dispatch, persistBoard, getAllCards, state, updateBoardsOrder, suppressRealtime, updateBoardAndPersist } = useApp();
+  const { getActiveBoard, confirmConfig, dispatch, persistBoard, getAllCards, state, updateBoardsOrder, suppressRealtime, updateBoardAndPersist, updateWorkspaceOrder } = useApp();
   const { initPreferences } = useTheme();
   const [activeView, setActiveView] = useState(() => localStorage.getItem('dailyways_active_view') || 'myday');
   const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
@@ -54,7 +55,16 @@ function AppContent() {
   const [plannedDropCard, setPlannedDropCard] = useState(null);
 
   // Global DragDropContext handler — intercepts sidebar drops, delegates the rest
+  const handleGlobalDragStart = useCallback((start) => {
+    if (['board', 'space'].includes(start.type)) {
+      if (state.selectedItems?.includes(start.draggableId) && state.selectedItems.length > 1) {
+        dispatch({ type: 'SET_DRAGGING_BULK', payload: true });
+      }
+    }
+  }, [state.selectedItems, dispatch]);
+
   const handleGlobalDragEnd = useCallback((result) => {
+    dispatch({ type: 'SET_DRAGGING_BULK', payload: false });
     const { source, destination, draggableId, type } = result;
     if (!destination) return;
 
@@ -94,24 +104,27 @@ function AppContent() {
       return;
     }
 
-    // Board reordering in sidebar — show floating-save while saving order
-    if (type === 'board' && destination.droppableId === 'boards') {
-      if (source.index === destination.index) return;
-      dispatch({
-        type: 'REORDER_BOARDS',
-        payload: { sourceIndex: source.index, destIndex: destination.index },
-        userId: user?.id,
-      });
-      const newBoards = [...state.boards];
-      const [moved] = newBoards.splice(source.index, 1);
-      newBoards.splice(destination.index, 0, moved);
-      const payloads = newBoards.map((b, i) => ({ id: b.id, position: i }));
-      dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__boards_order__', saving: true } });
-      if (suppressRealtime) suppressRealtime(3000);
-      updateBoardsOrder(user?.id, payloads)
-        .finally(() => {
-          dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__boards_order__', saving: false } });
-        });
+    // Workspace Reordering in Sidebar (Groups, Boards, Spaces)
+    if (['board', 'space', 'group'].includes(type) && destination.droppableId !== 'boards') {
+      // old 'boards' droppableId is replaced by 'boards-root', 'spaces-root', 'groups-board', 'groups-space', and 'group-{id}'
+      if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+
+      let itemType = 'boards';
+      if (type === 'space') itemType = 'spaces';
+      if (type === 'group') itemType = 'groups';
+
+      let sourceGroupId = null;
+      if (source.droppableId.startsWith('group-') && source.droppableId !== 'groups-board' && source.droppableId !== 'groups-space') {
+        sourceGroupId = source.droppableId.replace('group-', '');
+      }
+
+      let destGroupId = null;
+      if (destination.droppableId.startsWith('group-') && destination.droppableId !== 'groups-board' && destination.droppableId !== 'groups-space') {
+        destGroupId = destination.droppableId.replace('group-', '');
+      }
+
+      // Call updateWorkspaceOrder from the App Context
+      updateWorkspaceOrder(itemType, draggableId, sourceGroupId, destGroupId, destination.index);
       return;
     }
 
@@ -181,7 +194,13 @@ function AppContent() {
       case 'planned': return 'Planejado';
       case 'board': return activeBoard ? `${activeBoard.emoji} ${activeBoard.title}` : 'Board';
       case 'help': return 'Central de Ajuda';
-      default: return 'DailyWays';
+      default:
+        if (activeView.startsWith('space-')) {
+          const spaceId = activeView.replace('space-', '');
+          const space = state.spaces.find(s => s.id === spaceId);
+          return space ? `${space.emoji} ${space.title}` : 'Space';
+        }
+        return 'DailyWays';
     }
   };
 
@@ -189,6 +208,9 @@ function AppContent() {
     if (activeView === 'board' && activeBoard) {
       const totalCards = activeBoard.lists.reduce((acc, l) => acc + l.cards.length, 0);
       return `${activeBoard.lists.length} listas · ${totalCards} tarefas`;
+    }
+    if (activeView.startsWith('space-')) {
+      return 'Canvas Infinito';
     }
     return null;
   };
@@ -279,6 +301,7 @@ function AppContent() {
             {activeView === 'important' && <ImportantView key="important" onCardClick={handleCardClick} />}
             {activeView === 'planned' && <PlannedView key="planned" onCardClick={handleCardClick} />}
             {activeView === 'board' && activeBoard && <BoardView key={`board-${activeBoard.id}`} ref={boardViewRef} onCardClick={handleCardClick} />}
+            {activeView.startsWith('space-') && <SpaceView key={activeView} spaceId={activeView.replace('space-', '')} />}
             {activeView === 'help' && (
               <div style={{ padding: 'var(--space-xl)', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '80px' }}>
                 <h2 style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🤝 Central de Ajuda</h2>
