@@ -118,8 +118,17 @@ function appReducer(state, action) {
             return { ...state, boards: action.payload };
 
         // ── Groups ──
-        case 'SET_GROUPS':
-            return { ...state, groups: action.payload };
+        case 'SET_GROUPS': {
+            const merged = (action.payload || []).map(g => {
+                const current = state.groups.find(c => c.id === g.id);
+                const items = g.type === 'board' ? state.boards : state.spaces;
+                const count = (items || []).filter(i => i.groupId === g.id).length;
+                if (count === 0 && current?.isExpanded === false)
+                    return { ...g, isExpanded: false };
+                return g;
+            });
+            return { ...state, groups: merged };
+        }
         case 'ADD_GROUP':
             return { ...state, groups: [...state.groups, action.payload] };
         case 'UPDATE_GROUP':
@@ -134,14 +143,27 @@ function appReducer(state, action) {
         case 'SET_SPACES':
             return { ...state, spaces: action.payload };
         case 'ADD_SPACE':
-            return { ...state, spaces: [...state.spaces, action.payload] };
+            return { ...state, spaces: [...state.spaces, { ...action.payload, groupId: action.payload.groupId || null }] };
         case 'UPDATE_SPACE':
             return {
                 ...state,
                 spaces: state.spaces.map(s => s.id === action.payload.id ? { ...s, ...action.payload.updates } : s)
             };
-        case 'DELETE_SPACE':
-            return { ...state, spaces: state.spaces.filter(s => s.id !== action.payload) };
+        case 'DELETE_SPACE': {
+            const deletedSpace = state.spaces.find(s => s.id === action.payload);
+            const groupId = deletedSpace?.groupId;
+            const newSpaces = state.spaces.filter(s => s.id !== action.payload);
+            let newGroups = state.groups;
+            if (groupId) {
+                const remainingInGroup = newSpaces.filter(s => s.groupId === groupId);
+                if (remainingInGroup.length === 0) {
+                    newGroups = state.groups.map(g =>
+                        g.id === groupId ? { ...g, isExpanded: false } : g
+                    );
+                }
+            }
+            return { ...state, spaces: newSpaces, groups: newGroups };
+        }
 
         // ── Selection ──
         case 'SET_SELECTION':
@@ -160,17 +182,39 @@ function appReducer(state, action) {
         }
         case 'DELETE_SELECTED_ITEMS': {
             if (state.selectionType === 'board') {
+                const groupIdsAffected = new Set(
+                    state.boards.filter(b => state.selectedItems.includes(b.id)).map(b => b.groupId).filter(Boolean)
+                );
+                const newBoards = state.boards.filter(b => !state.selectedItems.includes(b.id));
+                let newGroups = state.groups;
+                groupIdsAffected.forEach(gid => {
+                    if (newBoards.filter(b => b.groupId === gid).length === 0) {
+                        newGroups = newGroups.map(g => (g.id === gid ? { ...g, isExpanded: false } : g));
+                    }
+                });
                 return {
                     ...state,
-                    boards: state.boards.filter(b => !state.selectedItems.includes(b.id)),
+                    boards: newBoards,
+                    groups: newGroups,
                     selectedItems: [],
                     selectionType: null,
                     activeBoard: state.selectedItems.includes(state.activeBoard) ? null : state.activeBoard
                 };
             } else if (state.selectionType === 'space') {
+                const groupIdsAffected = new Set(
+                    state.spaces.filter(s => state.selectedItems.includes(s.id)).map(s => s.groupId).filter(Boolean)
+                );
+                const newSpaces = state.spaces.filter(s => !state.selectedItems.includes(s.id));
+                let newGroups = state.groups;
+                groupIdsAffected.forEach(gid => {
+                    if (newSpaces.filter(s => s.groupId === gid).length === 0) {
+                        newGroups = newGroups.map(g => (g.id === gid ? { ...g, isExpanded: false } : g));
+                    }
+                });
                 return {
                     ...state,
-                    spaces: state.spaces.filter(s => !state.selectedItems.includes(s.id)),
+                    spaces: newSpaces,
+                    groups: newGroups,
                     selectedItems: [],
                     selectionType: null
                 };
@@ -193,6 +237,8 @@ function appReducer(state, action) {
                 color: action.payload.color || DEFAULT_BOARD_COLORS[Math.floor(Math.random() * DEFAULT_BOARD_COLORS.length)],
                 emoji: action.payload.emoji || '📋',
                 createdAt: action.payload.createdAt || new Date().toISOString(),
+                groupId: action.payload.groupId || null,
+                position: action.payload.position ?? state.boards.length,
                 // Aceita listas pré-criadas para manter IDs consistentes com o servidor
                 lists: action.payload.lists || [
                     { id: crypto.randomUUID(), title: 'A Fazer', color: null, isCompletionList: false, cards: [] },
@@ -209,13 +255,27 @@ function appReducer(state, action) {
                 boards: state.boards.map(b => b.id === action.payload.id ? { ...b, ...action.payload.updates } : b),
             };
 
-        case 'DELETE_BOARD':
+        case 'DELETE_BOARD': {
+            const deletedBoard = state.boards.find(b => b.id === action.payload);
+            const groupId = deletedBoard?.groupId;
+            const newBoards = state.boards.filter(b => b.id !== action.payload);
+            let newGroups = state.groups;
+            if (groupId) {
+                const remainingInGroup = newBoards.filter(b => b.groupId === groupId);
+                if (remainingInGroup.length === 0) {
+                    newGroups = state.groups.map(g =>
+                        g.id === groupId ? { ...g, isExpanded: false } : g
+                    );
+                }
+            }
             return {
                 ...state,
-                boards: state.boards.filter(b => b.id !== action.payload),
+                boards: newBoards,
+                groups: newGroups,
                 activeBoard: state.activeBoard === action.payload ? null : state.activeBoard,
                 selectedItems: state.selectedItems.filter(id => id !== action.payload)
             };
+        }
 
         case 'SET_ACTIVE_BOARD':
             if (action.payload) {
@@ -224,11 +284,19 @@ function appReducer(state, action) {
             return { ...state, activeBoard: action.payload };
 
         case 'MOVE_WORKSPACE_ITEM': {
-            const { itemType, itemIds, destGroupId, destIndex } = action.payload;
-            // itemType = 'boards' | 'spaces' | 'groups'
-            const list = [...state[itemType]];
+            const { itemType, itemIds, destGroupId, destIndex, sourceGroupIds: payloadSourceGroupIds } = action.payload;
+            // Deep-clone items to avoid mutating state in place
+            const list = state[itemType].map(i => ({ ...i }));
 
-            // Extract all moved items
+            // Use source groups from payload (computed before dispatch) so we close correctly even when Strict Mode runs reducer twice
+            const sourceGroupIds = new Set(Array.isArray(payloadSourceGroupIds) ? payloadSourceGroupIds : []);
+            if (sourceGroupIds.size === 0) {
+                for (const id of itemIds) {
+                    const item = list.find(i => i.id === id);
+                    if (item?.groupId) sourceGroupIds.add(item.groupId);
+                }
+            }
+
             const movedItems = [];
             for (const id of itemIds) {
                 const idx = list.findIndex(i => i.id === id);
@@ -238,47 +306,63 @@ function appReducer(state, action) {
             }
             if (movedItems.length === 0) return state;
 
-            // update groupId if applicable
             if (itemType !== 'groups') {
-                movedItems.forEach(item => item.groupId = destGroupId);
+                movedItems.forEach(item => { item.groupId = destGroupId; });
             }
 
-            // Insert at the correct calculated position based on other items in that group
-            const itemsInDest = list.filter(i => (itemType === 'groups' ? true : i.groupId === destGroupId)).sort((a, b) => a.position - b.position);
+            const itemsInDest = list
+                .filter(i => (itemType === 'groups' ? true : i.groupId === destGroupId))
+                .sort((a, b) => a.position - b.position);
             itemsInDest.splice(destIndex, 0, ...movedItems);
 
-            // Update positions for all items in that dest group
             itemsInDest.forEach((item, i) => {
                 item.position = i;
             });
 
-            // Re-merge itemsInDest with the rest of the list
             const rest = list.filter(i => (itemType === 'groups' ? false : i.groupId !== destGroupId));
             const newList = [...rest, ...itemsInDest];
 
-            return { ...state, [itemType]: newList };
+            // Close only groups that had items and are now empty (we moved items out of them)
+            let updatedGroups = state.groups;
+            if (itemType !== 'groups') {
+                updatedGroups = state.groups.map(g => {
+                    if (g.type !== itemType.slice(0, -1)) return g;
+                    const remainingInNew = newList.filter(i => i.groupId === g.id).length;
+                    const willClose = sourceGroupIds.has(g.id) && remainingInNew === 0;
+                    if (willClose)
+                        return { ...g, isExpanded: false };
+                    return g;
+                });
+            }
+
+            return { ...state, [itemType]: newList, groups: updatedGroups };
         }
 
         case 'DUPLICATE_BOARD': {
             const orig = state.boards.find(b => b.id === action.payload);
             if (!orig) return state;
-            const dup = {
-                ...JSON.parse(JSON.stringify(orig)),
-                id: crypto.randomUUID(),
-                title: `${orig.title} (cópia)`,
-                createdAt: new Date().toISOString(),
-            };
-            // Give new IDs to all sublists and cards
-            dup.lists = dup.lists.map(l => ({
-                ...l,
-                id: crypto.randomUUID(),
-                cards: l.cards.map(c => ({
-                    ...c,
+
+            const duplicateBoardStructure = (board) => {
+                const dup = {
+                    ...JSON.parse(JSON.stringify(board)),
                     id: crypto.randomUUID(),
-                    subtasks: c.subtasks.map(st => ({ ...st, id: crypto.randomUUID() })),
-                })),
-            }));
-            return { ...state, boards: [...state.boards, dup] };
+                    title: `${board.title} (cópia)`,
+                    createdAt: new Date().toISOString(),
+                };
+                dup.lists = dup.lists.map(l => ({
+                    ...l,
+                    id: crypto.randomUUID(),
+                    cards: l.cards.map(c => ({
+                        ...c,
+                        id: crypto.randomUUID(),
+                        subtasks: c.subtasks.map(st => ({ ...st, id: crypto.randomUUID() })),
+                    })),
+                }));
+                return dup;
+            };
+
+            const duplicated = duplicateBoardStructure(orig);
+            return { ...state, boards: [...state.boards, duplicated] };
         }
 
         case 'MOVE_LIST': {
@@ -630,6 +714,30 @@ export function AppProvider({ children }) {
     useEffect(() => {
         stateRef.current = state;
     }, [state]);
+
+    const persistedEmptyClosedGroupsRef = useRef(new Set());
+    useEffect(() => {
+        if (!userId) return;
+        (async () => {
+            const { updateGroup } = await import('../services/workspaceService');
+            const groups = state.groups || [];
+            for (const g of groups) {
+                if (g.type !== 'board' && g.type !== 'space') continue;
+                const items = g.type === 'board' ? state.boards : state.spaces;
+                const count = items.filter(i => i.groupId === g.id).length;
+                if (count === 0 && !g.isExpanded) {
+                    if (!persistedEmptyClosedGroupsRef.current.has(g.id)) {
+                        persistedEmptyClosedGroupsRef.current.add(g.id);
+                        try {
+                            await updateGroup(g.id, { isExpanded: false });
+                        } catch (e) { /* ignore */ }
+                    }
+                } else {
+                    persistedEmptyClosedGroupsRef.current.delete(g.id);
+                }
+            }
+        })();
+    }, [userId, state.groups, state.boards, state.spaces]);
 
     // Rastreia TOKEN_REFRESHED e SIGNED_IN para aplicar cooldown antes de requisições HTTP.
     // Ambos os eventos causam um lock interno no Supabase client que trava HTTP requests
@@ -1102,10 +1210,16 @@ export function AppProvider({ children }) {
         const matchesType = stateRef.current.selectionType === (itemType === 'spaces' ? 'space' : 'board');
         const isBulk = currentSelected.includes(itemId) && itemType !== 'groups' && matchesType;
         const itemIds = isBulk ? currentSelected : [itemId];
+        // Source groups from current state (before dispatch) so reducer works even when Strict Mode runs twice
+        const list = stateRef.current[itemType] || [];
+        const payloadSourceGroupIds = [...new Set(itemIds.map(id => {
+            const item = list.find(i => i.id === id);
+            return item?.groupId;
+        }).filter(Boolean))];
 
         dispatch({
             type: 'MOVE_WORKSPACE_ITEM',
-            payload: { itemType, itemIds, destGroupId, destIndex }
+            payload: { itemType, itemIds, destGroupId, destIndex, sourceGroupIds: payloadSourceGroupIds }
         });
 
         if (isBulk) {
@@ -1115,6 +1229,12 @@ export function AppProvider({ children }) {
         suppressRealtime(2000);
         // Compute the new order locally because stateRef.current is strictly stale right after dispatch
         const currentList = [...stateRef.current[itemType]];
+        const groupType = itemType === 'boards' ? 'board' : 'space';
+        const countBeforeByGroupId = {};
+        (stateRef.current.groups || []).forEach(g => {
+            if (g.type === groupType)
+                countBeforeByGroupId[g.id] = currentList.filter(i => i.groupId === g.id).length;
+        });
 
         const movedItems = [];
         for (const id of itemIds) {
@@ -1139,8 +1259,22 @@ export function AppProvider({ children }) {
 
         dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__workspace_order__', saving: true } });
         try {
-            const { updateEntitiesOrder } = await import('../services/workspaceService');
+            const { updateEntitiesOrder, updateGroup } = await import('../services/workspaceService');
             await updateEntitiesOrder(table, payloads);
+
+            // Persist isExpanded: false only for groups that had items and are now empty (we moved out of them)
+            if (itemType !== 'groups') {
+                const allItemsAfterMove = [...currentList, ...movedItems];
+                const groups = stateRef.current.groups || [];
+                for (const g of groups) {
+                    if (g.type !== groupType) continue;
+                    const hadItems = (countBeforeByGroupId[g.id] || 0) > 0;
+                    const remaining = allItemsAfterMove.filter(i => i.groupId === g.id).length;
+                    if (hadItems && remaining === 0) {
+                        try { await updateGroup(g.id, { isExpanded: false }); } catch (e) { /* ignore */ }
+                    }
+                }
+            }
         } catch (err) {
             console.error('[AppContext] Error updating order:', err);
         } finally {

@@ -201,6 +201,18 @@
     color: #ffffff;
 }
 
+/* Folder Selection Feedback */
+.sidebar-item.contents-selected {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary-alpha, rgba(99, 102, 241, 0.2));
+    background: var(--bg-hover);
+}
+
+.sidebar-item.selected-item {
+    background: var(--primary-alpha, rgba(99, 102, 241, 0.1)) !important;
+    border-color: var(--primary) !important;
+}
+
 .sidebar-item-active .sidebar-badge-subtle {
     color: rgba(255, 255, 255, 0.7);
 }
@@ -238,7 +250,7 @@
     position: absolute;
     top: -6px;
     right: -6px;
-    background: var(--danger, #ef4444);
+    background: var(--accent-primary, #6366f1);
     color: white;
     font-size: 11px;
     font-weight: bold;
@@ -252,34 +264,75 @@
     z-index: 999;
 }
 
-/* Multi-drag stack effect */
-.dragging-bulk-stack {
-    position: relative;
-}
-
-.dragging-bulk-stack::before,
-.dragging-bulk-stack::after {
-    content: '';
+/* ── Cascading chain for multi-drag ── */
+.bulk-chain-container {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    bottom: 0;
-    background: var(--bg-hover) !important;
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-md);
-    z-index: -1;
     pointer-events: none;
-    transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+    z-index: 10;
 }
 
-.dragging-bulk-stack::before {
-    transform: rotate(2deg) translate(4px, 4px);
+.bulk-chain-card {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    opacity: 0.9;
+    will-change: transform;
 }
 
-.dragging-bulk-stack::after {
-    transform: rotate(-2deg) translate(-2px, 8px);
-    z-index: -2;
+.bulk-chain-card:nth-child(n+2) {
+    margin-left: 4px;
+}
+
+.bulk-chain-card:nth-child(n+3) {
+    margin-left: 8px;
+}
+
+.bulk-chain-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.bulk-chain-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bulk-chain-ellipsis {
+    justify-content: center;
+    padding: 2px 10px;
+    background: var(--bg-tertiary, #333);
+    border: 1px dashed var(--border-color);
+    opacity: 0.6;
+}
+
+.bulk-chain-ellipsis .bulk-chain-label {
+    color: var(--text-tertiary);
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+}
+
+
+
+/* Multi-drag stack effect on the main dragged item */
+.dragging-bulk-stack {
+    position: relative;
 }
 
 /* ── Drop Zone Active (DnD) ── */
@@ -349,11 +402,35 @@
     padding: var(--space-xs) var(--space-sm);
 }
 
+.sidebar-boards-lists-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
 .sidebar-board-list {
     display: flex;
     flex-direction: column;
     gap: 2px;
     min-height: 10px;
+}
+
+/* Last folder: slightly larger hit area; on top in overlap so it wins over root zone */
+.sidebar-group-droppable-last {
+    position: relative;
+    z-index: 1;
+    padding-bottom: 24px;
+}
+
+/* Root zone: overlap last folder padding + gap so boards sit on top of green area; z-index below so last folder wins in overlap */
+.sidebar-root-drop-zone--has-items {
+    position: relative;
+    z-index: 0;
+    margin-top: -30px;
+}
+.sidebar-root-drop-zone--empty {
+    min-height: 12px;
+    border-radius: var(--radius-md);
 }
 
 .sidebar-board-dot {
@@ -440,6 +517,13 @@
     color: white;
 }
 
+.sidebar-board-checkbox.contents-selected-checkbox {
+    opacity: 1;
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.15);
+}
+
 .board-item:hover .board-drag-indicator {
     opacity: 1;
 }
@@ -519,19 +603,63 @@
 .sidebar-group {
     display: flex;
     flex-direction: column;
-    margin-bottom: 2px;
 }
 
+.sidebar-group.dragging {
+    background: var(--bg-hover) !important;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+}
+
+.sidebar-group.dragging .sidebar-group-content {
+    opacity: 0.4;
+}
+
+/* Override the grab cursor injected by dragHandleProps */
 .sidebar-group-header {
-    cursor: pointer;
+    cursor: pointer !important;
     display: flex;
     align-items: center;
+}
+
+.sidebar-group-header:active {
+    cursor: grabbing !important;
 }
 
 .sidebar-group-icon {
     display: flex;
     align-items: center;
     color: var(--text-tertiary);
+}
+
+/* Bouncy jelly animation for new folders */
+.sidebar-group.group-new {
+    animation: jellyBounce 0.5s cubic-bezier(0.25, 1.4, 0.55, 1) forwards;
+}
+
+@keyframes jellyBounce {
+    0% {
+        opacity: 0;
+        transform: scale(0.85) translateY(-6px);
+    }
+
+    40% {
+        opacity: 1;
+        transform: scale(1.04) translateY(0);
+    }
+
+    60% {
+        transform: scale(0.97);
+    }
+
+    80% {
+        transform: scale(1.015);
+    }
+
+    100% {
+        transform: scale(1);
+    }
 }
 
 .sidebar-group-content {
@@ -542,17 +670,16 @@
     flex-direction: column;
     gap: 2px;
     min-height: 26px;
-    margin-top: 4px;
-    margin-bottom: 4px;
+    margin-top: 2px;
+    margin-bottom: 0;
     transition: background var(--transition-fast);
 }
 
 .sidebar-group-droppable {
-    min-height: 38px;
     display: flex;
     flex-direction: column;
-    padding-top: 0px;
-    padding-bottom: 6px;
+    border-radius: var(--radius-md);
+    transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
 /* ── Bulk Drag Followers ── */
@@ -596,8 +723,13 @@
 }
 
 .group-drag-over {
-    background: rgba(120, 120, 150, 0.05);
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    background: rgba(99, 102, 241, 0.08);
+    box-shadow: inset 0 0 0 1.5px var(--primary, rgba(99, 102, 241, 0.4));
+    border-radius: var(--radius-md);
+}
+
+.group-drag-over .sidebar-group-header {
+    color: var(--text-primary);
 }
 
 .sidebar-empty-group-text {

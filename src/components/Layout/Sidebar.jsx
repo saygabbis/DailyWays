@@ -20,50 +20,91 @@ import logoBlack from '../../assets/Logo - Preto.png';
 import './Sidebar.css';
 import { useI18n, useTheme } from '../../context/ThemeContext';
 
-const BulkDragFollowers = ({ count }) => {
+const BulkDragFollowers = ({ count, items = [] }) => {
+    const containerRef = useRef(null);
+    const positionsRef = useRef([]);
+    const mouseRef = useRef({ x: 0, y: 0 });
+    const rafRef = useRef(null);
+
+    const maxFollowers = Math.min(count - 1, 8);
+    const followers = items.slice(0, maxFollowers);
+    const hasMore = count - 1 > maxFollowers;
+    const totalCards = maxFollowers + (hasMore ? 1 : 0);
+
+    useEffect(() => {
+        if (count <= 1) return;
+
+        let initialized = false;
+
+        const handleMouseMove = (e) => {
+            mouseRef.current = { x: e.clientX, y: e.clientY };
+            if (!initialized) {
+                // Seed all positions from the first real mouse position
+                positionsRef.current = Array.from({ length: totalCards }, () => ({ x: e.clientX, y: e.clientY }));
+                initialized = true;
+            }
+        };
+
+        const animate = () => {
+            if (!initialized) { rafRef.current = requestAnimationFrame(animate); return; }
+
+            const cards = containerRef.current?.children;
+            if (!cards) { rafRef.current = requestAnimationFrame(animate); return; }
+
+            const mouse = mouseRef.current;
+            const positions = positionsRef.current;
+
+            for (let i = 0; i < totalCards; i++) {
+                const card = cards[i];
+                if (!card || card.classList.contains('bulk-drag-badge')) continue;
+
+                // Each card follows the one above it (or mouse for the first)
+                const target = i === 0 ? mouse : positions[i - 1];
+                const smoothing = Math.max(0.35 - (i * 0.025), 0.12);
+
+                positions[i].x += (target.x - positions[i].x) * smoothing;
+                positions[i].y += (target.y - positions[i].y) * smoothing;
+
+                // Cards are position:absolute, offsetY = absolute Y position
+                // First card 38px below dragged item, then gap shrinks: 6, 4, 3, 2, 2...
+                const cardH = 28;
+                let offsetY = 38;
+                for (let j = 0; j < i; j++) {
+                    const gap = Math.max(6 - j * 1.5, 2);
+                    offsetY += cardH + gap;
+                }
+
+                card.style.transform = `translate(${positions[i].x - mouse.x}px, ${positions[i].y - mouse.y + offsetY}px)`;
+            }
+
+            rafRef.current = requestAnimationFrame(animate);
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        rafRef.current = requestAnimationFrame(animate);
+
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        };
+    }, [count, totalCards]);
+
     if (count <= 1) return null;
 
-    // Create 1 or 2 background cards for the "stack" effect to keep it clean
-    const followers = Array.from({ length: Math.min(count - 1, 2) });
-
     return (
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: -1 }}>
-            {followers.map((_, idx) => (
-                <div
-                    key={idx}
-                    style={{
-                        position: 'absolute',
-                        inset: 0,
-                        background: 'var(--bg-hover)',
-                        borderRadius: 'var(--radius-md)',
-                        boxShadow: 'var(--shadow-md)',
-                        opacity: 0.95 - (idx * 0.15),
-                        transformOrigin: 'bottom left',
-                        transform: `rotate(${-(idx + 1) * 3}deg) translateY(${(idx + 1) * 6}px)`
-                    }}
-                />
+        <div className="bulk-chain-container" ref={containerRef}>
+            {followers.map((item, idx) => (
+                <div key={item?.id || idx} className="bulk-chain-card">
+                    <span className="bulk-chain-dot" style={{ background: item?.color || 'var(--text-tertiary)' }} />
+                    <span className="bulk-chain-label">{item?.emoji} {item?.title || '...'}</span>
+                </div>
             ))}
-            <div
-                className="bulk-drag-badge"
-                style={{
-                    position: 'absolute',
-                    top: '-8px',
-                    right: '-8px',
-                    background: 'var(--danger)',
-                    color: 'white',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
-                    borderRadius: '50%',
-                    width: '20px',
-                    height: '20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                }}
-            >
-                {count}
-            </div>
+            {hasMore && (
+                <div className="bulk-chain-card bulk-chain-ellipsis">
+                    <span className="bulk-chain-label">•••</span>
+                </div>
+            )}
+            <div className="bulk-drag-badge">{count}</div>
         </div>
     );
 };
@@ -93,6 +134,9 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
     const [folderContextType, setFolderContextType] = useState('board');
     const [editingBoardId, setEditingBoardId] = useState(null);
     const [editBoardTitle, setEditBoardTitle] = useState('');
+    const [editingGroupId, setEditingGroupId] = useState(null);
+    const [editGroupTitle, setEditGroupTitle] = useState('');
+    const [recentlyAddedId, setRecentlyAddedId] = useState(null);
     const [detailsBoard, setDetailsBoard] = useState(null);
 
     // Resizable sidebar
@@ -201,15 +245,23 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
             id: crypto.randomUUID(),
             title: newFolderTitle.trim(),
             type: folderContextType,
-            position: state.groups.filter(g => g.type === folderContextType).length,
+            position: 0,
             isExpanded: false
         };
 
+        // Shift existing groups of the same type down by 1
+        state.groups.filter(g => g.type === folderContextType).forEach(g => {
+            dispatch({ type: 'UPDATE_GROUP', payload: { id: g.id, updates: { position: g.position + 1 } } });
+        });
+
         dispatch({ type: 'ADD_GROUP', payload: newGroup });
+        setRecentlyAddedId(newGroup.id);
+        setTimeout(() => setRecentlyAddedId(null), 600);
 
         // If there are selected items of the same type, move them into this new folder
-        if (state.selectedItems?.length > 0 && state.selectionType === folderContextType) {
-            state.selectedItems.forEach(itemId => {
+        const selectedSnap = state.selectedItems?.length > 0 && state.selectionType === folderContextType ? [...state.selectedItems] : null;
+        if (selectedSnap) {
+            selectedSnap.forEach(itemId => {
                 dispatch({
                     type: 'MOVE_WORKSPACE_ITEM',
                     payload: { itemType: folderContextType + 's', itemIds: [itemId], destGroupId: newGroup.id, destIndex: 0 }
@@ -221,22 +273,63 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         setNewFolderTitle('');
         setShowNewFolder(false);
 
-        const { insertGroup, updateEntitiesOrder } = await import('../../services/workspaceService');
-        await insertGroup(user.id, newGroup);
+        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: true } });
+        if (suppressRealtime) suppressRealtime(3000);
+        try {
+            const { insertGroup, updateEntitiesOrder } = await import('../../services/workspaceService');
+            await insertGroup(user.id, newGroup);
 
-        // If we moved items, we need to sync their order to backend
-        if (state.selectedItems?.length > 0 && state.selectionType === folderContextType) {
-            if (suppressRealtime) suppressRealtime(2000);
-            const list = state[folderContextType + 's'];
-            const updatedItems = [];
-            // We just let the UI calculate position or we send the destGroupId updates
-            state.selectedItems.forEach(itemId => {
-                updatedItems.push({ id: itemId, groupId: newGroup.id, position: 0 }); // In a real app we'd recalculate proper indices
-            });
-            try {
+            // If we moved items, sync their order to backend
+            if (selectedSnap) {
+                const updatedItems = selectedSnap.map(itemId => ({ id: itemId, groupId: newGroup.id, position: 0 }));
                 await updateEntitiesOrder(folderContextType + 's', updatedItems);
-            } catch (e) { }
+            }
+        } finally {
+            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: false } });
         }
+    };
+
+    const handleStartGroupRename = (group) => {
+        setEditingGroupId(group.id);
+        setEditGroupTitle(group.title);
+    };
+
+    const handleGroupRenameSubmit = async (groupId) => {
+        setEditingGroupId(null);
+        if (!groupId) return; // Escape pressed
+        const titleToSave = editGroupTitle.trim();
+        if (!titleToSave) return;
+
+        dispatch({ type: 'UPDATE_GROUP', payload: { id: groupId, updates: { title: titleToSave } } });
+        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: true } });
+        if (suppressRealtime) suppressRealtime(2000);
+        try {
+            const { updateGroup } = await import('../../services/workspaceService');
+            await updateGroup(groupId, { title: titleToSave });
+        } finally {
+            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: false } });
+        }
+    };
+
+    const handleGroupExpandToggle = async (g) => {
+        const newExpanded = !g.isExpanded;
+        dispatch({ type: 'UPDATE_GROUP', payload: { id: g.id, updates: { isExpanded: newExpanded } } });
+        if (suppressRealtime) suppressRealtime(2000);
+        try {
+            const { updateGroup } = await import('../../services/workspaceService');
+            await updateGroup(g.id, { isExpanded: newExpanded });
+        } catch (err) {
+            console.error('Failed to update group expanded state', err);
+        }
+    };
+
+    const handleGroupHeaderClick = (e, g) => {
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            dispatch({ type: 'TOGGLE_SELECTION', payload: { id: g.id, type: 'group' } });
+            return;
+        }
+        handleGroupExpandToggle(g);
     };
 
     const handleAddSpace = async (e) => {
@@ -308,6 +401,123 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
             type: 'danger'
         });
         if (confirmed) logout();
+    };
+
+    const handleDuplicateSelected = async (itemType) => {
+        const count = state.selectedItems?.length;
+        if (!count) return;
+
+        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__bulk_ops__', saving: true } });
+        try {
+            const itemsToDup = [...state.selectedItems];
+            if (itemType === 'board') {
+                const boards = state.boards.filter(b => itemsToDup.includes(b.id));
+                for (const b of boards) {
+                    const dup = {
+                        ...JSON.parse(JSON.stringify(b)),
+                        id: crypto.randomUUID(),
+                        title: `${b.title} (cópia)`,
+                        createdAt: new Date().toISOString(),
+                        lists: b.lists.map(l => ({
+                            ...l,
+                            id: crypto.randomUUID(),
+                            cards: l.cards.map(c => ({
+                                ...c,
+                                id: crypto.randomUUID(),
+                                subtasks: (c.subtasks || []).map(st => ({ ...st, id: crypto.randomUUID() })),
+                            })),
+                        })),
+                    };
+                    dispatch({ type: 'ADD_BOARD', payload: dup });
+                    await insertBoardFull(user.id, { ...dup, position: state.boards.length + 1 });
+                }
+            } else if (itemType === 'space') {
+                const { insertSpace } = await import('../../services/workspaceService');
+                const spaces = state.spaces.filter(s => itemsToDup.includes(s.id));
+                for (const s of spaces) {
+                    const dup = {
+                        ...JSON.parse(JSON.stringify(s)),
+                        id: crypto.randomUUID(),
+                        title: `${s.title} (cópia)`,
+                        createdAt: new Date().toISOString(),
+                        position: state.spaces.length
+                    };
+                    dispatch({ type: 'ADD_SPACE', payload: dup });
+                    await insertSpace(user.id, dup);
+                }
+            } else if (itemType === 'group') {
+                // Duplicate each selected folder with its contents
+                for (const gid of itemsToDup) {
+                    const group = state.groups.find(g => g.id === gid);
+                    if (group) await handleDuplicateGroup(group);
+                }
+            }
+            dispatch({ type: 'CLEAR_SELECTION' });
+        } catch (err) {
+            console.error('Failed to duplicate selected items', err);
+        } finally {
+            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__bulk_ops__', saving: false } });
+        }
+    };
+
+    const handleDuplicateGroup = async (group) => {
+        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: true } });
+        try {
+            const { insertGroup, insertSpace } = await import('../../services/workspaceService');
+            const newGroupId = crypto.randomUUID();
+            const newGroup = {
+                ...JSON.parse(JSON.stringify(group)),
+                id: newGroupId,
+                title: `${group.title} (cópia)`,
+                createdAt: new Date().toISOString(),
+                isExpanded: group.isExpanded,
+                type: group.type,
+                position: state.groups.filter(g => g.type === group.type).length
+            };
+
+            dispatch({ type: 'ADD_GROUP', payload: newGroup });
+            await insertGroup(user.id, newGroup);
+
+            if (group.type === 'board') {
+                const groupBoards = state.boards.filter(b => b.groupId === group.id);
+                for (const b of groupBoards) {
+                    const dup = {
+                        ...JSON.parse(JSON.stringify(b)),
+                        id: crypto.randomUUID(),
+                        groupId: newGroupId,
+                        title: b.title,
+                        createdAt: new Date().toISOString(),
+                        lists: b.lists.map(l => ({
+                            ...l,
+                            id: crypto.randomUUID(),
+                            cards: l.cards.map(c => ({
+                                ...c,
+                                id: crypto.randomUUID(),
+                                subtasks: (c.subtasks || []).map(st => ({ ...st, id: crypto.randomUUID() })),
+                            })),
+                        })),
+                    };
+                    dispatch({ type: 'ADD_BOARD', payload: dup });
+                    await insertBoardFull(user.id, { ...dup, position: state.boards.length + 1 });
+                }
+            } else if (group.type === 'space') {
+                const groupSpaces = state.spaces.filter(s => s.groupId === group.id);
+                for (const s of groupSpaces) {
+                    const dup = {
+                        ...JSON.parse(JSON.stringify(s)),
+                        id: crypto.randomUUID(),
+                        groupId: newGroupId,
+                        createdAt: new Date().toISOString()
+                    };
+                    dispatch({ type: 'ADD_SPACE', payload: dup });
+                    await insertSpace(user.id, dup);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to duplicate group', err);
+        } finally {
+            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: false } });
+        }
     };
 
 
@@ -388,6 +598,8 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 if (confirmed) {
                     const isActive = state.activeBoard === board.id;
                     const boardIndex = state.boards.findIndex(b => b.id === board.id);
+                    const groupId = board.groupId;
+                    const wasOnlyBoardInGroup = groupId && state.boards.filter(b => b.groupId === groupId).length === 1;
                     dispatch({ type: 'DELETE_BOARD', payload: board.id });
                     if (suppressRealtime) suppressRealtime(3000);
 
@@ -395,6 +607,12 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                     dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: true } });
                     try {
                         await deleteBoard(board.id);
+                        if (wasOnlyBoardInGroup) {
+                            try {
+                                const { updateGroup } = await import('../../services/workspaceService');
+                                await updateGroup(groupId, { isExpanded: false });
+                            } catch (e) { /* ignore */ }
+                        }
                     } finally {
                         dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: false } });
                     }
@@ -415,19 +633,55 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         },
     ];
 
+
     const handleGroupCheckboxClick = (e, group, groupItems) => {
         e.stopPropagation();
-        if (group.isExpanded && groupItems.length > 0) {
-            const ids = groupItems.map(i => i.id);
-            const itemType = group.type;
-            const allSelected = ids.every(id => state.selectedItems?.includes(id));
-            if (allSelected) {
-                dispatch({ type: 'CLEAR_SELECTION' });
+        const ids = groupItems.map(i => i.id);
+        const itemType = group.type; // 'board' or 'space'
+        const currentSelected = state.selectedItems || [];
+
+        if (!group.isExpanded || ids.length === 0) {
+            // Closed folder OR empty open folder: add/remove from selection
+            const isAlreadySelected = currentSelected.includes(group.id);
+            if (isAlreadySelected) {
+                // Remove this folder from the selection
+                const newItems = currentSelected.filter(id => id !== group.id);
+                if (newItems.length === 0) {
+                    dispatch({ type: 'CLEAR_SELECTION' });
+                } else {
+                    dispatch({ type: 'SET_SELECTION', payload: { type: state.selectionType || 'group', items: newItems } });
+                }
             } else {
-                dispatch({ type: 'SET_SELECTION', payload: { type: itemType, items: ids } });
+                // Check if current selection already has group IDs (2nd-click state)
+                // Only append if selecting folders or if no active selection
+                const hasGroupsInSelection = currentSelected.some(id =>
+                    (state.groups || []).some(g => g.id === id)
+                );
+                if (currentSelected.length === 0 || hasGroupsInSelection) {
+                    // Append: no selection yet or already selecting folders
+                    dispatch({ type: 'SET_SELECTION', payload: { type: 'group', items: [...currentSelected, group.id] } });
+                } else {
+                    // Current selection is pure content items (1st-click / dash state)
+                    // Start fresh with just this folder
+                    dispatch({ type: 'SET_SELECTION', payload: { type: 'group', items: [group.id] } });
+                }
             }
         } else {
-            dispatch({ type: 'TOGGLE_SELECTION', payload: { id: group.id, type: 'group' } });
+            // Open folder with items
+            const allItemsSelected = ids.length > 0 && ids.every(id => currentSelected.includes(id)) && state.selectionType === itemType;
+            const isGroupAlsoSelected = currentSelected.includes(group.id);
+
+            if (!allItemsSelected) {
+                // 1st click: select all contents only (not the folder)
+                dispatch({ type: 'SET_SELECTION', payload: { type: itemType, items: ids } });
+            } else if (!isGroupAlsoSelected) {
+                // 2nd click: also select the folder itself
+                // Keep the type as itemType so bulk drag still works for items
+                dispatch({ type: 'SET_SELECTION', payload: { type: itemType, items: [...ids, group.id] } });
+            } else {
+                // 3rd click: clear everything
+                dispatch({ type: 'CLEAR_SELECTION' });
+            }
         }
     };
 
@@ -474,6 +728,11 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                         }
                     }
                 }
+            },
+            {
+                label: `Duplicar Selecionados`,
+                icon: <Edit3 size={15} />,
+                action: () => handleDuplicateSelected(itemType)
             }
         ];
 
@@ -568,10 +827,15 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                         type: 'danger'
                     });
                     if (confirmed) {
+                        const groupId = space.groupId;
+                        const wasOnlySpaceInGroup = groupId && state.spaces.filter(s => s.groupId === groupId).length === 1;
                         dispatch({ type: 'DELETE_SPACE', payload: space.id });
                         if (suppressRealtime) suppressRealtime(3000);
-                        const { deleteSpace } = await import('../../services/workspaceService');
+                        const { deleteSpace, updateGroup } = await import('../../services/workspaceService');
                         await deleteSpace(space.id);
+                        if (wasOnlySpaceInGroup) {
+                            try { await updateGroup(groupId, { isExpanded: false }); } catch (e) { /* ignore */ }
+                        }
                     }
                 },
             },
@@ -584,9 +848,14 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         }
         showContextMenu(e, [
             {
-                label: 'Renomear Grupo',
+                label: 'Renomear Pasta',
                 icon: <Edit3 size={15} />,
-                action: () => alert('Opcão em desenvolvimento.'),
+                action: () => handleStartGroupRename(group),
+            },
+            {
+                label: 'Duplicar Pasta',
+                icon: <Edit3 size={15} />,
+                action: () => handleDuplicateGroup(group)
             },
             { type: 'divider' },
             {
@@ -600,7 +869,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                     });
                     if (confirmed) {
                         try {
-                            const { deleteGroup, fetchGroups } = await import('../../services/workspaceService');
+                            const { deleteGroup } = await import('../../services/workspaceService');
                             // Move items out
                             const items = group.type === 'board' ? state.boards : state.spaces;
                             const groupItems = items.filter(i => i.groupId === group.id);
@@ -609,10 +878,13 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                             });
 
                             dispatch({ type: 'DELETE_GROUP', payload: group.id });
+                            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: true } });
                             if (suppressRealtime) suppressRealtime(3000);
                             await deleteGroup(group.id);
                         } catch (err) {
                             console.error('Failed to delete group', err);
+                        } finally {
+                            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: false } });
                         }
                     }
                 },
@@ -629,8 +901,9 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                         type: 'danger'
                     });
                     if (confirmed) {
+                        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: true } });
                         try {
-                            const { deleteGroup, fetchGroups } = await import('../../services/workspaceService');
+                            const { deleteGroup } = await import('../../services/workspaceService');
                             dispatch({ type: 'DELETE_GROUP', payload: group.id });
 
                             // Delete items locally
@@ -666,6 +939,8 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
 
                         } catch (err) {
                             console.error('Failed to delete group', err);
+                        } finally {
+                            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: false } });
                         }
                     }
                 },
@@ -687,6 +962,16 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 ref={sidebarRef}
                 className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}
                 style={isDesktop ? { width: sidebarWidth } : undefined}
+                onClick={(e) => {
+                    // Clear selection when clicking empty sidebar space (NOT during drag)
+                    if (state.selectedItems?.length > 0 && !state.isDraggingBulk) {
+                        const target = e.target;
+                        const isInteractive = target.closest('.sidebar-item, .board-item, .sidebar-board-checkbox, .sidebar-group-header, .sidebar-section-btn, .sidebar-new-form, .sidebar-rename-form, .sidebar-section-label, input');
+                        if (!isInteractive) {
+                            dispatch({ type: 'CLEAR_SELECTION' });
+                        }
+                    }
+                }}
             >
                 {/* Header */}
                 <div className="sidebar-header">
@@ -781,13 +1066,14 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                             </form>
                         )}
 
-                        <Droppable droppableId="groups-board" type="board">
+                        <div className="sidebar-boards-lists-wrap">
+                        <Droppable droppableId="groups-board" type="board-group">
                             {(provided) => (
                                 <div className="sidebar-board-list" {...provided.droppableProps} ref={provided.innerRef}>
                                     {boardGroups.map((group, index) => (
                                         <SidebarGroup
                                             key={group.id}
-                                            group={group}
+                                            group={{ ...group, _isNew: recentlyAddedId === group.id }}
                                             index={index}
                                             items={activeBoards.filter(b => b.groupId === group.id).sort((a, b) => a.position - b.position)}
                                             activeView={activeView}
@@ -795,17 +1081,14 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                             onContextMenu={handleGroupContextMenu}
                                             onToggleSelection={(e) => handleGroupCheckboxClick(e, group, activeBoards.filter(b => b.groupId === group.id))}
                                             selectedItems={state.selectedItems}
-                                            onClickItem={async (g) => {
-                                                const newExpanded = !g.isExpanded;
-                                                dispatch({ type: 'UPDATE_GROUP', payload: { id: g.id, updates: { isExpanded: newExpanded } } });
-                                                if (suppressRealtime) suppressRealtime(2000);
-                                                try {
-                                                    const { updateGroup } = await import('../../services/workspaceService');
-                                                    await updateGroup(g.id, { isExpanded: newExpanded });
-                                                } catch (err) {
-                                                    console.error('Failed to update group expanded state', err);
-                                                }
-                                            }}
+                                            editingGroupId={editingGroupId}
+                                            editGroupTitle={editGroupTitle}
+                                            setEditGroupTitle={setEditGroupTitle}
+                                            onRenameSubmit={handleGroupRenameSubmit}
+                                            onRename={handleStartGroupRename}
+                                            onHeaderClick={handleGroupHeaderClick}
+                                            onClickItem={handleGroupExpandToggle}
+                                            isLastGroup={index === boardGroups.length - 1}
                                             renderItem={(board, bIndex) => (
                                                 <Draggable key={board.id} draggableId={board.id} index={bIndex}>
                                                     {(provided, snapshot) => (
@@ -835,7 +1118,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                             )}
                                                             <span className="sidebar-badge-subtle">{board.lists.reduce((acc, l) => acc + l.cards.length, 0)}</span>
                                                             {state.isDraggingBulk && snapshot.isDragging && (
-                                                                <BulkDragFollowers count={state.selectedItems.length} />
+                                                                <BulkDragFollowers count={state.selectedItems.length} items={allItems.filter(i => state.selectedItems.includes(i.id) && i.id !== board.id)} />
                                                             )}
                                                         </div>
                                                     )}
@@ -849,8 +1132,20 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                         </Droppable>
 
                         <Droppable droppableId="boards-root" type="board">
-                            {(provided) => (
-                                <div className="sidebar-board-list" {...provided.droppableProps} ref={provided.innerRef}>
+                            {(provided) => {
+                                const hasFolders = boardGroups.length > 0;
+                                const hasRootItems = rootBoards.length > 0;
+                                return (
+                                <div
+                                    className={`sidebar-board-list ${hasFolders ? `sidebar-root-drop-zone ${hasRootItems ? 'sidebar-root-drop-zone--has-items' : 'sidebar-root-drop-zone--empty'}` : ''}`}
+                                    {...provided.droppableProps}
+                                    ref={provided.innerRef}
+                                    style={{
+                                        minHeight: hasFolders ? (hasRootItems ? 0 : 12) : 10,
+                                        paddingTop: 0,
+                                        paddingBottom: hasFolders && hasRootItems ? 8 : 0
+                                    }}
+                                >
                                     {rootBoards.map((board, index) => (
                                         <Draggable key={board.id} draggableId={board.id} index={index}>
                                             {(provided, snapshot) => (
@@ -880,7 +1175,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                     )}
                                                     <span className="sidebar-badge-subtle">{board.lists.reduce((acc, l) => acc + l.cards.length, 0)}</span>
                                                     {state.isDraggingBulk && snapshot.isDragging && (
-                                                        <BulkDragFollowers count={state.selectedItems.length} />
+                                                        <BulkDragFollowers count={state.selectedItems.length} items={allItems.filter(i => state.selectedItems.includes(i.id) && i.id !== board.id)} />
                                                     )}
                                                 </div>
                                             )}
@@ -888,8 +1183,10 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                     ))}
                                     {provided.placeholder}
                                 </div>
-                            )}
+                                );
+                            }}
                         </Droppable>
+                        </div>
                     </div>
 
                     {/* Spaces section */}
@@ -934,13 +1231,14 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                             </form>
                         )}
 
-                        <Droppable droppableId="groups-space" type="space">
+                        <div className="sidebar-boards-lists-wrap">
+                        <Droppable droppableId="groups-space" type="space-group">
                             {(provided) => (
                                 <div className="sidebar-board-list" {...provided.droppableProps} ref={provided.innerRef}>
                                     {spaceGroups.map((group, index) => (
                                         <SidebarGroup
                                             key={group.id}
-                                            group={group}
+                                            group={{ ...group, _isNew: recentlyAddedId === group.id }}
                                             index={index}
                                             items={activeSpaces.filter(s => s.groupId === group.id).sort((a, b) => a.position - b.position)}
                                             activeView={activeView}
@@ -948,17 +1246,14 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                             onContextMenu={(e, g) => handleGroupContextMenu(e, g)}
                                             onToggleSelection={(e) => handleGroupCheckboxClick(e, group, activeSpaces.filter(s => s.groupId === group.id))}
                                             selectedItems={state.selectedItems}
-                                            onClickItem={async (g) => {
-                                                const newExpanded = !g.isExpanded;
-                                                dispatch({ type: 'UPDATE_GROUP', payload: { id: g.id, updates: { isExpanded: newExpanded } } });
-                                                if (suppressRealtime) suppressRealtime(2000);
-                                                try {
-                                                    const { updateGroup } = await import('../../services/workspaceService');
-                                                    await updateGroup(g.id, { isExpanded: newExpanded });
-                                                } catch (err) {
-                                                    console.error('Failed to update group expanded state', err);
-                                                }
-                                            }}
+                                            editingGroupId={editingGroupId}
+                                            editGroupTitle={editGroupTitle}
+                                            setEditGroupTitle={setEditGroupTitle}
+                                            onRenameSubmit={handleGroupRenameSubmit}
+                                            onRename={handleStartGroupRename}
+                                            onHeaderClick={handleGroupHeaderClick}
+                                            onClickItem={handleGroupExpandToggle}
+                                            isLastGroup={index === spaceGroups.length - 1}
                                             renderItem={(space, sIndex) => (
                                                 <Draggable key={space.id} draggableId={space.id} index={sIndex}>
                                                     {(provided, snapshot) => (
@@ -980,7 +1275,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                             <span className="sidebar-board-dot" style={{ background: space.color || '#9b59b6' }} />
                                                             <span className="truncate">{space.emoji} {space.title}</span>
                                                             {state.isDraggingBulk && snapshot.isDragging && (
-                                                                <BulkDragFollowers count={state.selectedItems.length} />
+                                                                <BulkDragFollowers count={state.selectedItems.length} items={allItems.filter(i => state.selectedItems.includes(i.id) && i.id !== space.id)} />
                                                             )}
                                                         </div>
                                                     )}
@@ -994,8 +1289,20 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                         </Droppable>
 
                         <Droppable droppableId="spaces-root" type="space">
-                            {(provided) => (
-                                <div className="sidebar-board-list" {...provided.droppableProps} ref={provided.innerRef}>
+                            {(provided) => {
+                                const hasFolders = spaceGroups.length > 0;
+                                const hasRootItems = rootSpaces.length > 0;
+                                return (
+                                <div
+                                    className={`sidebar-board-list ${hasFolders ? `sidebar-root-drop-zone ${hasRootItems ? 'sidebar-root-drop-zone--has-items' : 'sidebar-root-drop-zone--empty'}` : ''}`}
+                                    {...provided.droppableProps}
+                                    ref={provided.innerRef}
+                                    style={{
+                                        minHeight: hasFolders ? (hasRootItems ? 0 : 12) : 10,
+                                        paddingTop: 0,
+                                        paddingBottom: hasFolders && hasRootItems ? 8 : 0
+                                    }}
+                                >
                                     {rootSpaces.map((space, index) => (
                                         <Draggable key={space.id} draggableId={space.id} index={index}>
                                             {(provided, snapshot) => (
@@ -1017,7 +1324,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                     <span className="sidebar-board-dot" style={{ background: space.color || '#9b59b6' }} />
                                                     <span className="truncate">{space.emoji} {space.title}</span>
                                                     {state.isDraggingBulk && snapshot.isDragging && (
-                                                        <BulkDragFollowers count={state.selectedItems.length} />
+                                                        <BulkDragFollowers count={state.selectedItems.length} items={allItems.filter(i => state.selectedItems.includes(i.id) && i.id !== space.id)} />
                                                     )}
                                                 </div>
                                             )}
@@ -1025,8 +1332,10 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                     ))}
                                     {provided.placeholder}
                                 </div>
-                            )}
+                                );
+                            }}
                         </Droppable>
+                        </div>
                     </div>
 
                     {/* RECURSOS section */}

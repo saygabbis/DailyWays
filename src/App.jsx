@@ -56,7 +56,7 @@ function AppContent() {
 
   // Global DragDropContext handler — intercepts sidebar drops, delegates the rest
   const handleGlobalDragStart = useCallback((start) => {
-    if (['board', 'space'].includes(start.type)) {
+    if (['board', 'space', 'board-group', 'space-group'].includes(start.type)) {
       if (state.selectedItems?.includes(start.draggableId) && state.selectedItems.length > 1) {
         dispatch({ type: 'SET_DRAGGING_BULK', payload: true });
       }
@@ -105,13 +105,13 @@ function AppContent() {
     }
 
     // Workspace Reordering in Sidebar (Groups, Boards, Spaces)
-    if (['board', 'space', 'group'].includes(type) && destination.droppableId !== 'boards') {
+    if (['board', 'space', 'group', 'board-group', 'space-group'].includes(type) && destination.droppableId !== 'boards') {
       // old 'boards' droppableId is replaced by 'boards-root', 'spaces-root', 'groups-board', 'groups-space', and 'group-{id}'
       if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
       let itemType = 'boards';
       if (type === 'space') itemType = 'spaces';
-      if (type === 'group') itemType = 'groups';
+      if (type === 'group' || type === 'board-group' || type === 'space-group') itemType = 'groups';
 
       let sourceGroupId = null;
       if (source.droppableId.startsWith('group-') && source.droppableId !== 'groups-board' && source.droppableId !== 'groups-space') {
@@ -274,7 +274,7 @@ function AppContent() {
   }, [activeView, activeBoard, sidebarOpen, showContextMenu, toggleSidebar]);
 
   return (
-    <DragDropContext onDragEnd={handleGlobalDragEnd}>
+    <DragDropContext onDragStart={handleGlobalDragStart} onDragEnd={handleGlobalDragEnd}>
       <div className="app-layout" onContextMenu={handleGlobalContextMenu}>
         <Sidebar
           activeView={activeView}
@@ -295,7 +295,9 @@ function AppContent() {
             editableBoardTitle={activeView === 'board' && activeBoard ? { board: activeBoard, onSave: (newTitle) => updateBoardAndPersist(activeBoard.id, { title: newTitle }) } : null}
           />
 
-          <div className="app-content">
+          <div className="app-content" onClick={() => {
+            if (state.selectedItems?.length > 0 && !state.isDraggingBulk) dispatch({ type: 'CLEAR_SELECTION' });
+          }}>
             {activeView === 'dashboard' && <DashboardView key="dashboard" />}
             {activeView === 'myday' && <MyDayView key="myday" onCardClick={handleCardClick} />}
             {activeView === 'important' && <ImportantView key="important" onCardClick={handleCardClick} />}

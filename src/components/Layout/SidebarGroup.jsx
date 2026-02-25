@@ -1,10 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { Folder, FolderOpen, MoreHorizontal, Edit3, Trash2, Check } from 'lucide-react';
 
-export default function SidebarGroup({ group, index, items, activeView, activeBoard, onContextMenu, onToggleSelection, selectedItems = [], isDraggingBulk = false, onRename, onClickItem, renderItem }) {
+export default function SidebarGroup({ group, index, items, activeView, activeBoard, onContextMenu, onToggleSelection, selectedItems = [], isDraggingBulk = false, onRename, onClickItem, onHeaderClick, renderItem, editingGroupId, editGroupTitle, setEditGroupTitle, onRenameSubmit, isLastGroup = false }) {
     // Folders should always be toggleable. We just consider it "visually closed" if it's explicitly collapsed.
     const effectiveIsExpanded = Boolean(group.isExpanded);
+    const isEditing = editingGroupId === group.id;
+    const inputRef = useRef(null);
+
+    useEffect(() => {
+        if (isEditing && inputRef.current) {
+            inputRef.current.focus();
+            inputRef.current.select();
+        }
+    }, [isEditing]);
+
+    const hasSelectedItems = items.length > 0 && items.every(i => selectedItems?.includes(i.id));
+    const isFolderItselfSelected = selectedItems?.includes(group.id);
 
     return (
         <Draggable draggableId={group.id} index={index}>
@@ -12,7 +24,7 @@ export default function SidebarGroup({ group, index, items, activeView, activeBo
                 <div
                     ref={provided.innerRef}
                     {...provided.draggableProps}
-                    className={`sidebar-group ${snapshot.isDragging ? 'dragging' : ''}`}
+                    className={`sidebar-group ${snapshot.isDragging ? 'dragging' : ''} ${group._isNew ? 'group-new' : ''}`}
                 >
                     <Droppable droppableId={`group-${group.id}`} type={group.type}>
                         {(dropProvided, dropSnapshot) => {
@@ -21,28 +33,43 @@ export default function SidebarGroup({ group, index, items, activeView, activeBo
                                 <div
                                     ref={dropProvided.innerRef}
                                     {...dropProvided.droppableProps}
-                                    className={`sidebar-group-droppable ${dropSnapshot.isDraggingOver ? 'group-drag-over' : ''}`}
+                                    className={`sidebar-group-droppable ${dropSnapshot.isDraggingOver ? 'group-drag-over' : ''} ${isLastGroup ? 'sidebar-group-droppable-last' : ''}`}
                                 >
                                     {/* Folder Header */}
                                     <div
-                                        className="sidebar-group-header sidebar-item group-header-item"
-                                        onClick={() => onClickItem(group)}
+                                        className={`sidebar-group-header sidebar-item group-header-item ${hasSelectedItems && !isFolderItselfSelected ? 'contents-selected' : ''} ${isFolderItselfSelected ? 'selected-item' : ''}`}
+                                        {...provided.dragHandleProps}
+                                        style={{ cursor: 'pointer' }}
+                                        onClick={(e) => !isEditing && (onHeaderClick ? onHeaderClick(e, group) : onClickItem(group))}
                                         onContextMenu={(e) => onContextMenu(e, group)}
                                         onDoubleClick={(e) => { e.stopPropagation(); onRename && onRename(group); }}
                                     >
                                         <div
-                                            className={`sidebar-board-checkbox ${selectedItems?.includes(group.id) ? 'selected' : ''}`}
+                                            className={`sidebar-board-checkbox ${isFolderItselfSelected ? 'selected' : ''} ${hasSelectedItems && !isFolderItselfSelected ? 'contents-selected-checkbox' : ''}`}
                                             title="Selecionar"
                                             onClick={(e) => { e.stopPropagation(); onToggleSelection(e); }}
                                         >
-                                            {selectedItems?.includes(group.id) && <Check size={10} strokeWidth={4} />}
+                                            {isFolderItselfSelected && <Check size={10} strokeWidth={4} />}
+                                            {hasSelectedItems && !isFolderItselfSelected && <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', fontSize: '11px', fontWeight: 800 }}>–</span>}
                                         </div>
 
-                                        <span className="sidebar-group-icon" {...provided.dragHandleProps} title="Arrastar Pasta" style={{ cursor: 'grab' }}>
+                                        <span className="sidebar-group-icon">
                                             {effectiveIsExpanded ? <FolderOpen size={16} /> : (items.length > 0 ? <Folder size={16} fill="currentColor" /> : <Folder size={16} />)}
                                         </span>
 
-                                        <span className="truncate" style={{ fontWeight: 600 }}>{group.title}</span>
+                                        {isEditing ? (
+                                            <form onSubmit={(e) => { e.preventDefault(); onRenameSubmit(group.id); }} className="sidebar-rename-form" onClick={(e) => e.stopPropagation()}>
+                                                <input
+                                                    ref={inputRef}
+                                                    value={editGroupTitle}
+                                                    onChange={e => setEditGroupTitle(e.target.value)}
+                                                    onBlur={() => onRenameSubmit(group.id)}
+                                                    onKeyDown={e => e.key === 'Escape' && onRenameSubmit(null)}
+                                                />
+                                            </form>
+                                        ) : (
+                                            <span className="truncate" style={{ fontWeight: 600 }}>{group.title}</span>
+                                        )}
 
                                         <div
                                             className="board-drag-indicator"
@@ -60,11 +87,11 @@ export default function SidebarGroup({ group, index, items, activeView, activeBo
                                     <div
                                         className="sidebar-group-content"
                                         style={{
-                                            height: showContent ? 'auto' : '0px',
+                                            height: showContent ? 'auto' : 0,
                                             overflow: showContent ? 'visible' : 'hidden',
                                             opacity: showContent ? 1 : 0,
                                             pointerEvents: showContent ? 'auto' : 'none',
-                                            minHeight: showContent ? '26px' : '0px',
+                                            minHeight: showContent ? '26px' : 0,
                                             paddingTop: showContent ? undefined : 0,
                                             paddingBottom: showContent ? undefined : 0,
                                             marginTop: showContent ? undefined : 0,
@@ -74,7 +101,7 @@ export default function SidebarGroup({ group, index, items, activeView, activeBo
                                     >
                                         {items.map((item, itemIndex) => renderItem(item, itemIndex))}
                                         {dropProvided.placeholder}
-                                        {items.length === 0 && !dropSnapshot.isDraggingOver && (
+                                        {items.length === 0 && !dropSnapshot.isDraggingOver && showContent && (
                                             <div className="sidebar-empty-group-text">Pasta vazia</div>
                                         )}
                                     </div>
