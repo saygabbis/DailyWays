@@ -277,19 +277,18 @@ select option {
 
     10% {
         opacity: 1;
-        /* Instant opacity as per user request to remove fade-in */
     }
 
     40% {
-        transform: translateY(-2px) scale(1.02, 0.98);
+        transform: translateY(-2px) scale(1.01, 0.99);
     }
 
     60% {
-        transform: translateY(1px) scale(0.99, 1.01);
+        transform: translateY(1px) scale(0.995, 1.005);
     }
 
     80% {
-        transform: translateY(-0.5px) scale(1.005, 0.995);
+        transform: translateY(-0.5px) scale(1.002, 0.998);
     }
 
     100% {
@@ -299,6 +298,7 @@ select option {
 }
 
 .animate-slide-up-jelly {
+    transform-origin: center center;
     animation: slideUpJelly 0.6s var(--ease-out-soft) both;
 }
 
@@ -383,23 +383,19 @@ select option {
     }
 
     30% {
-        transform: scale(1.03, 0.97);
+        transform: scale(1.015, 0.985);
     }
 
-    40% {
-        transform: scale(0.98, 1.02);
-    }
-
-    50% {
-        transform: scale(1.01, 0.99);
-    }
-
-    65% {
+    45% {
         transform: scale(0.99, 1.01);
     }
 
-    75% {
-        transform: scale(1.01, 0.99);
+    60% {
+        transform: scale(1.005, 0.995);
+    }
+
+    80% {
+        transform: scale(0.998, 1.002);
     }
 
     100% {
@@ -450,6 +446,7 @@ select option {
 }
 
 .animate-jelly {
+    transform-origin: center center;
     animation: jelly 0.5s var(--ease-in-out-soft) both;
 }
 

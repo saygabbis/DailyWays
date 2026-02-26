@@ -28,6 +28,8 @@ export default function AuthPage() {
     loading: authLoading,
     authError: contextAuthError,
     clearAuthError,
+    pendingSignupEmail,
+    clearPendingSignupEmail,
   } = useAuth();
   const { theme } = useTheme();
   const isLightTheme = ['light', 'latte', 'ocean', 'nord'].includes(theme);
@@ -157,7 +159,7 @@ export default function AuthPage() {
   };
 
   const handleVerifyOtp = async () => {
-    if (otpCode.length < 6) return;
+    if (otpCode.length < 8) return;
     setOtpLoading(true);
     setOtpError('');
     const result = await verifySignupOtp(otpEmail, otpCode);
@@ -173,6 +175,7 @@ export default function AuthPage() {
     setShowOtpModal(false);
     setOtpCode('');
     setOtpError('');
+    clearPendingSignupEmail?.();
   };
 
   useEffect(() => {
@@ -193,6 +196,17 @@ export default function AuthPage() {
     setMfaCode('');
     setError('');
   };
+
+  // Abrir tela de código ao montar/atualizar se há e-mail pendente de confirmação (ex.: após F5)
+  useEffect(() => {
+    if (pendingSignupEmail) {
+      setOtpEmail(pendingSignupEmail);
+      setOtpCode('');
+      setOtpError('');
+      setShowOtpModal(true);
+      setIsLogin(false);
+    }
+  }, [pendingSignupEmail]);
 
   // Focus OTP input when modal opens
   useEffect(() => {
@@ -246,7 +260,7 @@ export default function AuthPage() {
               ? 'Digite o código do seu aplicativo autenticador'
               : isLogin
                 ? 'Bem-vindo de volta! 👋'
-                : 'Crie sua conta gratuita ✨'}
+                : 'Preencha os dados e confirme com o código enviado por e-mail ✨'}
           </p>
         </div>
 
@@ -408,7 +422,7 @@ export default function AuthPage() {
             <div className="otp-modal-header">
               <Mail size={28} className="otp-icon" />
               <h2>Verifique seu e-mail</h2>
-              <p>Enviamos um código de 6 dígitos para <strong>{otpEmail}</strong></p>
+              <p>Enviamos um código de 8 dígitos para <strong>{otpEmail}</strong></p>
             </div>
             <div className="otp-modal-body">
               <input
@@ -418,11 +432,11 @@ export default function AuthPage() {
                 pattern="[0-9]*"
                 placeholder="000000"
                 value={otpCode}
-                onChange={e => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                maxLength={6}
+                onChange={e => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                maxLength={8}
                 className="otp-input"
                 autoComplete="one-time-code"
-                onKeyDown={e => { if (e.key === 'Enter' && otpCode.length === 6) handleVerifyOtp(); }}
+                onKeyDown={e => { if (e.key === 'Enter' && otpCode.length === 8) handleVerifyOtp(); }}
               />
               {otpError && <div className="otp-error">{otpError}</div>}
               <p className="otp-hint">O código expira em 5 minutos. Confira também o spam.</p>
@@ -432,9 +446,9 @@ export default function AuthPage() {
                 type="button"
                 className="btn btn-primary otp-verify-btn"
                 onClick={handleVerifyOtp}
-                disabled={otpLoading || otpCode.length < 6}
+                disabled={otpLoading || otpCode.length < 8}
               >
-                {otpLoading ? <span className="auth-spinner" /> : 'Verificar e Logar'}
+                {otpLoading ? <span className="auth-spinner" /> : 'Confirmar e entrar'}
               </button>
               <button type="button" className="otp-cancel-btn" onClick={cancelOtp}>
                 Cancelar

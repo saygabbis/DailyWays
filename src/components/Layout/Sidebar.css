@@ -153,7 +153,11 @@
     font-size: var(--font-size-base);
     font-weight: 500;
     color: var(--text-secondary);
-    transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+    transition: background 0.25s cubic-bezier(0.2, 0, 0, 1),
+        color 0.25s cubic-bezier(0.2, 0, 0, 1),
+        border-color 0.25s cubic-bezier(0.2, 0, 0, 1),
+        box-shadow 0.25s cubic-bezier(0.2, 0, 0, 1),
+        opacity 0.2s ease;
     text-align: left;
     margin-bottom: 2px;
     position: relative;
@@ -415,21 +419,21 @@
     min-height: 10px;
 }
 
-/* Last folder: slightly larger hit area; on top in overlap so it wins over root zone */
+/* Last folder: extra hit-area via margin so drag-over highlight stays tight */
 .sidebar-group-droppable-last {
     position: relative;
-    z-index: 1;
-    padding-bottom: 24px;
+    margin-bottom: 24px;
 }
 
-/* Root zone: overlap last folder padding + gap so boards sit on top of green area; z-index below so last folder wins in overlap */
+/* Root zone: sits on top so board items are always interactive */
 .sidebar-root-drop-zone--has-items {
     position: relative;
-    z-index: 0;
-    margin-top: -30px;
+    z-index: 2;
+    margin-top: -24px;
+    padding-top: 2px;
 }
+
 .sidebar-root-drop-zone--empty {
-    min-height: 12px;
     border-radius: var(--radius-md);
 }
 
@@ -474,6 +478,7 @@
 /* Board Reordering & Renaming */
 .board-item {
     position: relative;
+    z-index: 2;
     padding-left: 8px !important;
 }
 
@@ -532,6 +537,58 @@
     opacity: 0;
 }
 
+/* ── Three-dots end area ── */
+.board-item-end {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    position: relative;
+    flex-shrink: 0;
+    min-width: 22px;
+}
+
+.board-item-end .sidebar-badge-subtle {
+    margin-left: 0;
+    transition: opacity 0.15s ease;
+}
+
+.board-item-menu-btn {
+    position: absolute;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+    pointer-events: none;
+}
+
+.board-item:hover .board-item-menu-btn {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.board-item-menu-btn:hover {
+    color: white;
+    background: var(--accent-primary);
+    transform: scale(1.15) rotate(5deg);
+}
+
+.board-item-menu-btn:active {
+    transform: scale(0.9) rotate(-5deg);
+}
+
+.sidebar-board-dot:hover {
+    transform: scale(1.4) rotate(15deg);
+    cursor: default;
+}
+
 .board-item {
     cursor: pointer !important;
 }
@@ -540,19 +597,42 @@
     cursor: grabbing !important;
     background: var(--bg-hover) !important;
     border-radius: var(--radius-md);
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-lg), 0 8px 32px rgba(0, 0, 0, 0.18);
     z-index: 1000;
+    opacity: 0.95;
+}
+
+/* Wrapper interno para jelly: animação no filho evita conflito com transform do DnD no pai */
+.sidebar-item-inner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    flex: 1;
+}
+.sidebar-group-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    min-width: 0;
+}
+/* Jelly suave ao soltar (scale no wrapper interno = sem conflito com translate do DnD) */
+.sidebar-item-inner.sidebar-jelly-reorder,
+.sidebar-group-inner.sidebar-jelly-reorder {
+    transform-origin: center center;
+    animation: sidebarJellyReorder 0.45s cubic-bezier(0.34, 1.2, 0.64, 1) both;
+}
+@keyframes sidebarJellyReorder {
+    0% { transform: scale(1); }
+    35% { transform: scale(1.03); }
+    65% { transform: scale(0.98); }
+    100% { transform: scale(1); }
 }
 
 .rotate-90 {
     transform: rotate(90deg);
-}
-
-.board-item.dragging {
-    background: var(--bg-hover) !important;
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-lg);
-    z-index: 1000;
 }
 
 .sidebar-rename-form {
@@ -608,12 +688,14 @@
 .sidebar-group.dragging {
     background: var(--bg-hover) !important;
     border-radius: var(--radius-md);
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-lg), 0 12px 40px rgba(0, 0, 0, 0.2);
     z-index: 1000;
 }
 
 .sidebar-group.dragging .sidebar-group-content {
-    opacity: 0.4;
+    opacity: 0.35;
+    filter: blur(0.5px);
+    transition: opacity 0.2s ease, filter 0.2s ease;
 }
 
 /* Override the grab cursor injected by dragHandleProps */
@@ -635,26 +717,27 @@
 
 /* Bouncy jelly animation for new folders */
 .sidebar-group.group-new {
+    transform-origin: center center;
     animation: jellyBounce 0.5s cubic-bezier(0.25, 1.4, 0.55, 1) forwards;
 }
 
 @keyframes jellyBounce {
     0% {
         opacity: 0;
-        transform: scale(0.85) translateY(-6px);
+        transform: scale(0.92) translateY(-6px);
     }
 
     40% {
         opacity: 1;
-        transform: scale(1.04) translateY(0);
+        transform: scale(1.02) translateY(0);
     }
 
     60% {
-        transform: scale(0.97);
+        transform: scale(0.99);
     }
 
     80% {
-        transform: scale(1.015);
+        transform: scale(1.008);
     }
 
     100% {
@@ -672,7 +755,7 @@
     min-height: 26px;
     margin-top: 2px;
     margin-bottom: 0;
-    transition: background var(--transition-fast);
+    transition: background var(--transition-fast), opacity 0.25s ease, filter 0.25s ease;
 }
 
 .sidebar-group-droppable {
@@ -723,14 +806,55 @@
 }
 
 .group-drag-over {
-    background: rgba(99, 102, 241, 0.08);
-    box-shadow: inset 0 0 0 1.5px var(--primary, rgba(99, 102, 241, 0.4));
+    background: rgba(99, 102, 241, 0.12);
+    box-shadow: 0 0 0 2px var(--accent-primary), 0 0 20px rgba(99, 102, 241, 0.3);
     border-radius: var(--radius-md);
+    animation: groupDragOverPulse 1s ease-in-out infinite alternate;
 }
+
+@keyframes groupDragOverPulse {
+    from {
+        box-shadow: 0 0 0 2px var(--accent-primary), 0 0 10px rgba(99, 102, 241, 0.2);
+    }
+
+    to {
+        box-shadow: 0 0 0 4px var(--accent-primary), 0 0 25px rgba(99, 102, 241, 0.4);
+    }
+}
+
+
 
 .group-drag-over .sidebar-group-header {
     color: var(--text-primary);
 }
+
+.group-drag-over .sidebar-group-icon {
+    animation: folderWiggle 0.4s cubic-bezier(0.25, 1.4, 0.55, 1);
+}
+
+@keyframes folderWiggle {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    25% {
+        transform: rotate(-6deg) scale(1.1);
+    }
+
+    50% {
+        transform: rotate(4deg) scale(1.05);
+    }
+
+    75% {
+        transform: rotate(-2deg);
+    }
+
+    100% {
+        transform: rotate(0deg);
+    }
+}
+
+
 
 .sidebar-empty-group-text {
     font-size: 0.75rem;

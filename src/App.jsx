@@ -125,6 +125,7 @@ function AppContent() {
 
       // Call updateWorkspaceOrder from the App Context
       updateWorkspaceOrder(itemType, draggableId, sourceGroupId, destGroupId, destination.index);
+
       return;
     }
 
@@ -156,11 +157,19 @@ function AppContent() {
     const zoom = localStorage.getItem('dailyways_zoom');
     if (zoom) document.documentElement.style.fontSize = `${zoom}%`;
 
-    // Keyboard shortcut for search
+    // Keyboard shortcuts
     const handleKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setShowSearch(true);
+      }
+      // Tab to toggle sidebar (only when not in an input)
+      if (e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const tag = document.activeElement?.tagName;
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !document.activeElement?.isContentEditable) {
+          e.preventDefault();
+          setSidebarOpen(prev => !prev);
+        }
       }
     };
     document.addEventListener('keydown', handleKey);

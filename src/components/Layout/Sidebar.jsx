@@ -115,7 +115,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         state, dispatch, getMyDayCards, getImportantCards, getPlannedCards,
         DEFAULT_BOARD_COLORS, updateBoardAndPersist, updateBoardAndPersistImmediate,
         updateBoardsOrder, persistBoard, getActiveBoard, isSavingBoard, suppressRealtime,
-        showConfirm,
+        showConfirm, lastReorderedIds = [], setLastReorderedIds,
     } = useApp();
     const t = useI18n();
     const { theme } = useTheme();
@@ -221,8 +221,9 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
 
         // Estado local imediato (otimismo) — ADD_BOARD usará o mesmo id e listas
         dispatch({ type: 'ADD_BOARD', payload: newBoard });
-        // SET_ACTIVE_BOARD persiste o id no localStorage (ADD_BOARD não faz isso)
         dispatch({ type: 'SET_ACTIVE_BOARD', payload: newBoard.id });
+        setRecentlyAddedId(newBoard.id);
+        setTimeout(() => setRecentlyAddedId(null), 700);
         setNewBoardTitle('');
         setShowNewBoard(false);
         onViewChange('board');
@@ -350,6 +351,8 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         };
 
         dispatch({ type: 'ADD_SPACE', payload: newSpace });
+        setRecentlyAddedId(newSpace.id);
+        setTimeout(() => setRecentlyAddedId(null), 700);
         setNewSpaceTitle('');
         setShowNewSpace(false);
         onViewChange('space');
@@ -737,26 +740,70 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         ];
 
         if (itemType === 'group') {
-            items.push({
-                label: `Apagar Pastas (Manter Itens)`,
-                icon: <Trash2 size={15} />,
-                action: async () => {
+            // Check if ALL selected folders are empty
+            const allEmpty = state.selectedItems.every(gid => {
+                const groupType = state.groups.find(g => g.id === gid)?.type;
+                if (!groupType) return true;
+                const entities = groupType === 'board' ? state.boards : state.spaces;
+                return entities.filter(i => i.groupId === gid).length === 0;
+            });
+
+            if (allEmpty) {
+                // All folders empty: single red delete button (replace the generic one)
+                items[2].label = 'Apagar Pastas';
+            } else {
+                // Some folders have items: show both options
+                items.push({
+                    label: `Apagar Pastas (Manter Itens)`,
+                    icon: <Trash2 size={15} />,
+                    action: async () => {
+                        const confirmed = await showConfirm({
+                            title: 'Apagar Pastas',
+                            message: `Você apagará ${count} pastas, mas os itens serão movidos para raiz.`,
+                            confirmLabel: 'Confirmar'
+                        });
+                        if (confirmed) {
+                            const itemsToDelete = [...state.selectedItems];
+
+                            // Move items out
+                            itemsToDelete.forEach(gid => {
+                                const groupType = state.groups.find(g => g.id === gid)?.type;
+                                if (!groupType) return;
+                                const entities = groupType === 'board' ? state.boards : state.spaces;
+                                const groupItems = entities.filter(i => i.groupId === gid);
+                                groupItems.forEach(i => {
+                                    dispatch({ type: 'MOVE_WORKSPACE_ITEM', payload: { itemType: groupType + 's', itemIds: [i.id], destGroupId: null, destIndex: 0 } });
+                                });
+                            });
+
+                            dispatch({ type: 'DELETE_SELECTED_ITEMS' });
+                            if (suppressRealtime) suppressRealtime(5000);
+                            try {
+                                const { deleteGroup } = await import('../../services/workspaceService');
+                                for (const id of itemsToDelete) await deleteGroup(id);
+                            } catch (e) { }
+                        }
+                    }
+                });
+                // Tweak the text of the existing delete option for groups
+                items[2].label = 'Apagar Tudo (Pastas + Itens)';
+                items[2].action = async () => {
                     const confirmed = await showConfirm({
-                        title: 'Apagar Pastas',
-                        message: `Você apagará ${count} pastas, mas os itens serão movidos para raiz.`,
-                        confirmLabel: 'Confirmar'
+                        title: 'Apagar Tudo',
+                        message: `Tudo dentro de ${count} pastas será apagado PERMANENTEMENTE.`,
+                        confirmLabel: 'Apagar Tudo',
+                        type: 'danger'
                     });
                     if (confirmed) {
                         const itemsToDelete = [...state.selectedItems];
 
-                        // Move items out
                         itemsToDelete.forEach(gid => {
                             const groupType = state.groups.find(g => g.id === gid)?.type;
                             if (!groupType) return;
                             const entities = groupType === 'board' ? state.boards : state.spaces;
                             const groupItems = entities.filter(i => i.groupId === gid);
                             groupItems.forEach(i => {
-                                dispatch({ type: 'MOVE_WORKSPACE_ITEM', payload: { itemType: groupType + 's', itemIds: [i.id], destGroupId: null, destIndex: 0 } });
+                                dispatch({ type: groupType === 'board' ? 'DELETE_BOARD' : 'DELETE_SPACE', payload: i.id });
                             });
                         });
 
@@ -767,38 +814,8 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                             for (const id of itemsToDelete) await deleteGroup(id);
                         } catch (e) { }
                     }
-                }
-            });
-            // Tweak the text of the existing delete option for groups
-            items[2].label = 'Apagar Tudo (Pastas + Itens)';
-            items[2].action = async () => {
-                const confirmed = await showConfirm({
-                    title: 'Apagar Tudo',
-                    message: `Tudo dentro de ${count} pastas será apagado PERMANENTEMENTE.`,
-                    confirmLabel: 'Apagar Tudo',
-                    type: 'danger'
-                });
-                if (confirmed) {
-                    const itemsToDelete = [...state.selectedItems];
-
-                    itemsToDelete.forEach(gid => {
-                        const groupType = state.groups.find(g => g.id === gid)?.type;
-                        if (!groupType) return;
-                        const entities = groupType === 'board' ? state.boards : state.spaces;
-                        const groupItems = entities.filter(i => i.groupId === gid);
-                        groupItems.forEach(i => {
-                            dispatch({ type: groupType === 'board' ? 'DELETE_BOARD' : 'DELETE_SPACE', payload: i.id });
-                        });
-                    });
-
-                    dispatch({ type: 'DELETE_SELECTED_ITEMS' });
-                    if (suppressRealtime) suppressRealtime(5000);
-                    try {
-                        const { deleteGroup } = await import('../../services/workspaceService');
-                        for (const id of itemsToDelete) await deleteGroup(id);
-                    } catch (e) { }
-                }
-            };
+                };
+            }
         }
 
         showContextMenu(e, items, { title: `${count} Selecionados` });
@@ -846,7 +863,11 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         if (state.selectedItems?.length > 1 && state.selectedItems.includes(group.id)) {
             return handleBulkContextMenu(e, 'group');
         }
-        showContextMenu(e, [
+        const items = group.type === 'board' ? state.boards : state.spaces;
+        const groupItems = items.filter(i => i.groupId === group.id);
+        const isEmpty = groupItems.length === 0;
+
+        const menuItems = [
             {
                 label: 'Renomear Pasta',
                 icon: <Edit3 size={15} />,
@@ -858,46 +879,18 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 action: () => handleDuplicateGroup(group)
             },
             { type: 'divider' },
-            {
-                label: 'Apagar Pasta (Manter Itens)',
-                icon: <Trash2 size={15} />,
-                action: async () => {
-                    const confirmed = await showConfirm({
-                        title: 'Apagar Pasta',
-                        message: `A pasta "${group.title}" será apagada, mas os itens serão movidos para fora.`,
-                        confirmLabel: 'Confirmar'
-                    });
-                    if (confirmed) {
-                        try {
-                            const { deleteGroup } = await import('../../services/workspaceService');
-                            // Move items out
-                            const items = group.type === 'board' ? state.boards : state.spaces;
-                            const groupItems = items.filter(i => i.groupId === group.id);
-                            groupItems.forEach(i => {
-                                dispatch({ type: 'MOVE_WORKSPACE_ITEM', payload: { itemType: group.type + 's', itemIds: [i.id], sourceGroupId: group.id, destGroupId: null, destIndex: 0 } });
-                            });
+        ];
 
-                            dispatch({ type: 'DELETE_GROUP', payload: group.id });
-                            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: true } });
-                            if (suppressRealtime) suppressRealtime(3000);
-                            await deleteGroup(group.id);
-                        } catch (err) {
-                            console.error('Failed to delete group', err);
-                        } finally {
-                            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: false } });
-                        }
-                    }
-                },
-            },
-            {
-                label: 'Apagar Tudo (Pasta + Itens)',
+        if (isEmpty) {
+            menuItems.push({
+                label: 'Apagar Pasta',
                 icon: <Trash2 size={15} color="var(--danger)" />,
                 danger: true,
                 action: async () => {
                     const confirmed = await showConfirm({
-                        title: 'Apagar Pasta e Itens',
-                        message: `Tudo dentro de "${group.title}" será apagado PERMANENTEMENTE.`,
-                        confirmLabel: 'Apagar Tudo',
+                        title: 'Apagar Pasta',
+                        message: `Tem certeza que deseja apagar a pasta "${group.title}"?`,
+                        confirmLabel: 'Apagar',
                         type: 'danger'
                     });
                     if (confirmed) {
@@ -905,38 +898,8 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                         try {
                             const { deleteGroup } = await import('../../services/workspaceService');
                             dispatch({ type: 'DELETE_GROUP', payload: group.id });
-
-                            // Delete items locally
-                            const items = group.type === 'board' ? state.boards : state.spaces;
-                            const groupItems = items.filter(i => i.groupId === group.id);
-
-                            const boardIdsToDelete = [];
-                            const spaceIdsToDelete = [];
-
-                            for (const i of groupItems) {
-                                if (group.type === 'board') {
-                                    dispatch({ type: 'DELETE_BOARD', payload: i.id });
-                                    boardIdsToDelete.push(i.id);
-                                }
-                                if (group.type === 'space') {
-                                    dispatch({ type: 'DELETE_SPACE', payload: i.id });
-                                    spaceIdsToDelete.push(i.id);
-                                }
-                            }
-
                             if (suppressRealtime) suppressRealtime(3000);
                             await deleteGroup(group.id);
-
-                            // Trigger backend deletes
-                            if (boardIdsToDelete.length > 0) {
-                                const { deleteBoard } = await import('../../services/boardService');
-                                for (const id of boardIdsToDelete) await deleteBoard(id);
-                            }
-                            if (spaceIdsToDelete.length > 0) {
-                                const { deleteSpace } = await import('../../services/workspaceService');
-                                for (const id of spaceIdsToDelete) await deleteSpace(id);
-                            }
-
                         } catch (err) {
                             console.error('Failed to delete group', err);
                         } finally {
@@ -944,8 +907,97 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                         }
                     }
                 },
-            },
-        ], { title: group.title });
+            });
+        } else {
+            menuItems.push(
+                {
+                    label: 'Apagar Pasta (Manter Itens)',
+                    icon: <Trash2 size={15} />,
+                    action: async () => {
+                        const confirmed = await showConfirm({
+                            title: 'Apagar Pasta',
+                            message: `A pasta "${group.title}" será apagada, mas os itens serão movidos para fora.`,
+                            confirmLabel: 'Confirmar'
+                        });
+                        if (confirmed) {
+                            try {
+                                const { deleteGroup } = await import('../../services/workspaceService');
+                                const idsKept = groupItems.map(i => i.id);
+                                groupItems.forEach(i => {
+                                    dispatch({ type: 'MOVE_WORKSPACE_ITEM', payload: { itemType: group.type + 's', itemIds: [i.id], sourceGroupId: group.id, destGroupId: null, destIndex: 0 } });
+                                });
+
+                                dispatch({ type: 'DELETE_GROUP', payload: group.id });
+                                if (idsKept.length > 0 && setLastReorderedIds) {
+                                    setLastReorderedIds(idsKept);
+                                    setTimeout(() => setLastReorderedIds([]), 650);
+                                }
+                                dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: true } });
+                                if (suppressRealtime) suppressRealtime(3000);
+                                await deleteGroup(group.id);
+                            } catch (err) {
+                                console.error('Failed to delete group', err);
+                            } finally {
+                                dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: false } });
+                            }
+                        }
+                    },
+                },
+                {
+                    label: 'Apagar Tudo (Pasta + Itens)',
+                    icon: <Trash2 size={15} color="var(--danger)" />,
+                    danger: true,
+                    action: async () => {
+                        const confirmed = await showConfirm({
+                            title: 'Apagar Pasta e Itens',
+                            message: `Tudo dentro de "${group.title}" será apagado PERMANENTEMENTE.`,
+                            confirmLabel: 'Apagar Tudo',
+                            type: 'danger'
+                        });
+                        if (confirmed) {
+                            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: true } });
+                            try {
+                                const { deleteGroup } = await import('../../services/workspaceService');
+                                dispatch({ type: 'DELETE_GROUP', payload: group.id });
+
+                                const boardIdsToDelete = [];
+                                const spaceIdsToDelete = [];
+
+                                for (const i of groupItems) {
+                                    if (group.type === 'board') {
+                                        dispatch({ type: 'DELETE_BOARD', payload: i.id });
+                                        boardIdsToDelete.push(i.id);
+                                    }
+                                    if (group.type === 'space') {
+                                        dispatch({ type: 'DELETE_SPACE', payload: i.id });
+                                        spaceIdsToDelete.push(i.id);
+                                    }
+                                }
+
+                                if (suppressRealtime) suppressRealtime(3000);
+                                await deleteGroup(group.id);
+
+                                if (boardIdsToDelete.length > 0) {
+                                    const { deleteBoard } = await import('../../services/boardService');
+                                    for (const id of boardIdsToDelete) await deleteBoard(id);
+                                }
+                                if (spaceIdsToDelete.length > 0) {
+                                    const { deleteSpace } = await import('../../services/workspaceService');
+                                    for (const id of spaceIdsToDelete) await deleteSpace(id);
+                                }
+
+                            } catch (err) {
+                                console.error('Failed to delete group', err);
+                            } finally {
+                                dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: false } });
+                            }
+                        }
+                    },
+                }
+            );
+        }
+
+        showContextMenu(e, menuItems, { title: group.title });
     };
 
     const handleBoardContextMenu = (e, board) => {
@@ -1049,6 +1101,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                     onChange={e => setNewFolderTitle(e.target.value)}
                                     autoFocus
                                     onBlur={() => { if (!newFolderTitle.trim()) setShowNewFolder(false); }}
+                                    onKeyDown={e => { if (e.key === 'Escape') { setShowNewFolder(false); setNewFolderTitle(''); } }}
                                 />
                             </form>
                         )}
@@ -1062,45 +1115,111 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                     onChange={e => setNewBoardTitle(e.target.value)}
                                     autoFocus
                                     onBlur={() => { if (!newBoardTitle.trim()) setShowNewBoard(false); }}
+                                    onKeyDown={e => { if (e.key === 'Escape') { setShowNewBoard(false); setNewBoardTitle(''); } }}
                                 />
                             </form>
                         )}
 
                         <div className="sidebar-boards-lists-wrap">
-                        <Droppable droppableId="groups-board" type="board-group">
-                            {(provided) => (
-                                <div className="sidebar-board-list" {...provided.droppableProps} ref={provided.innerRef}>
-                                    {boardGroups.map((group, index) => (
-                                        <SidebarGroup
-                                            key={group.id}
-                                            group={{ ...group, _isNew: recentlyAddedId === group.id }}
-                                            index={index}
-                                            items={activeBoards.filter(b => b.groupId === group.id).sort((a, b) => a.position - b.position)}
-                                            activeView={activeView}
-                                            activeBoard={state.activeBoard}
-                                            onContextMenu={handleGroupContextMenu}
-                                            onToggleSelection={(e) => handleGroupCheckboxClick(e, group, activeBoards.filter(b => b.groupId === group.id))}
-                                            selectedItems={state.selectedItems}
-                                            editingGroupId={editingGroupId}
-                                            editGroupTitle={editGroupTitle}
-                                            setEditGroupTitle={setEditGroupTitle}
-                                            onRenameSubmit={handleGroupRenameSubmit}
-                                            onRename={handleStartGroupRename}
-                                            onHeaderClick={handleGroupHeaderClick}
-                                            onClickItem={handleGroupExpandToggle}
-                                            isLastGroup={index === boardGroups.length - 1}
-                                            renderItem={(board, bIndex) => (
-                                                <Draggable key={board.id} draggableId={board.id} index={bIndex}>
+                            <Droppable droppableId="groups-board" type="board-group">
+                                {(provided) => (
+                                    <div className="sidebar-board-list" {...provided.droppableProps} ref={provided.innerRef} style={boardGroups.length === 0 ? { minHeight: 0 } : undefined}>
+                                        {boardGroups.map((group, index) => (
+                                            <SidebarGroup
+                                                key={group.id}
+                                                group={{ ...group, _isNew: recentlyAddedId === group.id }}
+                                                index={index}
+                                                items={activeBoards.filter(b => b.groupId === group.id).sort((a, b) => a.position - b.position)}
+                                                activeView={activeView}
+                                                activeBoard={state.activeBoard}
+                                                onContextMenu={handleGroupContextMenu}
+                                                onToggleSelection={(e) => handleGroupCheckboxClick(e, group, activeBoards.filter(b => b.groupId === group.id))}
+                                                selectedItems={state.selectedItems}
+                                                editingGroupId={editingGroupId}
+                                                editGroupTitle={editGroupTitle}
+                                                setEditGroupTitle={setEditGroupTitle}
+                                                onRenameSubmit={handleGroupRenameSubmit}
+                                                onRename={handleStartGroupRename}
+                                                onHeaderClick={handleGroupHeaderClick}
+                                                onClickItem={handleGroupExpandToggle}
+                                                isLastGroup={index === boardGroups.length - 1 && rootBoards.length > 0}
+                                                isJustReordered={lastReorderedIds.includes(group.id)}
+                                                renderItem={(board, bIndex) => (
+                                                    <Draggable key={board.id} draggableId={board.id} index={bIndex}>
+                                                        {(provided, snapshot) => (
+                                                            <div
+                                                                ref={provided.innerRef}
+                                                                {...provided.draggableProps}
+                                                                {...provided.dragHandleProps}
+                                                                className={`sidebar-item board-item ${state.selectedItems?.includes(board.id) ? 'selected' : ''} ${activeView === 'board' && state.activeBoard === board.id ? 'sidebar-item-active' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(board.id) && !snapshot.isDragging ? 'bulk-hidden' : ''} ${recentlyAddedId === board.id ? 'animate-slide-up-jelly' : ''}`}
+                                                                onClick={(e) => handleBoardClick(e, board.id)}
+                                                                onContextMenu={(e) => handleBoardContextMenu(e, board)}
+                                                                onDoubleClick={() => isDesktop && handleStartRename(board)}
+                                                            >
+                                                                <div className={`sidebar-item-inner ${lastReorderedIds.includes(board.id) ? 'sidebar-jelly-reorder' : ''}`}>
+                                                                <div
+                                                                    className={`sidebar-board-checkbox ${state.selectedItems?.includes(board.id) ? 'selected' : ''}`}
+                                                                    title="Selecionar"
+                                                                    onClick={(e) => { e.stopPropagation(); dispatch({ type: 'TOGGLE_SELECTION', payload: { id: board.id, type: 'board' } }); }}
+                                                                >
+                                                                    {state.selectedItems?.includes(board.id) && <Check size={10} strokeWidth={4} />}
+                                                                </div>
+                                                                <span className="sidebar-board-dot" style={{ background: board.color }} />
+                                                                {editingBoardId === board.id ? (
+                                                                    <form onSubmit={(e) => handleRenameSubmit(e, board.id)} className="sidebar-rename-form">
+                                                                        <input autoFocus value={editBoardTitle} onChange={e => setEditBoardTitle(e.target.value)} onBlur={(e) => handleRenameSubmit(e, board.id)} onKeyDown={e => e.key === 'Escape' && setEditingBoardId(null)} />
+                                                                    </form>
+                                                                ) : (
+                                                                    <span className="truncate">{board.emoji} {board.title}</span>
+                                                                )}
+                                                                <div className="board-item-end">
+                                                                    <span className="sidebar-badge-subtle">{board.lists.reduce((acc, l) => acc + l.cards.length, 0)}</span>
+                                                                    <button className="board-item-menu-btn" onClick={(e) => { e.stopPropagation(); handleBoardContextMenu(e, board); }} title="Opções">
+                                                                        <MoreHorizontal size={13} />
+                                                                    </button>
+                                                                </div>
+                                                                {state.isDraggingBulk && snapshot.isDragging && (
+                                                                    <BulkDragFollowers count={state.selectedItems.length} items={allItems.filter(i => state.selectedItems.includes(i.id) && i.id !== board.id)} />
+                                                                )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </Draggable>
+                                                )}
+                                            />
+                                        ))}
+                                        {provided.placeholder}
+                                    </div>
+                                )}
+                            </Droppable>
+
+                            <Droppable droppableId="boards-root" type="board">
+                                {(provided) => {
+                                    const hasFolders = boardGroups.length > 0;
+                                    const hasRootItems = rootBoards.length > 0;
+                                    return (
+                                        <div
+                                            className={`sidebar-board-list ${hasFolders ? `sidebar-root-drop-zone ${hasRootItems ? 'sidebar-root-drop-zone--has-items' : 'sidebar-root-drop-zone--empty'}` : ''}`}
+                                            {...provided.droppableProps}
+                                            ref={provided.innerRef}
+                                            style={{
+                                                minHeight: hasFolders ? (hasRootItems ? 0 : 4) : 10,
+                                                paddingBottom: hasFolders && hasRootItems ? 8 : 0
+                                            }}
+                                        >
+                                            {rootBoards.map((board, index) => (
+                                                <Draggable key={board.id} draggableId={board.id} index={index}>
                                                     {(provided, snapshot) => (
                                                         <div
                                                             ref={provided.innerRef}
                                                             {...provided.draggableProps}
                                                             {...provided.dragHandleProps}
-                                                            className={`sidebar-item board-item ${state.selectedItems?.includes(board.id) ? 'selected' : ''} ${activeView === 'board' && state.activeBoard === board.id ? 'sidebar-item-active' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(board.id) && !snapshot.isDragging ? 'bulk-hidden' : ''}`}
+                                                            className={`sidebar-item board-item ${activeView === 'board' && state.activeBoard === board.id ? 'sidebar-item-active' : ''} ${state.selectedItems?.includes(board.id) ? 'selected' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(board.id) && !snapshot.isDragging ? 'bulk-hidden' : ''} ${recentlyAddedId === board.id ? 'animate-slide-up-jelly' : ''}`}
                                                             onClick={(e) => handleBoardClick(e, board.id)}
                                                             onContextMenu={(e) => handleBoardContextMenu(e, board)}
                                                             onDoubleClick={() => isDesktop && handleStartRename(board)}
                                                         >
+                                                            <div className={`sidebar-item-inner ${lastReorderedIds.includes(board.id) ? 'sidebar-jelly-reorder' : ''}`}>
                                                             <div
                                                                 className={`sidebar-board-checkbox ${state.selectedItems?.includes(board.id) ? 'selected' : ''}`}
                                                                 title="Selecionar"
@@ -1116,81 +1235,30 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                             ) : (
                                                                 <span className="truncate">{board.emoji} {board.title}</span>
                                                             )}
-                                                            <span className="sidebar-badge-subtle">{board.lists.reduce((acc, l) => acc + l.cards.length, 0)}</span>
+                                                            <div className="board-item-end">
+                                                                <span className="sidebar-badge-subtle">{board.lists.reduce((acc, l) => acc + l.cards.length, 0)}</span>
+                                                                <button className="board-item-menu-btn" onClick={(e) => { e.stopPropagation(); handleBoardContextMenu(e, board); }} title="Opções">
+                                                                    <MoreHorizontal size={13} />
+                                                                </button>
+                                                            </div>
                                                             {state.isDraggingBulk && snapshot.isDragging && (
                                                                 <BulkDragFollowers count={state.selectedItems.length} items={allItems.filter(i => state.selectedItems.includes(i.id) && i.id !== board.id)} />
                                                             )}
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </Draggable>
-                                            )}
-                                        />
-                                    ))}
-                                    {provided.placeholder}
-                                </div>
-                            )}
-                        </Droppable>
-
-                        <Droppable droppableId="boards-root" type="board">
-                            {(provided) => {
-                                const hasFolders = boardGroups.length > 0;
-                                const hasRootItems = rootBoards.length > 0;
-                                return (
-                                <div
-                                    className={`sidebar-board-list ${hasFolders ? `sidebar-root-drop-zone ${hasRootItems ? 'sidebar-root-drop-zone--has-items' : 'sidebar-root-drop-zone--empty'}` : ''}`}
-                                    {...provided.droppableProps}
-                                    ref={provided.innerRef}
-                                    style={{
-                                        minHeight: hasFolders ? (hasRootItems ? 0 : 12) : 10,
-                                        paddingTop: 0,
-                                        paddingBottom: hasFolders && hasRootItems ? 8 : 0
-                                    }}
-                                >
-                                    {rootBoards.map((board, index) => (
-                                        <Draggable key={board.id} draggableId={board.id} index={index}>
-                                            {(provided, snapshot) => (
-                                                <div
-                                                    ref={provided.innerRef}
-                                                    {...provided.draggableProps}
-                                                    {...provided.dragHandleProps}
-                                                    className={`sidebar-item board-item ${activeView === 'board' && state.activeBoard === board.id ? 'sidebar-item-active' : ''} ${state.selectedItems?.includes(board.id) ? 'selected' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(board.id) && !snapshot.isDragging ? 'bulk-hidden' : ''}`}
-                                                    onClick={(e) => handleBoardClick(e, board.id)}
-                                                    onContextMenu={(e) => handleBoardContextMenu(e, board)}
-                                                    onDoubleClick={() => isDesktop && handleStartRename(board)}
-                                                >
-                                                    <div
-                                                        className={`sidebar-board-checkbox ${state.selectedItems?.includes(board.id) ? 'selected' : ''}`}
-                                                        title="Selecionar"
-                                                        onClick={(e) => { e.stopPropagation(); dispatch({ type: 'TOGGLE_SELECTION', payload: { id: board.id, type: 'board' } }); }}
-                                                    >
-                                                        {state.selectedItems?.includes(board.id) && <Check size={10} strokeWidth={4} />}
-                                                    </div>
-                                                    <span className="sidebar-board-dot" style={{ background: board.color }} />
-                                                    {editingBoardId === board.id ? (
-                                                        <form onSubmit={(e) => handleRenameSubmit(e, board.id)} className="sidebar-rename-form">
-                                                            <input autoFocus value={editBoardTitle} onChange={e => setEditBoardTitle(e.target.value)} onBlur={(e) => handleRenameSubmit(e, board.id)} onKeyDown={e => e.key === 'Escape' && setEditingBoardId(null)} />
-                                                        </form>
-                                                    ) : (
-                                                        <span className="truncate">{board.emoji} {board.title}</span>
-                                                    )}
-                                                    <span className="sidebar-badge-subtle">{board.lists.reduce((acc, l) => acc + l.cards.length, 0)}</span>
-                                                    {state.isDraggingBulk && snapshot.isDragging && (
-                                                        <BulkDragFollowers count={state.selectedItems.length} items={allItems.filter(i => state.selectedItems.includes(i.id) && i.id !== board.id)} />
-                                                    )}
-                                                </div>
-                                            )}
-                                        </Draggable>
-                                    ))}
-                                    {provided.placeholder}
-                                </div>
-                                );
-                            }}
-                        </Droppable>
+                                            ))}
+                                            {provided.placeholder}
+                                        </div>
+                                    );
+                                }}
+                            </Droppable>
                         </div>
                     </div>
 
                     {/* Spaces section */}
-                    <div className="sidebar-boards-section" style={{ marginTop: '16px' }}>
+                    <div className="sidebar-boards-section" style={{ marginTop: '18px' }}>
                         <div className="sidebar-section-header">
                             <span className="sidebar-section-label">
                                 <Box size={13} /> Spaces
@@ -1214,6 +1282,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                     onChange={e => setNewFolderTitle(e.target.value)}
                                     autoFocus
                                     onBlur={() => { if (!newFolderTitle.trim()) setShowNewFolder(false); }}
+                                    onKeyDown={e => { if (e.key === 'Escape') { setShowNewFolder(false); setNewFolderTitle(''); } }}
                                 />
                             </form>
                         )}
@@ -1227,44 +1296,102 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                     onChange={e => setNewSpaceTitle(e.target.value)}
                                     autoFocus
                                     onBlur={() => { if (!newSpaceTitle.trim()) setShowNewSpace(false); }}
+                                    onKeyDown={e => { if (e.key === 'Escape') { setShowNewSpace(false); setNewSpaceTitle(''); } }}
                                 />
                             </form>
                         )}
 
                         <div className="sidebar-boards-lists-wrap">
-                        <Droppable droppableId="groups-space" type="space-group">
-                            {(provided) => (
-                                <div className="sidebar-board-list" {...provided.droppableProps} ref={provided.innerRef}>
-                                    {spaceGroups.map((group, index) => (
-                                        <SidebarGroup
-                                            key={group.id}
-                                            group={{ ...group, _isNew: recentlyAddedId === group.id }}
-                                            index={index}
-                                            items={activeSpaces.filter(s => s.groupId === group.id).sort((a, b) => a.position - b.position)}
-                                            activeView={activeView}
-                                            activeBoard={state.activeBoard}
-                                            onContextMenu={(e, g) => handleGroupContextMenu(e, g)}
-                                            onToggleSelection={(e) => handleGroupCheckboxClick(e, group, activeSpaces.filter(s => s.groupId === group.id))}
-                                            selectedItems={state.selectedItems}
-                                            editingGroupId={editingGroupId}
-                                            editGroupTitle={editGroupTitle}
-                                            setEditGroupTitle={setEditGroupTitle}
-                                            onRenameSubmit={handleGroupRenameSubmit}
-                                            onRename={handleStartGroupRename}
-                                            onHeaderClick={handleGroupHeaderClick}
-                                            onClickItem={handleGroupExpandToggle}
-                                            isLastGroup={index === spaceGroups.length - 1}
-                                            renderItem={(space, sIndex) => (
-                                                <Draggable key={space.id} draggableId={space.id} index={sIndex}>
+                            <Droppable droppableId="groups-space" type="space-group">
+                                {(provided) => (
+                                    <div className="sidebar-board-list" {...provided.droppableProps} ref={provided.innerRef} style={spaceGroups.length === 0 ? { minHeight: 0 } : undefined}>
+                                        {spaceGroups.map((group, index) => (
+                                            <SidebarGroup
+                                                key={group.id}
+                                                group={{ ...group, _isNew: recentlyAddedId === group.id }}
+                                                index={index}
+                                                items={activeSpaces.filter(s => s.groupId === group.id).sort((a, b) => a.position - b.position)}
+                                                activeView={activeView}
+                                                activeBoard={state.activeBoard}
+                                                onContextMenu={(e, g) => handleGroupContextMenu(e, g)}
+                                                onToggleSelection={(e) => handleGroupCheckboxClick(e, group, activeSpaces.filter(s => s.groupId === group.id))}
+                                                selectedItems={state.selectedItems}
+                                                editingGroupId={editingGroupId}
+                                                editGroupTitle={editGroupTitle}
+                                                setEditGroupTitle={setEditGroupTitle}
+                                                onRenameSubmit={handleGroupRenameSubmit}
+                                                onRename={handleStartGroupRename}
+                                                onHeaderClick={handleGroupHeaderClick}
+                                                onClickItem={handleGroupExpandToggle}
+                                                isLastGroup={index === spaceGroups.length - 1 && rootSpaces.length > 0}
+                                                isJustReordered={lastReorderedIds.includes(group.id)}
+                                                renderItem={(space, sIndex) => (
+                                                    <Draggable key={space.id} draggableId={space.id} index={sIndex}>
+                                                        {(provided, snapshot) => (
+                                                            <div
+                                                                ref={provided.innerRef}
+                                                                {...provided.draggableProps}
+                                                                {...provided.dragHandleProps}
+                                                                className={`sidebar-item board-item ${state.selectedItems?.includes(space.id) ? 'selected' : ''} ${activeView === `space-${space.id}` ? 'sidebar-item-active' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(space.id) && !snapshot.isDragging ? 'bulk-hidden' : ''} ${recentlyAddedId === space.id ? 'animate-slide-up-jelly' : ''}`}
+                                                                onClick={(e) => handleSpaceClick(e, space.id)}
+                                                                onContextMenu={(e) => handleSpaceContextMenu(e, space)}
+                                                            >
+                                                                <div className={`sidebar-item-inner ${lastReorderedIds.includes(space.id) ? 'sidebar-jelly-reorder' : ''}`}>
+                                                                <div
+                                                                    className={`sidebar-board-checkbox ${state.selectedItems?.includes(space.id) ? 'selected' : ''}`}
+                                                                    title="Selecionar"
+                                                                    onClick={(e) => { e.stopPropagation(); dispatch({ type: 'TOGGLE_SELECTION', payload: { id: space.id, type: 'space' } }); }}
+                                                                >
+                                                                    {state.selectedItems?.includes(space.id) && <Check size={10} strokeWidth={4} />}
+                                                                </div>
+                                                                <span className="sidebar-board-dot" style={{ background: space.color || '#9b59b6' }} />
+                                                                <span className="truncate">{space.emoji} {space.title}</span>
+                                                                <div className="board-item-end">
+                                                                    <button className="board-item-menu-btn" onClick={(e) => { e.stopPropagation(); handleSpaceContextMenu(e, space); }} title="Opções">
+                                                                        <MoreHorizontal size={13} />
+                                                                    </button>
+                                                                </div>
+                                                                {state.isDraggingBulk && snapshot.isDragging && (
+                                                                    <BulkDragFollowers count={state.selectedItems.length} items={allItems.filter(i => state.selectedItems.includes(i.id) && i.id !== space.id)} />
+                                                                )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </Draggable>
+                                                )}
+                                            />
+                                        ))}
+                                        {provided.placeholder}
+                                    </div>
+                                )}
+                            </Droppable>
+
+                            <Droppable droppableId="spaces-root" type="space">
+                                {(provided) => {
+                                    const hasFolders = spaceGroups.length > 0;
+                                    const hasRootItems = rootSpaces.length > 0;
+                                    return (
+                                        <div
+                                            className={`sidebar-board-list ${hasFolders ? `sidebar-root-drop-zone ${hasRootItems ? 'sidebar-root-drop-zone--has-items' : 'sidebar-root-drop-zone--empty'}` : ''}`}
+                                            {...provided.droppableProps}
+                                            ref={provided.innerRef}
+                                            style={{
+                                                minHeight: hasFolders ? (hasRootItems ? 0 : 4) : 10,
+                                                paddingBottom: hasFolders && hasRootItems ? 8 : 0
+                                            }}
+                                        >
+                                            {rootSpaces.map((space, index) => (
+                                                <Draggable key={space.id} draggableId={space.id} index={index}>
                                                     {(provided, snapshot) => (
                                                         <div
                                                             ref={provided.innerRef}
                                                             {...provided.draggableProps}
                                                             {...provided.dragHandleProps}
-                                                            className={`sidebar-item board-item ${state.selectedItems?.includes(space.id) ? 'selected' : ''} ${activeView === `space-${space.id}` ? 'sidebar-item-active' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(space.id) && !snapshot.isDragging ? 'bulk-hidden' : ''}`}
+                                                            className={`sidebar-item board-item ${activeView === `space-${space.id}` ? 'sidebar-item-active' : ''} ${state.selectedItems?.includes(space.id) ? 'selected' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(space.id) && !snapshot.isDragging ? 'bulk-hidden' : ''} ${recentlyAddedId === space.id ? 'animate-slide-up-jelly' : ''}`}
                                                             onClick={(e) => handleSpaceClick(e, space.id)}
                                                             onContextMenu={(e) => handleSpaceContextMenu(e, space)}
                                                         >
+                                                            <div className={`sidebar-item-inner ${lastReorderedIds.includes(space.id) ? 'sidebar-jelly-reorder' : ''}`}>
                                                             <div
                                                                 className={`sidebar-board-checkbox ${state.selectedItems?.includes(space.id) ? 'selected' : ''}`}
                                                                 title="Selecionar"
@@ -1274,72 +1401,29 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                             </div>
                                                             <span className="sidebar-board-dot" style={{ background: space.color || '#9b59b6' }} />
                                                             <span className="truncate">{space.emoji} {space.title}</span>
+                                                            <div className="board-item-end">
+                                                                <button className="board-item-menu-btn" onClick={(e) => { e.stopPropagation(); handleSpaceContextMenu(e, space); }} title="Opções">
+                                                                    <MoreHorizontal size={13} />
+                                                                </button>
+                                                            </div>
                                                             {state.isDraggingBulk && snapshot.isDragging && (
                                                                 <BulkDragFollowers count={state.selectedItems.length} items={allItems.filter(i => state.selectedItems.includes(i.id) && i.id !== space.id)} />
                                                             )}
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </Draggable>
-                                            )}
-                                        />
-                                    ))}
-                                    {provided.placeholder}
-                                </div>
-                            )}
-                        </Droppable>
-
-                        <Droppable droppableId="spaces-root" type="space">
-                            {(provided) => {
-                                const hasFolders = spaceGroups.length > 0;
-                                const hasRootItems = rootSpaces.length > 0;
-                                return (
-                                <div
-                                    className={`sidebar-board-list ${hasFolders ? `sidebar-root-drop-zone ${hasRootItems ? 'sidebar-root-drop-zone--has-items' : 'sidebar-root-drop-zone--empty'}` : ''}`}
-                                    {...provided.droppableProps}
-                                    ref={provided.innerRef}
-                                    style={{
-                                        minHeight: hasFolders ? (hasRootItems ? 0 : 12) : 10,
-                                        paddingTop: 0,
-                                        paddingBottom: hasFolders && hasRootItems ? 8 : 0
-                                    }}
-                                >
-                                    {rootSpaces.map((space, index) => (
-                                        <Draggable key={space.id} draggableId={space.id} index={index}>
-                                            {(provided, snapshot) => (
-                                                <div
-                                                    ref={provided.innerRef}
-                                                    {...provided.draggableProps}
-                                                    {...provided.dragHandleProps}
-                                                    className={`sidebar-item board-item ${activeView === `space-${space.id}` ? 'sidebar-item-active' : ''} ${state.selectedItems?.includes(space.id) ? 'selected' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(space.id) && !snapshot.isDragging ? 'bulk-hidden' : ''}`}
-                                                    onClick={(e) => handleSpaceClick(e, space.id)}
-                                                    onContextMenu={(e) => handleSpaceContextMenu(e, space)}
-                                                >
-                                                    <div
-                                                        className={`sidebar-board-checkbox ${state.selectedItems?.includes(space.id) ? 'selected' : ''}`}
-                                                        title="Selecionar"
-                                                        onClick={(e) => { e.stopPropagation(); dispatch({ type: 'TOGGLE_SELECTION', payload: { id: space.id, type: 'space' } }); }}
-                                                    >
-                                                        {state.selectedItems?.includes(space.id) && <Check size={10} strokeWidth={4} />}
-                                                    </div>
-                                                    <span className="sidebar-board-dot" style={{ background: space.color || '#9b59b6' }} />
-                                                    <span className="truncate">{space.emoji} {space.title}</span>
-                                                    {state.isDraggingBulk && snapshot.isDragging && (
-                                                        <BulkDragFollowers count={state.selectedItems.length} items={allItems.filter(i => state.selectedItems.includes(i.id) && i.id !== space.id)} />
-                                                    )}
-                                                </div>
-                                            )}
-                                        </Draggable>
-                                    ))}
-                                    {provided.placeholder}
-                                </div>
-                                );
-                            }}
-                        </Droppable>
+                                            ))}
+                                            {provided.placeholder}
+                                        </div>
+                                    );
+                                }}
+                            </Droppable>
                         </div>
                     </div>
 
                     {/* RECURSOS section */}
-                    <nav className="sidebar-nav">
+                    <nav className="sidebar-nav" style={{ marginTop: '18px' }}>
                         <div className="sidebar-section-label">{t.resources}</div>
                         <button
                             className="sidebar-item"

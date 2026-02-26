@@ -695,6 +695,7 @@ export function AppProvider({ children }) {
     useEffect(() => { userIdRef.current = userId; }, [userId]);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [recentlyAddedId, setRecentlyAddedId] = useState(null);
+    const [lastReorderedIds, setLastReorderedIds] = useState([]);
     const [state, dispatch] = useReducer(appReducer, initialState);
     const stateRef = useRef(state);
     const initialLoadDone = useRef(false);
@@ -1221,6 +1222,8 @@ export function AppProvider({ children }) {
             type: 'MOVE_WORKSPACE_ITEM',
             payload: { itemType, itemIds, destGroupId, destIndex, sourceGroupIds: payloadSourceGroupIds }
         });
+        setLastReorderedIds(itemIds);
+        setTimeout(() => setLastReorderedIds([]), 650);
 
         if (isBulk) {
             dispatch({ type: 'CLEAR_SELECTION' });
@@ -1407,6 +1410,7 @@ export function AppProvider({ children }) {
             isSidebarOpen, setIsSidebarOpen,
             confirmConfig, showConfirm,
             recentlyAddedId, setRecentlyAddedId,
+            lastReorderedIds, setLastReorderedIds,
             persistBoard,
             saveAllPending,
             suppressRealtime,

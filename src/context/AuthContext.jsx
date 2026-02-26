@@ -66,6 +66,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [mfaChallengeId, setMfaChallengeId] = useState(null);
   const [authError, setAuthError] = useState('');
+  const [pendingSignupEmail, setPendingSignupEmail] = useState(null);
 
   const profileRef = useRef(null);
 
@@ -182,12 +183,15 @@ export function AuthProvider({ children }) {
         return;
       }
 
-      if (session?.user) {
+      // Nunca tratar como logado usuário com e-mail não confirmado (deve colar código na AuthPage)
+      if (session?.user && session.user.email_confirmed_at) {
         try {
           await refreshUser(session.user);
         } catch (err) {
           console.error('[Auth] onAuthStateChange refreshUser error:', err);
         }
+      } else if (session?.user && !session.user.email_confirmed_at) {
+        console.log('[Auth] onAuthStateChange: usuário sem e-mail confirmado — mantendo tela de login para colar código.');
       }
     });
 
@@ -322,6 +326,7 @@ export function AuthProvider({ children }) {
       if (data?.user && (!data?.session || !data.user.email_confirmed_at)) {
         setLoading(false);
         setAuthError('');
+        setPendingSignupEmail(email);
         return { success: true, pendingEmailConfirmation: true };
       }
       // Com sessão e e-mail confirmado = conta criada e já logado
@@ -359,6 +364,7 @@ export function AuthProvider({ children }) {
         return { success: false, error: msg };
       }
       if (data?.session?.user) {
+        setPendingSignupEmail(null);
         await refreshUser(data.session.user);
         setLoading(false);
         return { success: true };
@@ -379,6 +385,7 @@ export function AuthProvider({ children }) {
     setProfile(null);
     setMfaChallengeId(null);
     setAuthError('');
+    setPendingSignupEmail(null);
   };
 
   const confirmLogout = () => {
@@ -497,6 +504,8 @@ export function AuthProvider({ children }) {
     loading,
     mfaChallengeId,
     authError,
+    pendingSignupEmail,
+    clearPendingSignupEmail: () => setPendingSignupEmail(null),
     clearAuthError: () => setAuthError(''),
     login,
     verifyMfa,

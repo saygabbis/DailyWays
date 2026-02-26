@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { Folder, FolderOpen, MoreHorizontal, Edit3, Trash2, Check } from 'lucide-react';
 
-export default function SidebarGroup({ group, index, items, activeView, activeBoard, onContextMenu, onToggleSelection, selectedItems = [], isDraggingBulk = false, onRename, onClickItem, onHeaderClick, renderItem, editingGroupId, editGroupTitle, setEditGroupTitle, onRenameSubmit, isLastGroup = false }) {
+export default function SidebarGroup({ group, index, items, activeView, activeBoard, onContextMenu, onToggleSelection, selectedItems = [], isDraggingBulk = false, onRename, onClickItem, onHeaderClick, renderItem, editingGroupId, editGroupTitle, setEditGroupTitle, onRenameSubmit, isLastGroup = false, isJustReordered = false }) {
     // Folders should always be toggleable. We just consider it "visually closed" if it's explicitly collapsed.
     const effectiveIsExpanded = Boolean(group.isExpanded);
     const isEditing = editingGroupId === group.id;
@@ -26,6 +26,7 @@ export default function SidebarGroup({ group, index, items, activeView, activeBo
                     {...provided.draggableProps}
                     className={`sidebar-group ${snapshot.isDragging ? 'dragging' : ''} ${group._isNew ? 'group-new' : ''}`}
                 >
+                    <div className={`sidebar-group-inner ${isJustReordered ? 'sidebar-jelly-reorder' : ''}`}>
                     <Droppable droppableId={`group-${group.id}`} type={group.type}>
                         {(dropProvided, dropSnapshot) => {
                             const showContent = effectiveIsExpanded || dropSnapshot.isDraggingOver;
@@ -109,6 +110,7 @@ export default function SidebarGroup({ group, index, items, activeView, activeBo
                             );
                         }}
                     </Droppable>
+                    </div>
                 </div>
             )}
         </Draggable>
