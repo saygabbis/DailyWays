@@ -72,11 +72,15 @@ export default function BoardDetailsModal({ board, onClose }) {
                             {DEFAULT_BOARD_COLORS.map((c, i) => (
                                 <button
                                     key={i}
-                                    className={`settings-accent-btn ${color === c ? 'active' : ''}`}
+                                    className={`settings-accent-btn ${color === c ? 'active' : ''} ${c === null ? 'settings-accent-none' : ''}`}
                                     onClick={() => setColor(c)}
-                                    style={{ background: c }}
+                                    style={c ? { background: c } : {}}
                                 >
-                                    {color === c && <div className="active-check">✓</div>}
+                                    {c === null ? (
+                                        <span className="settings-accent-none-label">—</span>
+                                    ) : (
+                                        color === c && <div className="active-check">✓</div>
+                                    )}
                                 </button>
                             ))}
                         </div>

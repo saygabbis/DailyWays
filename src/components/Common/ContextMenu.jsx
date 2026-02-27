@@ -8,6 +8,19 @@ export function ContextMenuProvider({ children }) {
     const [menu, setMenu] = useState(null);
     const menuRef = useRef(null);
 
+    const hexToRgb = (hex) => {
+        if (!hex || typeof hex !== 'string') return null;
+        const h = hex.trim();
+        if (!h.startsWith('#')) return null;
+        const s = h.slice(1);
+        if (s.length !== 6) return null;
+        const r = parseInt(s.slice(0, 2), 16);
+        const g = parseInt(s.slice(2, 4), 16);
+        const b = parseInt(s.slice(4, 6), 16);
+        if ([r, g, b].some((v) => Number.isNaN(v))) return null;
+        return { r, g, b };
+    };
+
     const showContextMenu = useCallback((e, items, options = {}) => {
         e.preventDefault();
         e.stopPropagation();
@@ -93,7 +106,20 @@ export function ContextMenuProvider({ children }) {
                 <div
                     ref={menuRef}
                     className="context-menu animate-scale-in"
-                    style={{ left: menu.x, top: menu.y }}
+                    style={{
+                        left: menu.x,
+                        top: menu.y,
+                        ...(menu.options?.tint && (() => {
+                            const rgb = hexToRgb(menu.options.tint);
+                            if (!rgb) return {};
+                            // Fundo base bem escuro vem do CSS; aqui só adicionamos um brilho de cor.
+                            return {
+                                '--ctx-hover-bg': `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.22)`,
+                                borderColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.55)`,
+                                backgroundImage: `linear-gradient(135deg, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.18), transparent)`,
+                            };
+                        })())
+                    }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     {menu.options.title && (

@@ -1,2 +1,3 @@
-// Desative temporariamente até corrigir a configuração Azure no Supabase.
-export const ENABLE_MICROSOFT_LOGIN = false;
+// Para o login Microsoft funcionar: configure no Supabase (Auth > Providers > Azure)
+// o Redirect URI, Application (client) ID e Client secret do app Azure AD.
+export const ENABLE_MICROSOFT_LOGIN = true;

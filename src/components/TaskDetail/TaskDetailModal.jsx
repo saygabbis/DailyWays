@@ -27,6 +27,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const [recurrence, setRecurrence] = useState(liveCard.recurrence || 'none');
     const [myDay, setMyDay] = useState(liveCard.myDay);
     const [labels, setLabels] = useState(liveCard.labels || []);
+    const [cardColor, setCardColor] = useState(liveCard.color || null);
     const [newSubtask, setNewSubtask] = useState('');
     const [editingSubtaskId, setEditingSubtaskId] = useState(null);
     const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('');
@@ -58,7 +59,8 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                         dueDate: dueDate || null,
                         startDate: startDate || null,
                         recurrence: recurrence === 'none' ? null : recurrence,
-                        myDay, labels
+                        myDay, labels,
+                        color: cardColor || null,
                     }
                 },
             });
@@ -66,7 +68,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
             persistBoard(boardId);
         }, 300);
         return () => clearTimeout(timeout);
-    }, [title, description, priority, dueDate, myDay, labels]);
+    }, [title, description, priority, dueDate, myDay, labels, cardColor]);
 
     const handleDelete = async () => {
         const confirmed = await showConfirm({
@@ -177,6 +179,14 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         { value: 'urgent', label: 'Urgente', color: '#ef4444' },
     ];
 
+    useEffect(() => {
+        const onKey = (e) => {
+            if (e.key === 'Escape') onClose();
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [onClose]);
+
     return (
         <>
             <div className="modal-backdrop" onClick={onClose} />
@@ -217,6 +227,30 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                             <Sun size={16} />
                             <span>{myDay ? 'Meu Dia ✓' : 'Meu Dia'}</span>
                         </button>
+                    </div>
+
+                    {/* Card color */}
+                    <div className="task-detail-field" style={{ marginTop: 10 }}>
+                        <label><Tag size={15} /> Cor do card</label>
+                        <div className="task-detail-color-row">
+                            {[null, '#6b7280', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899', '__glass__'].map((c) => {
+                                const isGlass = c === '__glass__';
+                                const key = c ?? (isGlass ? 'glass' : 'none');
+                                const isActive = cardColor === c;
+                                return (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        className={`task-detail-color-chip ${isActive ? 'active' : ''} ${!c ? 'none' : ''} ${isGlass ? 'glass' : ''}`}
+                                        style={!isGlass && c ? { background: c } : {}}
+                                        title={isGlass ? 'Vidro (usa a cor da lista)' : (c ?? 'Sem cor')}
+                                        onClick={() => setCardColor(c)}
+                                    >
+                                        {isGlass && <span className="task-detail-color-glass-dot" />}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
 
                     {/* Fields Grid */}

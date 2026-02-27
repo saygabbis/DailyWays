@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
-import { Folder, FolderOpen, MoreHorizontal, Edit3, Trash2, Check } from 'lucide-react';
+import { Folder, FolderOpen, MoreHorizontal, Check, Music, Box, Star, Tag, Briefcase, BookOpen } from 'lucide-react';
 
 export default function SidebarGroup({ group, index, items, activeView, activeBoard, onContextMenu, onToggleSelection, selectedItems = [], isDraggingBulk = false, onRename, onClickItem, onHeaderClick, renderItem, editingGroupId, editGroupTitle, setEditGroupTitle, onRenameSubmit, isLastGroup = false, isJustReordered = false }) {
     // Folders should always be toggleable. We just consider it "visually closed" if it's explicitly collapsed.
@@ -17,6 +17,17 @@ export default function SidebarGroup({ group, index, items, activeView, activeBo
 
     const hasSelectedItems = items.length > 0 && items.every(i => selectedItems?.includes(i.id));
     const isFolderItselfSelected = selectedItems?.includes(group.id);
+    const IconForGroup = useMemo(() => {
+        const map = {
+            music: Music,
+            box: Box,
+            star: Star,
+            tag: Tag,
+            briefcase: Briefcase,
+            book: BookOpen,
+        };
+        return group?.icon ? map[group.icon] ?? null : null;
+    }, [group?.icon]);
 
     return (
         <Draggable draggableId={group.id} index={index}>
@@ -54,9 +65,19 @@ export default function SidebarGroup({ group, index, items, activeView, activeBo
                                             {hasSelectedItems && !isFolderItselfSelected && <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', fontSize: '11px', fontWeight: 800 }}>–</span>}
                                         </div>
 
-                                        <span className="sidebar-group-icon">
-                                            {effectiveIsExpanded ? <FolderOpen size={16} /> : (items.length > 0 ? <Folder size={16} fill="currentColor" /> : <Folder size={16} />)}
+                                        {/* Cor da pasta aplicada direto no ícone principal */}
+                                        <span
+                                            className="sidebar-group-icon"
+                                            style={group.color ? { color: group.color } : undefined}
+                                        >
+                                            {effectiveIsExpanded ? <FolderOpen size={16} /> : <Folder size={16} />}
                                         </span>
+
+                                        {IconForGroup ? (
+                                            <span className="sidebar-group-custom-icon" title="Ícone da pasta">
+                                                <IconForGroup size={14} />
+                                            </span>
+                                        ) : null}
 
                                         {isEditing ? (
                                             <form onSubmit={(e) => { e.preventDefault(); onRenameSubmit(group.id); }} className="sidebar-rename-form" onClick={(e) => e.stopPropagation()}>

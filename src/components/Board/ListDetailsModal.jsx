@@ -26,6 +26,14 @@ export default function ListDetailsModal({ list, boardId, onSave, onClose }) {
         setIsCompletionList(list?.isCompletionList ?? false);
     }, [list]);
 
+    useEffect(() => {
+        const onKey = (e) => {
+            if (e.key === 'Escape') onClose();
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [onClose]);
+
     const handleSubmit = (e) => {
         e.preventDefault();
         onSave({ title: title.trim() || list.title, color: color || null, isCompletionList });

@@ -8,11 +8,12 @@ import { useRadio } from '../../context/RadioContext';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import SidebarGroup from './SidebarGroup';
+import GroupDetailsModal from './GroupDetailsModal';
 import {
     Sun, Star, CalendarDays, LayoutGrid, Plus, LogOut,
     ChevronLeft, Settings, HelpCircle,
     Edit3, Trash2, Copy, Palette, Focus, LayoutDashboard,
-    MoreHorizontal, Music, Box, FolderPlus, Check, Folder
+    MoreHorizontal, Music, Box, FolderPlus, Check, Folder, Settings2
 } from 'lucide-react';
 import { useContextMenu } from '../Common/ContextMenu';
 import logoWhite from '../../assets/Logo - Branco.png';
@@ -137,6 +138,8 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
     const [editingGroupId, setEditingGroupId] = useState(null);
     const [editGroupTitle, setEditGroupTitle] = useState('');
     const [recentlyAddedId, setRecentlyAddedId] = useState(null);
+    const [groupDetailsOpen, setGroupDetailsOpen] = useState(false);
+    const [groupDetailsTarget, setGroupDetailsTarget] = useState(null);
     const [detailsBoard, setDetailsBoard] = useState(null);
 
     // Resizable sidebar
@@ -997,18 +1000,47 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
             );
         }
 
-        showContextMenu(e, menuItems, { title: group.title });
+        // Add details entry (cor/ícone)
+        menuItems.unshift({
+            label: 'Detalhes da pasta',
+            icon: <Settings2 size={15} />,
+            action: () => {
+                setGroupDetailsTarget(group);
+                setGroupDetailsOpen(true);
+            }
+        }, { type: 'divider' });
+
+        showContextMenu(e, menuItems, { title: group.title, tint: group.color || null });
     };
 
     const handleBoardContextMenu = (e, board) => {
         if (state.selectedItems?.length > 1 && state.selectedItems.includes(board.id)) {
             return handleBulkContextMenu(e, 'board');
         }
-        showContextMenu(e, getBoardContextItems(board), { title: board.title });
+        showContextMenu(e, getBoardContextItems(board), { title: board.title, tint: board.color || null });
     };
 
     return (
         <>
+            {groupDetailsOpen && (
+                <GroupDetailsModal
+                    group={groupDetailsTarget}
+                    onClose={() => { setGroupDetailsOpen(false); setGroupDetailsTarget(null); }}
+                    onSave={async (updates) => {
+                        if (!groupDetailsTarget?.id) return;
+                        const groupId = groupDetailsTarget.id;
+                        dispatch({ type: 'UPDATE_GROUP', payload: { id: groupId, updates } });
+                        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: true } });
+                        if (suppressRealtime) suppressRealtime(2000);
+                        try {
+                            const { updateGroup } = await import('../../services/workspaceService');
+                            await updateGroup(groupId, updates);
+                        } finally {
+                            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: false } });
+                        }
+                    }}
+                />
+            )}
             {isOpen && !isDesktop && <div className="sidebar-overlay" onClick={onClose} />}
             <aside
                 ref={sidebarRef}
@@ -1175,7 +1207,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                                 <div className="board-item-end">
                                                                     <span className="sidebar-badge-subtle">{board.lists.reduce((acc, l) => acc + l.cards.length, 0)}</span>
                                                                     <button className="board-item-menu-btn" onClick={(e) => { e.stopPropagation(); handleBoardContextMenu(e, board); }} title="Opções">
-                                                                        <MoreHorizontal size={13} />
+                                                                        <MoreHorizontal size={13} className="rotate-90" />
                                                                     </button>
                                                                 </div>
                                                                 {state.isDraggingBulk && snapshot.isDragging && (
@@ -1238,7 +1270,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                             <div className="board-item-end">
                                                                 <span className="sidebar-badge-subtle">{board.lists.reduce((acc, l) => acc + l.cards.length, 0)}</span>
                                                                 <button className="board-item-menu-btn" onClick={(e) => { e.stopPropagation(); handleBoardContextMenu(e, board); }} title="Opções">
-                                                                    <MoreHorizontal size={13} />
+                                                                    <MoreHorizontal size={13} className="rotate-90" />
                                                                 </button>
                                                             </div>
                                                             {state.isDraggingBulk && snapshot.isDragging && (

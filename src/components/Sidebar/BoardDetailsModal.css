@@ -73,6 +73,18 @@
     transform: scale(1.1);
 }
 
+.settings-accent-none {
+    background: transparent;
+    border-style: dashed;
+    border-color: var(--border-color);
+    color: var(--text-tertiary);
+    font-size: 1.2rem;
+}
+
+.settings-accent-none-label {
+    opacity: 0.7;
+}
+
 .active-check {
     color: white;
     font-weight: bold;

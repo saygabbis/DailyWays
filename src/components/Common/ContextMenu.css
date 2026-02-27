@@ -5,18 +5,19 @@
     z-index: 9999;
     min-width: 200px;
     max-width: 280px;
+    /* Base neutra; quando há tint, o JS injeta gradiente/borda por cima */
     background: var(--bg-secondary);
     border: 1.5px solid var(--border-color);
     border-radius: var(--radius-lg);
     padding: var(--space-xs);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2), 0 0 0 1px var(--glass-border);
-    backdrop-filter: blur(12px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--glass-border);
+    backdrop-filter: blur(14px) saturate(1.08);
 }
 
 .context-menu-title {
     font-size: var(--font-size-xs);
     font-weight: 700;
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     padding: var(--space-sm) var(--space-md);
@@ -47,7 +48,7 @@
 }
 
 .context-menu-item:hover {
-    background: var(--bg-hover);
+    background: var(--ctx-hover-bg, var(--bg-hover));
 }
 
 .context-menu-item:disabled {
@@ -71,7 +72,7 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
 }
 
 .context-menu-label {
@@ -80,7 +81,7 @@
 
 .context-menu-shortcut {
     font-size: var(--font-size-xs);
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
     font-weight: 600;
 }
 

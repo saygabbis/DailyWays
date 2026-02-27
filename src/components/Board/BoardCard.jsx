@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useContextMenu, useLongPress } from '../Common/ContextMenu';
-import { Calendar, CheckSquare, AlertCircle, Sun, Edit3, Trash2, Star, Tag, Copy, ArrowRight, Circle, CheckCircle2 } from 'lucide-react';
+import { Calendar, CheckSquare, AlertCircle, Sun, Edit3, Trash2, Star, Tag, Copy, ArrowRight, Circle, CheckCircle2, MoreHorizontal, FileText } from 'lucide-react';
 import { format, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-export default function BoardCard({ card, boardId, listId, isDragging, onClick }) {
+export default function BoardCard({ card, boardId, listId, listColor, isDragging, onClick }) {
     const { LABEL_COLORS, dispatch, persistBoard, showConfirm } = useApp();
     const { showContextMenu } = useContextMenu();
     const isCompleted = card.completed || false;
@@ -31,6 +31,8 @@ export default function BoardCard({ card, boardId, listId, isDragging, onClick }
     };
 
     const isOverdue = card.dueDate && isPast(new Date(card.dueDate)) && !isToday(new Date(card.dueDate));
+    const hasDescription = Boolean(card.description && card.description.trim().length > 0);
+    const effectiveColor = card.color === '__glass__' ? (listColor || null) : card.color || null;
 
     const getContextMenuItems = () => [
         {
@@ -105,7 +107,7 @@ export default function BoardCard({ card, boardId, listId, isDragging, onClick }
     ];
 
     const handleContextMenu = (e) => {
-        showContextMenu(e, getContextMenuItems(), { title: card.title });
+        showContextMenu(e, getContextMenuItems(), { title: card.title, tint: effectiveColor || null });
     };
 
     const longPressProps = useLongPress(handleContextMenu);
@@ -125,6 +127,8 @@ export default function BoardCard({ card, boardId, listId, isDragging, onClick }
             onClick={onClick}
             onContextMenu={handleContextMenu}
             {...longPressProps}
+            style={effectiveColor ? { '--card-accent': effectiveColor } : {}}
+            data-colored={effectiveColor ? 'true' : undefined}
         >
             <div className={`board-card-inner ${shouldAnimate ? 'animate-slide-up-jelly' : ''}`}>
                 {/* Labels */}
@@ -154,10 +158,23 @@ export default function BoardCard({ card, boardId, listId, isDragging, onClick }
                         {isCompleted ? <CheckCircle2 size={18} /> : <Circle size={18} />}
                     </button>
                     <div className="board-card-title">{card.title}</div>
+                    <button
+                        type="button"
+                        className="board-card-menu-btn"
+                        title="Opções"
+                        onClick={(e) => { e.stopPropagation(); handleContextMenu(e); }}
+                    >
+                        <MoreHorizontal size={16} className="rotate-90" />
+                    </button>
                 </div>
 
                 {/* Meta */}
                 <div className="board-card-meta">
+                    {hasDescription && (
+                        <span className="board-card-desc" title="Este card tem descrição">
+                            <FileText size={12} />
+                        </span>
+                    )}
                     {card.priority && card.priority !== 'none' && (
                         <span className="board-card-priority" style={{ color: priorityConfig[card.priority]?.color }}>
                             <AlertCircle size={12} />

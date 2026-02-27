@@ -29,6 +29,8 @@ const DEFAULT_BOARD_COLORS = [
     'linear-gradient(135deg, #8b5cf6, #ec4899)',
     'linear-gradient(135deg, #14b8a6, #06b6d4)',
     'linear-gradient(135deg, #f97316, #fbbf24)',
+    '#111827', // sólido escuro
+    null,      // sem cor
 ];
 
 const initialState = {

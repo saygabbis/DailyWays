@@ -439,6 +439,18 @@
     box-shadow: var(--shadow-card);
 }
 
+/* ── Colored Card: full background theming (similar to lists) ── */
+.board-card[data-colored="true"] {
+    background: color-mix(in srgb, var(--card-accent) 10%, var(--bg-card));
+    border-color: color-mix(in srgb, var(--card-accent) 35%, var(--border-color));
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--card-accent) 12%, transparent);
+}
+
+.board-card[data-colored="true"]:hover {
+    border-color: color-mix(in srgb, var(--card-accent) 55%, var(--border-color));
+    box-shadow: 0 6px 22px color-mix(in srgb, var(--card-accent) 16%, transparent);
+}
+
 .board-card-inner {
     transition: transform var(--transition-fast) var(--ease-out-soft);
     display: flex;
@@ -505,6 +517,34 @@
     align-items: flex-start;
     gap: var(--space-sm);
     margin-bottom: var(--space-xs);
+}
+
+.board-card-menu-btn {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+
+.board-card:hover .board-card-menu-btn {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.board-card-menu-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    transform: scale(1.08);
+}
+
+.board-card-desc {
+    color: var(--text-tertiary);
 }
 
 .board-card-title {

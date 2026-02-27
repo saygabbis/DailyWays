@@ -51,14 +51,16 @@ Você **pode usar seu e-mail pessoal** (ex.: gaffonsoxx@gmail.com) ou criar uma 
    - `supabase/migrations/20250218140000_username_and_has_password.sql` (coluna `has_password`, username do signup no perfil, login por username case-insensitive). Se você já tem usuários, essa migration também corrige o username deles a partir do que foi enviado no cadastro (ex.: **saygabbis** em vez da parte do e-mail).
 
 7. **Microsoft (Azure)** — checklist para evitar `server_error` / "Unable to exchange external code":
-   - **Supabase**: **Authentication > Providers > Azure** — **Client ID** (Application (client) ID do Azure) e **Client secret** (o **Value** do secret, não o Secret ID; confira que não expirou).
-   - **Supabase**: **Authentication > URL Configuration** — a URL do seu app (ex.: `http://localhost:5173`) deve estar em **Redirect URLs** (e **Site URL** em dev).
+   - **Importante**: no Azure, a **Redirect URI** deve ser a **URL de callback do Supabase**, não a do seu site (não use `http://localhost:5173` no Azure).
+   - **Onde pegar a URL de callback**: no **Supabase** > **Authentication** > **Providers** > **Azure** — o painel costuma mostrar a URL de callback (ex.: `https://xxxxx.supabase.co/auth/v1/callback`). **Copie essa URL** e use no Azure como Redirect URI.
+   - **Supabase**: **Authentication > Providers > Azure** — preencha **Client ID** (Application (client) ID do Azure) e **Client secret** (o **Value** do secret do Azure, não o Secret ID; confira que não expirou).
+   - **Supabase**: **Authentication > URL Configuration** — a URL do seu app (ex.: `http://localhost:5173`) deve estar em **Redirect URLs** (e **Site URL** em dev). Isso é para o Supabase redirecionar o usuário de volta ao seu app depois do login; não é a mesma coisa que a Redirect URI do Azure.
    - **Azure** (portal.azure.com) > **App registrations** > seu app:
      - **Authentication** > **Platform configurations** > **Web** (não SPA).
-     - **Redirect URI**: adicione **exatamente** (sem espaços, sem barra no final): `https://<project-ref>.supabase.co/auth/v1/callback` (o `<project-ref>` está na URL do projeto Supabase, ex.: `https://abcdefghij.supabase.co` → ref é `abcdefghij`).
-     - **Certificates & secrets**: use o **Value** do client secret (não o Secret ID) no Supabase; se criou um secret novo, use o valor assim que gerado (ele só aparece uma vez).
-     - **API permissions** (opcional mas recomendado): Microsoft Graph > Delegated > `User.Read`, `email`, `openid`, `profile`.
-   - Se ainda der erro: confira que no Azure a Redirect URI está **exatamente** igual à que o Supabase mostra no painel do provider Azure (copie/cole).
+     - **Redirect URI**: adicione a URL de callback do Supabase que você copiou (ex.: `https://<project-ref>.supabase.co/auth/v1/callback`). Sem barra no final, sem espaços, exatamente igual ao que o Supabase mostra.
+     - **Certificates & secrets**: o valor que você cola no Supabase é o **Value** do client secret (não o Secret ID). Ao criar um secret novo, copie o valor na hora (ele só aparece uma vez). Se o secret expirou, crie outro no Azure e atualize no Supabase.
+     - **API permissions** (recomendado): Microsoft Graph > Delegated > `User.Read`, `email`, `openid`, `profile`.
+   - **Se ainda der "Unable to exchange external code"**: (1) Redirect URI no Azure = exatamente a URL que o Supabase mostra em Providers > Azure; (2) Client secret no Supabase = Value do secret (não Secret ID); (3) Secret não expirado; (4) No Azure, plataforma é **Web**, não SPA.
 
 Depois disso, o app estará pronto para uso.
 

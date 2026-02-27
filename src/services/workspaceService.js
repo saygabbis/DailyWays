@@ -22,6 +22,8 @@ export async function fetchGroups(userId) {
         type: g.type,
         position: g.position,
         isExpanded: g.is_expanded,
+        color: g.color ?? null,
+        icon: g.icon ?? null,
         createdAt: g.created_at
     }));
     return { data: groups, error: null };
@@ -34,7 +36,9 @@ export async function insertGroup(userId, group) {
         title: group.title,
         type: group.type,
         position: group.position ?? 0,
-        is_expanded: group.isExpanded ?? true
+        is_expanded: group.isExpanded ?? true,
+        color: group.color ?? null,
+        icon: group.icon ?? null,
     });
     if (error) return { success: false, error: error.message };
     return { success: true };
@@ -45,6 +49,8 @@ export async function updateGroup(groupId, updates) {
     if (updates.title !== undefined) dbUpdates.title = updates.title;
     if (updates.position !== undefined) dbUpdates.position = updates.position;
     if (updates.isExpanded !== undefined) dbUpdates.is_expanded = updates.isExpanded;
+    if (updates.color !== undefined) dbUpdates.color = updates.color;
+    if (updates.icon !== undefined) dbUpdates.icon = updates.icon;
 
     const { error } = await supabase.from('groups').update(dbUpdates).eq('id', groupId);
     if (error) return { success: false, error: error.message };

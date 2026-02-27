@@ -12,7 +12,6 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
     const { showContextMenu } = useContextMenu();
     const [addingCard, setAddingCard] = useState(false);
     const [newCardTitle, setNewCardTitle] = useState('');
-    const [showMenu, setShowMenu] = useState(false);
     const [editing, setEditing] = useState(false);
     const [editTitle, setEditTitle] = useState(list.title);
 
@@ -106,7 +105,7 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
     ];
 
     const handleListContextMenu = (e) => {
-        showContextMenu(e, getListContextItems(), { title: list.title });
+        showContextMenu(e, getListContextItems(), { title: list.title, tint: list.color || null });
     };
 
     const longPressProps = useLongPress(handleListContextMenu);
@@ -162,19 +161,13 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
                         </h3>
                     )}
                     <div className="board-list-actions">
-                        <button className="btn-icon btn-sm" onClick={() => setShowMenu(!showMenu)}>
-                            <MoreHorizontal size={16} />
+                        <button
+                            className="btn-icon btn-sm"
+                            onClick={(e) => { e.stopPropagation(); handleListContextMenu(e); }}
+                            title="Opções"
+                        >
+                            <MoreHorizontal size={16} className="rotate-90" />
                         </button>
-                        {showMenu && (
-                            <div className="board-list-menu animate-pop-in">
-                                <button onClick={() => { setEditing(true); setShowMenu(false); }}>
-                                    <Edit3 size={14} /> Renomear
-                                </button>
-                                <button onClick={handleDeleteList} className="danger">
-                                    <Trash2 size={14} /> Deletar lista
-                                </button>
-                            </div>
-                        )}
                     </div>
                 </div>
 
@@ -203,6 +196,7 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
                                                     card={card}
                                                     boardId={boardId}
                                                     listId={list.id}
+                                                    listColor={list.color}
                                                     isDragging={snapshot.isDragging}
                                                     onClick={() => onCardClick(card, boardId, list.id)}
                                                 />

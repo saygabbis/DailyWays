@@ -277,9 +277,9 @@ export function AuthProvider({ children }) {
     if (data?.url) {
       const target = window.self !== window.top ? window.top : window;
       try {
-        target.location.replace(data.url);
+        target.location.href = data.url;
       } catch (e) {
-        try { window.location.replace(data.url); } catch (e2) { }
+        try { window.location.href = data.url; } catch (e2) { }
       }
       return { success: true, redirecting: true };
     }
@@ -344,6 +344,21 @@ export function AuthProvider({ children }) {
       const msg = e?.message || 'Erro ao criar conta.';
       setAuthError(msg);
       return { success: false, error: msg };
+    }
+  };
+
+  const resendSignupOtp = async (email) => {
+    try {
+      const { error } = await supabase.auth.resend({ type: 'signup', email });
+      if (error) {
+        const msg = /rate limit|rate_limit/i.test(error.message || '')
+          ? 'Aguarde alguns minutos para reenviar.'
+          : error.message || 'Erro ao reenviar código.';
+        return { success: false, error: msg };
+      }
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e?.message || 'Erro ao reenviar código.' };
     }
   };
 
@@ -511,6 +526,7 @@ export function AuthProvider({ children }) {
     verifyMfa,
     register,
     verifySignupOtp,
+    resendSignupOtp,
     logout,
     confirmLogout,
     updateProfile,

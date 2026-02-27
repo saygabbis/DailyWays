@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../services/supabaseClient';
 import { ENABLE_MICROSOFT_LOGIN } from '../../config';
-import { Lock, Mail, User, ArrowRight, Chrome, Command, Github, Shield } from 'lucide-react';
+import { Lock, Mail, User, ArrowRight, Chrome, Command, Github, Shield, Eye, EyeOff } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import logoWhite from '../../assets/Logo - Branco.png';
 import logoBlack from '../../assets/Logo - Preto.png';
@@ -17,11 +18,24 @@ function getOAuthErrorFromUrl() {
   return null;
 }
 
+function getPasswordStrength(pwd) {
+  if (!pwd || pwd.length < 8) return 'weak';
+  const hasLower = /[a-z]/.test(pwd);
+  const hasUpper = /[A-Z]/.test(pwd);
+  const hasNumber = /\d/.test(pwd);
+  const hasSpecial = /[^a-zA-Z0-9]/.test(pwd);
+  const types = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
+  if (types >= 3) return 'strong';
+  if (types >= 2) return 'medium';
+  return 'weak';
+}
+
 export default function AuthPage() {
   const {
     login,
     register,
     verifySignupOtp,
+    resendSignupOtp,
     loginWithProvider,
     verifyMfa,
     loadSession,
@@ -51,15 +65,25 @@ export default function AuthPage() {
   const [otpEmail, setOtpEmail] = useState('');
   const [otpError, setOtpError] = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [usernameError, setUsernameError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const errorRef = useRef(null);
   const otpInputRef = useRef(null);
+  const rafRef = useRef(null);
 
   useEffect(() => {
     const oauthError = getOAuthErrorFromUrl();
     if (oauthError) {
-      const hint = oauthError.includes('server_error') || oauthError.includes('exchange')
-        ? ' Verifique SUPABASE_SETUP.md: URL Configuration (Redirect URLs) e Azure (Redirect URI + Client secret).'
-        : '';
+      let hint = '';
+      if (oauthError.includes('Unable to exchange') || oauthError.includes('exchange external code')) {
+        hint = ' Checklist: (1) No Supabase, Authentication > Providers > Azure — copie a URL de callback que aparece lá. (2) No Azure, App registrations > seu app > Authentication > Web: cole essa URL exata em Redirect URI (sem barra no final). (3) No Supabase, Client secret = Value do secret do Azure (não o Secret ID); se expirou, crie um novo no Azure e atualize. Veja SUPABASE_SETUP.md item 7.';
+      } else if (oauthError.includes('server_error') || oauthError.includes('exchange')) {
+        hint = ' Verifique SUPABASE_SETUP.md: URL Configuration (Redirect URLs) e Azure (Redirect URI + Client secret).';
+      } else if (oauthError.includes('access_denied') || oauthError.includes('user has denied')) {
+        hint = ' Ao usar Microsoft, é preciso aceitar as permissões na tela da Microsoft (email e perfil). Se aparecer pedido de consentimento do administrador, o admin do Azure AD precisa autorizar o app.';
+      }
       setError(oauthError + hint);
       window.history.replaceState({}, '', window.location.pathname || '/');
     }
@@ -98,6 +122,11 @@ export default function AuthPage() {
           setLoading(false);
           return;
         }
+        if (usernameError) {
+          setError(usernameError);
+          setLoading(false);
+          return;
+        }
         if (!email.trim()) {
           setError('E-mail é obrigatório');
           setLoading(false);
@@ -105,6 +134,12 @@ export default function AuthPage() {
         }
         if (!password || password.length < 6) {
           setError('Senha deve ter no mínimo 6 caracteres');
+          setLoading(false);
+          return;
+        }
+        const strength = getPasswordStrength(password);
+        if (strength === 'weak') {
+          setError('Use uma senha mais forte (mínimo: 8 caracteres, misture letras e números).');
           setLoading(false);
           return;
         }
@@ -149,6 +184,8 @@ export default function AuthPage() {
   const switchMode = () => {
     setIsLogin(!isLogin);
     setError('');
+    setUsernameError('');
+    setShowPassword(false);
     clearAuthError();
     setShowAccountCreatedRedirecting(false);
     setShowMfaStep(false);
@@ -158,8 +195,25 @@ export default function AuthPage() {
     setOtpError('');
   };
 
+  // Debounced username availability check (cadastro)
+  useEffect(() => {
+    if (isLogin || !username.trim() || username.trim().length < 2) {
+      setUsernameError('');
+      return;
+    }
+    const t = setTimeout(async () => {
+      const { data, error: err } = await supabase.rpc('check_username_available', { u: username.trim() });
+      if (err) {
+        setUsernameError('');
+        return;
+      }
+      setUsernameError(data === false ? 'Esse username já está registrado.' : '');
+    }, 450);
+    return () => clearTimeout(t);
+  }, [username, isLogin]);
+
   const handleVerifyOtp = async () => {
-    if (otpCode.length < 8) return;
+    if (otpCode.length < 6) return;
     setOtpLoading(true);
     setOtpError('');
     const result = await verifySignupOtp(otpEmail, otpCode);
@@ -215,13 +269,60 @@ export default function AuthPage() {
     }
   }, [showOtpModal]);
 
+  // Reenviar código: cooldown 60s ao abrir o modal
+  useEffect(() => {
+    if (!showOtpModal || !otpEmail) return;
+    setResendCooldown(60);
+  }, [showOtpModal, otpEmail]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setInterval(() => {
+      setResendCooldown((c) => (c <= 1 ? 0 : c - 1));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [resendCooldown]);
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0) return;
+    setOtpError('');
+    const result = await resendSignupOtp(otpEmail);
+    if (result.success) {
+      setResendCooldown(60);
+    } else {
+      setOtpError(result.error || 'Erro ao reenviar.');
+    }
+  };
+
+  // Background orbs reativos ao mouse (parallax suave)
+  useEffect(() => {
+    const onMove = (e) => {
+      if (rafRef.current) return;
+      rafRef.current = requestAnimationFrame(() => {
+        const nx = (e.clientX / window.innerWidth - 0.5) * 2;
+        const ny = (e.clientY / window.innerHeight - 0.5) * 2;
+        setMousePos({ x: nx, y: ny });
+        rafRef.current = null;
+      });
+    };
+    window.addEventListener('mousemove', onMove, { passive: true });
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  const orbStyle = (factor) => ({
+    transform: `translate(${mousePos.x * factor}px, ${mousePos.y * factor}px)`,
+  });
+
   if (showAccountCreatedRedirecting) {
     return (
       <div className="auth-page">
         <div className="auth-bg">
-          <div className="auth-orb auth-orb-1" />
-          <div className="auth-orb auth-orb-2" />
-          <div className="auth-orb auth-orb-3" />
+          <div className="auth-orb-wrapper auth-orb-1" style={orbStyle(30)}><div className="auth-orb auth-orb-1" /></div>
+          <div className="auth-orb-wrapper auth-orb-2" style={orbStyle(20)}><div className="auth-orb auth-orb-2" /></div>
+          <div className="auth-orb-wrapper auth-orb-3" style={orbStyle(15)}><div className="auth-orb auth-orb-3" /></div>
         </div>
         <div className="auth-container auth-container-success animate-scale-in">
           <div className="auth-header">
@@ -244,9 +345,9 @@ export default function AuthPage() {
   return (
     <div className="auth-page">
       <div className="auth-bg">
-        <div className="auth-orb auth-orb-1" />
-        <div className="auth-orb auth-orb-2" />
-        <div className="auth-orb auth-orb-3" />
+        <div className="auth-orb-wrapper auth-orb-1" style={orbStyle(30)}><div className="auth-orb auth-orb-1" /></div>
+        <div className="auth-orb-wrapper auth-orb-2" style={orbStyle(20)}><div className="auth-orb auth-orb-2" /></div>
+        <div className="auth-orb-wrapper auth-orb-3" style={orbStyle(15)}><div className="auth-orb auth-orb-3" /></div>
       </div>
 
       <div className="auth-container animate-scale-in">
@@ -292,7 +393,7 @@ export default function AuthPage() {
             <form onSubmit={handleSubmit} className="auth-form">
               {!isLogin && (
                 <>
-                  <div className="auth-field animate-slide-up">
+                  <div key="register-name" className="auth-field animate-slide-up">
                     <User size={18} className="auth-field-icon" />
                     <input
                       type="text"
@@ -302,7 +403,7 @@ export default function AuthPage() {
                       autoComplete="name"
                     />
                   </div>
-                  <div className="auth-field animate-slide-up">
+                  <div key="register-username" className="auth-field animate-slide-up">
                     <User size={18} className="auth-field-icon" />
                     <input
                       type="text"
@@ -310,13 +411,15 @@ export default function AuthPage() {
                       value={username}
                       onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
                       autoComplete="username"
+                      aria-invalid={!!usernameError}
                     />
+                    {usernameError && <div className="auth-error auth-error-inline" role="alert">{usernameError}</div>}
                   </div>
                 </>
               )}
 
               {isLogin ? (
-                <div className="auth-field">
+                <div key="login-identifier" className="auth-field animate-slide-up">
                   <Mail size={18} className="auth-field-icon" />
                   <input
                     type="text"
@@ -328,7 +431,7 @@ export default function AuthPage() {
                   />
                 </div>
               ) : (
-                <div className="auth-field">
+                <div key="register-email" className="auth-field animate-slide-up auth-field-delay-1">
                   <Mail size={18} className="auth-field-icon" />
                   <input
                     type="email"
@@ -341,17 +444,38 @@ export default function AuthPage() {
                 </div>
               )}
 
-              <div className="auth-field">
+              <div key={isLogin ? 'login-password' : 'register-password'} className={`auth-field animate-slide-up ${isLogin ? 'auth-field-delay-1' : 'auth-field-delay-2'}`}>
                 <Lock size={18} className="auth-field-icon" />
-                <input
-                  type="password"
-                  placeholder="Senha"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  autoComplete={isLogin ? 'current-password' : 'new-password'}
-                />
+                <div className="auth-password-wrap">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Senha"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    autoComplete={isLogin ? 'current-password' : 'new-password'}
+                  />
+                  <button
+                    type="button"
+                    className="auth-password-toggle"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {!isLogin && password && (
+                  <div className="auth-password-strength" data-strength={getPasswordStrength(password)}>
+                    <span className="auth-password-strength-label">
+                      Senha {getPasswordStrength(password) === 'weak' ? 'fraca' : getPasswordStrength(password) === 'medium' ? 'média' : 'forte'}
+                    </span>
+                    <span className="auth-password-strength-bars">
+                      <span /><span /><span />
+                    </span>
+                  </div>
+                )}
               </div>
 
               {(error || contextAuthError) && (
@@ -422,7 +546,7 @@ export default function AuthPage() {
             <div className="otp-modal-header">
               <Mail size={28} className="otp-icon" />
               <h2>Verifique seu e-mail</h2>
-              <p>Enviamos um código de 8 dígitos para <strong>{otpEmail}</strong></p>
+              <p>Enviamos um código (6 ou 8 dígitos) para <strong>{otpEmail}</strong></p>
             </div>
             <div className="otp-modal-body">
               <input
@@ -430,23 +554,31 @@ export default function AuthPage() {
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
-                placeholder="000000"
+                placeholder="00000000"
                 value={otpCode}
                 onChange={e => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
                 maxLength={8}
                 className="otp-input"
                 autoComplete="one-time-code"
-                onKeyDown={e => { if (e.key === 'Enter' && otpCode.length === 8) handleVerifyOtp(); }}
+                onKeyDown={e => { if (e.key === 'Enter' && otpCode.length >= 6) handleVerifyOtp(); }}
               />
               {otpError && <div className="otp-error">{otpError}</div>}
               <p className="otp-hint">O código expira em 5 minutos. Confira também o spam.</p>
+              <button
+                type="button"
+                className="otp-resend-btn"
+                onClick={handleResendOtp}
+                disabled={resendCooldown > 0 || otpLoading}
+              >
+                {resendCooldown > 0 ? `Reenviar em ${resendCooldown}s` : 'Reenviar código'}
+              </button>
             </div>
             <div className="otp-modal-actions">
               <button
                 type="button"
                 className="btn btn-primary otp-verify-btn"
                 onClick={handleVerifyOtp}
-                disabled={otpLoading || otpCode.length < 8}
+                disabled={otpLoading || otpCode.length < 6}
               >
                 {otpLoading ? <span className="auth-spinner" /> : 'Confirmar e entrar'}
               </button>
