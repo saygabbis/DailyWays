@@ -141,6 +141,42 @@ export function AuthProvider({ children }) {
       console.log('[Auth] onAuthStateChange:', event);
       const session = sessionData ?? null;
 
+      // #region agent log
+      try {
+        let aalInfo = null;
+        try {
+          const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+          aalInfo = {
+            currentLevel: aalData?.currentLevel ?? null,
+            nextLevel: aalData?.nextLevel ?? null,
+          };
+        } catch (e) {
+          aalInfo = { error: e?.message || 'getAuthenticatorAssuranceLevel failed' };
+        }
+        fetch('http://127.0.0.1:7248/ingest/ff4d6763-e47c-42ed-8153-d4e68a3d9067', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Debug-Session-Id': 'dd284c',
+          },
+          body: JSON.stringify({
+            sessionId: 'dd284c',
+            runId: 'pre-fix',
+            hypothesisId: 'H3',
+            location: 'AuthContext.jsx:onAuthStateChange',
+            message: 'Auth state change with AAL info',
+            data: {
+              event,
+              hasSession: !!session,
+              aal: session?.aal ?? null,
+              aalInfo,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => { });
+      } catch (_) { }
+      // #endregion
+
       // SIGNED_OUT é ignorado aqui intencionalmente.
       // O logout do usuário é tratado exclusivamente pelo método logout() que chama
       // setUser(null) diretamente. O Supabase emite SIGNED_OUT espuriamente durante
@@ -225,12 +261,61 @@ export function AuthProvider({ children }) {
         setAuthError(msg);
         return { success: false, error: msg };
       }
+
+      // #region agent log
+      try {
+        fetch('http://127.0.0.1:7248/ingest/ff4d6763-e47c-42ed-8153-d4e68a3d9067', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Debug-Session-Id': 'dd284c',
+          },
+          body: JSON.stringify({
+            sessionId: 'dd284c',
+            runId: 'pre-fix',
+            hypothesisId: 'H2',
+            location: 'AuthContext.jsx:login:afterSignIn',
+            message: 'login signInWithPassword result',
+            data: {
+              hasSession: !!data?.session,
+              aal: data?.session?.aal ?? null,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => { });
+      } catch (_) { }
+      // #endregion
+
       if (data?.session?.aal === 'aal2') {
         setLoading(false);
         return { success: true };
       }
       const { data: factors } = await supabase.auth.mfa.listFactors();
       const totp = factors?.totp?.[0];
+
+      // #region agent log
+      try {
+        fetch('http://127.0.0.1:7248/ingest/ff4d6763-e47c-42ed-8153-d4e68a3d9067', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Debug-Session-Id': 'dd284c',
+          },
+          body: JSON.stringify({
+            sessionId: 'dd284c',
+            runId: 'pre-fix',
+            hypothesisId: 'H2',
+            location: 'AuthContext.jsx:login:afterListFactors',
+            message: 'login MFA factors after signInWithPassword',
+            data: {
+              hasFactors: !!factors,
+              totpStatus: totp?.status ?? null,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => { });
+      } catch (_) { }
+      // #endregion
       if (totp?.status === 'verified') {
         const { data: challenge } = await supabase.auth.mfa.challenge({ factorId: totp.id });
         if (challenge?.id) {
@@ -254,6 +339,28 @@ export function AuthProvider({ children }) {
     if (!mfaChallengeId) return { success: false, error: 'Sessão de verificação expirada.' };
     const { data, error } = await supabase.auth.mfa.verify({ challengeId: mfaChallengeId, code });
     setMfaChallengeId(null);
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7248/ingest/ff4d6763-e47c-42ed-8153-d4e68a3d9067', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': 'dd284c',
+        },
+        body: JSON.stringify({
+          sessionId: 'dd284c',
+          runId: 'pre-fix',
+          hypothesisId: 'H2',
+          location: 'AuthContext.jsx:verifyMfa',
+          message: 'verifyMfa result',
+          data: {
+            hadError: !!error,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => { });
+    } catch (_) { }
+    // #endregion
     if (error) return { success: false, error: error.message || 'Código inválido.' };
     await refreshUser(data.user);
     return { success: true };
@@ -422,10 +529,45 @@ export function AuthProvider({ children }) {
   };
 
   const startMfaEnrollment = async () => {
+    // Se já existe fator TOTP não verificado, remove para evitar erro de friendlyName duplicado
+    const { data: existingFactors, error: listError } = await supabase.auth.mfa.listFactors();
+    let existingTotp = existingFactors?.totp?.[0] ?? null;
+    if (listError) {
+      return { success: false, error: listError.message || 'Erro ao carregar fatores de 2FA.', data: null };
+    }
+
+    if (existingTotp && existingTotp.friendly_name === 'DailyWays' && existingTotp.status !== 'verified') {
+      // Tenta limpar fator pendente antes de criar outro
+      await supabase.auth.mfa.unenroll({ factorId: existingTotp.id }).catch(() => {});
+      existingTotp = null;
+    }
+
     const { data, error } = await supabase.auth.mfa.enroll({
       factorType: 'totp',
       friendlyName: 'DailyWays',
     });
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7248/ingest/ff4d6763-e47c-42ed-8153-d4e68a3d9067', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': 'dd284c',
+        },
+        body: JSON.stringify({
+          sessionId: 'dd284c',
+          runId: 'pre-fix',
+          hypothesisId: 'H1',
+          location: 'AuthContext.jsx:startMfaEnrollment',
+          message: 'startMfaEnrollment result',
+          data: {
+            hadError: !!error,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => { });
+    } catch (_) { }
+    // #endregion
     if (error) return { success: false, error: error.message, data: null };
     return {
       success: true,
@@ -442,15 +584,103 @@ export function AuthProvider({ children }) {
       factorId,
       code,
     });
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7248/ingest/ff4d6763-e47c-42ed-8153-d4e68a3d9067', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': 'dd284c',
+        },
+        body: JSON.stringify({
+          sessionId: 'dd284c',
+          runId: 'pre-fix',
+          hypothesisId: 'H1',
+          location: 'AuthContext.jsx:verifyMfaEnrollment',
+          message: 'verifyMfaEnrollment result',
+          data: {
+            hadError: !!error,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => { });
+    } catch (_) { }
+    // #endregion
     if (error) return { success: false, error: error.message };
     return { success: true, data };
   };
 
-  const disableMfa = async () => {
-    const { data: factors } = await supabase.auth.mfa.listFactors();
-    const totp = factors?.totp?.[0];
+  const disableMfa = async (code) => {
+    const { data: factors, error: listError } = await supabase.auth.mfa.listFactors();
+    const totp = factors?.totp?.find(f => f.status === 'verified') ?? null;
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7248/ingest/ff4d6763-e47c-42ed-8153-d4e68a3d9067', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': 'dd284c',
+        },
+        body: JSON.stringify({
+          sessionId: 'dd284c',
+          runId: 'pre-fix',
+          hypothesisId: 'H4',
+          location: 'AuthContext.jsx:disableMfa:beforeUnenroll',
+          message: 'disableMfa factors before unenroll',
+          data: {
+            listError: listError?.message ?? null,
+            hasFactors: !!factors,
+            hasTotp: !!totp,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => { });
+    } catch (_) { }
+    // #endregion
+    if (listError) return { success: false, error: listError.message || 'Erro ao carregar fatores de 2FA.' };
     if (!totp) return { success: false, error: '2FA não está ativo.' };
+    if (!code || code.length !== 6) {
+      return { success: false, error: 'Informe o código de 6 dígitos para desativar o 2FA.' };
+    }
+
+    // Primeiro valida o código TOTP atual via challenge + verify
+    const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({ factorId: totp.id });
+    if (challengeError || !challenge?.id) {
+      return { success: false, error: challengeError?.message || 'Não foi possível iniciar a verificação do 2FA.' };
+    }
+
+    const { error: verifyError } = await supabase.auth.mfa.verify({
+      factorId: totp.id,
+      challengeId: challenge.id,
+      code,
+    });
+    if (verifyError) {
+      return { success: false, error: 'Código 2FA inválido.' };
+    }
+
     const { error } = await supabase.auth.mfa.unenroll({ factorId: totp.id });
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7248/ingest/ff4d6763-e47c-42ed-8153-d4e68a3d9067', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': 'dd284c',
+        },
+        body: JSON.stringify({
+          sessionId: 'dd284c',
+          runId: 'pre-fix',
+          hypothesisId: 'H4',
+          location: 'AuthContext.jsx:disableMfa:afterUnenroll',
+          message: 'disableMfa unenroll result',
+          data: {
+            hadError: !!error,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => { });
+    } catch (_) { }
+    // #endregion
     if (error) return { success: false, error: error.message };
     return { success: true };
   };

@@ -217,6 +217,10 @@ const SecurityPanel = memo(function SecurityPanel({ user, startMfaEnrollment, ve
     const [mfaFactorId, setMfaFactorId] = useState(null);
     const [mfaVerifyCode, setMfaVerifyCode] = useState('');
     const [mfaError, setMfaError] = useState('');
+    const [mfaVerifying, setMfaVerifying] = useState(false);
+    const [showDisableMfaConfirm, setShowDisableMfaConfirm] = useState(false);
+    const [disableMfaCode, setDisableMfaCode] = useState('');
+    const [disableMfaLoading, setDisableMfaLoading] = useState(false);
     const [identities, setIdentities] = useState([]);
     const [identitiesLoading, setIdentitiesLoading] = useState(false);
     const [linkError, setLinkError] = useState('');
@@ -238,6 +242,29 @@ const SecurityPanel = memo(function SecurityPanel({ user, startMfaEnrollment, ve
         import('../../services/supabaseClient').then(({ supabase }) => {
             supabase.auth.mfa.listFactors().then(({ data }) => {
                 setMfaFactors(data?.totp ?? []);
+                // #region agent log
+                try {
+                    fetch('http://127.0.0.1:7248/ingest/ff4d6763-e47c-42ed-8153-d4e68a3d9067', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Debug-Session-Id': 'dd284c',
+                        },
+                        body: JSON.stringify({
+                            sessionId: 'dd284c',
+                            runId: 'pre-fix',
+                            hypothesisId: 'H1',
+                            location: 'SettingsView.jsx:SecurityPanel:useEffect',
+                            message: 'Initial MFA factors loaded',
+                            data: {
+                                hasFactors: !!data,
+                                totpCount: data?.totp?.length ?? 0,
+                            },
+                            timestamp: Date.now(),
+                        }),
+                    }).catch(() => { });
+                } catch (_) { }
+                // #endregion
             });
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -340,13 +367,85 @@ const SecurityPanel = memo(function SecurityPanel({ user, startMfaEnrollment, ve
                     <div className="settings-mfa-status">
                         <span className="settings-badge settings-badge-success"><ShieldCheck size={14} /> {t.sec2faActive}</span>
                         <button type="button" className="btn btn-danger btn-sm"
-                            onClick={async () => {
-                                if (!window.confirm('Desativar verificação em duas etapas?')) return;
-                                const result = await disableMfa();
-                                if (result.success) setMfaFactors([]);
-                                else setMfaError(result.error);
+                            onClick={() => {
+                                setMfaError('');
+                                setDisableMfaCode('');
+                                setShowDisableMfaConfirm(true);
                             }}
                         >{t.secDisable2fa}</button>
+
+                        {showDisableMfaConfirm && (
+                            <div className="settings-mfa-disable">
+                                <p className="settings-section-desc">Digite o código do seu app autenticador para desativar o 2FA.</p>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    className="settings-mfa-code-input"
+                                    value={disableMfaCode}
+                                    onChange={e => { setDisableMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setMfaError(''); }}
+                                    placeholder={t.sec2faCodePh}
+                                />
+                                {mfaError && <p className="settings-error">{mfaError}</p>}
+                                <div className="settings-actions">
+                                    <button
+                                        type="button"
+                                        className="btn btn-danger btn-sm"
+                                        disabled={disableMfaCode.length !== 6 || disableMfaLoading}
+                                        onClick={async () => {
+                                            setDisableMfaLoading(true);
+                                            let result;
+                                            try {
+                                                result = await disableMfa(disableMfaCode);
+                                            } catch (e) {
+                                                result = { success: false, error: e?.message || 'Erro ao desativar 2FA.' };
+                                            } finally {
+                                                setDisableMfaLoading(false);
+                                            }
+                                            // #region agent log
+                                            try {
+                                                fetch('http://127.0.0.1:7248/ingest/ff4d6763-e47c-42ed-8153-d4e68a3d9067', {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Content-Type': 'application/json',
+                                                        'X-Debug-Session-Id': 'dd284c',
+                                                    },
+                                                    body: JSON.stringify({
+                                                        sessionId: 'dd284c',
+                                                        runId: 'pre-fix',
+                                                        hypothesisId: 'H4',
+                                                        location: 'SettingsView.jsx:SecurityPanel:disableMfa',
+                                                        message: 'User clicked Disable 2FA',
+                                                        data: {
+                                                            success: !!result?.success,
+                                                            error: result?.error ?? null,
+                                                        },
+                                                        timestamp: Date.now(),
+                                                    }),
+                                                }).catch(() => { });
+                                            } catch (_) { }
+                                            // #endregion
+                                            if (result.success) {
+                                                setMfaFactors([]);
+                                                setShowDisableMfaConfirm(false);
+                                                setDisableMfaCode('');
+                                                setMfaError('');
+                                            } else {
+                                                setMfaError(result.error);
+                                            }
+                                        }}
+                                    >
+                                        {disableMfaLoading ? 'Desativando…' : 'Confirmar desativação'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-ghost btn-sm"
+                                        onClick={() => { setShowDisableMfaConfirm(false); setDisableMfaCode(''); setMfaError(''); }}
+                                    >
+                                        {t.cancel}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ) : mfaQrCode ? (
                     <div className="settings-mfa-enroll">
@@ -357,17 +456,69 @@ const SecurityPanel = memo(function SecurityPanel({ user, startMfaEnrollment, ve
                             className="settings-mfa-code-input" />
                         {mfaError && <p className="settings-error">{mfaError}</p>}
                         <div className="settings-actions">
-                            <button className="btn btn-primary btn-sm" disabled={mfaVerifyCode.length !== 6}
+                            <button className="btn btn-primary btn-sm" disabled={mfaVerifyCode.length !== 6 || mfaVerifying}
                                 onClick={async () => {
+                                    setMfaError('');
+                                    setMfaVerifying(true);
                                     const result = await verifyMfaEnrollment(mfaFactorId, mfaVerifyCode);
-                                    if (result.success) {
+                                    setMfaVerifying(false);
+                                    // #region agent log
+                                    try {
+                                        fetch('http://127.0.0.1:7248/ingest/ff4d6763-e47c-42ed-8153-d4e68a3d9067', {
+                                            method: 'POST',
+                                            headers: {
+                                                'Content-Type': 'application/json',
+                                                'X-Debug-Session-Id': 'dd284c',
+                                            },
+                                            body: JSON.stringify({
+                                                sessionId: 'dd284c',
+                                                runId: 'pre-fix',
+                                                hypothesisId: 'H1',
+                                                location: 'SettingsView.jsx:SecurityPanel:verifyMfaEnrollment',
+                                                message: 'User clicked Confirm 2FA',
+                                                data: {
+                                                    success: !!result?.success,
+                                                    error: result?.error ?? null,
+                                                },
+                                                timestamp: Date.now(),
+                                            }),
+                                        }).catch(() => { });
+                                    } catch (_) { }
+                                    // #endregion
+                                        if (result.success) {
+                                        // Atualiza UI imediatamente para mostrar 2FA ativo
+                                        setMfaFactors([{ id: mfaFactorId, status: 'verified' }]);
                                         setMfaQrCode(null); setMfaFactorId(null); setMfaVerifyCode(''); setMfaError(''); setMfaEnrolling(false);
                                         const { supabase } = await import('../../services/supabaseClient');
                                         const { data } = await supabase.auth.mfa.listFactors();
                                         setMfaFactors(data?.totp ?? []);
+                                        // #region agent log
+                                        try {
+                                            fetch('http://127.0.0.1:7248/ingest/ff4d6763-e47c-42ed-8153-d4e68a3d9067', {
+                                                method: 'POST',
+                                                headers: {
+                                                    'Content-Type': 'application/json',
+                                                    'X-Debug-Session-Id': 'dd284c',
+                                                },
+                                                body: JSON.stringify({
+                                                    sessionId: 'dd284c',
+                                                    runId: 'pre-fix',
+                                                    hypothesisId: 'H1',
+                                                    location: 'SettingsView.jsx:SecurityPanel:afterListFactors',
+                                                    message: 'MFA factors after successful enrollment',
+                                                    data: {
+                                                        hasFactors: !!data,
+                                                        totpCount: data?.totp?.length ?? 0,
+                                                        firstStatus: data?.totp?.[0]?.status ?? null,
+                                                    },
+                                                    timestamp: Date.now(),
+                                                }),
+                                            }).catch(() => { });
+                                        } catch (_) { }
+                                        // #endregion
                                     } else { setMfaError(result.error); }
                                 }}
-                            >{t.sec2faConfirm}</button>
+                            >{mfaVerifying ? 'Verificando…' : t.sec2faConfirm}</button>
                             <button type="button" className="btn btn-ghost btn-sm"
                                 onClick={() => { setMfaQrCode(null); setMfaFactorId(null); setMfaEnrolling(false); setMfaError(''); }}
                             >{t.cancel}</button>
