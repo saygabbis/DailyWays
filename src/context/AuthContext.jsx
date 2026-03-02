@@ -72,6 +72,11 @@ export function AuthProvider({ children }) {
 
   const refreshUser = useCallback(async (authUser) => {
     if (!authUser) {
+      // #region agent log
+      try {
+        console.log('[DebugBlur] AuthContext.refreshUser(null) -> setUser(null)', new Error('trace').stack);
+      } catch (_) { }
+      // #endregion
       setUser(null);
       setProfile(null);
       profileRef.current = null;
@@ -503,6 +508,11 @@ export function AuthProvider({ children }) {
     try {
       await supabase.auth.signOut({ scope: 'local' });
     } catch (_) { }
+    // #region agent log
+    try {
+      console.log('[DebugBlur] AuthContext.logout() called explicitly', new Error('trace').stack);
+    } catch (_) { }
+    // #endregion
     setUser(null);
     setProfile(null);
     setMfaChallengeId(null);

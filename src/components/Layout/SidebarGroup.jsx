@@ -65,19 +65,15 @@ export default function SidebarGroup({ group, index, items, activeView, activeBo
                                             {hasSelectedItems && !isFolderItselfSelected && <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', fontSize: '11px', fontWeight: 800 }}>–</span>}
                                         </div>
 
-                                        {/* Cor da pasta aplicada direto no ícone principal */}
+                                        {/* Ícone da pasta: usa o ícone escolhido (se houver); senão usa Folder/FolderOpen */}
                                         <span
                                             className="sidebar-group-icon"
                                             style={group.color ? { color: group.color } : undefined}
                                         >
-                                            {effectiveIsExpanded ? <FolderOpen size={16} /> : <Folder size={16} />}
+                                            {IconForGroup
+                                                ? <IconForGroup size={16} />
+                                                : (effectiveIsExpanded ? <FolderOpen size={16} /> : <Folder size={16} />)}
                                         </span>
-
-                                        {IconForGroup ? (
-                                            <span className="sidebar-group-custom-icon" title="Ícone da pasta">
-                                                <IconForGroup size={14} />
-                                            </span>
-                                        ) : null}
 
                                         {isEditing ? (
                                             <form onSubmit={(e) => { e.preventDefault(); onRenameSubmit(group.id); }} className="sidebar-rename-form" onClick={(e) => e.stopPropagation()}>
