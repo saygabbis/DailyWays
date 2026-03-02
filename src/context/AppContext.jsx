@@ -688,10 +688,8 @@ function appReducer(state, action) {
 }
 
 export function AppProvider({ children }) {
-    const { user, loading: authLoading } = useAuth();
+    const { user } = useAuth();
     const userId = user?.id ?? null;
-    const lastUserIdRef = useRef(userId);
-    useEffect(() => { lastUserIdRef.current = userId; }, [userId]);
     // Ref do userId: atualizado sempre que o user muda (via onAuthStateChange).
     // Permite que os callbacks de save acessem o userId atual SEM chamar getSession(),
     // que pode travar durante um token refresh (o Supabase client usa lock interno).
@@ -704,8 +702,6 @@ export function AppProvider({ children }) {
     const stateRef = useRef(state);
     const initialLoadDone = useRef(false);
     const saveTimeoutRef = useRef({});
-    const saveStartedAtRef = useRef({});
-    const saveAllPendingRef = useRef(null);
     const loadInProgressRef = useRef(false);
     // Unix timestamp (ms): ignore Realtime echo refetches until this time.
     // Set whenever THIS tab starts a local write to avoid overwriting optimistic state.
@@ -717,61 +713,10 @@ export function AppProvider({ children }) {
     // O Supabase client tem um lock interno durante o refresh que trava requisições HTTP.
     // Após TOKEN_REFRESHED, aguardamos 2s para o lock ser liberado.
     const tokenRefreshCooldownRef = useRef(0);
-    const pageHiddenRef = useRef(typeof document !== 'undefined' ? document.hidden : false);
 
     useEffect(() => {
         stateRef.current = state;
     }, [state]);
-
-    // Keep a ref to the latest saveAllPending() so visibility handler can call it.
-    useEffect(() => {
-        // Assigned later after saveAllPending is defined; harmless until then.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // When tab/app is backgrounded, timers can be throttled/frozen.
-    // We avoid starting network saves while hidden and recover stuck "saving" states when visible again.
-    useEffect(() => {
-        const onVisibility = () => {
-            pageHiddenRef.current = document.hidden;
-            console.log('[DebugBlur] visibilitychange', { hidden: document.hidden, userId: userIdRef.current });
-
-            if (!document.hidden) {
-                // Flush any pending saves that were deferred while hidden.
-                try {
-                    const pendingIds = stateRef.current.pendingBoardIds || [];
-                    const hasDeferredTimers = Object.keys(saveTimeoutRef.current || {}).length > 0;
-                    if (userIdRef.current && !authLoading && (pendingIds.length > 0 || hasDeferredTimers)) {
-                        console.log('[DebugBlur] flush pending saves on visible', { pendingCount: pendingIds.length, hasDeferredTimers });
-                        saveAllPendingRef.current?.();
-                    }
-                } catch (_) { }
-
-                const now = Date.now();
-                const savingIds = stateRef.current.savingBoardIds || [];
-                for (const boardId of savingIds) {
-                    const startedAt = saveStartedAtRef.current[boardId];
-                    if (startedAt && now - startedAt > 15000) {
-                        console.warn('[DebugBlur] recover stuck save', { boardId, ageMs: now - startedAt });
-                        delete saveStartedAtRef.current[boardId];
-                        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
-                        dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: false } });
-                        dispatch({
-                            type: 'PUSH_SAVE_ERROR',
-                            payload: { boardId, boardTitle: null, boardSnapshot: null, error: 'Save travou após sair da aba. Tente salvar novamente.' }
-                        });
-                    }
-                }
-            }
-        };
-        document.addEventListener('visibilitychange', onVisibility);
-        window.addEventListener('focus', onVisibility);
-        return () => {
-            document.removeEventListener('visibilitychange', onVisibility);
-            window.removeEventListener('focus', onVisibility);
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [authLoading]);
 
     const persistedEmptyClosedGroupsRef = useRef(new Set());
     useEffect(() => {
@@ -806,11 +751,6 @@ export function AppProvider({ children }) {
                 console.log(`[AppContext] ${event}: cooldown de 2s ativado para requisições HTTP`);
                 tokenRefreshCooldownRef.current = Date.now() + 2000;
             }
-            // #region agent log
-            try {
-                console.log('[DebugBlur] AppContext saw auth event', event);
-            } catch (_) { }
-            // #endregion
         });
         return () => subscription.unsubscribe();
     }, []);
@@ -822,13 +762,6 @@ export function AppProvider({ children }) {
     // para evitar re-execução quando refreshUser cria novo objeto com mesmo ID.
     useEffect(() => {
         if (!userId) {
-            // Durante re-hidratação da sessão (ex.: token refresh ao voltar para aba),
-            // o AuthContext pode ficar temporariamente sem user até o getSession terminar.
-            // Não tratar isso como logout, senão limpamos o estado e quebramos saves.
-            if (authLoading) {
-                console.log('[DebugBlur] AppContext: userId null enquanto authLoading=true (ignorar clear)', { lastUserId: lastUserIdRef.current });
-                return;
-            }
             // Logout: limpar tudo para evitar race conditions no próximo login
             initialLoadDone.current = false;
             loadInProgressRef.current = false;
@@ -848,11 +781,6 @@ export function AppProvider({ children }) {
             dispatch({ type: 'CLEAR_SAVING' });
             dispatch({ type: 'CLEAR_SAVE_ERRORS' });
             console.log('[AppContext] User logout: state cleared');
-            // #region agent log
-            try {
-                console.log('[DebugBlur] AppContext: userId null e authLoading=false -> clearing state', { lastUserId: lastUserIdRef.current });
-            } catch (_) { }
-            // #endregion
             return;
         }
         if (loadInProgressRef.current) {
@@ -948,12 +876,6 @@ export function AppProvider({ children }) {
         // Fast path: se já temos o userId do contexto, retorna imediatamente.
         // O token será renovado automaticamente pelo Supabase client na chamada HTTP.
         if (userIdRef.current) {
-            // #region agent log
-            try {
-                const cooldownMs = tokenRefreshCooldownRef.current - Date.now();
-                console.log('[DebugBlur] getFreshUserId fast-path', { userId: userIdRef.current, cooldownMs: Math.round(cooldownMs) });
-            } catch (_) { }
-            // #endregion
             // Cooldown após TOKEN_REFRESHED: aguarda o lock interno do Supabase client ser liberado.
             // Sem isso, requisições HTTP logo após o refresh ficam presas no lock e travam.
             const cooldownMs = tokenRefreshCooldownRef.current - Date.now();
@@ -966,11 +888,6 @@ export function AppProvider({ children }) {
 
         // Slow path: sessão pode estar null (primeira carga ou logout) — verifica no servidor.
         try {
-            // #region agent log
-            try {
-                console.log('[DebugBlur] getFreshUserId slow-path start');
-            } catch (_) { }
-            // #endregion
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('getSession timeout')), 8000)
             );
@@ -984,11 +901,6 @@ export function AppProvider({ children }) {
             }
             // Atualiza o ref com o valor recém obtido
             userIdRef.current = data.session.user.id;
-            // #region agent log
-            try {
-                console.log('[DebugBlur] getFreshUserId slow-path success', { userId: data.session.user.id });
-            } catch (_) { }
-            // #endregion
             return data.session.user.id;
         } catch (err) {
             console.error('[AppContext] getFreshUserId error:', err.message);
@@ -998,19 +910,7 @@ export function AppProvider({ children }) {
 
     // Helper para salvar um board específico de forma eficiente
     const persistBoard = useCallback(async (boardId) => {
-        // #region agent log
-        try {
-            console.log('[DebugBlur] persistBoard called', { boardId, hasUserId: !!userId, initialLoadDone: !!initialLoadDone.current, hidden: !!pageHiddenRef.current });
-        } catch (_) { }
-        // #endregion
-        if (!userId || !initialLoadDone.current || !boardId) {
-            // #region agent log
-            try {
-                console.log('[DebugBlur] persistBoard early return', { boardId, reason: !userId ? 'no-userId' : (!initialLoadDone.current ? 'initialLoadDone=false' : 'no-boardId') });
-            } catch (_) { }
-            // #endregion
-            return;
-        }
+        if (!userId || !initialLoadDone.current || !boardId) return;
 
         // Debounce por boardId: evita flood de updates caso o usuário faça várias
         // alterações rápidas (drag, check/uncheck subtasks, etc.).
@@ -1025,18 +925,9 @@ export function AppProvider({ children }) {
         dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: true } });
 
         timeouts[boardId] = setTimeout(async () => {
-            // Não iniciar saves de rede enquanto a aba estiver oculta (timers podem travar).
-            if (pageHiddenRef.current) {
-                console.log('[DebugBlur] persistBoard: aba oculta, mantendo pending e adiando save', { boardId });
-                // Clean up the completed timer entry so it can be flushed later.
-                try { delete saveTimeoutRef.current[boardId]; } catch (_) { }
-                return;
-            }
-
             // Debounce disparou: sai do pending para saving
             dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: false } });
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: true } });
-            saveStartedAtRef.current[boardId] = Date.now();
             activeSavesRef.current += 1;
             suppressRealtime(8000);
 
@@ -1115,13 +1006,7 @@ export function AppProvider({ children }) {
                 activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
                 if (activeSavesRef.current === 0) suppressRealtime(500);
                 dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
-                delete saveStartedAtRef.current[boardId];
                 delete saveTimeoutRef.current[boardId];
-                // #region agent log
-                try {
-                    console.log('[DebugBlur] persistBoard finished', { boardId });
-                } catch (_) { }
-                // #endregion
             }
         }, 400);
 
@@ -1131,10 +1016,7 @@ export function AppProvider({ children }) {
     // Salva todos os boards com debounce pendente imediatamente (usado pelo botão flutuante)
     const saveAllPending = useCallback(async () => {
         const timeouts = saveTimeoutRef.current;
-        const pendingIds = Array.from(new Set([
-            ...Object.keys(timeouts || {}),
-            ...(stateRef.current.pendingBoardIds || []),
-        ]));
+        const pendingIds = Object.keys(timeouts);
         if (!pendingIds.length) return;
 
         // Obtém sessão fresca — garante que token refresh não interfira
@@ -1147,11 +1029,8 @@ export function AppProvider({ children }) {
             return;
         }
 
-        // Cancelar timers de debounce (se existirem) — vamos salvar agora
-        pendingIds.forEach(id => {
-            const t = timeouts?.[id];
-            if (t) clearTimeout(t);
-        });
+        // Cancelar todos os timers de debounce pendentes
+        pendingIds.forEach(id => clearTimeout(timeouts[id]));
         saveTimeoutRef.current = {};
         suppressRealtime(8000);
         activeSavesRef.current += pendingIds.length;
@@ -1168,7 +1047,6 @@ export function AppProvider({ children }) {
             }
             const boardSnapshot = JSON.parse(JSON.stringify(board));
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: true } });
-            saveStartedAtRef.current[boardId] = Date.now();
             try {
                 console.log(`[AppContext] saveAllPending: ${board.title}`);
                 const result = await updateBoardFull(freshUserId, board);
@@ -1184,15 +1062,9 @@ export function AppProvider({ children }) {
                 activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
                 if (activeSavesRef.current === 0) suppressRealtime(500);
                 dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
-                delete saveStartedAtRef.current[boardId];
             }
         }));
     }, [suppressRealtime, getFreshUserId]);
-
-    // Update ref so visibility handler can call latest version.
-    useEffect(() => {
-        saveAllPendingRef.current = saveAllPending;
-    }, [saveAllPending]);
 
     // Helper interno compartilhado para persistência imediata com rollback + token refresh
     const persistBoardImmediate = useCallback(async (boardId, updates) => {
