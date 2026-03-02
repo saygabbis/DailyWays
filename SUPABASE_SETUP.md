@@ -12,7 +12,7 @@
    - Ative **Google**, **GitHub** e **Azure** (Microsoft); configure Client ID/Secret de cada um.
 5. Em **Authentication > Settings** (ou **Authentication > Providers**):
    - Habilite **Enable Custom SMTP** se quiser enviar emails de confirmação por seu próprio SMTP (opcional).
-   - Ative **MFA** (TOTP) e **Identity linking** (ou **Manual linking** / link de identidades OAuth). Sem isso, os botões «Vincular» nas Configurações do app mostrarão erro.
+   - Ative **Identity linking** (ou **Manual linking** / link de identidades OAuth). Sem isso, os botões «Vincular» nas Configurações do app mostrarão erro.
 
    **E-mails de confirmação não chegam?** Com o SMTP padrão do Supabase, os e-mails podem ir para **spam** ou ter limite de envio. Use **Custom SMTP** (veja seção abaixo).
 
@@ -49,6 +49,7 @@ Você **pode usar seu e-mail pessoal** (ex.: gaffonsoxx@gmail.com) ou criar uma 
    - `supabase/migrations/20250218120000_initial_schema.sql` (tabelas, RLS, `get_email_by_username`);
    - `supabase/migrations/20250218130000_trigger_handle_new_user.sql` (cria profile automaticamente ao criar usuário);
    - `supabase/migrations/20250218140000_username_and_has_password.sql` (coluna `has_password`, username do signup no perfil, login por username case-insensitive). Se você já tem usuários, essa migration também corrige o username deles a partir do que foi enviado no cadastro (ex.: **saygabbis** em vez da parte do e-mail).
+   - `supabase/migrations/20260302120000_journal_notes.sql` (tabela `journal_notes` para o Diário, com RLS por usuário).
 
 7. **Microsoft (Azure)** — checklist para evitar `server_error` / "Unable to exchange external code":
    - **Importante**: no Azure, a **Redirect URI** deve ser a **URL de callback do Supabase**, não a do seu site (não use `http://localhost:5173` no Azure).

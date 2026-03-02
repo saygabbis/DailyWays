@@ -728,38 +728,6 @@
     align-items: center;
 }
 
-.settings-mfa-status {
-    display: flex;
-    align-items: center;
-    gap: var(--space-md);
-    flex-wrap: wrap;
-}
-
-.settings-mfa-enroll {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
-}
-
-.settings-mfa-qr {
-    padding: var(--space-md);
-    background: #fff;
-    border-radius: var(--radius-md);
-    display: inline-block;
-    align-self: flex-start;
-}
-
-.settings-mfa-code-input {
-    max-width: 160px;
-    padding: var(--space-sm) var(--space-md);
-    font-size: var(--font-size-lg);
-    letter-spacing: 0.2em;
-    text-align: center;
-    border-radius: var(--radius-md);
-    border: 1.5px solid var(--border-color);
-    background: var(--bg-input);
-}
-
 .settings-identities {
     display: flex;
     flex-direction: column;

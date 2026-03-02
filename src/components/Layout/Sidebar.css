@@ -731,7 +731,20 @@
 .sidebar-group-icon {
     display: flex;
     align-items: center;
+    justify-content: center;
     color: var(--text-tertiary);
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.sidebar-group-icon--filled {
+    color: var(--accent-primary);
+}
+
+.sidebar-group-icon--filled svg {
+    fill: currentColor;
+    stroke-width: 1.4;
 }
 
 /* Bouncy jelly animation for new folders */

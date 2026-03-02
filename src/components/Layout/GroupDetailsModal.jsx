@@ -16,7 +16,7 @@ const GROUP_COLOR_PRESETS = [
 ];
 
 const ICON_PRESETS = [
-  { id: null, label: 'Sem ícone extra', Icon: null },
+  { id: null, label: 'Pasta padrão', Icon: Folder },
   { id: 'music', label: 'Música', Icon: Music },
   { id: 'box', label: 'Caixa', Icon: Box },
   { id: 'star', label: 'Favoritos', Icon: Star },

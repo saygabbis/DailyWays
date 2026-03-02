@@ -16,6 +16,7 @@ export default function SidebarGroup({ group, index, items, activeView, activeBo
     }, [isEditing]);
 
     const hasSelectedItems = items.length > 0 && items.every(i => selectedItems?.includes(i.id));
+    const hasItems = items.length > 0;
     const isFolderItselfSelected = selectedItems?.includes(group.id);
     const IconForGroup = useMemo(() => {
         const map = {
@@ -28,6 +29,8 @@ export default function SidebarGroup({ group, index, items, activeView, activeBo
         };
         return group?.icon ? map[group.icon] ?? null : null;
     }, [group?.icon]);
+
+    const MainIcon = IconForGroup || (effectiveIsExpanded ? FolderOpen : Folder);
 
     return (
         <Draggable draggableId={group.id} index={index}>
@@ -65,19 +68,14 @@ export default function SidebarGroup({ group, index, items, activeView, activeBo
                                             {hasSelectedItems && !isFolderItselfSelected && <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', fontSize: '11px', fontWeight: 800 }}>–</span>}
                                         </div>
 
-                                        {/* Cor da pasta aplicada direto no ícone principal */}
+                                        {/* Ícone principal da pasta (pode ser pasta padrão ou ícone customizado) */}
                                         <span
-                                            className="sidebar-group-icon"
+                                            className={`sidebar-group-icon ${hasItems ? 'sidebar-group-icon--filled' : ''}`}
                                             style={group.color ? { color: group.color } : undefined}
+                                            title="Ícone da pasta"
                                         >
-                                            {effectiveIsExpanded ? <FolderOpen size={16} /> : <Folder size={16} />}
+                                            <MainIcon size={16} />
                                         </span>
-
-                                        {IconForGroup ? (
-                                            <span className="sidebar-group-custom-icon" title="Ícone da pasta">
-                                                <IconForGroup size={14} />
-                                            </span>
-                                        ) : null}
 
                                         {isEditing ? (
                                             <form onSubmit={(e) => { e.preventDefault(); onRenameSubmit(group.id); }} className="sidebar-rename-form" onClick={(e) => e.stopPropagation()}>

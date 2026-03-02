@@ -208,15 +208,9 @@ const AccountPanel = memo(function AccountPanel({ user, updateProfile, confirmLo
 });
 
 // ─────────────────────────────────────────────
-// SECURITY PANEL
+// SECURITY PANEL (sem MFA)
 // ─────────────────────────────────────────────
-const SecurityPanel = memo(function SecurityPanel({ user, startMfaEnrollment, verifyMfaEnrollment, disableMfa, getLinkedIdentities, linkIdentity, unlinkIdentity, setPassword, t }) {
-    const [mfaFactors, setMfaFactors] = useState([]);
-    const [mfaEnrolling, setMfaEnrolling] = useState(false);
-    const [mfaQrCode, setMfaQrCode] = useState(null);
-    const [mfaFactorId, setMfaFactorId] = useState(null);
-    const [mfaVerifyCode, setMfaVerifyCode] = useState('');
-    const [mfaError, setMfaError] = useState('');
+const SecurityPanel = memo(function SecurityPanel({ user, getLinkedIdentities, linkIdentity, unlinkIdentity, setPassword, t }) {
     const [identities, setIdentities] = useState([]);
     const [identitiesLoading, setIdentitiesLoading] = useState(false);
     const [linkError, setLinkError] = useState('');
@@ -226,7 +220,7 @@ const SecurityPanel = memo(function SecurityPanel({ user, startMfaEnrollment, ve
     const [passwordError, setPasswordError] = useState('');
     const [passwordSuccess, setPasswordSuccess] = useState(false);
 
-    // Load identities & MFA once on mount  
+    // Load identities once on mount  
     useEffect(() => {
         if (!user) return;
         setIdentitiesLoading(true);
@@ -234,11 +228,6 @@ const SecurityPanel = memo(function SecurityPanel({ user, startMfaEnrollment, ve
         getLinkedIdentities().then(({ identities: ids }) => {
             setIdentities(ids || []);
             setIdentitiesLoading(false);
-        });
-        import('../../services/supabaseClient').then(({ supabase }) => {
-            supabase.auth.mfa.listFactors().then(({ data }) => {
-                setMfaFactors(data?.totp ?? []);
-            });
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // intentionally stable — SecurityPanel mounts only once per tab activation
@@ -330,64 +319,6 @@ const SecurityPanel = memo(function SecurityPanel({ user, startMfaEnrollment, ve
                             }}
                         >{t.secChangePassword}</button>
                     </>
-                )}
-            </div>
-
-            {/* 2FA */}
-            <div className="settings-section">
-                <h3 className="settings-section-title">{t.sec2fa}</h3>
-                {mfaFactors.some(f => f.status === 'verified') ? (
-                    <div className="settings-mfa-status">
-                        <span className="settings-badge settings-badge-success"><ShieldCheck size={14} /> {t.sec2faActive}</span>
-                        <button type="button" className="btn btn-danger btn-sm"
-                            onClick={async () => {
-                                if (!window.confirm('Desativar verificação em duas etapas?')) return;
-                                const result = await disableMfa();
-                                if (result.success) setMfaFactors([]);
-                                else setMfaError(result.error);
-                            }}
-                        >{t.secDisable2fa}</button>
-                    </div>
-                ) : mfaQrCode ? (
-                    <div className="settings-mfa-enroll">
-                        <p>{t.sec2faScanDesc}</p>
-                        <div className="settings-mfa-qr"><img src={mfaQrCode} alt="QR Code 2FA" width={180} height={180} /></div>
-                        <input type="text" inputMode="numeric" placeholder={t.sec2faCodePh} value={mfaVerifyCode}
-                            onChange={e => setMfaVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                            className="settings-mfa-code-input" />
-                        {mfaError && <p className="settings-error">{mfaError}</p>}
-                        <div className="settings-actions">
-                            <button className="btn btn-primary btn-sm" disabled={mfaVerifyCode.length !== 6}
-                                onClick={async () => {
-                                    const result = await verifyMfaEnrollment(mfaFactorId, mfaVerifyCode);
-                                    if (result.success) {
-                                        setMfaQrCode(null); setMfaFactorId(null); setMfaVerifyCode(''); setMfaError(''); setMfaEnrolling(false);
-                                        const { supabase } = await import('../../services/supabaseClient');
-                                        const { data } = await supabase.auth.mfa.listFactors();
-                                        setMfaFactors(data?.totp ?? []);
-                                    } else { setMfaError(result.error); }
-                                }}
-                            >{t.sec2faConfirm}</button>
-                            <button type="button" className="btn btn-ghost btn-sm"
-                                onClick={() => { setMfaQrCode(null); setMfaFactorId(null); setMfaEnrolling(false); setMfaError(''); }}
-                            >{t.cancel}</button>
-                        </div>
-                    </div>
-                ) : (
-                    <div>
-                        <p className="settings-section-desc">{t.sec2faDesc}</p>
-                        {mfaError && <p className="settings-error">{mfaError}</p>}
-                        <button type="button" className="btn btn-primary btn-sm" disabled={mfaEnrolling}
-                            onClick={async () => {
-                                setMfaError(''); setMfaEnrolling(true);
-                                const result = await startMfaEnrollment();
-                                setMfaEnrolling(false);
-                                if (result.success && result.data) {
-                                    setMfaQrCode(result.data.qrCode); setMfaFactorId(result.data.id);
-                                } else { setMfaError(result.error || 'Erro ao ativar 2FA'); }
-                            }}
-                        >{mfaEnrolling ? t.sec2faActivating : t.sec2faEnable}</button>
-                    </div>
                 )}
             </div>
 
@@ -746,7 +677,6 @@ const LanguagePanel = memo(function LanguagePanel({ language, setLanguage, t }) 
 export default function SettingsModal({ onClose }) {
     const {
         user, updateProfile, confirmLogout,
-        startMfaEnrollment, verifyMfaEnrollment, disableMfa,
         getLinkedIdentities, linkIdentity, unlinkIdentity,
         setPassword, uploadAvatar, removeAvatar,
     } = useAuth();
@@ -813,9 +743,6 @@ export default function SettingsModal({ onClose }) {
                         {activeTab === 'security' && (
                             <SecurityPanel
                                 user={user}
-                                startMfaEnrollment={startMfaEnrollment}
-                                verifyMfaEnrollment={verifyMfaEnrollment}
-                                disableMfa={disableMfa}
                                 getLinkedIdentities={getLinkedIdentities}
                                 linkIdentity={linkIdentity}
                                 unlinkIdentity={unlinkIdentity}

@@ -81,7 +81,7 @@ const FONT_PRESETS = [
 // ── Translations ──
 const TRANSLATIONS = {
     'pt-br': {
-        myday: 'Meu Dia', important: 'Importante', planned: 'Planejado',
+        myday: 'Diário', important: 'Importante', planned: 'Planejado',
         dashboard: 'Visão Geral', boards: 'BOARDS', general: 'GERAL',
         resources: 'WIDGETS', others: 'OUTROS', focusMode: 'Modo Foco', radio: 'Rádio',
         settings: 'Configurações', help: 'Central de Ajuda', logout: 'Sair',

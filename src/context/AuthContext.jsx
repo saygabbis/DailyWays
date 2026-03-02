@@ -64,7 +64,6 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [mfaChallengeId, setMfaChallengeId] = useState(null);
   const [authError, setAuthError] = useState('');
   const [pendingSignupEmail, setPendingSignupEmail] = useState(null);
 
@@ -225,20 +224,6 @@ export function AuthProvider({ children }) {
         setAuthError(msg);
         return { success: false, error: msg };
       }
-      if (data?.session?.aal === 'aal2') {
-        setLoading(false);
-        return { success: true };
-      }
-      const { data: factors } = await supabase.auth.mfa.listFactors();
-      const totp = factors?.totp?.[0];
-      if (totp?.status === 'verified') {
-        const { data: challenge } = await supabase.auth.mfa.challenge({ factorId: totp.id });
-        if (challenge?.id) {
-          setMfaChallengeId(challenge.id);
-          setLoading(false);
-          return { success: false, requiresMfa: true, error: null };
-        }
-      }
       await refreshUser(data.user);
       setLoading(false);
       return { success: true };
@@ -248,15 +233,6 @@ export function AuthProvider({ children }) {
       setAuthError(msg);
       return { success: false, error: msg };
     }
-  };
-
-  const verifyMfa = async (code) => {
-    if (!mfaChallengeId) return { success: false, error: 'Sessão de verificação expirada.' };
-    const { data, error } = await supabase.auth.mfa.verify({ challengeId: mfaChallengeId, code });
-    setMfaChallengeId(null);
-    if (error) return { success: false, error: error.message || 'Código inválido.' };
-    await refreshUser(data.user);
-    return { success: true };
   };
 
   const loginWithProvider = async (provider) => {
@@ -398,7 +374,6 @@ export function AuthProvider({ children }) {
     } catch (_) { }
     setUser(null);
     setProfile(null);
-    setMfaChallengeId(null);
     setAuthError('');
     setPendingSignupEmail(null);
   };
@@ -418,40 +393,6 @@ export function AuthProvider({ children }) {
     if (error) return { success: false, error: error.message };
     setProfile((p) => ({ ...p, ...updates }));
     setUser((u) => (u ? { ...u, ...updates } : null));
-    return { success: true };
-  };
-
-  const startMfaEnrollment = async () => {
-    const { data, error } = await supabase.auth.mfa.enroll({
-      factorType: 'totp',
-      friendlyName: 'DailyWays',
-    });
-    if (error) return { success: false, error: error.message, data: null };
-    return {
-      success: true,
-      data: {
-        id: data.id,
-        qrCode: data.totp.qr_code,
-        secret: data.totp.secret,
-      },
-    };
-  };
-
-  const verifyMfaEnrollment = async (factorId, code) => {
-    const { data, error } = await supabase.auth.mfa.challengeAndVerify({
-      factorId,
-      code,
-    });
-    if (error) return { success: false, error: error.message };
-    return { success: true, data };
-  };
-
-  const disableMfa = async () => {
-    const { data: factors } = await supabase.auth.mfa.listFactors();
-    const totp = factors?.totp?.[0];
-    if (!totp) return { success: false, error: '2FA não está ativo.' };
-    const { error } = await supabase.auth.mfa.unenroll({ factorId: totp.id });
-    if (error) return { success: false, error: error.message };
     return { success: true };
   };
 
@@ -517,13 +458,11 @@ export function AuthProvider({ children }) {
     user,
     profile,
     loading,
-    mfaChallengeId,
     authError,
     pendingSignupEmail,
     clearPendingSignupEmail: () => setPendingSignupEmail(null),
     clearAuthError: () => setAuthError(''),
     login,
-    verifyMfa,
     register,
     verifySignupOtp,
     resendSignupOtp,
@@ -533,9 +472,6 @@ export function AuthProvider({ children }) {
     uploadAvatar,
     removeAvatar,
     loginWithProvider,
-    startMfaEnrollment,
-    verifyMfaEnrollment,
-    disableMfa,
     getLinkedIdentities,
     linkIdentity,
     unlinkIdentity,

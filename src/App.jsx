@@ -198,7 +198,7 @@ function AppContent() {
   const getTitle = () => {
     switch (activeView) {
       case 'dashboard': return 'Visão Geral';
-      case 'myday': return 'Meu Dia';
+      case 'myday': return 'Diário';
       case 'important': return 'Importante';
       case 'planned': return 'Planejado';
       case 'board': return activeBoard ? `${activeBoard.emoji} ${activeBoard.title}` : 'Board';
@@ -249,7 +249,7 @@ function AppContent() {
 
     const navItems = [
       { label: 'Visão Geral', icon: <LayoutDashboard size={15} />, action: () => setActiveView('dashboard'), shortcut: '' },
-      { label: 'Meu Dia', icon: <Sun size={15} />, action: () => setActiveView('myday') },
+      { label: 'Diário', icon: <Sun size={15} />, action: () => setActiveView('myday') },
       { label: 'Importante', icon: <Star size={15} />, action: () => setActiveView('important') },
       { label: 'Planejado', icon: <CalendarDays size={15} />, action: () => setActiveView('planned') },
     ];
