@@ -1,0 +1,188 @@
+/* AvatarCropper.css */
+
+.cropper-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cropper-modal {
+    background: var(--bg-card);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
+    padding: var(--space-xl);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-md);
+    max-width: 360px;
+    width: 92%;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+
+.cropper-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    text-align: center;
+}
+
+.cropper-hint {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    margin: 0;
+    text-align: center;
+}
+
+.cropper-upload-area {
+    width: 280px;
+    height: 220px;
+    border: 2px dashed var(--glass-border);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    color: var(--text-secondary);
+    text-align: center;
+    padding: var(--space-lg);
+}
+
+.cropper-upload-area:hover {
+    border-color: var(--accent-primary);
+    background: var(--accent-light);
+    color: var(--text-primary);
+}
+
+.cropper-upload-icon {
+    font-size: 2.5rem;
+    line-height: 1;
+}
+
+.cropper-upload-area p {
+    margin: 0;
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.cropper-upload-area span {
+    font-size: 0.72rem;
+    color: var(--text-tertiary);
+}
+
+.cropper-canvas {
+    border-radius: 50%;
+    display: block;
+    touch-action: none;
+    box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.cropper-zoom {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    width: 280px;
+}
+
+.cropper-zoom input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent-primary);
+}
+
+.cropper-zoom span {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    min-width: 32px;
+    text-align: right;
+}
+
+.cropper-actions {
+    display: flex;
+    gap: var(--space-sm);
+    width: 100%;
+    justify-content: flex-end;
+}
+
+/* Avatar edit overlay in Settings Account */
+.settings-avatar-wrapper {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.settings-avatar-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.settings-avatar-wrapper:hover .settings-avatar-overlay {
+    opacity: 1;
+}
+
+.settings-avatar-photo {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+}
+
+/* Avatar options dropdown */
+.avatar-options-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    padding: 4px;
+    z-index: 200;
+    min-width: 175px;
+    display: flex;
+    flex-direction: column;
+}
+
+.avatar-option-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    text-align: left;
+    transition: background 0.15s;
+}
+
+.avatar-option-btn:hover {
+    background: var(--bg-hover);
+}
+
+.avatar-option-btn.danger {
+    color: var(--color-danger, #ef4444);
+}
+
+.avatar-option-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}

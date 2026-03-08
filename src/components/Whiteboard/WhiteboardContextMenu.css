@@ -1,0 +1,41 @@
+.whiteboard-context-menu {
+    min-width: 160px;
+    padding: 6px 0;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+}
+
+.whiteboard-context-menu-title {
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.whiteboard-context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.whiteboard-context-menu-item:hover {
+    background: var(--bg-tertiary);
+}
+
+.whiteboard-context-menu-sep {
+    height: 1px;
+    margin: 4px 0;
+    background: var(--border-color);
+}

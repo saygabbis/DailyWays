@@ -1,0 +1,891 @@
+/* ===== Board View — DailyWays Design ===== */
+.board-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    /* Padding moved to scroller */
+    height: calc(100vh - var(--header-height));
+    min-height: 0;
+    position: relative;
+    /* Remove overflow: hidden to help DND nested scroll detection */
+}
+
+.board-scroller {
+    flex: 1;
+    overflow: auto;
+    padding: var(--space-xl);
+    height: 100%;
+}
+
+.board-scroller.is-panning {
+    cursor: grabbing;
+    user-select: none;
+}
+
+/* Custom scrollbar for horizontal board scroll */
+.board-view::-webkit-scrollbar {
+    height: 8px;
+}
+
+.board-view::-webkit-scrollbar-track {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+.board-view::-webkit-scrollbar-thumb {
+    background: var(--border-color-strong);
+    border-radius: 4px;
+}
+
+.board-view::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-primary);
+}
+
+/* ── Board Toolbar ── */
+.board-toolbar {
+    position: absolute;
+    top: var(--space-md);
+    right: var(--space-xl);
+    z-index: 100;
+    /* Higher than lists */
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    /* Glassmorphic float */
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-full);
+    padding: 6px 12px;
+    box-shadow: var(--glass-shadow);
+    transition: box-shadow var(--transition-fast) ease, background var(--transition-fast) ease;
+    user-select: none;
+    cursor: move;
+    /* Allow dragging from the background */
+    white-space: nowrap;
+    min-width: max-content;
+}
+
+.board-toolbar.floating {
+    position: absolute;
+    z-index: 80;
+    /* Relative to board-view, below header/sidebar but above content */
+    margin: 0;
+    top: 20px;
+    right: 20px;
+}
+
+.board-toolbar.dragging {
+    box-shadow: var(--shadow-xl);
+    background: var(--bg-card);
+    opacity: 0.95;
+    z-index: 1001;
+    /* Ensure it stays on top while moving */
+    cursor: move;
+}
+
+.board-toolbar>* {
+    flex-shrink: 0;
+}
+
+.board-toolbar button,
+.board-toolbar input,
+.board-toolbar a {
+    cursor: pointer;
+    /* Ensure buttons have correct cursor */
+}
+
+.board-list-header-actions button {
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
+.board-toolbar-handle {
+    display: flex;
+    align-items: center;
+    color: var(--text-secondary);
+    opacity: 0.6;
+    transition: opacity var(--transition-fast);
+    cursor: grab;
+    padding: 4px;
+    margin-left: -4px;
+}
+
+.board-toolbar.dragging .board-toolbar-handle {
+    cursor: grabbing;
+}
+
+.board-toolbar:hover .board-toolbar-handle {
+    opacity: 0.8;
+}
+
+.toolbar-close-btn {
+    opacity: 0.7;
+    transition: all var(--transition-fast);
+}
+
+.toolbar-close-btn:hover {
+    opacity: 1;
+    color: var(--danger);
+    background: var(--bg-hover) !important;
+}
+
+.board-members {
+    display: flex;
+    align-items: center;
+    margin-right: var(--space-sm);
+}
+
+.board-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-card);
+    border: 2px solid var(--bg-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-left: -8px;
+    cursor: default;
+    transition: transform var(--transition-fast);
+}
+
+.board-avatar:first-child {
+    margin-left: 0;
+}
+
+.board-avatar:hover {
+    transform: translateY(-2px);
+    z-index: 1;
+}
+
+.board-avatar:nth-child(1) {
+    background: #ff6b6b;
+    color: white;
+}
+
+.board-avatar:nth-child(2) {
+    background: #4d96ff;
+    color: white;
+}
+
+.board-avatar-more {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-elevated);
+    border: 2px solid var(--bg-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-left: -8px;
+    cursor: default;
+}
+
+.board-toolbar-delim {
+    width: 1px;
+    height: 24px;
+    background: var(--border-color);
+    margin: 0 var(--space-xs);
+}
+
+/* ── Saving Indicator ── */
+.board-saving-indicator {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0.01em;
+    opacity: 1;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.spinning {
+    animation: spin 0.9s linear infinite;
+}
+
+
+.board-lists {
+    display: flex;
+    gap: var(--space-lg);
+    align-items: flex-start;
+    height: 100%;
+    padding-bottom: var(--space-lg);
+    /* Ensure lists never wrap and extend horizontally */
+    min-width: min-content;
+}
+
+/* ── List ── */
+.board-list {
+    flex-shrink: 0;
+    width: 320px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    border: 1.5px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-sm);
+    transition: background-color var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
+    max-height: 100%;
+}
+
+.board-list-inner {
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+}
+
+/* Wrapper for DND to avoid layout shifts */
+.board-list-wrapper {
+    flex-shrink: 0;
+    width: 320px;
+    height: 100%;
+}
+
+.list-dragging {
+    opacity: 0.8;
+}
+
+.list-dragging .board-list {
+    box-shadow: var(--shadow-xl);
+    border-color: var(--accent-primary);
+    transform: rotate(1deg);
+}
+
+.board-list:hover {
+    box-shadow: var(--shadow-md);
+}
+
+/* ── Colored List: full background theming ── */
+/* Light theme: soft warm tint */
+.board-list[data-colored="true"] {
+    background: color-mix(in srgb, var(--list-accent) 10%, var(--bg-secondary));
+    border-color: color-mix(in srgb, var(--list-accent) 35%, var(--border-color));
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--list-accent) 15%, transparent);
+}
+
+.board-list[data-colored="true"] .board-list-header {
+    background: color-mix(in srgb, var(--list-accent) 16%, var(--bg-secondary));
+    border-bottom-color: color-mix(in srgb, var(--list-accent) 30%, var(--border-color));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.board-list[data-colored="true"] .board-list-footer {
+    border-top-color: color-mix(in srgb, var(--list-accent) 25%, var(--border-color));
+}
+
+/* Dark theme: even more subtle so it doesn't blind */
+[data-theme="dark"] .board-list[data-colored="true"] {
+    background: color-mix(in srgb, var(--list-accent) 8%, var(--bg-secondary));
+    border-color: color-mix(in srgb, var(--list-accent) 25%, var(--border-color));
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--list-accent) 12%, transparent);
+}
+
+[data-theme="dark"] .board-list[data-colored="true"] .board-list-header {
+    background: color-mix(in srgb, var(--list-accent) 12%, var(--bg-secondary));
+    border-bottom-color: color-mix(in srgb, var(--list-accent) 20%, var(--border-color));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+[data-theme="dark"] .board-list[data-colored="true"] .board-list-footer {
+    border-top-color: color-mix(in srgb, var(--list-accent) 18%, var(--border-color));
+}
+
+/* Dragging-over uses the accent tint instead of global accent-light */
+.board-list[data-colored="true"] .board-list-cards.dragging-over {
+    background: color-mix(in srgb, var(--list-accent) 18%, transparent);
+}
+
+.board-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+}
+
+.board-list-title {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    cursor: default;
+    color: var(--text-primary);
+}
+
+.list-completion-icon {
+    color: var(--success);
+    flex-shrink: 0;
+}
+
+.board-list-count {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--accent-primary);
+    background: var(--accent-light);
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+}
+
+.board-list-actions {
+    position: relative;
+}
+
+.board-list-menu {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: var(--bg-secondary);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-xs);
+    min-width: 160px;
+    z-index: var(--z-dropdown);
+    box-shadow: var(--shadow-lg);
+}
+
+.board-list-menu button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    transition: all var(--transition-fast);
+}
+
+.board-list-menu button:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.board-list-menu button.danger:hover {
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
+.board-list-rename input {
+    height: 32px;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    width: 100%;
+}
+
+/* ── Cards Container ── */
+.board-list-cards {
+    flex: 1;
+    overflow-y: visible;
+    /* Changed from auto to visible to avoid DND nesting bug */
+    padding: var(--space-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    min-height: 60px;
+    transition: background var(--transition-fast);
+}
+
+/* Cards container custom scrollbar */
+.board-list-cards::-webkit-scrollbar {
+    width: 4px;
+}
+
+.board-list-cards::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.board-list-cards::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.board-list-cards.dragging-over {
+    background: var(--accent-light);
+    border-radius: var(--radius-md);
+}
+
+/* ── Card ── */
+.board-card {
+    background: var(--bg-card);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    cursor: pointer;
+    /* Outer container has NO transition on transform/all to avoid DND lag */
+    transition: background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+    position: relative;
+    box-shadow: var(--shadow-card);
+}
+
+/* ── Colored Card: full background theming (similar to lists) ── */
+.board-card[data-colored="true"] {
+    background: color-mix(in srgb, var(--card-accent) 10%, var(--bg-card));
+    border-color: color-mix(in srgb, var(--card-accent) 35%, var(--border-color));
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--card-accent) 12%, transparent);
+}
+
+.board-card[data-colored="true"]:hover {
+    border-color: color-mix(in srgb, var(--card-accent) 55%, var(--border-color));
+    box-shadow: 0 6px 22px color-mix(in srgb, var(--card-accent) 16%, transparent);
+}
+
+.board-card-inner {
+    transition: transform var(--transition-fast) var(--ease-out-soft);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.board-card:hover .board-card-inner {
+    transform: translateY(-4px);
+    animation: jelly 0.6s var(--ease-in-out-soft) both;
+}
+
+.board-card:hover {
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-card-hover);
+}
+
+.board-card:active .board-card-inner {
+    transform: translateY(-2px) scale(0.98);
+}
+
+.board-card-dragging .board-card-inner {
+    transform: rotate(2deg);
+    animation: none !important;
+    /* Prevent entrance animation during drag */
+}
+
+.board-card-dragging {
+    border-color: var(--accent-primary) !important;
+    box-shadow: var(--shadow-xl) !important;
+    z-index: 9999;
+}
+
+.board-card-done-state {
+    opacity: 0.65 !important;
+    border-color: var(--border-color) !important;
+}
+
+.board-card-done-state .board-card-title {
+    text-decoration: line-through;
+    color: var(--text-tertiary);
+}
+
+.board-card-done-state:hover {
+    opacity: 0.85 !important;
+}
+
+.board-card-all-subtasks-done {
+    border-color: var(--success-alpha) !important;
+    background: rgba(34, 197, 94, 0.02);
+}
+
+.board-card-done .board-card-title {
+    opacity: 0.9;
+}
+
+.board-card-done .board-card-meta,
+.board-card-done .board-card-labels {
+    opacity: 0.8;
+}
+
+.board-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-xs);
+}
+
+.board-card-menu-btn {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+
+.board-card:hover .board-card-menu-btn {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.board-card-menu-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    transform: scale(1.08);
+}
+
+.board-card-desc {
+    color: var(--text-tertiary);
+}
+
+.board-card-title {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.board-card-check {
+    background: transparent;
+    border: none;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.board-card-check:hover {
+    color: var(--accent-primary);
+    transform: scale(1.15);
+}
+
+.board-card-check.completed {
+    color: var(--success);
+}
+
+.board-card-label {
+    width: 32px;
+    height: 6px;
+    border-radius: var(--radius-full);
+    display: inline-block;
+}
+
+.board-card-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+}
+
+.board-card-meta>span {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.board-card-priority {
+    font-weight: 700;
+}
+
+.board-card-due {
+    color: var(--text-secondary);
+}
+
+.board-card-due.overdue {
+    color: var(--danger);
+    font-weight: 700;
+}
+
+.board-card-due.today {
+    color: var(--warning);
+    font-weight: 700;
+}
+
+.board-card-myday {
+    color: var(--label-yellow);
+}
+
+.board-card-subtasks.all-done {
+    color: var(--success);
+}
+
+.board-card-progress {
+    height: 4px;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-full);
+    margin-top: var(--space-sm);
+    overflow: hidden;
+}
+
+.board-card-progress-bar {
+    height: 100%;
+    border-radius: var(--radius-full);
+    transition: width var(--transition-base);
+}
+
+/* ── Footer / Add Card ── */
+.board-list-footer {
+    padding: var(--space-sm);
+    border-top: 1px solid var(--border-color);
+}
+
+.board-add-card-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: 10px var(--space-md);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    transition: all var(--transition-fast);
+}
+
+.board-add-card-btn:hover {
+    background: var(--bg-hover);
+    color: var(--accent-primary);
+}
+
+.board-add-card-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.board-add-card-form input {
+    height: 38px;
+    font-size: var(--font-size-sm);
+}
+
+.board-add-card-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+/* ── Add List ── */
+.board-add-list {
+    flex-shrink: 0;
+    width: 320px;
+    animation: slideUpJelly 0.55s var(--ease-out-soft) both;
+    /* animation-delay: definido dinamicamente via inline style no BoardView.jsx */
+}
+
+.board-add-list-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: var(--space-lg);
+    border-radius: var(--radius-lg);
+    background: var(--bg-secondary);
+    border: 2px dashed var(--border-color);
+    color: var(--text-secondary);
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    transition: all var(--transition-fast);
+}
+
+.board-add-list-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: var(--accent-light);
+    transform: translateY(-2px);
+}
+
+.board-add-list-form {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    border: 1.5px solid var(--border-color);
+    padding: var(--space-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    box-shadow: var(--shadow-sm);
+}
+
+.board-add-list-form input {
+    height: 40px;
+}
+
+.board-add-list-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+/* ── Empty State ── */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    gap: var(--space-md);
+    color: var(--text-tertiary);
+    padding: var(--space-3xl);
+}
+
+.empty-state-icon {
+    font-size: 64px;
+    filter: grayscale(0.5);
+}
+
+.empty-state h2 {
+    font-size: var(--font-size-xl);
+    color: var(--text-primary);
+}
+
+.empty-state p {
+    font-size: var(--font-size-base);
+    max-width: 300px;
+}
+
+/* ── Tablet ── */
+@media (max-width: 768px) {
+    .board-view {
+        padding: var(--space-md);
+        padding-bottom: 0;
+        height: calc(100vh - var(--header-height));
+        /* Enable horizontal snap scrolling between lists */
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .board-lists {
+        gap: var(--space-md);
+        /* Ensure lists have enough space to breathe */
+        padding-right: var(--space-md);
+    }
+
+    .board-list {
+        /* Fill most of the screen — leave a peek of the next list */
+        width: calc(100vw - var(--space-xl) * 2);
+        min-width: 260px;
+        max-width: 360px;
+        scroll-snap-align: center;
+        max-height: calc(100vh - var(--header-height) - var(--space-2xl));
+    }
+
+    .board-add-list {
+        width: calc(100vw - var(--space-xl) * 2);
+        min-width: 260px;
+        max-width: 360px;
+        scroll-snap-align: center;
+    }
+
+    .board-toolbar {
+        flex-wrap: wrap;
+        gap: var(--space-sm);
+    }
+
+    .board-card {
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    .board-card-title {
+        font-size: var(--font-size-sm);
+    }
+
+    .board-card-meta {
+        font-size: 0.625rem;
+    }
+
+    .board-list-header {
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    .board-list-footer {
+        padding: var(--space-xs) var(--space-sm);
+    }
+
+    .board-add-card-btn {
+        padding: 8px var(--space-md);
+    }
+}
+
+/* ── Mobile Small ── */
+@media (max-width: 480px) {
+    .board-view {
+        padding: var(--space-sm);
+        padding-bottom: 0;
+    }
+
+    .board-lists {
+        gap: var(--space-sm);
+        padding-right: var(--space-sm);
+    }
+
+    .board-list {
+        /* Almost full width on small phones */
+        width: calc(100vw - var(--space-lg) * 2);
+        max-width: none;
+        max-height: calc(100vh - var(--header-height) - var(--space-lg));
+    }
+
+    .board-add-list {
+        width: calc(100vw - var(--space-lg) * 2);
+        max-width: none;
+    }
+
+    .board-list-title {
+        font-size: var(--font-size-sm);
+    }
+
+    .board-card {
+        padding: var(--space-sm);
+    }
+
+    .board-card-labels {
+        margin-bottom: 4px;
+    }
+
+    .board-card-label {
+        width: 24px;
+        height: 4px;
+    }
+
+    .board-card-title {
+        font-size: var(--font-size-sm);
+        margin-bottom: 4px;
+    }
+
+    .board-add-list-btn {
+        padding: var(--space-md);
+        font-size: var(--font-size-sm);
+    }
+
+    .board-list-cards {
+        padding: var(--space-xs);
+        gap: var(--space-xs);
+    }
+
+    .empty-state {
+        padding: var(--space-xl);
+    }
+
+    .empty-state h2 {
+        font-size: var(--font-size-lg);
+    }
+
+    .empty-state p {
+        font-size: var(--font-size-sm);
+    }
+}

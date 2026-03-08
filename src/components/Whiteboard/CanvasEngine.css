@@ -1,0 +1,150 @@
+.whiteboard-editor-layout {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.whiteboard-editor-layout .whiteboard-viewport {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+}
+
+.whiteboard-viewport {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    background-color: var(--bg-primary);
+    background-image: radial-gradient(var(--border-color) 1px, transparent 1px);
+    cursor: default;
+    user-select: none;
+    touch-action: none;
+}
+
+.whiteboard-viewport.space-pressed {
+    cursor: grab;
+}
+
+.whiteboard-viewport.panning {
+    cursor: grabbing;
+}
+
+.whiteboard-viewport.grid-hidden {
+    background-image: none;
+}
+
+.whiteboard-canvas-transform {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+.whiteboard-center-marker {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--text-tertiary);
+    opacity: 0.3;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.whiteboard-nodes-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.whiteboard-nodes-container > * {
+    pointer-events: auto;
+}
+
+.whiteboard-node-wrapper {
+    cursor: pointer;
+}
+
+.whiteboard-node-wrapper.selected {
+    outline: 2px solid var(--accent, #4d96ff);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+@keyframes node-pop-in {
+    0% {
+        transform: scale(0.92);
+        opacity: 0.6;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.whiteboard-node-wrapper.node-just-created {
+    animation: node-pop-in 0.2s ease-out forwards;
+}
+
+.whiteboard-resize-handles {
+    z-index: 5;
+}
+
+.whiteboard-resize-handle {
+    border: 2px solid var(--accent, #4d96ff);
+    background: var(--bg-primary);
+    border-radius: 2px;
+    box-sizing: border-box;
+}
+
+.whiteboard-resize-handle:hover {
+    background: var(--accent, #4d96ff);
+}
+
+.whiteboard-viewport-controls {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    min-height: 32px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow-md);
+    z-index: 10;
+}
+
+.whiteboard-viewport-controls button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.whiteboard-viewport-controls button:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.whiteboard-viewport-controls .zoom-label {
+    min-width: 36px;
+    font-size: 11px;
+    line-height: 26px;
+    color: var(--text-secondary);
+    text-align: center;
+}

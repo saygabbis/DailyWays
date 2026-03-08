@@ -1,0 +1,111 @@
+/* ===== Planned Drop Popover ===== */
+
+.planned-drop-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+}
+
+.planned-drop-popover {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    z-index: 10000;
+    width: 320px;
+    overflow: hidden;
+}
+
+.planned-drop-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-lg);
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.planned-drop-header-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.planned-drop-title {
+    font-weight: 700;
+    font-size: var(--font-size-base);
+}
+
+.planned-drop-card-name {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Quick Options */
+.planned-drop-options {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-sm);
+}
+
+.planned-drop-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-weight: 500;
+}
+
+.planned-drop-option:hover {
+    background: var(--bg-hover);
+    transform: translateX(4px);
+}
+
+.planned-drop-option.custom {
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border-color);
+    margin-top: var(--space-xs);
+    padding-top: var(--space-md);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.planned-drop-option-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+}
+
+.planned-drop-option-date {
+    margin-left: auto;
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+}
+
+/* Custom DatePicker */
+.planned-drop-custom {
+    padding: var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}

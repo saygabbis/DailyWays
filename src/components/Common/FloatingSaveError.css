@@ -1,0 +1,152 @@
+/* ===== Floating Save Error ===== */
+.floating-save-error {
+    position: fixed;
+    bottom: 88px;
+    right: var(--space-xl);
+    z-index: var(--z-modal);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding: 10px 14px;
+    border-radius: var(--radius-lg);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid color-mix(in srgb, var(--error, #f87171) 40%, transparent);
+    box-shadow:
+        var(--glass-shadow),
+        0 4px 24px rgba(0, 0, 0, 0.3),
+        0 0 0 2px color-mix(in srgb, var(--error, #f87171) 12%, transparent);
+    pointer-events: auto;
+    min-width: 260px;
+    max-width: 340px;
+}
+
+.floating-save-error.animate-slide-up {
+    animation: slideUpFadeErr 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideUpFadeErr {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.97);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Cabeçalho */
+.floating-save-error-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--error, #f87171);
+    white-space: nowrap;
+}
+
+.floating-save-error-header svg {
+    flex-shrink: 0;
+}
+
+/* Board name (secundário) */
+.floating-save-error-board {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    padding-left: 21px;
+    /* alinha com o texto depois do ícone */
+    margin-top: -4px;
+}
+
+/* Botões */
+.floating-save-error-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: 2px;
+}
+
+.floating-save-error-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: var(--radius-full);
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition:
+        background var(--transition-fast),
+        transform var(--transition-fast),
+        box-shadow var(--transition-fast);
+    white-space: nowrap;
+}
+
+.floating-save-error-btn:hover {
+    transform: translateY(-1px);
+}
+
+.floating-save-error-btn:active {
+    transform: translateY(0);
+}
+
+/* Botão primário: Tentar novamente */
+.floating-save-error-btn--retry {
+    background: var(--accent-primary);
+    color: #fff;
+}
+
+.floating-save-error-btn--retry:hover {
+    background: var(--accent-hover, color-mix(in srgb, var(--accent-primary) 85%, white));
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--accent-primary) 35%, transparent);
+}
+
+.floating-save-error-btn--retry:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Botão secundário: Reverter */
+.floating-save-error-btn--revert {
+    background: color-mix(in srgb, var(--error, #f87171) 12%, transparent);
+    color: var(--error, #f87171);
+    border: 1px solid color-mix(in srgb, var(--error, #f87171) 30%, transparent);
+}
+
+.floating-save-error-btn--revert:hover {
+    background: color-mix(in srgb, var(--error, #f87171) 22%, transparent);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--error, #f87171) 20%, transparent);
+}
+
+.floating-save-error-btn--revert:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Spinner inline */
+@keyframes spin-fse {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.floating-save-error .spinning {
+    animation: spin-fse 0.9s linear infinite;
+}

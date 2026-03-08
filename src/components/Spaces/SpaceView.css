@@ -1,0 +1,71 @@
+.space-view-container {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    background-color: var(--bg-primary);
+    background-image: radial-gradient(var(--border-color) 1px, transparent 1px);
+    background-size: 24px 24px;
+    cursor: grab;
+    user-select: none;
+    transition: background-color var(--transition-base);
+}
+
+.space-view-container.panning {
+    cursor: grabbing;
+}
+
+.space-canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform-origin: 0 0;
+    /* Will be overridden by inline styles for pan/zoom */
+    will-change: transform;
+}
+
+.space-center-marker {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    /* Center it exactly at 0,0 */
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--text-tertiary);
+    opacity: 0.3;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.space-view-empty {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: var(--font-size-lg);
+}
+
+.space-reset-btn {
+    position: absolute;
+    bottom: var(--space-xl);
+    right: var(--space-xl);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 12px;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    box-shadow: var(--shadow-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+}
+
+.space-reset-btn:hover {
+    color: var(--text-primary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--text-tertiary);
+}

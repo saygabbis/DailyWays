@@ -1,0 +1,98 @@
+/* ===== Floating Save Button ===== */
+.floating-save {
+    position: fixed;
+    bottom: 88px;
+    /* acima do PomodoroTimer */
+    right: var(--space-xl);
+    z-index: var(--z-modal);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 8px 12px;
+    border-radius: var(--radius-full);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow), 0 4px 20px rgba(0, 0, 0, 0.25);
+    pointer-events: auto;
+}
+
+.floating-save--saving {
+    border-color: var(--accent-primary);
+    box-shadow: var(--glass-shadow), 0 0 0 2px color-mix(in srgb, var(--accent-primary) 20%, transparent);
+}
+
+/* Animação de entrada */
+@keyframes slideUpFade {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.floating-save.animate-slide-up {
+    animation: slideUpFade 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Status (texto + ícone) */
+.floating-save-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.floating-save--saving .floating-save-status {
+    color: var(--accent-primary);
+}
+
+/* Botão de ação */
+.floating-save-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    background: var(--accent-primary);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: background var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+    white-space: nowrap;
+}
+
+.floating-save-btn:hover {
+    background: var(--accent-hover, color-mix(in srgb, var(--accent-primary) 85%, white));
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--accent-primary) 35%, transparent);
+}
+
+.floating-save-btn:active {
+    transform: translateY(0);
+}
+
+/* Spin animation (self-contained, não depende de Board.css) */
+@keyframes spin-fsb {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.floating-save .spinning {
+    animation: spin-fsb 0.9s linear infinite;
+}
