@@ -234,6 +234,154 @@ export async function fetchBoards(userId) {
   return { data, error: null };
 }
 
+// ── Sharing helpers: members & invitations ───────────────────────────
+
+/**
+ * Busca membros de um board, incluindo dados básicos do profile.
+ * Retorna array de { userId, role, name, username, email, avatar }.
+ */
+export async function fetchBoardMembers(boardId) {
+  if (!boardId) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('board_members')
+    .select('board_id, user_id, role, profiles:public.profiles!inner (id, username, name, avatar)')
+    .eq('board_id', boardId);
+
+  if (error) {
+    console.error('[boardService] fetchBoardMembers error', error);
+    return { data: [], error: error.message || 'Erro ao carregar membros do board.' };
+  }
+
+  const members = (data || []).map((row) => ({
+    boardId: row.board_id,
+    userId: row.user_id,
+    role: row.role,
+    name: row.profiles?.name ?? '',
+    username: row.profiles?.username ?? '',
+    avatar: row.profiles?.avatar ?? '',
+  }));
+  return { data: members, error: null };
+}
+
+/**
+ * Convida alguém para um board por e-mail, com role 'editor' ou 'reader'.
+ * Usa a RPC invite_board_member definida nas migrations.
+ */
+export async function inviteBoardMember(boardId, email, role = 'reader') {
+  if (!boardId || !email) {
+    return { success: false, error: 'Board ou e-mail inválido.' };
+  }
+  const normalizedRole = role === 'editor' ? 'editor' : 'reader';
+  const { error } = await supabase.rpc('invite_board_member', {
+    p_board_id: boardId,
+    p_email: email,
+    p_role: normalizedRole,
+  });
+  if (error) {
+    console.error('[boardService] inviteBoardMember error', error);
+    return { success: false, error: error.message || 'Erro ao enviar convite.' };
+  }
+  return { success: true };
+}
+
+/**
+ * Lista convites de board do usuário atual (apenas pendentes).
+ * Depende das policies de board_invitations e da função accept_board_invitation.
+ */
+export async function fetchMyInvitations() {
+  const {
+    data: sessionData,
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError || !sessionData?.session?.user) {
+    return { data: [], error: null };
+  }
+  const user = sessionData.session.user;
+
+  const { data, error } = await supabase
+    .from('board_invitations')
+    .select('id, board_id, inviter_id, invitee_email, invitee_user_id, role, status, created_at, boards!inner (title, emoji)')
+    .eq('status', 'pending')
+    .or(
+      `invitee_user_id.eq.${user.id},invitee_email.eq.${user.email}`,
+    );
+
+  if (error) {
+    console.error('[boardService] fetchMyInvitations error', error);
+    return { data: [], error: error.message || 'Erro ao carregar convites.' };
+  }
+
+  const invitations = (data || []).map((row) => ({
+    id: row.id,
+    boardId: row.board_id,
+    role: row.role,
+    status: row.status,
+    inviteeEmail: row.invitee_email,
+    createdAt: row.created_at,
+    boardTitle: row.boards?.title ?? 'Board',
+    boardEmoji: row.boards?.emoji ?? '📋',
+  }));
+  return { data: invitations, error: null };
+}
+
+export async function acceptInvitation(inviteId) {
+  if (!inviteId) return { success: false, error: 'Convite inválido.' };
+  const { error } = await supabase.rpc('accept_board_invitation', {
+    p_invite_id: inviteId,
+  });
+  if (error) {
+    console.error('[boardService] acceptInvitation error', error);
+    return { success: false, error: error.message || 'Erro ao aceitar convite.' };
+  }
+  return { success: true };
+}
+
+export async function declineInvitation(inviteId) {
+  if (!inviteId) return { success: false, error: 'Convite inválido.' };
+  const { error } = await supabase
+    .from('board_invitations')
+    .update({ status: 'declined' })
+    .eq('id', inviteId);
+  if (error) {
+    console.error('[boardService] declineInvitation error', error);
+    return { success: false, error: error.message || 'Erro ao recusar convite.' };
+  }
+  return { success: true };
+}
+
+export async function updateMemberRole(boardId, userId, role) {
+  if (!boardId || !userId) {
+    return { success: false, error: 'Dados inválidos.' };
+  }
+  const normalizedRole = role === 'editor' || role === 'owner' ? role : 'reader';
+  const { error } = await supabase
+    .from('board_members')
+    .update({ role: normalizedRole })
+    .eq('board_id', boardId)
+    .eq('user_id', userId);
+  if (error) {
+    console.error('[boardService] updateMemberRole error', error);
+    return { success: false, error: error.message || 'Erro ao atualizar permissão.' };
+  }
+  return { success: true };
+}
+
+export async function removeMember(boardId, userId) {
+  if (!boardId || !userId) {
+    return { success: false, error: 'Dados inválidos.' };
+  }
+  const { error } = await supabase
+    .from('board_members')
+    .delete()
+    .eq('board_id', boardId)
+    .eq('user_id', userId);
+  if (error) {
+    console.error('[boardService] removeMember error', error);
+    return { success: false, error: error.message || 'Erro ao remover membro.' };
+  }
+  return { success: true };
+}
+
 // ── Delete ──────────────────────────────────────────────────────────
 
 /**

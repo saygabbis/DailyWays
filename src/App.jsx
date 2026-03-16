@@ -14,6 +14,7 @@ import TaskDetailModal from './components/TaskDetail/TaskDetailModal';
 import SettingsModal from './components/Settings/SettingsView';
 import SearchOverlay from './components/Search/SearchOverlay';
 import SpaceView from './components/Spaces/SpaceView';
+import SpacesComingSoon from './components/Spaces/SpacesComingSoon';
 
 import PomodoroTimer from './components/Pomodoro/PomodoroTimer';
 import RadioWidget from './components/Radio/RadioWidget';
@@ -321,7 +322,7 @@ function AppContent() {
             {activeView === 'important' && <ImportantView key="important" onCardClick={handleCardClick} />}
             {activeView === 'planned' && <PlannedView key="planned" onCardClick={handleCardClick} />}
             {activeView === 'board' && activeBoard && <BoardView key={`board-${activeBoard.id}`} ref={boardViewRef} onCardClick={handleCardClick} />}
-            {activeView.startsWith('space-') && <SpaceView key={activeView} spaceId={activeView.replace('space-', '')} />}
+            {activeView.startsWith('space-') && <SpacesComingSoon key={activeView} />}
             {activeView === 'help' && (
               <div style={{ padding: 'var(--space-xl)', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '80px' }}>
                 <h2 style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🤝 Central de Ajuda</h2>

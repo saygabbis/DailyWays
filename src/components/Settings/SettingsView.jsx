@@ -6,10 +6,11 @@ import {
     ChevronRight, Save, Shield, Bell, LogOut,
     X, ZoomIn, ZoomOut, ShieldCheck, Link2, Unlink, Cloud,
     ChevronLeft as ChevLeft, ChevronRight as ChevRight,
-    Camera, Trash2,
+    Camera, Trash2, Users,
 } from 'lucide-react';
 import { Chrome, Command, Github, Plus } from 'lucide-react';
 import { ENABLE_MICROSOFT_LOGIN } from '../../config';
+import { fetchMyInvitations, acceptInvitation, declineInvitation } from '../../services/boardService';
 import logoWhite from '../../assets/Logo - Branco.png';
 import logoBlack from '../../assets/Logo - Preto.png';
 import CustomAccentPopover from './CustomAccentPopover';
@@ -638,6 +639,102 @@ const AppPanel = memo(function AppPanel({ t }) {
 });
 
 // ─────────────────────────────────────────────
+// INVITATIONS PANEL
+// ─────────────────────────────────────────────
+const InvitationsPanel = memo(function InvitationsPanel({ t }) {
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [items, setItems] = useState([]);
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        setError('');
+        const { data, error: err } = await fetchMyInvitations();
+        if (err) setError(err);
+        setItems(data || []);
+        setLoading(false);
+    }, []);
+
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    const handleAccept = async (id) => {
+        setError('');
+        const res = await acceptInvitation(id);
+        if (!res.success) {
+            setError(res.error || 'Erro ao aceitar convite.');
+        } else {
+            await load();
+        }
+    };
+
+    const handleDecline = async (id) => {
+        setError('');
+        const res = await declineInvitation(id);
+        if (!res.success) {
+            setError(res.error || 'Erro ao recusar convite.');
+        } else {
+            await load();
+        }
+    };
+
+    return (
+        <div className="settings-panel animate-fade-in">
+            <div className="settings-panel-header">
+                <h2>Convites de Boards</h2>
+                <p>Veja e gerencie convites para boards compartilhados com você.</p>
+            </div>
+
+            <div className="settings-section">
+                {loading && <p className="settings-muted">Carregando convites...</p>}
+                {error && <p className="settings-error">{error}</p>}
+                {!loading && items.length === 0 && !error && (
+                    <p className="settings-muted">Você não tem convites pendentes.</p>
+                )}
+                {!loading && items.length > 0 && (
+                    <div className="settings-invitations-list">
+                        {items.map(inv => (
+                            <div key={inv.id} className="settings-invitation-row">
+                                <div className="settings-invitation-main">
+                                    <div className="settings-invitation-emoji">
+                                        {inv.boardEmoji || '📋'}
+                                    </div>
+                                    <div>
+                                        <div className="settings-invitation-title">
+                                            {inv.boardTitle}
+                                        </div>
+                                        <div className="settings-invitation-meta">
+                                            Acesso como {inv.role === 'editor' ? 'editor' : 'leitor'} · convidado para {inv.inviteeEmail}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="settings-invitation-actions">
+                                    <button
+                                        type="button"
+                                        className="btn btn-ghost btn-sm"
+                                        onClick={() => handleDecline(inv.id)}
+                                    >
+                                        Recusar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary btn-sm"
+                                        onClick={() => handleAccept(inv.id)}
+                                    >
+                                        Aceitar
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+});
+
+// ─────────────────────────────────────────────
 // LANGUAGE PANEL
 // ─────────────────────────────────────────────
 const LANGUAGES = [
@@ -688,6 +785,7 @@ export default function SettingsModal({ onClose }) {
     const tabs = [
         { id: 'account', label: t.stAccount, icon: User },
         { id: 'security', label: t.stSecurity, icon: Shield },
+        { id: 'invitations', label: 'Convites', icon: Users },
         { id: 'appearance', label: t.stAppearance, icon: Palette },
         { id: 'app', label: t.stApp, icon: Smartphone },
         { id: 'language', label: t.stLanguage, icon: Globe },
@@ -761,6 +859,7 @@ export default function SettingsModal({ onClose }) {
                             />
                         )}
                         {activeTab === 'app' && <AppPanel t={t} />}
+                        {activeTab === 'invitations' && <InvitationsPanel t={t} />}
                         {activeTab === 'language' && (
                             <LanguagePanel language={language} setLanguage={setLanguage} t={t} />
                         )}
