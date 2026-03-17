@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo, lazy, Suspense } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 import { useTheme, useI18n } from '../../context/ThemeContext';
 import {
     User, Palette, Globe, Smartphone, Sun, Moon,
@@ -642,6 +643,7 @@ const AppPanel = memo(function AppPanel({ t }) {
 // INVITATIONS PANEL
 // ─────────────────────────────────────────────
 const InvitationsPanel = memo(function InvitationsPanel({ t }) {
+    const { reloadBoards } = useApp();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [items, setItems] = useState([]);
@@ -666,6 +668,8 @@ const InvitationsPanel = memo(function InvitationsPanel({ t }) {
             setError(res.error || 'Erro ao aceitar convite.');
         } else {
             await load();
+            // Recarrega boards para o board compartilhado aparecer na sidebar
+            await reloadBoards();
         }
     };
 

@@ -475,122 +475,61 @@ export async function insertBoardFull(userId, board) {
  * (lock de token refresh, rede idle, etc.), a função rejeita limpamente após 8s.
  */
 export async function updateBoardFull(userId, board) {
-  const hasPosition = await cardsHasPositionColumn();
-  const boardId = board.id;
-
-  // AbortController: cancela TODAS as requisições pendentes se o timeout bater.
-  // 8s é menor que o safety timer de 10s do AppContext, então o catch do persistBoard
-  // dispara antes do safety timer e mostra o FloatingSaveError corretamente.
-  const controller = new AbortController();
-  const signal = controller.signal;
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-  console.log(`[boardService] upsertBoardFull (Smart): board "${board.title}" (${boardId})`);
-
+  console.log(`[boardService] upsertBoardFull: board "${board.title}" (${board.id})`);
   try {
-    // Wrapper para passar o signal em cada query
-    const q = (query) => query.abortSignal(signal);
-
-    // 1. Atualizar metadados do board
-    const { error: upErr } = await q(supabase
-      .from('boards')
-      .upsert({
-        id: boardId,
-        owner_id: userId,
-        title: board.title,
-        color: board.color,
-        emoji: board.emoji,
+    const { data, error } = await supabase.rpc('upsert_board_full', {
+      p_board: {
+        id: board.id,
+        title: board.title ?? 'Novo Board',
+        color: board.color ?? null,
+        emoji: board.emoji ?? '📋',
         position: board.position ?? 0,
-        group_id: board.groupId ?? null,
-        updated_at: new Date().toISOString(),
-      }));
-
-    if (upErr) throw upErr;
-
-    // 2. Coletar IDs do payload para o Diff
-    const payloadListIds = new Set();
-    const payloadCardIds = new Set();
-    const payloadSubtaskIds = new Set();
-
-    const listsToUpsert = [];
-    const cardsToUpsert = [];
-    const subtasksToUpsert = [];
-
-    (board.lists ?? []).forEach((list, li) => {
-      payloadListIds.add(list.id);
-      listsToUpsert.push(listToRow(list, boardId, li));
-
-      (list.cards ?? []).forEach((card, ci) => {
-        payloadCardIds.add(card.id);
-        cardsToUpsert.push(cardToRowSafe(card, list.id, ci, hasPosition));
-
-        (card.subtasks ?? []).forEach(st => {
-          payloadSubtaskIds.add(st.id);
-          subtasksToUpsert.push(subtaskToRow(st, card.id));
-        });
-      });
+        groupId: board.groupId ?? null,
+        lists: (board.lists ?? []).map(list => ({
+          id: list.id,
+          title: list.title ?? 'Nova Lista',
+          color: list.color ?? null,
+          isCompletionList: list.isCompletionList ?? false,
+          cards: (list.cards ?? []).map(card => ({
+            id: card.id,
+            title: card.title ?? 'Nova Tarefa',
+            description: card.description ?? '',
+            priority: card.priority ?? 'none',
+            dueDate: card.dueDate ?? null,
+            myDay: card.myDay ?? false,
+            labels: Array.isArray(card.labels) ? card.labels : [],
+            color: card.color ?? null,
+            createdAt: card.createdAt ?? new Date().toISOString(),
+            completed: card.completed ?? false,
+            subtasks: (card.subtasks ?? []).map(st => ({
+              id: st.id,
+              title: st.title ?? '',
+              done: st.done ?? false,
+            })),
+          })),
+        })),
+      },
     });
 
-    // 3. Identificar e deletar removidos (Sync reverso)
-    // Deletar subtarefas órfãs
-    if (payloadListIds.size > 0) {
-      const { data: dbCards } = await q(supabase.from('cards').select('id').in('list_id', Array.from(payloadListIds)));
-      const allDbCardIds = (dbCards ?? []).map(c => c.id);
-      if (allDbCardIds.length > 0) {
-        const { data: dbSubtasks } = await q(supabase.from('subtasks').select('id').in('card_id', allDbCardIds));
-        const subtasksToDelete = (dbSubtasks ?? []).filter(st => !payloadSubtaskIds.has(st.id)).map(st => st.id);
-        if (subtasksToDelete.length > 0) {
-          await q(supabase.from('subtasks').delete().in('id', subtasksToDelete));
-        }
-      }
+    if (error) {
+      console.error('[boardService] updateBoardFull RPC error:', error);
+      return { success: false, error: error.message || 'Falha ao salvar board' };
     }
 
-    // Deletar cards órfãos
-    const { data: dbLists } = await q(supabase.from('lists').select('id').eq('board_id', boardId));
-    const allDbListIds = (dbLists ?? []).map(l => l.id);
-    if (allDbListIds.length > 0) {
-      const { data: dbCardsForBoard } = await q(supabase.from('cards').select('id').in('list_id', allDbListIds));
-      const cardsToDelete = (dbCardsForBoard ?? []).filter(c => !payloadCardIds.has(c.id)).map(c => c.id);
-      if (cardsToDelete.length > 0) {
-        await q(supabase.from('cards').delete().in('id', cardsToDelete));
-      }
-
-      // Deletar listas órfãs
-      const listsToDelete = allDbListIds.filter(id => !payloadListIds.has(id));
-      if (listsToDelete.length > 0) {
-        await q(supabase.from('lists').delete().in('id', listsToDelete));
-      }
-    }
-
-    // 4. Batch Upsert (Apenas 3 chamadas para tudo)
-    if (listsToUpsert.length > 0) {
-      const { error: lErr } = await q(supabase.from('lists').upsert(listsToUpsert));
-      if (lErr) throw lErr;
-    }
-
-    if (cardsToUpsert.length > 0) {
-      const { error: cErr } = await q(supabase.from('cards').upsert(cardsToUpsert));
-      if (cErr) throw cErr;
-    }
-
-    if (subtasksToUpsert.length > 0) {
-      const { error: sErr } = await q(supabase.from('subtasks').upsert(subtasksToUpsert));
-      if (sErr) throw sErr;
+    const result = typeof data === 'string' ? JSON.parse(data) : data;
+    if (!result?.success) {
+      console.error('[boardService] updateBoardFull server error:', result?.error);
+      return { success: false, error: result?.error || 'Falha ao salvar board' };
     }
 
     console.log(`[boardService] upsertBoardFull OK: "${board.title}"`);
     return { success: true };
   } catch (err) {
-    const isAbort = signal.aborted || err?.name === 'AbortError';
-    const msg = isAbort
-      ? `Timeout (8s): requisição ao servidor travou. Verifique sua conexão.`
-      : (err.message || String(err));
-    console.error('[boardService] updateBoardFull error:', isAbort ? 'ABORT/TIMEOUT' : err);
-    return { success: false, error: msg };
-  } finally {
-    clearTimeout(timeoutId);
+    console.error('[boardService] updateBoardFull error:', err);
+    return { success: false, error: err.message || String(err) };
   }
 }
+
 
 
 // ── Save All ────────────────────────────────────────────────────────

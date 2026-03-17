@@ -702,6 +702,7 @@ export function AppProvider({ children }) {
     const stateRef = useRef(state);
     const initialLoadDone = useRef(false);
     const saveTimeoutRef = useRef({});
+    const saveInProgressRef = useRef({});  // tracks active saves per boardId; 'saving' | 'queued'
     const loadInProgressRef = useRef(false);
     // Unix timestamp (ms): ignore Realtime echo refetches until this time.
     // Set whenever THIS tab starts a local write to avoid overwriting optimistic state.
@@ -925,23 +926,28 @@ export function AppProvider({ children }) {
         dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: true } });
 
         timeouts[boardId] = setTimeout(async () => {
+            // Se já tem um save rodando para este board, marca para re-salvar depois
+            if (saveInProgressRef.current[boardId]) {
+                saveInProgressRef.current[boardId] = 'queued';
+                return;
+            }
+
             // Debounce disparou: sai do pending para saving
             dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: false } });
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: true } });
             activeSavesRef.current += 1;
             suppressRealtime(8000);
 
-            // Safety timer de 10s: se o save travar por qualquer motivo (rede, sessão, etc),
-            // libera o indicador E mostra o painel FloatingSaveError para o usuário agir.
+            // Safety timer de 20s
             const safetyTimer = setTimeout(() => {
-                console.warn('[AppContext] persistBoard: safety timeout (10s) para board', boardId);
+                console.warn('[AppContext] persistBoard: safety timeout (20s) para board', boardId);
                 const stuckBoard = stateRef.current.boards.find(b => b.id === boardId);
                 activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
-                if (activeSavesRef.current === 0) suppressRealtime(500);
+                if (activeSavesRef.current === 0) suppressRealtime(2000);
                 dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
                 dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: false } });
                 delete saveTimeoutRef.current[boardId];
-                // Mostra painel de erro com snapshot atual para retry/revert
+                delete saveInProgressRef.current[boardId];
                 dispatch({
                     type: 'PUSH_SAVE_ERROR',
                     payload: {
@@ -951,63 +957,68 @@ export function AppProvider({ children }) {
                         error: 'Timeout: save travou. Verifique sua conexão.',
                     },
                 });
-            }, 10000);
+            }, 20000);
 
-            let boardSnapshot = null;
-            try {
-                const latestState = stateRef.current;
-                const board = latestState.boards.find(b => b.id === boardId);
-                if (!board) {
-                    console.warn('[AppContext] persistBoard: board não encontrado', boardId);
-                    return;
+            // Loop de save: re-salva se houve mudanças durante o save anterior
+            let saveAgain = true;
+            let lastError = null;
+            saveInProgressRef.current[boardId] = 'saving';
+
+            while (saveAgain) {
+                saveAgain = false;
+                saveInProgressRef.current[boardId] = 'saving';
+
+                try {
+                    const board = stateRef.current.boards.find(b => b.id === boardId);
+                    if (!board) {
+                        console.warn('[AppContext] persistBoard: board não encontrado', boardId);
+                        break;
+                    }
+
+                    const freshUserId = await getFreshUserId();
+                    if (!freshUserId) {
+                        console.warn('[AppContext] persistBoard: sem sessão válida, abortando save de', boardId);
+                        dispatch({
+                            type: 'PUSH_SAVE_ERROR',
+                            payload: { boardId, boardTitle: board?.title, boardSnapshot: null, error: 'Sessão expirada' }
+                        });
+                        break;
+                    }
+
+                    console.log(`[AppContext] persistBoard: salvando "${board.title}"`);
+                    const result = await updateBoardFull(freshUserId, board);
+
+                    if (!result?.success) {
+                        throw new Error(result?.error || 'Falha ao salvar board');
+                    }
+                    lastError = null;
+                } catch (err) {
+                    console.error('[AppContext] persistBoard error:', err);
+                    lastError = err;
                 }
 
-                // Captura snapshot para rollback antes de qualquer operação destrutiva
-                boardSnapshot = JSON.parse(JSON.stringify(board));
-
-                // Obtém sessão fresca — resolve o bug de token refresh:
-                // se o token foi renovado enquanto o debounce aguardava, getSession()
-                // retorna o userId da sessão ativa com o novo token já configurado.
-                const freshUserId = await getFreshUserId();
-                if (!freshUserId) {
-                    console.warn('[AppContext] persistBoard: sem sessão válida, abortando save de', boardId);
-                    // Rollback: restaura o snapshot
-                    dispatch({ type: 'SET_BOARDS', payload: stateRef.current.boards.map(b => b.id === boardId ? boardSnapshot : b) });
-                    dispatch({
-                        type: 'PUSH_SAVE_ERROR',
-                        payload: { boardId, boardTitle: boardSnapshot?.title, boardSnapshot, error: 'Sessão expirada' }
-                    });
-                    return;
+                // Se houve mudanças durante o save, re-salva com o estado mais recente
+                if (saveInProgressRef.current[boardId] === 'queued') {
+                    saveAgain = true;
+                    suppressRealtime(8000);
                 }
-
-                console.log(`[AppContext] persistBoard: salvando "${board.title}"`);
-                // Promise.race: garante que mesmo se o AbortController do boardService
-                // não funcionar, o catch aqui dispara em 8.5s (antes do safety timer de 10s).
-                const saveTimeout = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Save timeout (8.5s): servidor não respondeu')), 8500)
-                );
-                const result = await Promise.race([updateBoardFull(freshUserId, board), saveTimeout]);
-
-                if (!result?.success) {
-                    throw new Error(result?.error || 'Falha ao salvar board');
-                }
-            } catch (err) {
-                console.error('[AppContext] persistBoard error:', err);
-                // Rollback: restaura o estado do board ao snapshot capturado antes do save
-                if (boardSnapshot) {
-                    dispatch({ type: 'SET_BOARDS', payload: stateRef.current.boards.map(b => b.id === boardId ? boardSnapshot : b) });
-                    dispatch({
-                        type: 'PUSH_SAVE_ERROR',
-                        payload: { boardId, boardTitle: boardSnapshot.title, boardSnapshot, error: err?.message || 'Falha ao salvar' }
-                    });
-                }
-            } finally {
-                clearTimeout(safetyTimer);
-                activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
-                if (activeSavesRef.current === 0) suppressRealtime(500);
-                dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
-                delete saveTimeoutRef.current[boardId];
             }
+
+            // Se o último save falhou, mostra erro (sem rollback — dados podem estar parcialmente salvos)
+            if (lastError) {
+                const board = stateRef.current.boards.find(b => b.id === boardId);
+                dispatch({
+                    type: 'PUSH_SAVE_ERROR',
+                    payload: { boardId, boardTitle: board?.title, boardSnapshot: null, error: lastError?.message || 'Falha ao salvar' }
+                });
+            }
+
+            clearTimeout(safetyTimer);
+            activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
+            if (activeSavesRef.current === 0) suppressRealtime(2000);
+            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
+            delete saveTimeoutRef.current[boardId];
+            delete saveInProgressRef.current[boardId];
         }, 400);
 
         saveTimeoutRef.current = timeouts;
@@ -1079,10 +1090,10 @@ export function AppProvider({ children }) {
         activeSavesRef.current += 1;
 
         const safetyTimer = setTimeout(() => {
-            console.warn('[AppContext] persistBoardImmediate: safety timeout (10s) para board', boardId);
+            console.warn('[AppContext] persistBoardImmediate: safety timeout (20s) para board', boardId);
             const stuckBoard = stateRef.current.boards.find(b => b.id === boardId);
             activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
-            if (activeSavesRef.current === 0) suppressRealtime(500);
+            if (activeSavesRef.current === 0) suppressRealtime(2000);
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
             // Mostra painel de erro com snapshot atual para retry/revert
             dispatch({
@@ -1094,7 +1105,7 @@ export function AppProvider({ children }) {
                     error: 'Timeout: save travou. Verifique sua conexão.',
                 },
             });
-        }, 10000);
+        }, 20000);
 
         try {
             const freshUserId = await getFreshUserId();
@@ -1111,10 +1122,7 @@ export function AppProvider({ children }) {
             }
             const board = stateRef.current.boards.find(b => b.id === boardId);
             if (!board) return;
-            const saveTimeout = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Save timeout (8.5s): servidor não respondeu')), 8500)
-            );
-            const result = await Promise.race([updateBoardFull(freshUserId, { ...board, ...updates }), saveTimeout]);
+            const result = await updateBoardFull(freshUserId, { ...board, ...updates });
             if (!result?.success) throw new Error(result?.error || 'Falha ao salvar');
         } catch (err) {
             console.error('[AppContext] persistBoardImmediate error:', err);
@@ -1128,7 +1136,7 @@ export function AppProvider({ children }) {
         } finally {
             clearTimeout(safetyTimer);
             activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
-            if (activeSavesRef.current === 0) suppressRealtime(500);
+            if (activeSavesRef.current === 0) suppressRealtime(2000);
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
         }
     }, [suppressRealtime, getFreshUserId]);
@@ -1396,6 +1404,15 @@ export function AppProvider({ children }) {
     const isSavingBoard = useCallback((boardId) => state.savingBoardIds.includes(boardId), [state.savingBoardIds]);
     const hasUnsavedChanges = state.pendingBoardIds.length > 0 || state.savingBoardIds.length > 0;
 
+    // Recarrega boards do servidor (usado após aceitar convite de compartilhamento)
+    const reloadBoards = useCallback(async () => {
+        if (!userId) return;
+        const { data: fromDb } = await fetchBoards(userId);
+        if (fromDb) {
+            dispatch({ type: 'SET_BOARDS', payload: fromDb });
+        }
+    }, [userId]);
+
     return (
         <AppContext.Provider value={{
             state,
@@ -1427,6 +1444,7 @@ export function AppProvider({ children }) {
             LABEL_COLORS: state.labels,
             DEFAULT_BOARD_COLORS,
             updateWorkspaceOrder,
+            reloadBoards,
         }}>
             {children}
             {/* Global Confirm Modal */}
