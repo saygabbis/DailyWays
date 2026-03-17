@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { useI18n } from '../../context/ThemeContext';
 import NotificationDropdown from '../Notifications/NotificationDropdown';
+import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import './Header.css';
 
 export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOpenSettings, onOpenSearch, editableBoardTitle, editableSpaceTitle }) {
@@ -12,6 +13,7 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
     const t = useI18n();
     const [showProfile, setShowProfile] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
+    const [showShareModal, setShowShareModal] = useState(false);
     const [editingBoardTitle, setEditingBoardTitle] = useState(false);
     const [editBoardTitleValue, setEditBoardTitleValue] = useState('');
     const profileRef = useRef(null);
@@ -104,8 +106,8 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                     <Search size={18} className="header-search-btn-icon" />
                 </button>
 
-                {editableSpaceTitle && (
-                    <button className="btn-icon header-icon-btn" title="Compartilhar" onClick={() => { /* TODO: share modal */ }}>
+                {(editableBoardTitle || editableSpaceTitle) && (
+                    <button className="btn-icon header-icon-btn" title="Compartilhar" onClick={() => setShowShareModal(true)}>
                         <Share2 size={18} />
                     </button>
                 )}
@@ -175,6 +177,14 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                     )}
                 </div>
             </div>
+
+            {showShareModal && activeBoard && (
+                <BoardDetailsModal
+                    board={activeBoard}
+                    onClose={() => setShowShareModal(false)}
+                    initialTab="share"
+                />
+            )}
         </header>
     );
 }

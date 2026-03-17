@@ -50,7 +50,7 @@ const initialState = {
     // Cada entrada representa um save falho aguardando acao do usuario (retry ou revert)
     saveErrors: [],
     isDraggingBulk: false,
-    showBoardToolbar: JSON.parse(localStorage.getItem('dailyways_show_toolbar') ?? 'true'),
+    showBoardToolbar: JSON.parse(localStorage.getItem('dailyways_show_toolbar') ?? 'false'),
     confirmModal: {
         show: false,
         title: '',

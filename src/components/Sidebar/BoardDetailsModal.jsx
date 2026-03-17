@@ -4,9 +4,9 @@ import { useApp } from '../../context/AppContext';
 import { fetchBoardMembers, inviteBoardMember, updateMemberRole, removeMember } from '../../services/boardService';
 import './BoardDetailsModal.css';
 
-export default function BoardDetailsModal({ board, onClose }) {
+export default function BoardDetailsModal({ board, onClose, initialTab = 'details' }) {
     const { updateBoardAndPersist, DEFAULT_BOARD_COLORS } = useApp();
-    const [activeTab, setActiveTab] = useState('details');
+    const [activeTab, setActiveTab] = useState(initialTab);
 
     // Detalhes
     const [title, setTitle] = useState(board.title);

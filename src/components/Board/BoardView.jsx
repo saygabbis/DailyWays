@@ -3,7 +3,8 @@ import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { useApp } from '../../context/AppContext';
 import BoardList from './BoardList';
 import ListDetailsModal from './ListDetailsModal';
-import { Plus, Loader2, X, GripVertical } from 'lucide-react';
+import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
+import { Plus, Loader2, X, GripVertical, Share2 } from 'lucide-react';
 import './Board.css';
 
 function BoardView({ onCardClick }, ref) {
@@ -12,6 +13,7 @@ function BoardView({ onCardClick }, ref) {
     const [newListTitle, setNewListTitle] = useState('');
     const [listDetails, setListDetails] = useState(null);
     const [droppedListId, setDroppedListId] = useState(null);
+    const [showShareModal, setShowShareModal] = useState(false);
 
     // Floating Toolbar State
     const [toolbarPos, setToolbarPos] = useState(null);
@@ -280,6 +282,13 @@ function BoardView({ onCardClick }, ref) {
                         </div>
                     )}
                     <button
+                        className="btn-icon-xs"
+                        onClick={() => setShowShareModal(true)}
+                        title="Compartilhar board"
+                    >
+                        <Share2 size={14} />
+                    </button>
+                    <button
                         className="btn-icon-xs toolbar-close-btn"
                         onClick={() => dispatch({ type: 'TOGGLE_BOARD_TOOLBAR', payload: false })}
                         title="Fechar toolbar"
@@ -387,6 +396,14 @@ function BoardView({ onCardClick }, ref) {
                     boardId={board.id}
                     onSave={handleSaveListDetails}
                     onClose={() => setListDetails(null)}
+                />
+            )}
+
+            {showShareModal && (
+                <BoardDetailsModal
+                    board={board}
+                    onClose={() => setShowShareModal(false)}
+                    initialTab="share"
                 />
             )}
         </div>
