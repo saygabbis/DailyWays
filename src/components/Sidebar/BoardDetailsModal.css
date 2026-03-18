@@ -91,8 +91,332 @@
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-.settings-field-hint {
+.board-details-modal .settings-field-hint {
     font-size: var(--font-size-xs);
     color: var(--text-tertiary);
     margin-top: 4px;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Tabs / Layout do modal de Board (Compartilhar)
+   ────────────────────────────────────────────────────────────── */
+
+.board-details-tabs {
+    padding: var(--space-sm) var(--space-lg) var(--space-lg);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.board-details-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    padding: 10px 12px;
+    border-radius: var(--radius-lg);
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.board-details-tab:hover {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+    background: var(--bg-hover);
+    transform: translateY(-1px);
+}
+
+.board-details-tab.active {
+    background: var(--accent-light);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    box-shadow: var(--accent-glow);
+}
+
+/* ── Inputs / mensagens (reutiliza tokens do site) ── */
+
+.board-details-modal .settings-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.board-details-modal .settings-field label {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.board-details-modal .settings-error {
+    color: var(--danger);
+    font-size: var(--font-size-sm);
+    margin-top: var(--space-sm);
+}
+
+.board-details-modal .settings-success {
+    color: var(--success);
+    font-size: var(--font-size-sm);
+    margin-top: var(--space-sm);
+}
+
+.board-details-modal .settings-muted {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+}
+
+/* ── Compartilhar ── */
+
+.board-share-panel {
+    background: var(--bg-tertiary);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: var(--space-lg);
+    box-shadow: var(--shadow-sm);
+}
+
+.board-share-invite-section {
+    margin: 0;
+}
+
+.board-share-invite-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.board-share-invite-top {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.board-share-invite-send {
+    height: 44px;
+    min-width: 140px;
+}
+
+.board-share-invite-bottom {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    justify-content: space-between;
+}
+
+.board-share-invite-row {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-sm);
+}
+
+.board-share-invite-input {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 10px 12px;
+    border-radius: var(--radius-lg);
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-tertiary);
+}
+
+.board-share-invite-input input {
+    width: 100%;
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    height: auto;
+}
+
+.board-share-role-select {
+    width: 120px;
+    height: 44px;
+}
+
+.board-share-role-select-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.board-share-role-select-btn {
+    width: 120px;
+    height: 44px;
+    border-radius: var(--radius-full);
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--space-md);
+    font-weight: 700;
+    box-shadow: var(--shadow-sm);
+    transition: all var(--transition-fast);
+}
+
+.board-share-role-select-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+.board-share-role-select-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+    transform: translateY(-1px);
+}
+
+.board-share-role-select-chevron {
+    transition: transform var(--transition-fast);
+    opacity: 0.8;
+}
+
+.board-share-role-select-chevron.open {
+    transform: rotate(180deg);
+}
+
+.board-share-role-menu {
+    position: absolute;
+    top: calc(100% + var(--space-xs));
+    left: 0;
+    right: 0;
+    margin-top: 0;
+    background: var(--bg-secondary);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    z-index: 50;
+}
+
+.board-share-role-menu-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 10px var(--space-md);
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.board-share-role-menu-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.board-share-role-menu-item.active {
+    background: color-mix(in srgb, var(--accent-light) 35%, var(--bg-secondary));
+    color: var(--accent-primary);
+}
+
+.board-share-role-select-invite {
+    width: 120px;
+}
+
+.board-share-role-select-member .board-share-role-select-btn {
+    width: 110px;
+}
+
+.board-share-members {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+}
+
+.board-share-members-card {
+    margin-top: var(--space-md);
+}
+
+.board-share-member-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-lg);
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-tertiary);
+}
+
+.board-share-member-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    min-width: 0;
+}
+
+.board-share-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-full);
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-secondary);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.board-share-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.board-share-avatar-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: var(--font-size-xs);
+    color: var(--accent-primary);
+    background: transparent;
+}
+
+.board-share-avatar-fallback.hidden {
+    display: none;
+}
+
+.board-share-name {
+    font-weight: 700;
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    line-height: 1.2;
+}
+
+.board-share-username {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    margin-top: 2px;
+}
+
+.board-share-member-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-shrink: 0;
+}
+
+.board-share-member-actions .board-share-role-select {
+    width: 110px;
+}
+
+.board-share-member-actions .btn-icon {
+    width: 36px;
+    height: 36px;
+    padding: 0;
 }

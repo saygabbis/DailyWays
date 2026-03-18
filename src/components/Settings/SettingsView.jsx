@@ -775,7 +775,7 @@ const LanguagePanel = memo(function LanguagePanel({ language, setLanguage, t }) 
 // ─────────────────────────────────────────────
 // SETTINGS MODAL (thin shell — only holds tab state)
 // ─────────────────────────────────────────────
-export default function SettingsModal({ onClose }) {
+export default function SettingsModal({ onClose, initialTab = 'account' }) {
     const {
         user, updateProfile, confirmLogout,
         getLinkedIdentities, linkIdentity, unlinkIdentity,
@@ -784,7 +784,7 @@ export default function SettingsModal({ onClose }) {
     const { theme, toggleTheme, setTheme, accentId, setAccent, ACCENT_PRESETS, THEME_PRESETS, fontId, setFont, FONT_PRESETS, language, setLanguage, animStyle, setAnimStyle, CUSTOM_ACCENT_ID, customAccentValue, setCustomAccent } = useTheme();
     const t = useI18n();
 
-    const [activeTab, setActiveTab] = useState('account');
+    const [activeTab, setActiveTab] = useState(initialTab);
 
     const tabs = [
         { id: 'account', label: t.stAccount, icon: User },

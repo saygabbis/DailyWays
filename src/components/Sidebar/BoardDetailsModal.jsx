@@ -1,8 +1,60 @@
-import { useState, useEffect } from 'react';
-import { X, Save, Users, Mail, Shield, Trash2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Save, Users, Mail, Shield, Trash2, ChevronDown } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { fetchBoardMembers, inviteBoardMember, updateMemberRole, removeMember } from '../../services/boardService';
 import './BoardDetailsModal.css';
+
+function RoleSelect({ value, onChange, options, className = '', disabled = false }) {
+    const [open, setOpen] = useState(false);
+    const wrapRef = useRef(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const onDown = (e) => {
+            if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+        };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [open]);
+
+    const selectedLabel = options.find(o => o.value === value)?.label ?? value;
+
+    return (
+        <div className={`board-share-role-select-wrap ${className}`} ref={wrapRef}>
+            <button
+                type="button"
+                className="board-share-role-select-btn"
+                onClick={() => {
+                    if (disabled) return;
+                    setOpen(v => !v);
+                }}
+                aria-expanded={open}
+                disabled={disabled}
+            >
+                <span className="board-share-role-select-label">{selectedLabel}</span>
+                <ChevronDown size={16} className={`board-share-role-select-chevron ${open ? 'open' : ''}`} />
+            </button>
+            {open && !disabled && (
+                <div className="board-share-role-menu" role="menu">
+                    {options.map((o) => (
+                        <button
+                            key={o.value}
+                            type="button"
+                            className={`board-share-role-menu-item ${o.value === value ? 'active' : ''}`}
+                            onClick={() => {
+                                onChange(o.value);
+                                setOpen(false);
+                            }}
+                            role="menuitem"
+                        >
+                            {o.label}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default function BoardDetailsModal({ board, onClose, initialTab = 'details' }) {
     const { updateBoardAndPersist, DEFAULT_BOARD_COLORS } = useApp();
@@ -169,59 +221,83 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
                                 ))}
                             </div>
                         </div>
-                    </div>
+                        </div>
                 )}
 
                 {activeTab === 'share' && (
                     <div className="modal-body">
-                        <div className="settings-field">
-                            <label>Convidar por e-mail</label>
-                            <form className="board-share-invite-row" onSubmit={handleInvite}>
-                                <div className="board-share-invite-input">
-                                    <Mail size={14} />
-                                    <input
-                                        type="email"
-                                        placeholder="email@pessoa.com"
-                                        value={inviteEmail}
-                                        onChange={e => setInviteEmail(e.target.value)}
-                                    />
-                                </div>
-                                <select
-                                    value={inviteRole}
-                                    onChange={e => setInviteRole(e.target.value)}
-                                    className="board-share-role-select"
-                                >
-                                    <option value="editor">Editor</option>
-                                    <option value="reader">Leitor</option>
-                                </select>
-                                <button className="btn btn-primary btn-sm" type="submit">
-                                    Enviar convite
-                                </button>
-                            </form>
-                            <p className="settings-field-hint">
-                                A pessoa precisará ter conta com este e-mail para acessar o board.
-                            </p>
-                        </div>
+                        <div className="board-share-panel">
+                            <div className="settings-field board-share-invite-section">
+                                <label>Convidar por e-mail</label>
+                                <form className="board-share-invite-form" onSubmit={handleInvite}>
+                                    <div className="board-share-invite-top">
+                                        <div className="board-share-invite-input">
+                                            <Mail size={14} />
+                                            <input
+                                                type="email"
+                                                placeholder="email@pessoa.com"
+                                                value={inviteEmail}
+                                                onChange={e => setInviteEmail(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
 
-                        {shareError && <p className="settings-error" style={{ marginTop: 4 }}>{shareError}</p>}
-                        {shareSuccess && <p className="settings-success" style={{ marginTop: 4 }}>{shareSuccess}</p>}
+                                    <div className="board-share-invite-bottom">
+                                        <RoleSelect
+                                            value={inviteRole}
+                                            onChange={setInviteRole}
+                                            options={[{ value: 'editor', label: 'Editor' }, { value: 'reader', label: 'Leitor' }]}
+                                            className="board-share-role-select-invite"
+                                        />
+                                        <button className="btn btn-primary btn-sm board-share-invite-send" type="submit">
+                                            Enviar convite
+                                        </button>
+                                    </div>
+                                </form>
+                                <p className="settings-field-hint">
+                                    A pessoa precisará ter conta com este e-mail para acessar o board.
+                                </p>
+                            </div>
 
-                        <div className="settings-field" style={{ marginTop: 16 }}>
-                            <label>Membros do board</label>
+                            {shareError && <p className="settings-error" style={{ marginTop: 4 }}>{shareError}</p>}
+                            {shareSuccess && <p className="settings-success" style={{ marginTop: 4 }}>{shareSuccess}</p>}
+
+                            <div className="settings-field board-share-members-section">
+                                <label>Membros do board</label>
                             {membersLoading && <p className="settings-muted">Carregando membros...</p>}
                             {!membersLoading && members.length === 0 && (
                                 <p className="settings-muted">Apenas você tem acesso a este board.</p>
                             )}
                             {!membersLoading && members.length > 0 && (
-                                <div className="board-share-members">
+                                <div className="board-share-members board-share-members-card">
                                     {members.map((m) => (
                                         <div key={m.userId} className="board-share-member-row">
                                             <div className="board-share-member-info">
                                                 <div className="board-share-avatar">
-                                                    {m.avatar ? (
-                                                        <img src={m.avatar} alt={m.name || m.username} />
+                                                    {m.photoUrl ? (
+                                                        <>
+                                                            <img
+                                                                src={m.photoUrl}
+                                                                alt={m.name || m.username}
+                                                                className="board-share-avatar-img"
+                                                                onError={(e) => {
+                                                                    const img = e.currentTarget;
+                                                                    const wrap = img.closest('.board-share-avatar');
+                                                                    const fallback = wrap?.querySelector('.board-share-avatar-fallback');
+                                                                    if (fallback) {
+                                                                        fallback.style.display = 'flex';
+                                                                    }
+                                                                    img.style.display = 'none';
+                                                                }}
+                                                            />
+                                                            <span className="board-share-avatar-fallback hidden">
+                                                                {(m.name || m.username || '?')[0]}
+                                                            </span>
+                                                        </>
                                                     ) : (
-                                                        <span>{(m.name || m.username || '?')[0]}</span>
+                                                        <span className="board-share-avatar-fallback">
+                                                            {(m.name || m.username || '?')[0]}
+                                                        </span>
                                                     )}
                                                 </div>
                                                 <div>
@@ -234,22 +310,23 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
                                                 </div>
                                             </div>
                                             <div className="board-share-member-actions">
-                                                <select
+                                                <RoleSelect
                                                     value={m.role}
-                                                    onChange={e => handleRoleChange(m.userId, e.target.value)}
-                                                    className="board-share-role-select"
-                                                >
-                                                    <option value="editor">Editor</option>
-                                                    <option value="reader">Leitor</option>
-                                                </select>
-                                                <button
-                                                    type="button"
-                                                    className="btn-icon"
-                                                    title="Remover acesso"
-                                                    onClick={() => handleRemoveMember(m.userId)}
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
+                                                    onChange={(val) => handleRoleChange(m.userId, val)}
+                                                    options={[{ value: 'editor', label: 'Editor' }, { value: 'reader', label: 'Leitor' }]}
+                                                    className="board-share-role-select-member"
+                                                    disabled={m.role === 'owner'}
+                                                />
+                                                {m.role !== 'owner' && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn-icon"
+                                                        title="Remover acesso"
+                                                        onClick={() => handleRemoveMember(m.userId)}
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     ))}
@@ -257,6 +334,7 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
                             )}
                         </div>
                     </div>
+                </div>
                 )}
 
                 {activeTab === 'details' && (

@@ -15,6 +15,7 @@ export default function MyDayView({ onCardClick }) {
     const [showFocus, setShowFocus] = useState(false);
 
     const cards = getMyDayCards();
+    const pendingCards = cards.filter(c => !c.completed);
     const completedCards = cards.filter(c => c.completed);
     const progress = cards.length > 0 ? Math.round((completedCards.length / cards.length) * 100) : 0;
     const now = new Date();

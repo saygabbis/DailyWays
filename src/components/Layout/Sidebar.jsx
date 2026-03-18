@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
-import { insertBoardFull, deleteBoard } from '../../services/boardService';
+import { insertBoardFull, deleteBoard, removeMember } from '../../services/boardService';
 
 import { usePomodoro } from '../../context/PomodoroContext';
 import { useRadio } from '../../context/RadioContext';
@@ -612,7 +612,14 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                     // Ativa o floating save durante a operação no servidor
                     dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: true } });
                     try {
-                        await deleteBoard(board.id);
+                        const ownerId = board.ownerId ?? null;
+                        const isOwner = !ownerId || ownerId === user.id;
+                        if (isOwner) {
+                            await deleteBoard(board.id);
+                        } else {
+                            // Não-dono: "deletar" vira sair do board compartilhado.
+                            await removeMember(board.id, user.id);
+                        }
                         if (wasOnlyBoardInGroup) {
                             try {
                                 const { updateGroup } = await import('../../services/workspaceService');
@@ -721,7 +728,16 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                         try {
                             if (itemType === 'board') {
                                 const { deleteBoard } = await import('../../services/boardService');
-                                for (const id of itemsToDelete) await deleteBoard(id);
+                                for (const id of itemsToDelete) {
+                                    const b = state.boards.find(x => x.id === id);
+                                    const ownerId = b?.ownerId ?? null;
+                                    const isOwner = !ownerId || ownerId === user.id;
+                                    if (isOwner) {
+                                        await deleteBoard(id);
+                                    } else {
+                                        await removeMember(id, user.id);
+                                    }
+                                }
                             } else if (itemType === 'space') {
                                 const { deleteSpace } = await import('../../services/workspaceService');
                                 for (const id of itemsToDelete) await deleteSpace(id);
@@ -982,7 +998,16 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
 
                                 if (boardIdsToDelete.length > 0) {
                                     const { deleteBoard } = await import('../../services/boardService');
-                                    for (const id of boardIdsToDelete) await deleteBoard(id);
+                                    for (const id of boardIdsToDelete) {
+                                        const b = state.boards.find(x => x.id === id);
+                                        const ownerId = b?.ownerId ?? null;
+                                        const isOwner = !ownerId || ownerId === user.id;
+                                        if (isOwner) {
+                                            await deleteBoard(id);
+                                        } else {
+                                            await removeMember(id, user.id);
+                                        }
+                                    }
                                 }
                                 if (spaceIdsToDelete.length > 0) {
                                     const { deleteSpace } = await import('../../services/workspaceService');

@@ -6,6 +6,33 @@ import { useAuth } from './AuthContext';
 import { supabase } from '../services/supabaseClient';
 import ConfirmModal from '../components/Common/ConfirmModal';
 import FloatingSaveError from '../components/Common/FloatingSaveError';
+import FloatingInvitationToast from '../components/Common/FloatingInvitationToast';
+
+const DEBUG_ENDPOINT = 'http://127.0.0.1:7248/ingest/0093f15a-2614-4c0e-9862-18929ca449cb';
+const DEBUG_SESSION_ID = 'f6ad57';
+
+function debugLog(hypothesisId, location, message, data, runId = 'pre-fix') {
+    // #region agent log
+    try {
+        fetch(DEBUG_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Debug-Session-Id': DEBUG_SESSION_ID,
+            },
+            body: JSON.stringify({
+                sessionId: DEBUG_SESSION_ID,
+                runId,
+                hypothesisId,
+                location,
+                message,
+                data,
+                timestamp: Date.now(),
+            }),
+        }).catch(() => { });
+    } catch (_) { }
+    // #endregion
+}
 
 const AppContext = createContext(null);
 
@@ -1179,27 +1206,109 @@ export function AppProvider({ children }) {
             const handleChange = (payload) => {
                 // If THIS tab triggered this write, skip the echo to avoid overwriting
                 // optimistic local state with potentially stale server data.
-                if (Date.now() < realtimeSuppressUntilRef.current || activeSavesRef.current > 0) {
+                const now = Date.now();
+                const suppressedByWindow = now < realtimeSuppressUntilRef.current;
+                const suppressedByActiveSaves = activeSavesRef.current > 0;
+
+                if (suppressedByWindow || suppressedByActiveSaves) {
+                    debugLog(
+                        'RT-A',
+                        'AppContext.jsx:realtime:handleChange suppressed',
+                        'skip refetch due to suppression',
+                        {
+                            now,
+                            realtimeSuppressUntilRef: realtimeSuppressUntilRef.current,
+                            activeSaves: activeSavesRef.current,
+                            table: payload?.table,
+                            eventType: payload?.eventType,
+                        },
+                        'post-fix',
+                    );
                     return;
                 }
+
+                debugLog(
+                    'RT-ENTER',
+                    'AppContext.jsx:realtime:handleChange',
+                    'event received (not suppressed)',
+                    {
+                        now,
+                        table: payload?.table,
+                        eventType: payload?.eventType,
+                        realtimeSuppressUntilRef: realtimeSuppressUntilRef.current,
+                        activeSaves: activeSavesRef.current,
+                    },
+                    'post-fix',
+                );
+
                 if (debounceTimer) clearTimeout(debounceTimer);
+                // Realtime: refetch curto para melhorar sensação de "instantâneo"
                 debounceTimer = setTimeout(async () => {
                     if (cancelled) return;
                     console.log('[AppContext] Realtime refetch for user', userId.slice(0, 8));
+
+                    debugLog(
+                        'RT-B',
+                        'AppContext.jsx:realtime:refetch',
+                        'before fetchBoards',
+                        { userIdPrefix: String(userId).slice(0, 8) },
+                        'post-fix',
+                    );
+
                     const { data, error } = await fetchBoards(userId);
-                    if (cancelled || error || !data?.length) return;
+
+                    if (cancelled || error) {
+                        debugLog(
+                            'RT-C',
+                            'AppContext.jsx:realtime:refetch result',
+                            'fetchBoards failed or cancelled',
+                            {
+                                error: error?.message || String(error || ''),
+                                cancelled,
+                                boardsLen: data?.length || 0,
+                            },
+                            'post-fix',
+                        );
+                        return;
+                    }
                     dispatch({ type: 'SET_BOARDS', payload: data });
                     // Sem localStorage — servidor é a fonte de verdade
-                }, 1000); // Increased debounce to 1s to prevent spam
+
+                    debugLog(
+                        'RT-D',
+                        'AppContext.jsx:realtime:refetch result',
+                        'dispatch SET_BOARDS',
+                        { boardsLen: data?.length || 0 },
+                        'post-fix',
+                    );
+                }, 250);
             };
 
             realtimeChannel = supabase
                 .channel('dailyways-sync-' + userId.slice(0, 8))
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'boards' }, handleChange)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'board_members' }, handleChange)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'board_invitations' }, handleChange)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'lists' }, handleChange)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'cards' }, handleChange)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'subtasks' }, handleChange)
-                .subscribe();
+                .subscribe((status) => {
+                    debugLog(
+                        'RT-STATUS',
+                        'AppContext.jsx:realtime:subscribe status',
+                        'channel status changed',
+                        { status, userIdPrefix: String(userId).slice(0, 8) },
+                        'post-fix',
+                    );
+                });
+
+            debugLog(
+                'RT-READY',
+                'AppContext.jsx:realtime:setup',
+                'realtime subscription created',
+                { userIdPrefix: String(userId).slice(0, 8) },
+                'post-fix',
+            );
         };
 
         waitAndSubscribe();
@@ -1460,6 +1569,8 @@ export function AppProvider({ children }) {
             />
             {/* Painel flutuante de erro de save */}
             <FloatingSaveError />
+            {/* Painel flutuante de convite */}
+            <FloatingInvitationToast />
         </AppContext.Provider>
     );
 }

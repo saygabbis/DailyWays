@@ -6,6 +6,7 @@ import { useI18n } from '../../context/ThemeContext';
 import NotificationDropdown from '../Notifications/NotificationDropdown';
 import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import './Header.css';
+import { fetchMyInvitations } from '../../services/boardService';
 
 export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOpenSettings, onOpenSearch, editableBoardTitle, editableSpaceTitle }) {
     const { user, logout } = useAuth();
@@ -13,6 +14,7 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
     const t = useI18n();
     const [showProfile, setShowProfile] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
+    const [unreadInvitesCount, setUnreadInvitesCount] = useState(0);
     const [showShareModal, setShowShareModal] = useState(false);
     const [editingBoardTitle, setEditingBoardTitle] = useState(false);
     const [editBoardTitleValue, setEditBoardTitleValue] = useState('');
@@ -61,6 +63,34 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
         document.addEventListener('mousedown', handleClick);
         return () => document.removeEventListener('mousedown', handleClick);
     }, [showProfile]);
+
+    useEffect(() => {
+        const loadUnread = async () => {
+            if (!user?.id) {
+                setUnreadInvitesCount(0);
+                return;
+            }
+            const readKey = `dailyways_invite_read_${user.id}`;
+            try {
+                const raw = window.localStorage.getItem(readKey);
+                const arr = raw ? JSON.parse(raw) : [];
+                const readSet = new Set(Array.isArray(arr) ? arr : []);
+                const { data, error } = await fetchMyInvitations();
+                if (error) {
+                    setUnreadInvitesCount(0);
+                    return;
+                }
+                const unread = (data || []).filter(inv => !readSet.has(inv.id)).length;
+                setUnreadInvitesCount(unread);
+            } catch (_) {
+                setUnreadInvitesCount(0);
+            }
+        };
+        if (!showNotifications) {
+            loadUnread();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id, showNotifications]);
 
     return (
         <header className="header">
@@ -119,7 +149,36 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                     >
                         <Bell size={18} />
                     </button>
-                    {showNotifications && <NotificationDropdown onClose={() => setShowNotifications(false)} />}
+                    {unreadInvitesCount > 0 && (
+                        <div
+                            className="header-notification-dot"
+                            style={{ right: 12 }}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`${unreadInvitesCount} convite(s) pendente(s)`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setShowNotifications(v => !v);
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setShowNotifications(v => !v);
+                                }
+                            }}
+                        />
+                    )}
+                    {showNotifications && (
+                        <NotificationDropdown
+                            onClose={() => setShowNotifications(false)}
+                            onOpenInvitations={() => {
+                                setShowNotifications(false);
+                                onOpenSettings?.('invitations');
+                            }}
+                        />
+                    )}
                 </div>
 
                 {/* User profile dropdown */}

@@ -5,7 +5,7 @@ import { Calendar, CheckSquare, AlertCircle, Sun, Edit3, Trash2, Star, Tag, Copy
 import { format, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-export default function BoardCard({ card, boardId, listId, listColor, isDragging, onClick }) {
+export default function BoardCard({ card, boardId, listId, listColor, isDragging, onClick, editingEditors = [] }) {
     const { LABEL_COLORS, dispatch, persistBoard, showConfirm } = useApp();
     const { showContextMenu } = useContextMenu();
     const isCompleted = card.completed || false;
@@ -33,6 +33,9 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
     const isOverdue = card.dueDate && isPast(new Date(card.dueDate)) && !isToday(new Date(card.dueDate));
     const hasDescription = Boolean(card.description && card.description.trim().length > 0);
     const effectiveColor = card.color === '__glass__' ? (listColor || null) : card.color || null;
+    const primaryEditor = editingEditors?.[0] || null;
+    const presenceColor = primaryEditor?.color || 'var(--accent-primary)';
+    const isBeingEdited = Array.isArray(editingEditors) && editingEditors.length > 0;
 
     const getContextMenuItems = () => [
         {
@@ -123,13 +126,36 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
 
     return (
         <div
-            className={`board-card ${isDragging ? 'board-card-dragging' : ''} ${isCompleted ? 'board-card-done-state' : ''} ${allDone ? 'board-card-all-subtasks-done' : ''}`}
+            className={`board-card ${isDragging ? 'board-card-dragging' : ''} ${isCompleted ? 'board-card-done-state' : ''} ${allDone ? 'board-card-all-subtasks-done' : ''} ${isBeingEdited ? 'board-card-presence-active' : ''}`}
             onClick={onClick}
             onContextMenu={handleContextMenu}
             {...longPressProps}
-            style={effectiveColor ? { '--card-accent': effectiveColor } : {}}
+            style={{
+              ...(effectiveColor ? { '--card-accent': effectiveColor } : {}),
+              ...(isBeingEdited ? { '--presence-color': presenceColor } : {}),
+            }}
             data-colored={effectiveColor ? 'true' : undefined}
         >
+            {isBeingEdited && (
+                <div className="board-card-presence-indicator" aria-label={`Sendo editado por ${primaryEditor?.name || 'alguém'}`}>
+                    {primaryEditor?.photoUrl ? (
+                        <img
+                            src={primaryEditor.photoUrl}
+                            alt={primaryEditor.name || primaryEditor.userId}
+                            onLoad={(e) => {
+                                const wrap = e.currentTarget.closest('.board-card-presence-indicator');
+                                const fallback = wrap?.querySelector('.board-card-presence-fallback');
+                                if (fallback) fallback.style.display = 'none';
+                            }}
+                            onError={(e) => {
+                                // se falhar, mantém o fallback visível
+                                void e;
+                            }}
+                        />
+                    ) : null}
+                    <span className="board-card-presence-fallback">{primaryEditor?.avatarInitial || '?'}</span>
+                </div>
+            )}
             <div className={`board-card-inner ${shouldAnimate ? 'animate-slide-up-jelly' : ''}`}>
                 {/* Labels */}
                 {card.labels.length > 0 && (

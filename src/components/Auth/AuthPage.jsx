@@ -57,6 +57,8 @@ export default function AuthPage() {
   const [mfaCode, setMfaCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState('');
   const [pendingEmailConfirmation, setPendingEmailConfirmation] = useState(false);
   const [showAccountCreatedRedirecting, setShowAccountCreatedRedirecting] = useState(false);
   const [showMfaStep, setShowMfaStep] = useState(false);
@@ -184,6 +186,7 @@ export default function AuthPage() {
   const switchMode = () => {
     setIsLogin(!isLogin);
     setError('');
+    setForgotMessage('');
     setUsernameError('');
     setShowPassword(false);
     clearAuthError();
@@ -193,6 +196,42 @@ export default function AuthPage() {
     setShowOtpModal(false);
     setOtpCode('');
     setOtpError('');
+  };
+
+  const handleForgotPassword = async () => {
+    setForgotMessage('');
+    const raw = identifier.trim();
+    if (!raw) {
+      setForgotMessage('Digite seu e-mail ou username antes de pedir recuperação.');
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      // Flag para forçar a UI a abrir a tela de redefinição,
+      // mesmo que o Supabase faça login temporário e redirecione sem `type=recovery`.
+      window.localStorage.setItem('dailyways_pw_reset_pending', '1');
+      window.localStorage.setItem('dailyways_pw_reset_pending_ts', String(Date.now()));
+
+      let email = raw;
+      if (!raw.includes('@')) {
+        const { data, error: rpcErr } = await supabase.rpc('get_email_by_username', { u: raw });
+        if (rpcErr || !data) throw new Error('Usuário não encontrado para recuperação de senha.');
+        email = data;
+      }
+
+      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
+      });
+
+      if (resetErr) throw resetErr;
+
+      setForgotMessage('Enviamos um link para redefinir sua senha. Confira seu e-mail.');
+    } catch (e) {
+      setForgotMessage(e?.message || 'Não foi possível iniciar a recuperação de senha.');
+    } finally {
+      setForgotLoading(false);
+    }
   };
 
   // Debounced username availability check (cadastro)
@@ -496,9 +535,27 @@ export default function AuthPage() {
               </button>
             </form>
 
-            <button type="button" onClick={switchMode} className="auth-switch-btn">
-              {isLogin ? 'Criar conta' : 'Fazer login'}
-            </button>
+            <div className="auth-switch-row">
+              <button type="button" onClick={switchMode} className="auth-switch-btn">
+                {isLogin ? 'Criar conta' : 'Fazer login'}
+              </button>
+              {isLogin && (
+                <button
+                  type="button"
+                  className="auth-forgot-btn"
+                  onClick={handleForgotPassword}
+                  disabled={forgotLoading}
+                >
+                  {forgotLoading ? 'Enviando...' : 'Esqueceu a senha?'}
+                </button>
+              )}
+            </div>
+
+            {isLogin && forgotMessage && (
+              <div className="auth-forgot-message" role="status">
+                {forgotMessage}
+              </div>
+            )}
 
             <div className="auth-separator">
               <span>ou continue com</span>

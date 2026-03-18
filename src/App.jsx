@@ -15,6 +15,7 @@ import SettingsModal from './components/Settings/SettingsView';
 import SearchOverlay from './components/Search/SearchOverlay';
 import SpaceView from './components/Spaces/SpaceView';
 import SpacesComingSoon from './components/Spaces/SpacesComingSoon';
+import PasswordResetPage from './components/Auth/PasswordResetPage';
 
 import PomodoroTimer from './components/Pomodoro/PomodoroTimer';
 import RadioWidget from './components/Radio/RadioWidget';
@@ -50,6 +51,7 @@ function AppContent() {
   }, [activeView]);
   const [selectedCard, setSelectedCard] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState('account');
   const [showSearch, setShowSearch] = useState(false);
   const { showContextMenu } = useContextMenu();
   const boardViewRef = useRef(null);
@@ -300,7 +302,10 @@ function AppContent() {
             subtitle={getSubtitle()}
             onMenuClick={toggleSidebar}
             sidebarOpen={sidebarOpen}
-            onOpenSettings={() => setShowSettings(true)}
+            onOpenSettings={(tab) => {
+              setSettingsInitialTab(tab || 'account');
+              setShowSettings(true);
+            }}
             onOpenSearch={() => setShowSearch(true)}
             editableBoardTitle={activeView === 'board' && activeBoard ? { board: activeBoard, onSave: (newTitle) => updateBoardAndPersist(activeBoard.id, { title: newTitle }) } : null}
             editableSpaceTitle={activeView.startsWith('space-') && (() => {
@@ -333,7 +338,12 @@ function AppContent() {
         </main>
 
         {/* Settings floating modal */}
-        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+        {showSettings && (
+          <SettingsModal
+            onClose={() => setShowSettings(false)}
+            initialTab={settingsInitialTab}
+          />
+        )}
 
         {/* Search floating modal */}
         {showSearch && <SearchOverlay onClose={() => setShowSearch(false)} onCardClick={handleCardClick} />}
@@ -375,6 +385,61 @@ function AppContent() {
 export default function App() {
   const { user, loading } = useAuth();
 
+  const hash = window.location.hash || '';
+  const search = window.location.search || '';
+  const combined = `${hash || ''}&${search || ''}`.toLowerCase();
+
+  const isPasswordRecovery = (() => {
+    // usa as mesmas variáveis externas (hash/search) porém mantendo o escopo local
+    const combined = `${hash || ''}&${search || ''}`.toLowerCase();
+
+    const searchParams = new URLSearchParams(search || '');
+    const hashParams = new URLSearchParams(hash?.startsWith('#') ? hash.slice(1) : hash || '');
+
+    const type = (searchParams.get('type') || hashParams.get('type') || '').toLowerCase();
+    const token = searchParams.get('token') || hashParams.get('token');
+
+    // Casos suportados:
+    // 1) Supabase recovery link: ?type=recovery&token=...
+    if (type === 'recovery' && token) return true;
+
+    // 2) Links que vêm com access/refresh token (às vezes sem `token=...`)
+    const hasAccessRefresh =
+      (combined.includes('access_token') || combined.includes('access_token=')) &&
+      (combined.includes('refresh_token') || combined.includes('refresh_token='));
+
+    // Para evitar falso positivo em fluxos não relacionados,
+    // exigimos que seja explicitamente recovery pelo `type` ou pela palavra "recovery".
+    const hasRecoveryKeyword = type === 'recovery' || combined.includes('recovery');
+
+    return hasAccessRefresh && hasRecoveryKeyword;
+  })();
+
+  const pwResetPending = window.localStorage.getItem('dailyways_pw_reset_pending') === '1';
+  const pwResetPendingTs = Number(window.localStorage.getItem('dailyways_pw_reset_pending_ts') || '0');
+  const pwResetPendingValid = pwResetPending && !!pwResetPendingTs && (Date.now() - pwResetPendingTs) < 10 * 60 * 1000;
+
+  const urlHasAccessRefresh =
+    (combined.includes('access_token') || combined.includes('access_token=')) &&
+    (combined.includes('refresh_token') || combined.includes('refresh_token='));
+
+  // Segurança + UX:
+  // 1) Se a URL indicar explicitamente recovery, abre a tela.
+  // 2) Se houver access/refresh tokens na URL e você iniciou recovery recentemente,
+  // ainda abrimos (alguns redirects não vêm com `type=recovery`).
+  // 3) Em navegação normal, sem tokens na URL, nunca força a tela novamente.
+  const shouldForcePasswordReset = isPasswordRecovery || (pwResetPendingValid && urlHasAccessRefresh);
+
+  // Limpa a flag pendente quando não for recovery real na URL (ou quando expirar),
+  // pra não ficar "preso" e aparecer de novo em login normal.
+  useEffect(() => {
+    if (!pwResetPending) return;
+    if (isPasswordRecovery) return;
+    if (urlHasAccessRefresh) return;
+    window.localStorage.removeItem('dailyways_pw_reset_pending');
+    window.localStorage.removeItem('dailyways_pw_reset_pending_ts');
+  }, [isPasswordRecovery, pwResetPending, pwResetPendingValid, urlHasAccessRefresh]);
+
   if (loading) {
     return (
       <div className="app-loading">
@@ -382,6 +447,10 @@ export default function App() {
       </div>
     );
   }
+
+  // Segurança: na recuperação de senha, não mostrar o app principal.
+  // Forçamos uma página dedicada para digitar a nova senha.
+  if (shouldForcePasswordReset) return <PasswordResetPage />;
 
   if (!user) return <AuthPage />;
 

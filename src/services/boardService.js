@@ -1,5 +1,31 @@
 import { supabase } from './supabaseClient';
 
+const DEBUG_ENDPOINT = 'http://127.0.0.1:7248/ingest/0093f15a-2614-4c0e-9862-18929ca449cb';
+const DEBUG_SESSION_ID = 'f6ad57';
+
+function debugLog(hypothesisId, location, message, data, runId = 'pre-fix') {
+  // #region agent log
+  try {
+    fetch(DEBUG_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': DEBUG_SESSION_ID,
+      },
+      body: JSON.stringify({
+        sessionId: DEBUG_SESSION_ID,
+        runId,
+        hypothesisId,
+        location,
+        message,
+        data,
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  } catch (_) { }
+  // #endregion
+}
+
 /**
  * Formato esperado de um board (como no AppContext):
  * { id, title, color, emoji, createdAt, lists: [ { id, title, cards: [ { id, title, description, labels, priority, dueDate, myDay, subtasks, createdAt } ] } ] }
@@ -80,6 +106,7 @@ function rowToBoard(row) {
     emoji: row.emoji,
     position: row.position ?? 0,
     groupId: row.group_id ?? null,
+    ownerId: row.owner_id ?? null,
     createdAt: row.created_at,
     lists: [],
   };
@@ -129,11 +156,16 @@ function cardToRowSafe(card, listId, position, hasPosition) {
 export async function fetchBoards(userId) {
   if (!userId) return { data: [], error: null };
 
+  const t0 = Date.now();
+  // #region agent log
+  debugLog('D', 'boardService.js:fetchBoards', 'start fetchBoards', { userIdLen: String(userId || '').length }, 'pre-fix');
+  // #endregion
+
   const hasPosition = await cardsHasPositionColumn();
 
   const { data: owned, error: ownedErr } = await supabase
     .from('boards')
-    .select('*')
+    .select('id, title, color, emoji, position, group_id, owner_id, created_at')
     .eq('owner_id', userId)
     .order('position', { ascending: true });
   if (ownedErr) {
@@ -155,7 +187,7 @@ export async function fetchBoards(userId) {
   if (memberBoardIds.length > 0) {
     const { data: shared, error: sharedErr } = await supabase
       .from('boards')
-      .select('*')
+      .select('id, title, color, emoji, position, group_id, owner_id, created_at')
       .in('id', memberBoardIds)
       .order('position', { ascending: true });
     if (!sharedErr && shared?.length) boardsData = boardsData.concat(shared);
@@ -166,44 +198,57 @@ export async function fetchBoards(userId) {
   const boardIds = boardsData.map(b => b.id);
 
   // ── Lists ──
+  const tLists0 = Date.now();
   const { data: listsData, error: listsError } = await supabase
     .from('lists')
-    .select('*')
+    .select('id, board_id, title, color, position, is_completion_list')
     .in('board_id', boardIds)
     .order('position', { ascending: true });
   if (listsError) {
     console.error('[boardService] fetchBoards lists error', listsError);
     return { data: [], error: listsError.message || 'Erro ao carregar listas.' };
   }
+  // #region agent log
+  debugLog('D', 'boardService.js:fetchBoards', 'lists query done', { ms: Date.now() - tLists0, listsCount: (listsData || []).length }, 'pre-fix');
+  // #endregion
 
   // ── Cards ──
   const listIds = (listsData ?? []).map(l => l.id);
 
   // Usa position se existir, senão created_at
-  let cardsQuery = supabase.from('cards').select('*').in('list_id', listIds);
+  const baseCardSelect = 'id, list_id, title, description, priority, due_date, my_day, labels, color, created_at, completed';
+  let cardsQuery = supabase.from('cards').select(hasPosition ? `${baseCardSelect}, position` : baseCardSelect).in('list_id', listIds);
   if (hasPosition) {
     cardsQuery = cardsQuery.order('position', { ascending: true });
   } else {
     cardsQuery = cardsQuery.order('created_at', { ascending: true });
   }
+  const tCards0 = Date.now();
   const { data: cardsData, error: cardsError } = await cardsQuery;
   if (cardsError) {
     console.error('[boardService] fetchBoards cards error', cardsError);
     return { data: [], error: cardsError.message || 'Erro ao carregar cards.' };
   }
+  // #region agent log
+  debugLog('D', 'boardService.js:fetchBoards', 'cards query done', { ms: Date.now() - tCards0, cardsCount: (cardsData || []).length }, 'pre-fix');
+  // #endregion
 
   // ── Subtasks ──
   const cardIds = (cardsData ?? []).map(c => c.id);
   let subtasksData = [];
   if (cardIds.length > 0) {
+    const tSub0 = Date.now();
     const { data: stData, error: stErr } = await supabase
       .from('subtasks')
-      .select('*')
+      .select('id, card_id, title, done')
       .in('card_id', cardIds);
     if (stErr) {
       console.error('[boardService] fetchBoards subtasks error', stErr);
     }
     subtasksData = stData ?? [];
+    // #region agent log
+    debugLog('D', 'boardService.js:fetchBoards', 'subtasks query done', { ms: Date.now() - tSub0, subtasksCount: (subtasksData || []).length }, 'pre-fix');
+    // #endregion
   }
 
   // ── Montar estrutura ──
@@ -231,6 +276,22 @@ export async function fetchBoards(userId) {
   })).sort((a, b) => (a.position - b.position) || (new Date(a.createdAt) - new Date(b.createdAt)));
 
   console.log(`[boardService] fetchBoards OK: ${data.length} boards, ${(listsData ?? []).length} lists, ${(cardsData ?? []).length} cards, ${subtasksData.length} subtasks`);
+  // #region agent log
+  debugLog(
+    'D',
+    'boardService.js:fetchBoards',
+    'fetchBoards total done',
+    {
+      ms: Date.now() - t0,
+      boardsCount: data.length,
+      firstBoardIds: data.slice(0, 5).map(b => b.id),
+      listsCount: (listsData ?? []).length,
+      cardsCount: (cardsData ?? []).length,
+      subtasksCount: subtasksData.length,
+    },
+    'pre-fix'
+  );
+  // #endregion
   return { data, error: null };
 }
 
@@ -238,28 +299,74 @@ export async function fetchBoards(userId) {
 
 /**
  * Busca membros de um board, incluindo dados básicos do profile.
- * Retorna array de { userId, role, name, username, email, avatar }.
+ * Retorna array de { userId, role, name, username, avatar(initial), photoUrl }.
  */
 export async function fetchBoardMembers(boardId) {
   if (!boardId) return { data: [], error: null };
-  const { data, error } = await supabase
+  // Importante: evitar select aninhado com join em string, porque o PostgREST
+  // pode falhar a parse (ex.: `profiles:public.profiles!inner (..)`) dependendo
+  // do esquema/relacionamentos. Aqui fazemos em 2 passos e depois mapeamos.
+  const { data: membersRows, error: membersErr } = await supabase
     .from('board_members')
-    .select('board_id, user_id, role, profiles:public.profiles!inner (id, username, name, avatar)')
+    .select('board_id, user_id, role')
     .eq('board_id', boardId);
 
-  if (error) {
-    console.error('[boardService] fetchBoardMembers error', error);
-    return { data: [], error: error.message || 'Erro ao carregar membros do board.' };
+  if (membersErr) {
+    console.error('[boardService] fetchBoardMembers members error', membersErr);
+    return { data: [], error: membersErr.message || 'Erro ao carregar membros do board.' };
   }
 
-  const members = (data || []).map((row) => ({
-    boardId: row.board_id,
-    userId: row.user_id,
-    role: row.role,
-    name: row.profiles?.name ?? '',
-    username: row.profiles?.username ?? '',
-    avatar: row.profiles?.avatar ?? '',
-  }));
+  const rows = membersRows || [];
+  const userIds = Array.from(new Set(rows.map(r => r.user_id).filter(Boolean)));
+
+  // Busca dados básicos dos perfis. RLS pode restringir parte dos perfis,
+  // então o UI usa fallback para campos vazios.
+  let profileById = {};
+  if (userIds.length > 0) {
+    const { data: profiles, error: profilesErr } = await supabase
+      .from('profiles')
+      .select('id, username, name, avatar, photo_url')
+      .in('id', userIds);
+
+    if (profilesErr) {
+      console.error('[boardService] fetchBoardMembers profiles error', profilesErr);
+      // Não aborta a listagem dos membros; só ficariam sem name/username.
+      profileById = {};
+    } else {
+      // #region agent log
+      debugLog(
+        'A',
+        'boardService.js:fetchBoardMembers',
+        'profiles query done',
+        {
+          boardIdPresent: !!boardId,
+          membersCount: rows.length,
+          profilesCount: (profiles || []).length,
+          firstPhotoUrlPresent: !!(profiles || [])[0]?.photo_url,
+        },
+        'pre-fix'
+      );
+      // #endregion
+      profileById = (profiles || []).reduce((acc, p) => {
+        acc[p.id] = p;
+        return acc;
+      }, {});
+    }
+  }
+
+  const members = rows.map((row) => {
+    const p = profileById[row.user_id] || null;
+    return {
+      boardId: row.board_id,
+      userId: row.user_id,
+      role: row.role,
+      name: p?.name ?? '',
+      username: p?.username ?? '',
+      avatar: p?.avatar ?? '',
+      photoUrl: p?.photo_url ?? '',
+    };
+  });
+
   return { data: members, error: null };
 }
 
@@ -298,41 +405,147 @@ export async function fetchMyInvitations() {
   }
   const user = sessionData.session.user;
 
-  const { data, error } = await supabase
-    .from('board_invitations')
-    .select('id, board_id, inviter_id, invitee_email, invitee_user_id, role, status, created_at, boards!inner (title, emoji)')
-    .eq('status', 'pending')
-    .or(
-      `invitee_user_id.eq.${user.id},invitee_email.eq.${user.email}`,
-    );
+  // #region agent log
+  debugLog(
+    'I',
+    'boardService.js:fetchMyInvitations',
+    'start',
+    {
+      userIdLen: String(user?.id || '').length,
+      emailLen: String(user?.email || '').length,
+      emailHasAt: (user?.email || '').includes('@'),
+    },
+    'pre-fix'
+  );
+  // #endregion
 
-  if (error) {
-    console.error('[boardService] fetchMyInvitations error', error);
-    return { data: [], error: error.message || 'Erro ao carregar convites.' };
+  const baseSelect = 'id, board_id, inviter_id, invitee_email, invitee_user_id, role, status, created_at';
+
+  // Importante: evitamos `boards!inner` aqui porque o convidado ainda não está em `board_members` até aceitar.
+  // Assim garantimos que a lista de convites apareça mesmo antes do accept.
+  const q1 = supabase
+    .from('board_invitations')
+    .select(baseSelect)
+    .eq('status', 'pending')
+    .eq('invitee_user_id', user.id);
+
+  const emailLower = (user?.email || '').toLowerCase();
+  const q2 = supabase
+    .from('board_invitations')
+    .select(baseSelect)
+    .eq('status', 'pending')
+    .ilike('invitee_email', emailLower);
+
+  const [r1, r2] = await Promise.all([q1, q2]);
+  const err1 = r1?.error ?? null;
+  const err2 = r2?.error ?? null;
+
+  if (err1 || err2) {
+    console.error('[boardService] fetchMyInvitations error', err1 || err2);
+    return { data: [], error: (err1 || err2)?.message || 'Erro ao carregar convites.' };
   }
 
-  const invitations = (data || []).map((row) => ({
+  const merged = [...(r1.data || []), ...(r2.data || [])];
+  const uniqueById = new Map();
+  for (const row of merged) uniqueById.set(row.id, row);
+
+  // #region agent log
+  debugLog(
+    'I',
+    'boardService.js:fetchMyInvitations',
+    'queries done',
+    {
+      pendingCountUserId: (r1.data || []).length,
+      pendingCountEmail: (r2.data || []).length,
+      mergedCount: merged.length,
+      uniqueCount: uniqueById.size,
+    },
+    'pre-fix'
+  );
+  // #endregion
+
+  const invitations = Array.from(uniqueById.values()).map((row) => ({
     id: row.id,
     boardId: row.board_id,
     role: row.role,
     status: row.status,
     inviteeEmail: row.invitee_email,
     createdAt: row.created_at,
-    boardTitle: row.boards?.title ?? 'Board',
-    boardEmoji: row.boards?.emoji ?? '📋',
+    boardTitle: 'Board',
+    boardEmoji: '📋',
   }));
+
   return { data: invitations, error: null };
 }
 
 export async function acceptInvitation(inviteId) {
   if (!inviteId) return { success: false, error: 'Convite inválido.' };
-  const { error } = await supabase.rpc('accept_board_invitation', {
-    p_invite_id: inviteId,
-  });
+
+  const { data: sessData } = await supabase.auth.getSession();
+  const userId = sessData?.session?.user?.id;
+
+  let inviteRow = null;
+  try {
+    const { data: r, error: rErr } = await supabase
+      .from('board_invitations')
+      .select('id, board_id, invitee_user_id, status')
+      .eq('id', inviteId)
+      .maybeSingle();
+    if (!rErr && r) inviteRow = r;
+  } catch (_) { }
+
+  // #region agent log
+  try {
+    debugLog(
+      'RLS-invitee-insert',
+      'boardService.js:acceptInvitation',
+      'before rpc',
+      {
+        inviteId,
+        userIdPrefix: userId ? String(userId).slice(0, 8) : null,
+        inviteBoardIdPrefix: inviteRow?.board_id ? String(inviteRow.board_id).slice(0, 8) : null,
+        inviteStatus: inviteRow?.status ?? null,
+      },
+      'pre-fix',
+    );
+  } catch (_) { }
+  // #endregion
+
+  const { error } = await supabase.rpc('accept_board_invitation', { p_invite_id: inviteId });
   if (error) {
     console.error('[boardService] acceptInvitation error', error);
     return { success: false, error: error.message || 'Erro ao aceitar convite.' };
   }
+
+  // Verifica se a linha em board_members apareceu para o invitee
+  let membersCountAfter = null;
+  try {
+    const boardId = inviteRow?.board_id;
+    if (boardId && userId) {
+      const { data: bmRows, error: bmErr } = await supabase
+        .from('board_members')
+        .select('user_id')
+        .eq('board_id', boardId)
+        .eq('user_id', userId);
+      if (!bmErr) membersCountAfter = (bmRows || []).length;
+    }
+  } catch (_) { }
+
+  // #region agent log
+  try {
+    debugLog(
+      'RLS-invitee-insert',
+      'boardService.js:acceptInvitation',
+      'after rpc / board_members check',
+      {
+        inviteId,
+        membersCountAfter,
+      },
+      'pre-fix',
+    );
+  } catch (_) { }
+  // #endregion
+
   return { success: true };
 }
 

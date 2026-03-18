@@ -7,7 +7,7 @@ import BoardCard from './BoardCard';
 import ListDetailsModal from './ListDetailsModal';
 import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy, Settings2, CheckCircle } from 'lucide-react';
 
-export default function BoardList({ list, boardId, onCardClick, index, onOpenListDetails, dragHandleProps, isDropped, entryDelay = 0 }) {
+export default function BoardList({ list, boardId, onCardClick, index, onOpenListDetails, dragHandleProps, isDropped, entryDelay = 0, editingByCardId }) {
     const { dispatch, state, persistBoard, showConfirm } = useApp();
     const { showContextMenu } = useContextMenu();
     const [addingCard, setAddingCard] = useState(false);
@@ -199,6 +199,7 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
                                                     listColor={list.color}
                                                     isDragging={snapshot.isDragging}
                                                     onClick={() => onCardClick(card, boardId, list.id)}
+                                                    editingEditors={editingByCardId?.[card.id] || []}
                                                 />
                                             </div>
                                         );

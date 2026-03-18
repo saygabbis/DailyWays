@@ -346,6 +346,46 @@
     color: var(--accent-secondary);
 }
 
+/* ── Login: linha de troca (Criar conta + Esqueceu senha) ── */
+.auth-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--space-xl);
+}
+
+.auth-switch-row .auth-switch-btn {
+    margin-left: 0;
+}
+
+.auth-forgot-btn {
+    border: none;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    color: var(--text-tertiary);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    transition: color var(--transition-fast), text-decoration var(--transition-fast);
+}
+
+.auth-forgot-btn:hover:not(:disabled) {
+    color: var(--accent-primary);
+    text-decoration: underline;
+}
+
+.auth-forgot-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+    text-decoration: none;
+}
+
+.auth-forgot-message {
+    margin-top: var(--space-sm);
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+}
+
 .auth-success-title {
     font-size: var(--font-size-2xl);
     font-weight: 800;

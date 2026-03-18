@@ -5,6 +5,8 @@ import BoardList from './BoardList';
 import ListDetailsModal from './ListDetailsModal';
 import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import { Plus, Loader2, X, GripVertical, Share2 } from 'lucide-react';
+import { fetchBoardMembers } from '../../services/boardService';
+import { useBoardPresence } from '../../hooks/useBoardPresence';
 import './Board.css';
 
 function BoardView({ onCardClick }, ref) {
@@ -14,6 +16,8 @@ function BoardView({ onCardClick }, ref) {
     const [listDetails, setListDetails] = useState(null);
     const [droppedListId, setDroppedListId] = useState(null);
     const [showShareModal, setShowShareModal] = useState(false);
+    const [toolbarMembers, setToolbarMembers] = useState([]);
+    const [toolbarMembersLoading, setToolbarMembersLoading] = useState(false);
 
     // Floating Toolbar State
     const [toolbarPos, setToolbarPos] = useState(null);
@@ -30,6 +34,28 @@ function BoardView({ onCardClick }, ref) {
     }, [showBoardToolbar]);
 
     const board = getActiveBoard();
+    const { editorsByCardId } = useBoardPresence(board?.id);
+
+    // Load board members for toolbar avatars
+    useEffect(() => {
+        if (!showBoardToolbar || !board?.id) return;
+        let cancelled = false;
+        (async () => {
+            setToolbarMembersLoading(true);
+            const { data, error } = await fetchBoardMembers(board.id);
+            if (cancelled) return;
+            if (error) {
+                setToolbarMembers([]);
+            } else {
+                setToolbarMembers(Array.isArray(data) ? data : []);
+            }
+            setToolbarMembersLoading(false);
+        })();
+        return () => { cancelled = true; };
+    }, [showBoardToolbar, board?.id]);
+
+    const toolbarVisibleMembers = toolbarMembers.slice(0, 4);
+    const toolbarExtraCount = Math.max(0, toolbarMembers.length - 4);
 
 
 
@@ -281,6 +307,44 @@ function BoardView({ onCardClick }, ref) {
                             </span>
                         </div>
                     )}
+                    {showBoardToolbar && (
+                        <div className="board-toolbar-section board-toolbar-members" aria-label="Membros do board">
+                            {toolbarMembersLoading ? null : (
+                                toolbarMembers.length > 0 ? (
+                                    <div className="board-members">
+                                        {toolbarVisibleMembers.map((m) => (
+                                            <div key={m.userId} className={`board-avatar ${m.photoUrl ? 'has-photo' : ''}`}>
+                                                {m.photoUrl ? (
+                                                    <>
+                                                        <img
+                                                            src={m.photoUrl}
+                                                            alt={m.name || m.username}
+                                                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                                            onError={(e) => {
+                                                                const img = e.currentTarget;
+                                                                const wrap = img.closest('.board-avatar');
+                                                                const fallback = wrap?.querySelector('.board-avatar-fallback');
+                                                                if (fallback) fallback.style.display = 'flex';
+                                                                img.style.display = 'none';
+                                                            }}
+                                                        />
+                                                        <span className="board-avatar-fallback hidden">
+                                                            {(m.name || m.username || '?')[0]}
+                                                        </span>
+                                                    </>
+                                                ) : (
+                                                    <span className="board-avatar-initial">{(m.name || m.username || '?')[0]}</span>
+                                                )}
+                                            </div>
+                                        ))}
+                                        {toolbarExtraCount > 0 && (
+                                            <div className="board-avatar-more">+</div>
+                                        )}
+                                    </div>
+                                ) : null
+                            )}
+                        </div>
+                    )}
                     <button
                         className="btn-icon-xs"
                         onClick={() => setShowShareModal(true)}
@@ -341,6 +405,7 @@ function BoardView({ onCardClick }, ref) {
                                                                 list={list}
                                                                 boardId={board.id}
                                                                 onCardClick={onCardClick}
+                                                                editingByCardId={editorsByCardId}
                                                                 index={index}
                                                                 onOpenListDetails={setListDetails}
                                                                 dragHandleProps={provided.dragHandleProps}

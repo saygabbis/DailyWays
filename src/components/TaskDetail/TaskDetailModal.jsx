@@ -1,14 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../services/supabaseClient';
 import {
     X, Calendar, Tag, AlertCircle, Sun, CheckSquare,
     Plus, Trash2, Edit3, GripVertical, Repeat, Clock
 } from 'lucide-react';
 import DatePicker from '../Common/DatePicker';
 import './TaskDetail.css';
+import { colorFromUserId, initialFromName } from '../../utils/userColor';
 
 export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const { dispatch, LABEL_COLORS, state, persistBoard, showConfirm } = useApp();
+    const { user } = useAuth();
 
     // Get the LIVE card data from state (not the stale prop)
     const liveCard = (() => {
@@ -69,6 +73,45 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         }, 300);
         return () => clearTimeout(timeout);
     }, [title, description, priority, dueDate, myDay, labels, cardColor]);
+
+    // ── Presence: anuncia que este usuário está editando este card ──
+    useEffect(() => {
+        if (!boardId || !card?.id || !user?.id) return;
+
+        const channelName = `board-presence:${boardId}`;
+        const channel = supabase.channel(channelName, {
+            config: { presence: { key: user.id } },
+        });
+
+        const payload = {
+            cardId: card.id,
+            name: user.name || user.email || user.id,
+            photoUrl: user.photo_url || null,
+            avatarInitial: initialFromName(user.name || user.email || user.id),
+            color: colorFromUserId(user.id),
+        };
+
+        const handleSub = (status) => {
+            // supabase-js pode mandar string ("SUBSCRIBED") ou objeto (dependendo da versão/transport)
+            const raw = typeof status === 'string' ? status : status?.status;
+            if (raw !== 'SUBSCRIBED') return;
+            try {
+                channel.track(payload);
+            } catch (_) { }
+        };
+
+        channel.subscribe(handleSub);
+
+        return () => {
+            try {
+                // Limpa nossa presença do card (auto-evapora também ao desconectar)
+                channel.untrack?.();
+            } catch (_) { }
+            try {
+                supabase.removeChannel(channel);
+            } catch (_) { }
+        };
+    }, [boardId, card?.id, user?.id, user?.name, user?.email, user?.photo_url]);
 
     const handleDelete = async () => {
         const confirmed = await showConfirm({

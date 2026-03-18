@@ -50,6 +50,7 @@ Você **pode usar seu e-mail pessoal** (ex.: gaffonsoxx@gmail.com) ou criar uma 
    - `supabase/migrations/20250218130000_trigger_handle_new_user.sql` (cria profile automaticamente ao criar usuário);
    - `supabase/migrations/20250218140000_username_and_has_password.sql` (coluna `has_password`, username do signup no perfil, login por username case-insensitive). Se você já tem usuários, essa migration também corrige o username deles a partir do que foi enviado no cadastro (ex.: **saygabbis** em vez da parte do e-mail).
    - `supabase/migrations/20260302120000_journal_notes.sql` (tabela `journal_notes` para o Diário, com RLS por usuário).
+   - `supabase/migrations/20260318103000_invite_board_member_pending_only.sql` (convites pendentes até aceitar)
 
 7. **Microsoft (Azure)** — checklist para evitar `server_error` / "Unable to exchange external code":
    - **Importante**: no Azure, a **Redirect URI** deve ser a **URL de callback do Supabase**, não a do seu site (não use `http://localhost:5173` no Azure).

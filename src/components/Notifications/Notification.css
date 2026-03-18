@@ -45,6 +45,7 @@
 
 .notification-item {
     display: flex;
+    align-items: center;
     gap: var(--space-md);
     padding: var(--space-md) var(--space-lg);
     border-bottom: 1px solid var(--border-color);
@@ -107,10 +108,8 @@
     height: 8px;
     border-radius: 50%;
     background: var(--accent-primary);
-    position: absolute;
-    top: 50%;
-    right: var(--space-md);
-    transform: translateY(-50%);
+    margin-left: auto;
+    flex-shrink: 0;
 }
 
 .notification-empty {

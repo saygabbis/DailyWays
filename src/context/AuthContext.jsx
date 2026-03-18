@@ -99,8 +99,23 @@ export function AuthProvider({ children }) {
     // Limpa tokens de auth da URL (OAuth redirect) para que no F5
     // o Supabase não tente re-processar tokens expirados.
     const cleanUrlTokens = () => {
-      const hash = window.location.hash;
-      if (hash && (hash.includes('access_token') || hash.includes('refresh_token') || hash.includes('type=recovery'))) {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      const combined = `${hash || ''}&${search || ''}`.toLowerCase();
+
+      const pwResetPending = window.localStorage.getItem('dailyways_pw_reset_pending') === '1';
+
+      // Durante password recovery precisamos manter os tokens para setSession.
+      const isRecovery =
+        combined.includes('type=recovery') ||
+        combined.includes('recovery') ||
+        combined.includes('reset_password') ||
+        combined.includes('reset');
+
+      const hasAccess = combined.includes('access_token');
+      const hasRefresh = combined.includes('refresh_token');
+
+      if (hasAccess && hasRefresh && !isRecovery && !pwResetPending) {
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
       }
     };

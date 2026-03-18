@@ -1,0 +1,63 @@
+.floating-invitation-toast {
+    position: fixed;
+    bottom: 88px;
+    right: var(--space-xl);
+    z-index: var(--z-modal);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding: 10px 14px;
+    border-radius: var(--radius-lg);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 35%, transparent);
+    box-shadow:
+        var(--glass-shadow),
+        0 4px 24px rgba(0, 0, 0, 0.25),
+        0 0 0 2px color-mix(in srgb, var(--accent-primary) 10%, transparent);
+    pointer-events: auto;
+    min-width: 260px;
+    max-width: 340px;
+}
+
+.floating-invitation-toast-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent-primary);
+    white-space: nowrap;
+}
+
+.floating-invitation-toast-close {
+    margin-left: auto;
+    opacity: 0.75;
+}
+
+.floating-invitation-toast-close:hover {
+    opacity: 1;
+    color: var(--text-primary);
+}
+
+.floating-invitation-toast-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.floating-invitation-toast-board {
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.floating-invitation-toast-meta {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+}
+
