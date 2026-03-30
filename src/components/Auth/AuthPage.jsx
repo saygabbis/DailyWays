@@ -4,8 +4,9 @@ import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../services/supabaseClient';
 import { getAppOrigin } from '../../utils/appUrl';
 import { ENABLE_MICROSOFT_LOGIN } from '../../config';
-import { Lock, Mail, User, ArrowRight, Chrome, Command, Github, Shield, Eye, EyeOff } from 'lucide-react';
+import { Lock, Mail, User, ArrowRight, Chrome, Command, Github, Shield, Eye, EyeOff, X } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import logoWhite from '../../assets/Logo - Branco.png';
 import logoBlack from '../../assets/Logo - Preto.png';
 import './Auth.css';
@@ -49,6 +50,7 @@ export default function AuthPage() {
   const { theme } = useTheme();
   const isLightTheme = ['light', 'latte', 'ocean', 'nord'].includes(theme);
   const logoImg = isLightTheme ? logoBlack : logoWhite;
+  const isCoarsePointer = useCoarsePointer();
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
@@ -308,6 +310,17 @@ export default function AuthPage() {
       setTimeout(() => otpInputRef.current?.focus(), 100);
     }
   }, [showOtpModal]);
+
+  // Fechar no Escape apenas em desktop (no mobile isso costuma fechar sem querer)
+  useEffect(() => {
+    if (!showOtpModal) return;
+    if (isCoarsePointer) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') cancelOtp();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showOtpModal, isCoarsePointer]);
 
   // Reenviar código: cooldown 60s ao abrir o modal
   useEffect(() => {
@@ -599,12 +612,15 @@ export default function AuthPage() {
 
       {/* OTP Verification Modal — Portal no body para escapar do overflow:hidden do auth-page */}
       {showOtpModal && createPortal(
-        <div className="otp-overlay" onClick={cancelOtp}>
-          <div className="otp-modal animate-scale-in" onClick={e => e.stopPropagation()}>
+        <div className="otp-overlay">
+          <div className="otp-modal animate-scale-in" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Verificar e-mail">
             <div className="otp-modal-header">
               <Mail size={28} className="otp-icon" />
               <h2>Verifique seu e-mail</h2>
               <p>Enviamos um código (6 ou 8 dígitos) para <strong>{otpEmail}</strong></p>
+              <button type="button" className="btn-icon otp-close-btn" onClick={cancelOtp} aria-label="Fechar">
+                <X size={18} />
+              </button>
             </div>
             <div className="otp-modal-body">
               <input
@@ -639,9 +655,6 @@ export default function AuthPage() {
                 disabled={otpLoading || otpCode.length < 6}
               >
                 {otpLoading ? <span className="auth-spinner" /> : 'Confirmar e entrar'}
-              </button>
-              <button type="button" className="otp-cancel-btn" onClick={cancelOtp}>
-                Cancelar
               </button>
             </div>
           </div>

@@ -480,8 +480,29 @@
 }
 
 .otp-modal-header {
+    position: relative;
     text-align: center;
     margin-bottom: var(--space-xl);
+}
+
+.otp-close-btn {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.otp-close-btn:hover {
+    color: var(--text-primary);
+    background: rgba(0, 0, 0, 0.12);
 }
 
 .otp-icon {
