@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
-import { insertBoardFull, deleteBoard, removeMember } from '../../services/boardService';
+import { insertBoardFull, deleteBoard, removeMember, isBoardOwnerClient } from '../../services/boardService';
 
 import { usePomodoro } from '../../context/PomodoroContext';
 import { useRadio } from '../../context/RadioContext';
@@ -117,7 +117,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         state, dispatch, getMyDayCards, getImportantCards, getPlannedCards,
         DEFAULT_BOARD_COLORS, updateBoardAndPersist, updateBoardAndPersistImmediate,
         updateBoardsOrder, persistBoard, getActiveBoard, isSavingBoard, suppressRealtime,
-        showConfirm, lastReorderedIds = [], setLastReorderedIds,
+        showConfirm, reloadBoards, lastReorderedIds = [], setLastReorderedIds,
     } = useApp();
     const t = useI18n();
     const { theme } = useTheme();
@@ -197,13 +197,20 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
     const allItems = [...activeBoards, ...activeSpaces];
     const activeGroups = state.groups || [];
 
-    // Board groupings
+    // Board groupings — boards com group_id da pasta de OUTRO utilizador (ex.: dono do board partilhado)
+    // não têm essa pasta no nosso state.groups → tratamos como "raiz" para aparecerem na sidebar.
     const boardGroups = activeGroups.filter(g => g.type === 'board').sort((a, b) => a.position - b.position);
-    const rootBoards = activeBoards.filter(b => !b.groupId).sort((a, b) => a.position - b.position);
+    const boardFolderIds = new Set(boardGroups.map((g) => g.id));
+    const rootBoards = activeBoards
+        .filter((b) => !b.groupId || !boardFolderIds.has(b.groupId))
+        .sort((a, b) => a.position - b.position);
 
-    // Space groupings
+    // Space groupings (mesma lógica)
     const spaceGroups = activeGroups.filter(g => g.type === 'space').sort((a, b) => a.position - b.position);
-    const rootSpaces = activeSpaces.filter(s => !s.groupId).sort((a, b) => a.position - b.position);
+    const spaceFolderIds = new Set(spaceGroups.map((g) => g.id));
+    const rootSpaces = activeSpaces
+        .filter((s) => !s.groupId || !spaceFolderIds.has(s.groupId))
+        .sort((a, b) => a.position - b.position);
 
     const handleAddBoard = async (e) => {
         e.preventDefault();
@@ -212,6 +219,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         // Criar o board com IDs definitivos (mesmo id que vai ao Supabase)
         const newBoard = {
             id: uuidv4(),
+            ownerId: user.id,
             title: newBoardTitle.trim(),
             color: DEFAULT_BOARD_COLORS[Math.floor(Math.random() * DEFAULT_BOARD_COLORS.length)],
             emoji: '📋',
@@ -423,6 +431,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                     const dup = {
                         ...JSON.parse(JSON.stringify(b)),
                         id: uuidv4(),
+                        ownerId: user.id,
                         title: `${b.title} (cópia)`,
                         createdAt: new Date().toISOString(),
                         lists: b.lists.map(l => ({
@@ -491,6 +500,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                     const dup = {
                         ...JSON.parse(JSON.stringify(b)),
                         id: uuidv4(),
+                        ownerId: user.id,
                         groupId: newGroupId,
                         title: b.title,
                         createdAt: new Date().toISOString(),
@@ -564,6 +574,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 const dup = {
                     ...JSON.parse(JSON.stringify(board)),
                     id: uuidv4(),
+                    ownerId: user.id,
                     title: `${board.title} (cópia)`,
                     createdAt: new Date().toISOString(),
                     lists: board.lists.map(l => ({
@@ -592,55 +603,67 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         },
         { type: 'divider' },
         {
-            label: 'Deletar board',
+            label: isBoardOwnerClient(board, user.id) ? 'Deletar board' : 'Sair do board',
             icon: <Trash2 size={15} />,
             danger: true,
             action: async () => {
+                const isOwner = isBoardOwnerClient(board, user.id);
                 const confirmed = await showConfirm({
-                    title: 'Deletar Board',
-                    message: `Tem certeza que deseja deletar o board "${board.title}"? Esta ação não pode ser desfeita.`,
-                    confirmLabel: 'Deletar',
+                    title: isOwner ? 'Deletar board' : 'Sair do board',
+                    message: isOwner
+                        ? `Tem certeza que deseja deletar o board "${board.title}"? Esta ação não pode ser desfeita.`
+                        : `O board "${board.title}" não será apagado — só deixas de o ver na tua lista e sais dos membros.`,
+                    confirmLabel: isOwner ? 'Deletar' : 'Sair',
+                    cancelLabel: 'Cancelar',
                     type: 'danger'
                 });
-                if (confirmed) {
-                    const isActive = state.activeBoard === board.id;
-                    const boardIndex = state.boards.findIndex(b => b.id === board.id);
-                    const groupId = board.groupId;
-                    const wasOnlyBoardInGroup = groupId && state.boards.filter(b => b.groupId === groupId).length === 1;
-                    dispatch({ type: 'DELETE_BOARD', payload: board.id });
-                    if (suppressRealtime) suppressRealtime(3000);
+                if (!confirmed) return;
 
-                    // Ativa o floating save durante a operação no servidor
-                    dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: true } });
-                    try {
-                        const ownerId = board.ownerId ?? null;
-                        const isOwner = !ownerId || ownerId === user.id;
-                        if (isOwner) {
-                            await deleteBoard(board.id);
-                        } else {
-                            // Não-dono: "deletar" vira sair do board compartilhado.
-                            await removeMember(board.id, user.id);
-                        }
-                        if (wasOnlyBoardInGroup) {
-                            try {
-                                const { updateGroup } = await import('../../services/workspaceService');
-                                await updateGroup(groupId, { isExpanded: false });
-                            } catch (e) { /* ignore */ }
-                        }
-                    } finally {
-                        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: false } });
+                dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: true } });
+                if (suppressRealtime) suppressRealtime(3000);
+                let serverOk = false;
+                try {
+                    const result = isOwner
+                        ? await deleteBoard(board.id)
+                        : await removeMember(board.id, user.id);
+                    serverOk = result.success;
+                    if (!serverOk) {
+                        await reloadBoards();
+                        await showConfirm({
+                            title: isOwner ? 'Não foi possível apagar' : 'Não foi possível sair',
+                            message: result.error || 'Tenta novamente.',
+                            type: 'info',
+                            confirmLabel: 'OK',
+                            cancelLabel: 'Fechar',
+                        });
+                        return;
                     }
+                } finally {
+                    dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: false } });
+                }
 
-                    if (isActive) {
-                        const remaining = state.boards.filter(b => b.id !== board.id);
-                        if (remaining.length > 0) {
-                            // vai para o próximo, ou para o anterior se era o último
-                            const next = remaining[boardIndex] ?? remaining[boardIndex - 1];
-                            dispatch({ type: 'SET_ACTIVE_BOARD', payload: next.id });
-                            onViewChange('board');
-                        } else {
-                            onViewChange('dashboard');
-                        }
+                const isActive = state.activeBoard === board.id;
+                const boardIndex = state.boards.findIndex(b => b.id === board.id);
+                const groupId = board.groupId;
+                const wasOnlyBoardInGroup = groupId && state.boards.filter(b => b.groupId === groupId).length === 1;
+
+                dispatch({ type: 'DELETE_BOARD', payload: board.id });
+
+                if (wasOnlyBoardInGroup) {
+                    try {
+                        const { updateGroup } = await import('../../services/workspaceService');
+                        await updateGroup(groupId, { isExpanded: false });
+                    } catch (e) { /* ignore */ }
+                }
+
+                if (isActive) {
+                    const remaining = state.boards.filter(b => b.id !== board.id);
+                    if (remaining.length > 0) {
+                        const next = remaining[boardIndex] ?? remaining[boardIndex - 1];
+                        dispatch({ type: 'SET_ACTIVE_BOARD', payload: next.id });
+                        onViewChange('board');
+                    } else {
+                        onViewChange('dashboard');
                     }
                 }
             },
@@ -731,12 +754,20 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                 const { deleteBoard } = await import('../../services/boardService');
                                 for (const id of itemsToDelete) {
                                     const b = state.boards.find(x => x.id === id);
-                                    const ownerId = b?.ownerId ?? null;
-                                    const isOwner = !ownerId || ownerId === user.id;
-                                    if (isOwner) {
-                                        await deleteBoard(id);
-                                    } else {
-                                        await removeMember(id, user.id);
+                                    const isOwner = isBoardOwnerClient(b, user.id);
+                                    const result = isOwner
+                                        ? await deleteBoard(id)
+                                        : await removeMember(id, user.id);
+                                    if (!result.success) {
+                                        await reloadBoards();
+                                        await showConfirm({
+                                            title: 'Operação incompleta',
+                                            message: result.error || 'Alguns boards não foram atualizados. A lista foi sincronizada.',
+                                            type: 'info',
+                                            confirmLabel: 'OK',
+                                            cancelLabel: 'Fechar',
+                                        });
+                                        break;
                                     }
                                 }
                             } else if (itemType === 'space') {
@@ -1001,12 +1032,20 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                     const { deleteBoard } = await import('../../services/boardService');
                                     for (const id of boardIdsToDelete) {
                                         const b = state.boards.find(x => x.id === id);
-                                        const ownerId = b?.ownerId ?? null;
-                                        const isOwner = !ownerId || ownerId === user.id;
-                                        if (isOwner) {
-                                            await deleteBoard(id);
-                                        } else {
-                                            await removeMember(id, user.id);
+                                        const isOwner = isBoardOwnerClient(b, user.id);
+                                        const result = isOwner
+                                            ? await deleteBoard(id)
+                                            : await removeMember(id, user.id);
+                                        if (!result.success) {
+                                            await reloadBoards();
+                                            await showConfirm({
+                                                title: 'Operação incompleta',
+                                                message: result.error || 'Alguns boards não foram atualizados.',
+                                                type: 'info',
+                                                confirmLabel: 'OK',
+                                                cancelLabel: 'Fechar',
+                                            });
+                                            break;
                                         }
                                     }
                                 }

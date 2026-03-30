@@ -76,6 +76,7 @@
     margin: 0;
     top: 20px;
     right: 20px;
+    transition: top 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease, transform 0.2s ease;
 }
 
 .board-toolbar.dragging {
@@ -85,6 +86,7 @@
     z-index: 1001;
     /* Ensure it stays on top while moving */
     cursor: move;
+    transition: none !important;
 }
 
 .board-toolbar>* {
@@ -122,6 +124,14 @@
     opacity: 0.8;
 }
 
+.board-toolbar-members-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    color: var(--text-tertiary);
+}
+
 .toolbar-close-btn {
     opacity: 0.7;
     transition: all var(--transition-fast);
@@ -136,7 +146,19 @@
 .board-members {
     display: flex;
     align-items: center;
+    gap: 0;
     margin-right: var(--space-sm);
+}
+
+.board-toolbar-members .board-avatar,
+.board-toolbar-members .board-avatar-more {
+    cursor: pointer;
+}
+
+.board-toolbar-members .board-avatar:focus-visible,
+.board-toolbar-members .board-avatar-more:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
 }
 
 .board-avatar {
@@ -167,12 +189,12 @@
     z-index: 1;
 }
 
-.board-avatar:nth-child(1) {
+.board-members > .board-avatar:nth-child(1):not(.has-photo):not(.has-image) {
     background: #ff6b6b;
     color: white;
 }
 
-.board-avatar:nth-child(2) {
+.board-members > .board-avatar:nth-child(2):not(.has-photo):not(.has-image) {
     background: #4d96ff;
     color: white;
 }
@@ -210,7 +232,8 @@
 }
 
 /* Se tiver imagem, não queremos cores fixas por nth-child */
-.board-avatar.has-image {
+.board-avatar.has-image,
+.board-avatar.has-photo {
     background: var(--bg-card) !important;
     color: var(--text-primary) !important;
 }
@@ -918,33 +941,32 @@
     }
 
     .board-toolbar {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: var(--space-sm);
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
     }
 
-    /* Toolbar do board no mobile: acima da barra inferior de navegação */
-    .board-toolbar.floating {
-        position: fixed !important;
-        left: 12px !important;
-        right: 12px !important;
-        bottom: calc(12px + var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom, 0px)) !important;
-        top: auto !important;
-        transform: none !important;
-        justify-content: space-between;
-        gap: 8px;
-        padding: 10px 12px;
-        border-radius: 16px;
+    /* Mobile: pill no canto inferior direito do board (área já acima da nav); arrastar usa left/top inline */
+    .board-toolbar.floating.board-toolbar--default-bottom {
+        top: auto;
+        right: 12px;
+        bottom: 12px;
+        left: auto;
+        width: max-content;
+        max-width: calc(100% - 24px);
+        margin: 0;
+        transform: none;
+        justify-content: flex-start;
+        padding: 8px 10px;
+        border-radius: var(--radius-full);
         z-index: 120;
-        max-width: none;
-        width: auto;
     }
 
-    .board-toolbar-handle {
-        display: none;
-    }
-
-    .board-toolbar-members {
-        display: none;
+    .board-toolbar.floating:not(.board-toolbar--default-bottom) {
+        margin: 0;
+        z-index: 120;
     }
 
     .board-card {

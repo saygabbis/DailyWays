@@ -54,6 +54,10 @@ const initialState = {
     saveErrors: [],
     isDraggingBulk: false,
     showBoardToolbar: JSON.parse(localStorage.getItem('dailyways_show_toolbar') ?? 'false'),
+    /** Header profile dropdown aberto — BoardView desloca a toolbar para não ficar por baixo */
+    profileMenuOpen: false,
+    /** Erro ao carregar boards do Supabase (evita criar "Meu Primeiro Board" à toa) */
+    boardsLoadError: null,
     confirmModal: {
         show: false,
         title: '',
@@ -119,8 +123,17 @@ function createDefaultBoards() {
 function appReducer(state, action) {
     switch (action.type) {
         // ── Boards ──
-        case 'SET_BOARDS':
-            return { ...state, boards: action.payload };
+        case 'SET_BOARDS': {
+            const boards = action.payload ?? [];
+            const validActive = state.activeBoard && boards.some((b) => b.id === state.activeBoard);
+            const nextActive = validActive ? state.activeBoard : (boards.length > 0 ? boards[0].id : null);
+            if (nextActive) {
+                storageService.save(STORAGE_KEYS.ACTIVE_BOARD, nextActive);
+            } else {
+                storageService.remove(STORAGE_KEYS.ACTIVE_BOARD);
+            }
+            return { ...state, boards, activeBoard: nextActive };
+        }
 
         // ── Groups ──
         case 'SET_GROUPS': {
@@ -238,6 +251,7 @@ function appReducer(state, action) {
             const newBoard = {
                 // Aceita id pré-gerado (para consistência com o que foi salvo no servidor)
                 id: action.payload.id || uuidv4(),
+                ownerId: action.payload.ownerId ?? null,
                 title: action.payload.title || 'Novo Board',
                 color: action.payload.color || DEFAULT_BOARD_COLORS[Math.floor(Math.random() * DEFAULT_BOARD_COLORS.length)],
                 emoji: action.payload.emoji || '📋',
@@ -285,6 +299,8 @@ function appReducer(state, action) {
         case 'SET_ACTIVE_BOARD':
             if (action.payload) {
                 storageService.save(STORAGE_KEYS.ACTIVE_BOARD, action.payload);
+            } else {
+                storageService.remove(STORAGE_KEYS.ACTIVE_BOARD);
             }
             return { ...state, activeBoard: action.payload };
 
@@ -670,6 +686,12 @@ function appReducer(state, action) {
             return { ...state, showBoardToolbar: newValue };
         }
 
+        case 'SET_PROFILE_MENU_OPEN':
+            return { ...state, profileMenuOpen: Boolean(action.payload) };
+
+        case 'SET_BOARDS_LOAD_ERROR':
+            return { ...state, boardsLoadError: action.payload ?? null };
+
         case 'SHOW_CONFIRM':
             return { ...state, confirmModal: { ...action.payload, show: true } };
 
@@ -784,6 +806,7 @@ export function AppProvider({ children }) {
             dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId: '__all__', pending: false } });
             dispatch({ type: 'CLEAR_SAVING' });
             dispatch({ type: 'CLEAR_SAVE_ERRORS' });
+            dispatch({ type: 'SET_BOARDS_LOAD_ERROR', payload: null });
             logger.debug('[AppContext] User logout: state cleared');
             return;
         }
@@ -820,6 +843,7 @@ export function AppProvider({ children }) {
             if (cancelled) return { ok: false };
             if (fetchError || groupErr || spaceErr) {
                 logger.error('[AppContext] fetch error:', fetchError || groupErr || spaceErr);
+                dispatch({ type: 'SET_BOARDS_LOAD_ERROR', payload: fetchError || groupErr || spaceErr || null });
                 // Erro de rede/sessão: boards ficam como estão na memória.
                 // Retry automático após 2s na primeira falha.
                 if (!isRetry) {
@@ -828,6 +852,7 @@ export function AppProvider({ children }) {
                 return { ok: false };
             }
 
+            dispatch({ type: 'SET_BOARDS_LOAD_ERROR', payload: null });
             dispatch({ type: 'SET_GROUPS', payload: dbGroups || [] });
             dispatch({ type: 'SET_SPACES', payload: dbSpaces || [] });
 
@@ -835,7 +860,7 @@ export function AppProvider({ children }) {
                 applyBoards(fromDb, 'supabase');
                 return { ok: true };
             }
-            // Supabase retornou sucesso com 0 boards = usuário novo. Criar defaults.
+            // Supabase retornou sucesso com 0 boards = usuário novo (confirmado pelo fetchBoards + RPC). Criar defaults.
             logger.debug('[AppContext] Nenhum board no Supabase, criando defaults...');
             const defaults = createDefaultBoards();
             dispatch({ type: 'SET_BOARDS', payload: defaults });
@@ -1422,7 +1447,12 @@ export function AppProvider({ children }) {
     // Recarrega boards do servidor (usado após aceitar convite de compartilhamento)
     const reloadBoards = useCallback(async () => {
         if (!userId) return;
-        const { data: fromDb } = await fetchBoards(userId);
+        const { data: fromDb, error } = await fetchBoards(userId);
+        if (error) {
+            dispatch({ type: 'SET_BOARDS_LOAD_ERROR', payload: error });
+            return;
+        }
+        dispatch({ type: 'SET_BOARDS_LOAD_ERROR', payload: null });
         if (fromDb) {
             dispatch({ type: 'SET_BOARDS', payload: fromDb });
         }
@@ -1454,6 +1484,8 @@ export function AppProvider({ children }) {
             retryFailedSave,
             revertFailedSave,
             showBoardToolbar: state.showBoardToolbar,
+            profileMenuOpen: state.profileMenuOpen,
+            boardsLoadError: state.boardsLoadError,
             isSavingBoard,
             hasUnsavedChanges,
             LABEL_COLORS: state.labels,

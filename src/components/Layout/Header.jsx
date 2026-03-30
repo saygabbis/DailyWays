@@ -65,6 +65,10 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
     }, [showProfile]);
 
     useEffect(() => {
+        dispatch({ type: 'SET_PROFILE_MENU_OPEN', payload: showProfile });
+    }, [showProfile, dispatch]);
+
+    useEffect(() => {
         const loadUnread = async () => {
             if (!user?.id) {
                 setUnreadInvitesCount(0);
@@ -222,7 +226,17 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                                 <span>Minha Conta</span>
                             </button>
                             {activeBoard && (
-                                <button className="header-profile-item" onClick={() => dispatch({ type: 'TOGGLE_BOARD_TOOLBAR' })}>
+                                <button
+                                    className="header-profile-item"
+                                    onClick={() => {
+                                        const next = !showBoardToolbar;
+                                        dispatch({ type: 'TOGGLE_BOARD_TOOLBAR', payload: next });
+                                        if (activeBoard.id) {
+                                            if (next) localStorage.removeItem(`dailyways_board_toolbar_dismissed_${activeBoard.id}`);
+                                            else localStorage.setItem(`dailyways_board_toolbar_dismissed_${activeBoard.id}`, '1');
+                                        }
+                                    }}
+                                >
                                     <Layout size={16} />
                                     <span>{showBoardToolbar ? 'Ocultar Toolbar' : 'Mostrar Toolbar'}</span>
                                 </button>

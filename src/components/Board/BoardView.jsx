@@ -1,16 +1,70 @@
-import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useImperativeHandle, forwardRef, useMemo } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import BoardList from './BoardList';
 import ListDetailsModal from './ListDetailsModal';
 import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import { Plus, Loader2, X, GripVertical, Share2 } from 'lucide-react';
-import { fetchBoardMembers } from '../../services/boardService';
+import { fetchBoardMembers, sortBoardMembersOwnerFirst } from '../../services/boardService';
 import { useBoardPresence } from '../../hooks/useBoardPresence';
 import './Board.css';
 
+/** Zona do menu de perfil (viewport): padding horizontal + respiro por baixo do dropdown (como na zona vermelha). */
+const PROFILE_MENU_ZONE_PAD_X = 8;
+const PROFILE_MENU_ZONE_PAD_BELOW = 16;
+/** Espaço visível entre o fundo do dropdown e o topo da toolbar (px). */
+const PROFILE_MENU_GAP_AFTER_ZONE = 20;
+
+/** Mínimos para interseção antes do layout medir a toolbar (offsetWidth 0 não pode virar largura 1px). */
+const TOOLBAR_SYNTHETIC_MIN_W = 300;
+const TOOLBAR_SYNTHETIC_MIN_H = 48;
+
+/**
+ * Posição da toolbar em viewport para interseção com o menu de perfil (sintético).
+ * `narrowLayout`: canto inferior direito do board (mobile); senão canto superior direito (desktop).
+ */
+function getToolbarSyntheticViewportRect(boardRect, toolbarPos, toolbarW, toolbarH, narrowLayout) {
+    if (toolbarPos != null) {
+        const w = Math.max(toolbarW || 0, 1);
+        const h = Math.max(toolbarH || 0, 1);
+        return {
+            left: boardRect.left + toolbarPos.x,
+            top: boardRect.top + toolbarPos.y,
+            right: boardRect.left + toolbarPos.x + w,
+            bottom: boardRect.top + toolbarPos.y + h,
+        };
+    }
+    const w = Math.max(toolbarW || 0, TOOLBAR_SYNTHETIC_MIN_W);
+    const h = Math.max(toolbarH || 0, TOOLBAR_SYNTHETIC_MIN_H);
+    if (narrowLayout) {
+        const pad = 12;
+        const right = boardRect.right - pad;
+        const bottom = boardRect.bottom - pad;
+        return {
+            left: right - w,
+            top: bottom - h,
+            right,
+            bottom,
+        };
+    }
+    const right = boardRect.right - 20;
+    const top = boardRect.top + 20;
+    return {
+        left: right - w,
+        top,
+        right,
+        bottom: top + h,
+    };
+}
+
+function rectsIntersect(a, b) {
+    return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+}
+
 function BoardView({ onCardClick }, ref) {
-    const { state, getActiveBoard, dispatch, persistBoard, isSavingBoard, showBoardToolbar } = useApp();
+    const { state, getActiveBoard, dispatch, persistBoard, isSavingBoard, showBoardToolbar, profileMenuOpen } = useApp();
+    const { user } = useAuth();
     const [addingList, setAddingList] = useState(false);
     const [newListTitle, setNewListTitle] = useState('');
     const [listDetails, setListDetails] = useState(null);
@@ -18,6 +72,9 @@ function BoardView({ onCardClick }, ref) {
     const [showShareModal, setShowShareModal] = useState(false);
     const [toolbarMembers, setToolbarMembers] = useState([]);
     const [toolbarMembersLoading, setToolbarMembersLoading] = useState(false);
+    const [narrowBoardLayout, setNarrowBoardLayout] = useState(
+        () => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
+    );
 
     // Floating Toolbar State
     const [toolbarPos, setToolbarPos] = useState(null);
@@ -33,8 +90,34 @@ function BoardView({ onCardClick }, ref) {
         }
     }, [showBoardToolbar]);
 
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 768px)');
+        const onChange = () => setNarrowBoardLayout(mq.matches);
+        onChange();
+        mq.addEventListener('change', onChange);
+        return () => mq.removeEventListener('change', onChange);
+    }, []);
+
     const board = getActiveBoard();
     const { editorsByCardId } = useBoardPresence(board?.id);
+
+    // Board partilhado: mostrar toolbar por defeito (o utilizador pode fechar; persistimos por board)
+    useEffect(() => {
+        if (!board?.id || !user?.id) return;
+        const dismissed = localStorage.getItem(`dailyways_board_toolbar_dismissed_${board.id}`);
+        if (dismissed === '1') return;
+        let cancelled = false;
+        (async () => {
+            const { data } = await fetchBoardMembers(board.id);
+            if (cancelled) return;
+            const members = data || [];
+            const shared = members.length > 1 || (board.ownerId && board.ownerId !== user.id);
+            if (shared) {
+                dispatch({ type: 'TOGGLE_BOARD_TOOLBAR', payload: true });
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [board?.id, board?.ownerId, user?.id, dispatch]);
 
     // Load board members for toolbar avatars
     useEffect(() => {
@@ -47,17 +130,16 @@ function BoardView({ onCardClick }, ref) {
             if (error) {
                 setToolbarMembers([]);
             } else {
-                setToolbarMembers(Array.isArray(data) ? data : []);
+                const list = Array.isArray(data) ? data : [];
+                setToolbarMembers(sortBoardMembersOwnerFirst(list, board.ownerId));
             }
             setToolbarMembersLoading(false);
         })();
         return () => { cancelled = true; };
-    }, [showBoardToolbar, board?.id]);
+    }, [showBoardToolbar, board?.id, board?.ownerId]);
 
     const toolbarVisibleMembers = toolbarMembers.slice(0, 4);
     const toolbarExtraCount = Math.max(0, toolbarMembers.length - 4);
-
-
 
 
     // ── Panning Logic ──
@@ -266,6 +348,66 @@ function BoardView({ onCardClick }, ref) {
         };
     }, [isDragging, handleToolbarPointerUpGlobal]);
 
+    const [profileMenuAvoidMinTop, setProfileMenuAvoidMinTop] = useState(null);
+
+    useLayoutEffect(() => {
+        if (!profileMenuOpen || !showBoardToolbar) {
+            setProfileMenuAvoidMinTop(null);
+            return;
+        }
+        const run = () => {
+            const boardEl = containerRef.current;
+            const menuEl = document.querySelector('.header-profile-dropdown');
+            const toolEl = toolbarRef.current;
+            if (!boardEl || !menuEl) {
+                setProfileMenuAvoidMinTop(null);
+                return;
+            }
+            const boardRect = boardEl.getBoundingClientRect();
+            const menuRect = menuEl.getBoundingClientRect();
+            const rawW = toolEl?.offsetWidth || 0;
+            const rawH = toolEl?.offsetHeight || 0;
+            const tw = toolbarPos != null
+                ? Math.max(rawW, 1)
+                : Math.max(rawW, TOOLBAR_SYNTHETIC_MIN_W);
+            const th = toolbarPos != null
+                ? Math.max(rawH, 1)
+                : Math.max(rawH, TOOLBAR_SYNTHETIC_MIN_H);
+            const toolRect = getToolbarSyntheticViewportRect(boardRect, toolbarPos, tw, th, narrowBoardLayout);
+            const zone = {
+                left: menuRect.left - PROFILE_MENU_ZONE_PAD_X,
+                right: menuRect.right + PROFILE_MENU_ZONE_PAD_X,
+                top: menuRect.top,
+                bottom: menuRect.bottom + PROFILE_MENU_ZONE_PAD_BELOW,
+            };
+
+            if (!rectsIntersect(toolRect, zone)) {
+                setProfileMenuAvoidMinTop(null);
+                return;
+            }
+            setProfileMenuAvoidMinTop(zone.bottom + PROFILE_MENU_GAP_AFTER_ZONE - boardRect.top);
+        };
+
+        run();
+        const id = requestAnimationFrame(run);
+        window.addEventListener('resize', run);
+        return () => {
+            cancelAnimationFrame(id);
+            window.removeEventListener('resize', run);
+        };
+    }, [profileMenuOpen, showBoardToolbar, toolbarPos?.x, toolbarPos?.y, board?.id, narrowBoardLayout]);
+
+    const toolbarDefaultBottomCorner = narrowBoardLayout && toolbarPos == null && profileMenuAvoidMinTop == null;
+
+    const toolbarComputedTop = useMemo(() => {
+        if (toolbarPos != null) {
+            if (profileMenuAvoidMinTop == null) return toolbarPos.y;
+            return Math.max(toolbarPos.y, profileMenuAvoidMinTop);
+        }
+        if (profileMenuAvoidMinTop != null) return profileMenuAvoidMinTop;
+        return undefined;
+    }, [profileMenuAvoidMinTop, toolbarPos]);
+
     if (!board) {
         return (
             <div className="empty-state">
@@ -282,14 +424,15 @@ function BoardView({ onCardClick }, ref) {
             {showBoardToolbar && (
                 <div
                     ref={toolbarRef}
-                    className={`board-toolbar floating animate-slide-down ${isDragging ? 'dragging' : ''}`}
+                    className={`board-toolbar floating animate-slide-down ${isDragging ? 'dragging' : ''} ${toolbarDefaultBottomCorner ? 'board-toolbar--default-bottom' : ''}`}
                     style={{
-                        left: toolbarPos ? toolbarPos.x : undefined,
-                        top: toolbarPos ? toolbarPos.y : undefined,
-                        right: toolbarPos ? 'auto' : undefined,
-                        bottom: toolbarPos ? 'auto' : undefined,
+                        left: toolbarPos != null ? toolbarPos.x : undefined,
+                        top: toolbarComputedTop,
+                        right: toolbarPos != null ? 'auto' : undefined,
+                        bottom: toolbarPos != null ? 'auto' : undefined,
                         position: 'absolute',
-                        transition: isDragging ? 'none' : 'opacity 0.2s ease, transform 0.2s ease'
+                        transition: isDragging ? 'none' : 'opacity 0.2s ease, transform 0.2s ease, top 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        touchAction: isDragging ? 'none' : undefined,
                     }}
                     onPointerDown={handleToolbarPointerDown}
                 >
@@ -305,11 +448,32 @@ function BoardView({ onCardClick }, ref) {
                     )}
                     {showBoardToolbar && (
                         <div className="board-toolbar-section board-toolbar-members" aria-label="Membros do board">
-                            {toolbarMembersLoading ? null : (
-                                toolbarMembers.length > 0 ? (
+                            {toolbarMembersLoading ? (
+                                <span className="board-toolbar-members-loading" aria-hidden>
+                                    <Loader2 size={16} className="spinning" />
+                                </span>
+                            ) : toolbarMembers.length > 0 ? (
                                     <div className="board-members">
                                         {toolbarVisibleMembers.map((m) => (
-                                            <div key={m.userId} className={`board-avatar ${m.photoUrl ? 'has-photo' : ''}`}>
+                                            <div
+                                                key={m.userId}
+                                                className={`board-avatar ${m.photoUrl ? 'has-photo' : ''}`}
+                                                role="button"
+                                                tabIndex={0}
+                                                title="Compartilhar board"
+                                                onPointerDown={(e) => e.stopPropagation()}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setShowShareModal(true);
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        setShowShareModal(true);
+                                                    }
+                                                }}
+                                            >
                                                 {m.photoUrl ? (
                                                     <>
                                                         <img
@@ -334,11 +498,29 @@ function BoardView({ onCardClick }, ref) {
                                             </div>
                                         ))}
                                         {toolbarExtraCount > 0 && (
-                                            <div className="board-avatar-more">+</div>
+                                            <div
+                                                className="board-avatar-more"
+                                                role="button"
+                                                tabIndex={0}
+                                                title="Compartilhar board"
+                                                onPointerDown={(e) => e.stopPropagation()}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setShowShareModal(true);
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        setShowShareModal(true);
+                                                    }
+                                                }}
+                                            >
+                                                +
+                                            </div>
                                         )}
                                     </div>
-                                ) : null
-                            )}
+                                ) : null}
                         </div>
                     )}
                     <button
@@ -350,7 +532,10 @@ function BoardView({ onCardClick }, ref) {
                     </button>
                     <button
                         className="btn-icon-xs toolbar-close-btn"
-                        onClick={() => dispatch({ type: 'TOGGLE_BOARD_TOOLBAR', payload: false })}
+                        onClick={() => {
+                            dispatch({ type: 'TOGGLE_BOARD_TOOLBAR', payload: false });
+                            if (board?.id) localStorage.setItem(`dailyways_board_toolbar_dismissed_${board.id}`, '1');
+                        }}
                         title="Fechar toolbar"
                     >
                         <X size={14} />

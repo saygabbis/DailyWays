@@ -86,6 +86,24 @@ function rowToBoard(row) {
   };
 }
 
+/** Dono do board no cliente: requer ownerId vindo do servidor (evita confundir membro com dono). */
+export function isBoardOwnerClient(board, userId) {
+  if (!userId || !board) return false;
+  return board.ownerId === userId;
+}
+
+/** Membros para UI: dono do board sempre primeiro (`role === 'owner'` ou `userId === ownerId`). */
+export function sortBoardMembersOwnerFirst(members, ownerId) {
+  if (!Array.isArray(members)) return [];
+  return [...members].sort((a, b) => {
+    const aIsOwner = a.role === 'owner' || (ownerId && a.userId === ownerId);
+    const bIsOwner = b.role === 'owner' || (ownerId && b.userId === ownerId);
+    if (aIsOwner && !bIsOwner) return -1;
+    if (!aIsOwner && bIsOwner) return 1;
+    return 0;
+  });
+}
+
 // ── Detecta se coluna "position" existe na tabela cards ────────────
 // Cacheamos para não bater na API toda vez.
 let _cardsHasPosition = null;
@@ -150,6 +168,7 @@ export async function fetchBoards(userId) {
     .eq('user_id', userId);
   if (memberErr) {
     console.error('[boardService] fetchBoards memberRows error', memberErr);
+    return { data: [], error: memberErr.message || 'Erro ao carregar participações em boards.' };
   }
 
   const ownedIds = new Set((owned ?? []).map(b => b.id));
@@ -161,10 +180,37 @@ export async function fetchBoards(userId) {
       .select('id, title, color, emoji, position, group_id, owner_id, created_at')
       .in('id', memberBoardIds)
       .order('position', { ascending: true });
-    if (!sharedErr && shared?.length) boardsData = boardsData.concat(shared);
+    if (sharedErr) {
+      console.error('[boardService] fetchBoards shared boards error', sharedErr);
+      return { data: [], error: sharedErr.message || 'Erro ao carregar boards partilhados.' };
+    }
+    // Usar o que o SELECT devolver (pode ser parcial); não falhar só porque veio 0 linhas
+    boardsData = boardsData.concat(shared ?? []);
   }
 
-  if (!boardsData.length) return { data: [], error: null };
+  if (!boardsData.length) {
+    const { data: inv, error: invErr } = await supabase.rpc('board_inventory_for_current_user');
+    if (invErr) {
+      console.error('[boardService] fetchBoards inventory RPC error', invErr);
+      return {
+        data: [],
+        error:
+          invErr.message ||
+          'Não foi possível verificar os boards na conta. Aplica a migração `20260330140000_board_inventory_rpc.sql` no Supabase.',
+      };
+    }
+    const row = Array.isArray(inv) ? inv[0] : inv;
+    const o = Number(row?.owned_boards ?? 0);
+    const m = Number(row?.membership_rows ?? 0);
+    if (o > 0 || m > 0) {
+      return {
+        data: [],
+        error:
+          'Os boards não foram carregados (lista vazia mas a conta tem dados). Costuma ser política RLS. Recarrega a página ou revê as migrações recentes em `board_members` / `boards`.',
+      };
+    }
+    return { data: [], error: null };
+  }
 
   const boardIds = boardsData.map(b => b.id);
 
@@ -433,11 +479,19 @@ export async function declineInvitation(inviteId) {
   return { success: true };
 }
 
+/** Valores válidos em board_members.role (incl. admin). */
+export function normalizeBoardMemberRole(role) {
+  if (role === 'owner') return 'owner';
+  if (role === 'admin') return 'admin';
+  if (role === 'editor') return 'editor';
+  return 'reader';
+}
+
 export async function updateMemberRole(boardId, userId, role) {
   if (!boardId || !userId) {
     return { success: false, error: 'Dados inválidos.' };
   }
-  const normalizedRole = role === 'editor' || role === 'owner' ? role : 'reader';
+  const normalizedRole = normalizeBoardMemberRole(role);
   const { error } = await supabase
     .from('board_members')
     .update({ role: normalizedRole })

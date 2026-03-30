@@ -2,6 +2,7 @@ const STORAGE_KEYS = {
   USER: 'dailyways_user',
   BOARDS: 'dailyways_boards',
   SETTINGS: 'dailyways_settings',
+  ACTIVE_BOARD: 'dailyways_active_board',
 };
 
 const storageService = {

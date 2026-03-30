@@ -27,6 +27,35 @@
   min-height: 0;
 }
 
+.boards-load-error-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-lg);
+  margin: 0 var(--space-md);
+  margin-top: var(--space-xs);
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  border-radius: var(--radius-md);
+  z-index: 5;
+}
+
+.boards-load-error-text {
+  flex: 1;
+  min-width: 200px;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.boards-load-error-actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
 /* ── Loading ── */
 .app-loading {
   min-height: 100vh;

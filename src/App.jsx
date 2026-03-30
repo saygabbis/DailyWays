@@ -30,7 +30,7 @@ import './App.css';
 
 function AppContent() {
   const { user, profile } = useAuth();
-  const { getActiveBoard, confirmConfig, dispatch, persistBoard, getAllCards, state, updateBoardsOrder, suppressRealtime, updateBoardAndPersist, updateWorkspaceOrder } = useApp();
+  const { getActiveBoard, confirmConfig, dispatch, persistBoard, getAllCards, state, updateBoardsOrder, suppressRealtime, updateBoardAndPersist, updateWorkspaceOrder, boardsLoadError } = useApp();
   const { initPreferences } = useTheme();
   const [activeView, setActiveView] = useState(() => localStorage.getItem('dailyways_active_view') || 'myday');
   const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
@@ -323,6 +323,20 @@ function AppContent() {
               } } : null;
             })()}
           />
+
+          {boardsLoadError && user && (
+            <div className="boards-load-error-banner" role="alert">
+              <span className="boards-load-error-text">{boardsLoadError}</span>
+              <div className="boards-load-error-actions">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => dispatch({ type: 'SET_BOARDS_LOAD_ERROR', payload: null })}>
+                  Fechar
+                </button>
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => window.location.reload()}>
+                  Recarregar
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="app-content" onClick={() => {
             if (state.selectedItems?.length > 0 && !state.isDraggingBulk) dispatch({ type: 'CLEAR_SELECTION' });
