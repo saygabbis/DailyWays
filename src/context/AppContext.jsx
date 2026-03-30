@@ -8,6 +8,7 @@ import { uuidv4 } from '../utils/uuid';
 import ConfirmModal from '../components/Common/ConfirmModal';
 import FloatingSaveError from '../components/Common/FloatingSaveError';
 import FloatingInvitationToast from '../components/Common/FloatingInvitationToast';
+import { logger } from '../utils/logger';
 
 const AppContext = createContext(null);
 
@@ -751,7 +752,7 @@ export function AppProvider({ children }) {
     useEffect(() => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
             if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
-                console.log(`[AppContext] ${event}: cooldown de 2s ativado para requisições HTTP`);
+                logger.debug(`[AppContext] ${event}: cooldown de 2s ativado para requisições HTTP`);
                 tokenRefreshCooldownRef.current = Date.now() + 2000;
             }
         });
@@ -783,11 +784,11 @@ export function AppProvider({ children }) {
             dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId: '__all__', pending: false } });
             dispatch({ type: 'CLEAR_SAVING' });
             dispatch({ type: 'CLEAR_SAVE_ERRORS' });
-            console.log('[AppContext] User logout: state cleared');
+            logger.debug('[AppContext] User logout: state cleared');
             return;
         }
         if (loadInProgressRef.current) {
-            console.log('[AppContext] Load already in progress, skipping');
+            logger.debug('[AppContext] Load already in progress, skipping');
             return;
         }
         loadInProgressRef.current = true;
@@ -796,7 +797,7 @@ export function AppProvider({ children }) {
 
         const applyBoards = (boards, source) => {
             if (!cancelled && boards?.length > 0) {
-                console.log(`[AppContext] applyBoards (${source}): ${boards.length} boards`);
+                logger.debug(`[AppContext] applyBoards (${source}): ${boards.length} boards`);
                 dispatch({ type: 'SET_BOARDS', payload: boards });
 
                 // Restaurar último board ativo (apenas preferência de UI, não dados)
@@ -811,14 +812,14 @@ export function AppProvider({ children }) {
         };
 
         const loadFromApi = async (isRetry = false) => {
-            console.log(`[AppContext] loadFromApi (retry=${isRetry}) for user ${userId.slice(0, 8)}...`);
+            logger.debug(`[AppContext] loadFromApi (retry=${isRetry}) for user ${userId.slice(0, 8)}...`);
             const { data: fromDb, error: fetchError } = await fetchBoards(userId);
             const { data: dbGroups, error: groupErr } = await fetchGroups(userId);
             const { data: dbSpaces, error: spaceErr } = await fetchSpaces(userId);
 
             if (cancelled) return { ok: false };
             if (fetchError || groupErr || spaceErr) {
-                console.error('[AppContext] fetch error:', fetchError || groupErr || spaceErr);
+                logger.error('[AppContext] fetch error:', fetchError || groupErr || spaceErr);
                 // Erro de rede/sessão: boards ficam como estão na memória.
                 // Retry automático após 2s na primeira falha.
                 if (!isRetry) {
@@ -835,7 +836,7 @@ export function AppProvider({ children }) {
                 return { ok: true };
             }
             // Supabase retornou sucesso com 0 boards = usuário novo. Criar defaults.
-            console.log('[AppContext] Nenhum board no Supabase, criando defaults...');
+            logger.debug('[AppContext] Nenhum board no Supabase, criando defaults...');
             const defaults = createDefaultBoards();
             dispatch({ type: 'SET_BOARDS', payload: defaults });
             dispatch({ type: 'SET_ACTIVE_BOARD', payload: defaults[0].id });
@@ -848,10 +849,10 @@ export function AppProvider({ children }) {
                 await loadFromApi(false);
                 if (!cancelled) {
                     initialLoadDone.current = true;
-                    console.log('[AppContext] Initial load done');
+                    logger.debug('[AppContext] Initial load done');
                 }
             } catch (err) {
-                console.error('[AppContext] loadFromApi uncaught error:', err);
+                logger.error('[AppContext] loadFromApi uncaught error:', err);
             } finally {
                 loadInProgressRef.current = false;
             }
@@ -883,7 +884,7 @@ export function AppProvider({ children }) {
             // Sem isso, requisições HTTP logo após o refresh ficam presas no lock e travam.
             const cooldownMs = tokenRefreshCooldownRef.current - Date.now();
             if (cooldownMs > 0) {
-                console.log(`[AppContext] getFreshUserId: aguardando cooldown pós-TOKEN_REFRESHED (${Math.round(cooldownMs)}ms)`);
+                logger.debug(`[AppContext] getFreshUserId: aguardando cooldown pós-TOKEN_REFRESHED (${Math.round(cooldownMs)}ms)`);
                 await new Promise(resolve => setTimeout(resolve, cooldownMs));
             }
             return userIdRef.current;
@@ -899,14 +900,14 @@ export function AppProvider({ children }) {
                 timeoutPromise,
             ]);
             if (error || !data?.session?.user?.id) {
-                console.warn('[AppContext] getFreshUserId: sessão inválida ou expirada', error?.message);
+                logger.warn('[AppContext] getFreshUserId: sessão inválida ou expirada', error?.message);
                 return null;
             }
             // Atualiza o ref com o valor recém obtido
             userIdRef.current = data.session.user.id;
             return data.session.user.id;
         } catch (err) {
-            console.error('[AppContext] getFreshUserId error:', err.message);
+            logger.error('[AppContext] getFreshUserId error:', err.message);
             return null;
         }
     }, []);
@@ -942,7 +943,7 @@ export function AppProvider({ children }) {
 
             // Safety timer de 20s
             const safetyTimer = setTimeout(() => {
-                console.warn('[AppContext] persistBoard: safety timeout (20s) para board', boardId);
+                logger.warn('[AppContext] persistBoard: safety timeout (20s) para board', boardId);
                 const stuckBoard = stateRef.current.boards.find(b => b.id === boardId);
                 activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
                 if (activeSavesRef.current === 0) suppressRealtime(2000);
@@ -973,13 +974,13 @@ export function AppProvider({ children }) {
                 try {
                     const board = stateRef.current.boards.find(b => b.id === boardId);
                     if (!board) {
-                        console.warn('[AppContext] persistBoard: board não encontrado', boardId);
+                        logger.warn('[AppContext] persistBoard: board não encontrado', boardId);
                         break;
                     }
 
                     const freshUserId = await getFreshUserId();
                     if (!freshUserId) {
-                        console.warn('[AppContext] persistBoard: sem sessão válida, abortando save de', boardId);
+                        logger.warn('[AppContext] persistBoard: sem sessão válida, abortando save de', boardId);
                         dispatch({
                             type: 'PUSH_SAVE_ERROR',
                             payload: { boardId, boardTitle: board?.title, boardSnapshot: null, error: 'Sessão expirada' }
@@ -987,7 +988,7 @@ export function AppProvider({ children }) {
                         break;
                     }
 
-                    console.log(`[AppContext] persistBoard: salvando "${board.title}"`);
+                    logger.debug(`[AppContext] persistBoard: salvando "${board.title}"`);
                     const result = await updateBoardFull(freshUserId, board);
 
                     if (!result?.success) {
@@ -995,7 +996,7 @@ export function AppProvider({ children }) {
                     }
                     lastError = null;
                 } catch (err) {
-                    console.error('[AppContext] persistBoard error:', err);
+                    logger.error('[AppContext] persistBoard error:', err);
                     lastError = err;
                 }
 
@@ -1061,11 +1062,11 @@ export function AppProvider({ children }) {
             const boardSnapshot = JSON.parse(JSON.stringify(board));
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: true } });
             try {
-                console.log(`[AppContext] saveAllPending: ${board.title}`);
+                logger.debug(`[AppContext] saveAllPending: ${board.title}`);
                 const result = await updateBoardFull(freshUserId, board);
                 if (!result?.success) throw new Error(result?.error || 'Falha ao salvar');
             } catch (err) {
-                console.error('[AppContext] saveAllPending error:', err);
+                logger.error('[AppContext] saveAllPending error:', err);
                 dispatch({ type: 'SET_BOARDS', payload: stateRef.current.boards.map(b => b.id === boardId ? boardSnapshot : b) });
                 dispatch({
                     type: 'PUSH_SAVE_ERROR',
@@ -1092,7 +1093,7 @@ export function AppProvider({ children }) {
         activeSavesRef.current += 1;
 
         const safetyTimer = setTimeout(() => {
-            console.warn('[AppContext] persistBoardImmediate: safety timeout (20s) para board', boardId);
+            logger.warn('[AppContext] persistBoardImmediate: safety timeout (20s) para board', boardId);
             const stuckBoard = stateRef.current.boards.find(b => b.id === boardId);
             activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
             if (activeSavesRef.current === 0) suppressRealtime(2000);
@@ -1112,7 +1113,7 @@ export function AppProvider({ children }) {
         try {
             const freshUserId = await getFreshUserId();
             if (!freshUserId) {
-                console.warn('[AppContext] persistBoardImmediate: sem sessão, abortando');
+                logger.warn('[AppContext] persistBoardImmediate: sem sessão, abortando');
                 if (boardSnapshot) {
                     dispatch({ type: 'SET_BOARDS', payload: stateRef.current.boards.map(b => b.id === boardId ? boardSnapshot : b) });
                     dispatch({
@@ -1127,7 +1128,7 @@ export function AppProvider({ children }) {
             const result = await updateBoardFull(freshUserId, { ...board, ...updates });
             if (!result?.success) throw new Error(result?.error || 'Falha ao salvar');
         } catch (err) {
-            console.error('[AppContext] persistBoardImmediate error:', err);
+            logger.error('[AppContext] persistBoardImmediate error:', err);
             if (boardSnapshot) {
                 dispatch({ type: 'SET_BOARDS', payload: stateRef.current.boards.map(b => b.id === boardId ? boardSnapshot : b) });
                 dispatch({
@@ -1193,7 +1194,7 @@ export function AppProvider({ children }) {
                 // Realtime: refetch curto para melhorar sensação de "instantâneo"
                 debounceTimer = setTimeout(async () => {
                     if (cancelled) return;
-                    console.log('[AppContext] Realtime refetch for user', userId.slice(0, 8));
+                    logger.debug('[AppContext] Realtime refetch for user', userId.slice(0, 8));
 
                     const { data, error } = await fetchBoards(userId);
 
@@ -1303,7 +1304,7 @@ export function AppProvider({ children }) {
                 }
             }
         } catch (err) {
-            console.error('[AppContext] Error updating order:', err);
+            logger.error('[AppContext] Error updating order:', err);
         } finally {
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__workspace_order__', saving: false } });
         }
@@ -1385,15 +1386,15 @@ export function AppProvider({ children }) {
         try {
             const freshUserId = await getFreshUserId();
             if (!freshUserId) {
-                console.warn('[AppContext] retryFailedSave: ainda sem sessão válida');
+                logger.warn('[AppContext] retryFailedSave: ainda sem sessão válida');
                 return; // mantém o erro no painel
             }
             const result = await updateBoardFull(freshUserId, board);
             if (!result?.success) throw new Error(result?.error || 'Falha ao salvar');
-            console.log('[AppContext] retryFailedSave OK:', board.title);
+            logger.debug('[AppContext] retryFailedSave OK:', board.title);
             dispatch({ type: 'DISMISS_SAVE_ERROR', payload: boardId });
         } catch (err) {
-            console.error('[AppContext] retryFailedSave error:', err);
+            logger.error('[AppContext] retryFailedSave error:', err);
             // Mantém o erro no painel; usuário pode tentar de novo ou reverter
         } finally {
             activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);

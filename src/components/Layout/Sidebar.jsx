@@ -20,6 +20,7 @@ import logoWhite from '../../assets/Logo - Branco.png';
 import logoBlack from '../../assets/Logo - Preto.png';
 import './Sidebar.css';
 import { useI18n, useTheme } from '../../context/ThemeContext';
+import { uuidv4 } from '../../utils/uuid';
 
 const BulkDragFollowers = ({ count, items = [] }) => {
     const containerRef = useRef(null);
@@ -210,15 +211,15 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
 
         // Criar o board com IDs definitivos (mesmo id que vai ao Supabase)
         const newBoard = {
-            id: crypto.randomUUID(),
+            id: uuidv4(),
             title: newBoardTitle.trim(),
             color: DEFAULT_BOARD_COLORS[Math.floor(Math.random() * DEFAULT_BOARD_COLORS.length)],
             emoji: '📋',
             createdAt: new Date().toISOString(),
             lists: [
-                { id: crypto.randomUUID(), title: 'A Fazer', color: null, isCompletionList: false, cards: [] },
-                { id: crypto.randomUUID(), title: 'Em Progresso', color: null, isCompletionList: false, cards: [] },
-                { id: crypto.randomUUID(), title: 'Concluído', color: null, isCompletionList: true, cards: [] },
+                { id: uuidv4(), title: 'A Fazer', color: null, isCompletionList: false, cards: [] },
+                { id: uuidv4(), title: 'Em Progresso', color: null, isCompletionList: false, cards: [] },
+                { id: uuidv4(), title: 'Concluído', color: null, isCompletionList: true, cards: [] },
             ],
         };
 
@@ -246,7 +247,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         if (!newFolderTitle.trim()) return;
 
         const newGroup = {
-            id: crypto.randomUUID(),
+            id: uuidv4(),
             title: newFolderTitle.trim(),
             type: folderContextType,
             position: 0,
@@ -341,7 +342,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         if (!newSpaceTitle.trim()) return;
 
         const newSpace = {
-            id: crypto.randomUUID(),
+            id: uuidv4(),
             title: newSpaceTitle.trim(),
             color: DEFAULT_BOARD_COLORS[Math.floor(Math.random() * DEFAULT_BOARD_COLORS.length)],
             emoji: '🌌',
@@ -421,16 +422,16 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 for (const b of boards) {
                     const dup = {
                         ...JSON.parse(JSON.stringify(b)),
-                        id: crypto.randomUUID(),
+                        id: uuidv4(),
                         title: `${b.title} (cópia)`,
                         createdAt: new Date().toISOString(),
                         lists: b.lists.map(l => ({
                             ...l,
-                            id: crypto.randomUUID(),
+                            id: uuidv4(),
                             cards: l.cards.map(c => ({
                                 ...c,
-                                id: crypto.randomUUID(),
-                                subtasks: (c.subtasks || []).map(st => ({ ...st, id: crypto.randomUUID() })),
+                                id: uuidv4(),
+                                subtasks: (c.subtasks || []).map(st => ({ ...st, id: uuidv4() })),
                             })),
                         })),
                     };
@@ -443,7 +444,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 for (const s of spaces) {
                     const dup = {
                         ...JSON.parse(JSON.stringify(s)),
-                        id: crypto.randomUUID(),
+                        id: uuidv4(),
                         title: `${s.title} (cópia)`,
                         createdAt: new Date().toISOString(),
                         position: state.spaces.length
@@ -470,7 +471,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: true } });
         try {
             const { insertGroup, insertSpace } = await import('../../services/workspaceService');
-            const newGroupId = crypto.randomUUID();
+            const newGroupId = uuidv4();
             const newGroup = {
                 ...JSON.parse(JSON.stringify(group)),
                 id: newGroupId,
@@ -489,17 +490,17 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 for (const b of groupBoards) {
                     const dup = {
                         ...JSON.parse(JSON.stringify(b)),
-                        id: crypto.randomUUID(),
+                        id: uuidv4(),
                         groupId: newGroupId,
                         title: b.title,
                         createdAt: new Date().toISOString(),
                         lists: b.lists.map(l => ({
                             ...l,
-                            id: crypto.randomUUID(),
+                            id: uuidv4(),
                             cards: l.cards.map(c => ({
                                 ...c,
-                                id: crypto.randomUUID(),
-                                subtasks: (c.subtasks || []).map(st => ({ ...st, id: crypto.randomUUID() })),
+                                id: uuidv4(),
+                                subtasks: (c.subtasks || []).map(st => ({ ...st, id: uuidv4() })),
                             })),
                         })),
                     };
@@ -511,7 +512,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 for (const s of groupSpaces) {
                     const dup = {
                         ...JSON.parse(JSON.stringify(s)),
-                        id: crypto.randomUUID(),
+                        id: uuidv4(),
                         groupId: newGroupId,
                         createdAt: new Date().toISOString()
                     };
@@ -562,16 +563,16 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 // Gerar todos os IDs novos antes, assim dispatch e Supabase usam os MESMOS IDs
                 const dup = {
                     ...JSON.parse(JSON.stringify(board)),
-                    id: crypto.randomUUID(),
+                    id: uuidv4(),
                     title: `${board.title} (cópia)`,
                     createdAt: new Date().toISOString(),
                     lists: board.lists.map(l => ({
                         ...l,
-                        id: crypto.randomUUID(),
+                        id: uuidv4(),
                         cards: l.cards.map(c => ({
                             ...c,
-                            id: crypto.randomUUID(),
-                            subtasks: (c.subtasks || []).map(st => ({ ...st, id: crypto.randomUUID() })),
+                            id: uuidv4(),
+                            subtasks: (c.subtasks || []).map(st => ({ ...st, id: uuidv4() })),
                         })),
                     })),
                 };

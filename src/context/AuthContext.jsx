@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { getAppOrigin } from '../utils/appUrl';
+import { logger } from '../utils/logger';
 
 const AuthContext = createContext(null);
 
@@ -29,17 +30,17 @@ function buildUserData(authUser, profile) {
 
 async function ensureProfile(authUser) {
   if (!authUser?.id) return null;
-  console.log('[Auth] ensureProfile: checking for', authUser.id.slice(0, 8));
+  logger.debug('[Auth] ensureProfile: checking for', authUser.id.slice(0, 8));
   const { data: existing, error: selectErr } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
   if (selectErr && selectErr.code !== 'PGRST116') {
     // PGRST116 = "not found" which is expected for new users
-    console.error('[Auth] ensureProfile SELECT error:', selectErr);
+    logger.error('[Auth] ensureProfile SELECT error:', selectErr);
   }
   if (existing) {
-    console.log('[Auth] ensureProfile: found existing profile');
+    logger.debug('[Auth] ensureProfile: found existing profile');
     return existing;
   }
-  console.log('[Auth] ensureProfile: creating new profile...');
+  logger.debug('[Auth] ensureProfile: creating new profile...');
   const username = authUser.user_metadata?.username ?? `user_${authUser.id.slice(0, 8)}`;
   const name = authUser.user_metadata?.name ?? authUser.email?.split('@')[0] ?? 'Usuário';
   const { data: inserted, error } = await supabase.from('profiles').insert({
@@ -51,13 +52,13 @@ async function ensureProfile(authUser) {
   }).select().single();
   if (error) {
     if (error.code === '23505') {
-      console.log('[Auth] ensureProfile: duplicate, fetching again');
+      logger.debug('[Auth] ensureProfile: duplicate, fetching again');
       return (await supabase.from('profiles').select('*').eq('id', authUser.id).single()).data;
     }
-    console.error('[Auth] ensureProfile INSERT error:', error);
+    logger.error('[Auth] ensureProfile INSERT error:', error);
     return null;
   }
-  console.log('[Auth] ensureProfile: created new profile');
+  logger.debug('[Auth] ensureProfile: created new profile');
   return inserted;
 }
 
@@ -89,7 +90,7 @@ export function AuthProvider({ children }) {
       const session = result?.data?.session ?? null;
       if (session?.user) await refreshUser(session.user);
     } catch (err) {
-      console.error('[Auth] loadSession error:', err);
+      logger.error('[Auth] loadSession error:', err);
     }
   }, [refreshUser]);
 
@@ -126,13 +127,13 @@ export function AuthProvider({ children }) {
       try {
         const result = await supabase.auth.getSession();
         const session = result?.data?.session ?? null;
-        console.log('[Auth] getSession:', session ? `user=${session.user.id.slice(0, 8)}` : 'sem sessão');
+        logger.debug('[Auth] getSession:', session ? `user=${session.user.id.slice(0, 8)}` : 'sem sessão');
         if (mounted && session?.user) {
           await refreshUser(session.user);
-          console.log('[Auth] refreshUser OK');
+          logger.debug('[Auth] refreshUser OK');
         }
       } catch (err) {
-        console.error('[Auth] getSession/refreshUser error:', err);
+        logger.error('[Auth] getSession/refreshUser error:', err);
       }
       cleanUrlTokens();
       if (mounted) {
@@ -149,11 +150,11 @@ export function AuthProvider({ children }) {
       // Durante o load inicial, getSession() já cuida de tudo.
       // Ignorar eventos iniciais evita chamadas concorrentes que travam.
       if (!initialLoadComplete) {
-        console.log(`[Auth] onAuthStateChange: ignorando ${event} (load inicial em progresso)`);
+        logger.debug(`[Auth] onAuthStateChange: ignorando ${event} (load inicial em progresso)`);
         return;
       }
 
-      console.log('[Auth] onAuthStateChange:', event);
+      logger.debug('[Auth] onAuthStateChange:', event);
       const session = sessionData ?? null;
 
       // SIGNED_OUT é ignorado aqui intencionalmente.
@@ -172,7 +173,7 @@ export function AuthProvider({ children }) {
         if (!session?.user) return;
         // Bloqueia o OTP flow: não logar se e-mail não confirmado
         if (event === 'SIGNED_IN' && !session.user.email_confirmed_at) {
-          console.log('[Auth] onAuthStateChange: SIGNED_IN ignorado — e-mail ainda não confirmado (aguardando OTP).');
+          logger.debug('[Auth] onAuthStateChange: SIGNED_IN ignorado — e-mail ainda não confirmado (aguardando OTP).');
           return;
         }
 
@@ -181,19 +182,19 @@ export function AuthProvider({ children }) {
         // o perfil já em cache. Evita o hang do ensureProfile durante o lock do Supabase.
         const cachedProfile = profileRef.current;
         if (cachedProfile && cachedProfile.id === session.user.id) {
-          console.log(`[Auth] onAuthStateChange: ${event} → mesmo usuário, silent update (sem HTTP)`);
+          logger.debug(`[Auth] onAuthStateChange: ${event} → mesmo usuário, silent update (sem HTTP)`);
           setUser(buildUserData(session.user, cachedProfile));
           return;
         }
 
         // Usuário diferente ou sem cache: faz o refreshUser completo
-        console.log(`[Auth] onAuthStateChange: ${event} → novo usuário, refreshUser completo`);
+        logger.debug(`[Auth] onAuthStateChange: ${event} → novo usuário, refreshUser completo`);
         await new Promise(resolve => setTimeout(resolve, 2000));
         if (!mounted) return;
         try {
           await refreshUser(session.user);
         } catch (err) {
-          console.error(`[Auth] onAuthStateChange ${event} refreshUser error:`, err);
+          logger.error(`[Auth] onAuthStateChange ${event} refreshUser error:`, err);
         }
         return;
       }
@@ -203,10 +204,10 @@ export function AuthProvider({ children }) {
         try {
           await refreshUser(session.user);
         } catch (err) {
-          console.error('[Auth] onAuthStateChange refreshUser error:', err);
+          logger.error('[Auth] onAuthStateChange refreshUser error:', err);
         }
       } else if (session?.user && !session.user.email_confirmed_at) {
-        console.log('[Auth] onAuthStateChange: usuário sem e-mail confirmado — mantendo tela de login para colar código.');
+        logger.debug('[Auth] onAuthStateChange: usuário sem e-mail confirmado — mantendo tela de login para colar código.');
       }
     });
 
@@ -289,7 +290,7 @@ export function AuthProvider({ children }) {
           emailRedirectTo: getAppOrigin(),
         },
       });
-      console.log('[Auth] signUp result:', {
+      logger.debug('[Auth] signUp result:', {
         error: error?.message ?? null,
         userId: data?.user?.id ?? null,
         session: !!data?.session,
@@ -309,7 +310,7 @@ export function AuthProvider({ children }) {
       }
       // Supabase retorna user com identities vazio se email já existe (anti-enumeration)
       if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
-        console.warn('[Auth] signUp: email já existe (identities vazio). Supabase finge sucesso por segurança.');
+        logger.warn('[Auth] signUp: email já existe (identities vazio). Supabase finge sucesso por segurança.');
         setLoading(false);
         setAuthError('Este e-mail já está cadastrado. Tente fazer login.');
         return { success: false, error: 'Este e-mail já está cadastrado. Tente fazer login.' };

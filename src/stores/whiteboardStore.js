@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { uuidv4 } from '../utils/uuid';
 
 const MAX_HISTORY = 100;
 
@@ -9,7 +10,7 @@ export function createHistoryEntry(type, payload) {
 const CREATION_TOOLS = ['sticky_note', 'text', 'shape', 'frame', 'link', 'todo_list', 'column', 'table', 'connector', 'comment', 'draw', 'image', 'file'];
 
 export function getDefaultNodePayload(type, x, y) {
-    const id = crypto.randomUUID();
+    const id = uuidv4();
     const base = { id, x, y, rotation: 0, scale: 1, parentId: null, zIndex: 0 };
     const defaults = {
         sticky_note: { type: 'sticky_note', width: 150, height: 100, data: { text: '' }, style: { backgroundColor: '#fef08a' } },
@@ -17,7 +18,7 @@ export function getDefaultNodePayload(type, x, y) {
         shape: { type: 'shape', width: 100, height: 100, data: { shape: 'rectangle' }, style: { fill: 'var(--bg-elevated)', stroke: 'var(--border-color)' } },
         frame: { type: 'frame', width: 300, height: 200, data: { title: 'Frame' }, style: {} },
         link: { type: 'link', width: 240, height: 80, data: { url: '', title: '' }, style: {} },
-        todo_list: { type: 'todo_list', width: 220, height: 120, data: { items: [{ id: crypto.randomUUID(), text: 'Item', done: false }] }, style: {} },
+        todo_list: { type: 'todo_list', width: 220, height: 120, data: { items: [{ id: uuidv4(), text: 'Item', done: false }] }, style: {} },
         column: { type: 'column', width: 200, height: 200, data: { title: '' }, style: {} },
         table: { type: 'table', width: 280, height: 120, data: { rows: [], cols: [] }, style: {} },
         connector: { type: 'connector', width: 0, height: 0, data: {}, style: {} },

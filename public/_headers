@@ -1,0 +1,9 @@
+# Netlify / compatível com hosts que copiam public/ para a raiz do site.
+# Ajuste a diretiva connect-src em SECURITY.md se usar login social (Google, etc.).
+
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.supabase.in; frame-ancestors 'none'; base-uri 'self'; object-src 'none'

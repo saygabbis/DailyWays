@@ -5,6 +5,7 @@ import { worldToScreenWithContainer } from './viewportUtils';
 import { insertNode, deleteNode as deleteNodeService } from '../../services/whiteboardService';
 import { Copy, Trash2, ArrowUp, ArrowDown, Type, Palette, Shapes, Maximize2 } from 'lucide-react';
 import './FloatingToolbar.css';
+import { uuidv4 } from '../../utils/uuid';
 
 const COLOR_OPTIONS = ['#fef08a', '#fecaca', '#bbf7d0', '#bfdbfe', '#e9d5ff', '#fef3c7', '#fff', '#1f2937'];
 
@@ -48,7 +49,7 @@ export default function FloatingToolbar({ viewport, containerRef }) {
         for (const node of selectedNodes) {
             const newNode = {
                 ...node,
-                id: crypto.randomUUID(),
+                id: uuidv4(),
                 x: node.x + 20,
                 y: node.y + 20,
             };
@@ -142,7 +143,7 @@ export default function FloatingToolbar({ viewport, containerRef }) {
                 shape: { type: 'shape', data: { shape: 'rectangle' }, style: { fill: n.style?.backgroundColor || 'var(--bg-elevated)', stroke: 'var(--border-color)' } },
                 frame: { type: 'frame', data: { title: n.data?.title ?? n.data?.text ?? 'Frame' }, style: {} },
                 link: { type: 'link', data: { url: n.data?.url ?? '', title: n.data?.title ?? n.data?.text ?? 'Link' }, style: {} },
-                todo_list: { type: 'todo_list', data: { items: [{ id: crypto.randomUUID(), text: n.data?.text ?? 'Item', done: false }] }, style: {} },
+                todo_list: { type: 'todo_list', data: { items: [{ id: uuidv4(), text: n.data?.text ?? 'Item', done: false }] }, style: {} },
                 file_card: { type: 'file_card', data: { url: n.data?.url ?? '', filename: n.data?.filename ?? 'Arquivo', size: n.data?.size ?? '' }, style: {} },
                 drawing: { type: 'drawing', data: { paths: n.data?.paths ?? [] }, style: { stroke: n.style?.stroke ?? '#000' } },
                 column: { type: 'column', data: { title: n.data?.title ?? n.data?.text ?? 'Coluna' }, style: {} },

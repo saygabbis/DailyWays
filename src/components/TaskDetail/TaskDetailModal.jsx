@@ -10,6 +10,7 @@ import {
 import DatePicker from '../Common/DatePicker';
 import './TaskDetail.css';
 import { colorFromUserId, initialFromName } from '../../utils/userColor';
+import { uuidv4 } from '../../utils/uuid';
 
 export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const { dispatch, LABEL_COLORS, state, persistBoard, showConfirm } = useApp();
@@ -140,7 +141,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         e.preventDefault();
         if (!newLabelName.trim()) return;
         const newLabel = {
-            id: crypto.randomUUID(),
+            id: uuidv4(),
             name: newLabelName.trim(),
             color: newLabelColor
         };

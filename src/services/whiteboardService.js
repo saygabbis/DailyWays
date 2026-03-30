@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { uuidv4 } from '../utils/uuid';
 
 const NODE_TYPES = ['sticky_note', 'text', 'shape', 'frame', 'connector', 'image', 'comment', 'link', 'todo_list', 'file_card', 'drawing', 'column', 'table'];
 
@@ -256,7 +257,7 @@ const BUCKET = 'space-assets';
 export async function uploadSpaceAsset(spaceId, file, userId = null) {
     if (!spaceId || !file) return { success: false, error: 'Missing spaceId or file' };
     const ext = file.name.split('.').pop() || 'bin';
-    const path = `${spaceId}/${crypto.randomUUID()}.${ext}`;
+    const path = `${spaceId}/${uuidv4()}.${ext}`;
     const { data, error } = await supabase.storage.from(BUCKET).upload(path, file, {
         cacheControl: '3600',
         upsert: false,

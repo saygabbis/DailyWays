@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { uploadSpaceAsset } from '../../services/whiteboardService';
 import { insertNode } from '../../services/whiteboardService';
 import { ImagePlus } from 'lucide-react';
+import { uuidv4 } from '../../utils/uuid';
 
 export default function AssetUploader({ viewport, containerRef }) {
     const inputRef = useRef(null);
@@ -20,7 +21,7 @@ export default function AssetUploader({ viewport, containerRef }) {
         const worldX = -100;
         const worldY = -75;
         const node = {
-            id: crypto.randomUUID(),
+            id: uuidv4(),
             type: 'image',
             x: worldX,
             y: worldY,

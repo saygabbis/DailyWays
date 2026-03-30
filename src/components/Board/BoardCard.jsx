@@ -5,6 +5,7 @@ import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { Calendar, CheckSquare, AlertCircle, Sun, Edit3, Trash2, Star, Tag, Copy, ArrowRight, Circle, CheckCircle2, MoreHorizontal, FileText } from 'lucide-react';
 import { format, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { uuidv4 } from '../../utils/uuid';
 
 export default function BoardCard({ card, boardId, listId, listColor, isDragging, onClick, editingEditors = [] }) {
     const { LABEL_COLORS, dispatch, persistBoard, showConfirm } = useApp();
@@ -79,7 +80,7 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
                         dueDate: card.dueDate,
                         myDay: false,
                         subtasks: card.subtasks.map(st => ({
-                            id: crypto.randomUUID(),
+                            id: uuidv4(),
                             title: st.title,
                             done: false,
                         })),

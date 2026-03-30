@@ -2,9 +2,10 @@ import React from 'react';
 import BaseNode from './BaseNode';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 import { Check, Square } from 'lucide-react';
+import { uuidv4 } from '../../../utils/uuid';
 
 export default function TodoListNode({ node, onNodePointerDown }) {
-    const items = node.data?.items ?? [{ id: crypto.randomUUID(), text: 'Item', done: false }];
+    const items = node.data?.items ?? [{ id: uuidv4(), text: 'Item', done: false }];
     const { patchNode } = useWhiteboardStore();
 
     const toggle = (itemId) => {
