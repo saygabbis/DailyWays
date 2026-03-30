@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
+import { getAppOrigin } from '../utils/appUrl';
 
 const AuthContext = createContext(null);
 
@@ -254,7 +255,7 @@ export function AuthProvider({ children }) {
     const map = { google: 'google', github: 'github', microsoft: 'azure' };
     const supabaseProvider = map[provider] || provider;
     const options = {
-      redirectTo: window.location.origin,
+      redirectTo: getAppOrigin(),
       queryParams: {},
     };
     if (supabaseProvider === 'azure') {
@@ -285,7 +286,7 @@ export function AuthProvider({ children }) {
         password,
         options: {
           data: { name, username },
-          emailRedirectTo: window.location.origin,
+          emailRedirectTo: getAppOrigin(),
         },
       });
       console.log('[Auth] signUp result:', {
@@ -420,7 +421,7 @@ export function AuthProvider({ children }) {
   const linkIdentity = async (provider) => {
     const map = { google: 'google', github: 'github', microsoft: 'azure' };
     const supabaseProvider = map[provider] || provider;
-    const options = { redirectTo: window.location.origin };
+    const options = { redirectTo: getAppOrigin() };
     if (supabaseProvider === 'azure') options.scopes = 'email openid profile';
     const { data, error } = await supabase.auth.linkIdentity({
       provider: supabaseProvider,

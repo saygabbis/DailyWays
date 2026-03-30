@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../services/supabaseClient';
+import { getAppOrigin } from '../../utils/appUrl';
 import { ENABLE_MICROSOFT_LOGIN } from '../../config';
 import { Lock, Mail, User, ArrowRight, Chrome, Command, Github, Shield, Eye, EyeOff } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
@@ -221,7 +222,7 @@ export default function AuthPage() {
       }
 
       const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin,
+        redirectTo: getAppOrigin(),
       });
 
       if (resetErr) throw resetErr;

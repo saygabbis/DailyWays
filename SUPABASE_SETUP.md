@@ -4,6 +4,7 @@
 2. Em **Project Settings > API**: copie **Project URL** e **anon public** para `.env.local`:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
+   - (produção) `VITE_PUBLIC_SITE_URL` (ex.: `http://SEU_IP:5174` ou `https://seudominio.com`)
 3. **Authentication > URL Configuration** (obrigatório para OAuth):
    - **Site URL**: use a URL do seu app (ex.: `http://localhost:5173` em dev ou `https://seudominio.com` em produção).
    - **Redirect URLs**: adicione a mesma URL (ex.: `http://localhost:5173` ou `http://localhost:5173/**`). Sem isso, o login social redireciona mas pode dar `server_error` ao voltar.
