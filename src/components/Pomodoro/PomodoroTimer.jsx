@@ -1,11 +1,28 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePomodoro } from '../../context/PomodoroContext';
 import { Play, Pause, RotateCcw, X, Minimize2, Settings } from 'lucide-react';
+import { touchPairDistance } from '../../utils/pointerSession';
 import './PomodoroTimer.css';
 
 const DEFAULT_SIZE = { width: 280, height: null }; // height null = auto
 const DEFAULT_MINI_SIZE = { width: 120, height: 60 };
-const DEFAULT_POS = () => ({ x: window.innerWidth - 320, y: window.innerHeight - 380 });
+
+function clamp(n, min, max) {
+    return Math.max(min, Math.min(n, max));
+}
+
+function getDefaultPos(widgetW = 280, widgetH = 260) {
+    // Mobile: manter sempre visível (evita x negativo em telas pequenas).
+    const pad = 12;
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    const x = vw - widgetW - pad;
+    const y = vh - widgetH - pad;
+    return {
+        x: clamp(x, pad, Math.max(pad, vw - pad - 40)),
+        y: clamp(y, pad, Math.max(pad, vh - pad - 40)),
+    };
+}
 
 export default function PomodoroTimer() {
     const {
@@ -16,17 +33,37 @@ export default function PomodoroTimer() {
 
     const [showSettings, setShowSettings] = useState(false);
     const [customMinutes, setCustomMinutes] = useState('25');
-    const [position, setPosition] = useState(DEFAULT_POS);
+    const [position, setPosition] = useState(() => getDefaultPos(DEFAULT_SIZE.width, 320));
     const [size, setSize] = useState(DEFAULT_SIZE);     // full mode
     const [miniSize, setMiniSize] = useState(DEFAULT_MINI_SIZE);    // minimized mode
 
     useEffect(() => {
         if (isOpen) {
-            setPosition(DEFAULT_POS());
+            setPosition(getDefaultPos(DEFAULT_SIZE.width, 320));
             setSize(DEFAULT_SIZE);
             setMiniSize(DEFAULT_MINI_SIZE);
         }
     }, [isOpen]);
+
+    // Reposiciona se a tela mudar (ex.: rotação / mobile address bar).
+    useEffect(() => {
+        const onResize = () => {
+            setPosition((p) => {
+                const el = widgetRef.current;
+                const w = el?.offsetWidth || (isMinimized ? DEFAULT_MINI_SIZE.width : DEFAULT_SIZE.width);
+                const h = el?.offsetHeight || (isMinimized ? DEFAULT_MINI_SIZE.height : 320);
+                const pad = 12;
+                const vw = window.innerWidth || 0;
+                const vh = window.innerHeight || 0;
+                return {
+                    x: clamp(p.x, pad, Math.max(pad, vw - w - pad)),
+                    y: clamp(p.y, pad, Math.max(pad, vh - h - pad)),
+                };
+            });
+        };
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, [isMinimized]);
 
     // Drag ──────────────────────────────────────────────────────────────────
     const [isDragging, setIsDragging] = useState(false);
@@ -40,30 +77,39 @@ export default function PomodoroTimer() {
 
     const widgetRef = useRef(null);
 
-    const handleMouseDownDrag = useCallback((e) => {
+    const handlePointerDownDrag = useCallback((e) => {
+        if (e.target.closest('button')) return;
+        if (!e.isPrimary) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
         e.preventDefault();
         dragDistance.current = 0;
         dragStart.current = { x: e.clientX, y: e.clientY, posX: position.x, posY: position.y };
         setIsDragging(true);
+        try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+        } catch (_) { /* noop */ }
     }, [position]);
 
     const startResize = useCallback((dir) => (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (!e.isPrimary) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
         const el = widgetRef.current;
         const currentW = el?.offsetWidth || (isMinimized ? miniSize.width : size.width || 280);
         const currentH = el?.offsetHeight || (isMinimized ? miniSize.height : size.height || 300);
         resizeStart.current = { width: currentW, height: currentH, mouseX: e.clientX, mouseY: e.clientY };
-        // Anchor height when starting vertical resize on full mode
         if (!isMinimized && dir.includes('s')) {
             setSize(prev => ({ ...prev, height: currentH }));
         }
         setResizeDir(dir);
+        try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+        } catch (_) { /* noop */ }
     }, [isMinimized, miniSize, size]);
 
     useEffect(() => {
         const onMove = (e) => {
-            // Drag
             if (isDragging && !resizeDir) {
                 const dx = e.clientX - dragStart.current.x;
                 const dy = e.clientY - dragStart.current.y;
@@ -81,24 +127,16 @@ export default function PomodoroTimer() {
                     });
                 }
             }
-            // Resize
             if (resizeDir) {
                 const dx = e.clientX - resizeStart.current.mouseX;
                 const dy = e.clientY - resizeStart.current.mouseY;
-
-                // Uniform delta: any movement (right or down) scales it up
-                // Using Math.max(dx, dy) makes it feel responsive to both axes
                 const delta = Math.max(dx, dy);
 
                 if (isMinimized) {
                     setMiniSize(prev => {
                         const ratio = resizeStart.current.width / resizeStart.current.height;
-                        // Lower min width to 80 for more range
                         const newW = Math.min(450, Math.max(80, resizeStart.current.width + delta));
-
-                        // Keep it rounder by default (ratio closer to 2)
                         const targetRatio = Math.max(1.8, Math.min(2.4, ratio + delta / 500));
-
                         return { width: newW, height: newW / targetRatio };
                     });
                 } else {
@@ -109,16 +147,75 @@ export default function PomodoroTimer() {
                 }
             }
         };
-        const onUp = () => { setIsDragging(false); setIsActuallyDragging(false); setResizeDir(null); };
+        const onUp = () => {
+            setIsDragging(false);
+            setIsActuallyDragging(false);
+            setResizeDir(null);
+        };
         if (isDragging || resizeDir) {
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
+            document.addEventListener('pointermove', onMove, { passive: false });
+            document.addEventListener('pointerup', onUp);
+            document.addEventListener('pointercancel', onUp);
         }
         return () => {
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onUp);
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+            document.removeEventListener('pointercancel', onUp);
         };
     }, [isDragging, isActuallyDragging, resizeDir, isMinimized]);
+
+    /* Pinch para redimensionar no touch (substitui handles em telas grossas) */
+    const pinchRef = useRef({ dist: 0, miniW: 0, miniH: 0, fullW: 0, fullH: 0, minimized: false });
+    useEffect(() => {
+        const el = widgetRef.current;
+        if (!el) return;
+
+        const onTouchStart = (ev) => {
+            if (ev.touches.length !== 2) return;
+            const d = touchPairDistance(ev.touches);
+            if (d < 24) return;
+            pinchRef.current = {
+                dist: d,
+                miniW: miniSize.width,
+                miniH: miniSize.height,
+                fullW: size.width || 280,
+                fullH: widgetRef.current?.offsetHeight || 300,
+                minimized: isMinimized,
+            };
+            ev.preventDefault();
+        };
+
+        const onTouchMove = (ev) => {
+            const p = pinchRef.current;
+            if (!p.dist || ev.touches.length < 2) return;
+            const d = touchPairDistance(ev.touches);
+            const scale = d / p.dist;
+            ev.preventDefault();
+            if (p.minimized) {
+                const nw = Math.min(450, Math.max(80, p.miniW * scale));
+                const ratio = p.miniW / p.miniH;
+                setMiniSize({ width: nw, height: nw / Math.max(1.5, ratio) });
+            } else {
+                const nw = Math.min(480, Math.max(200, p.fullW * scale));
+                setSize(prev => ({ ...prev, width: nw }));
+            }
+        };
+
+        const endPinch = () => {
+            pinchRef.current.dist = 0;
+        };
+
+        el.addEventListener('touchstart', onTouchStart, { passive: false });
+        el.addEventListener('touchmove', onTouchMove, { passive: false });
+        el.addEventListener('touchend', endPinch);
+        el.addEventListener('touchcancel', endPinch);
+        return () => {
+            el.removeEventListener('touchstart', onTouchStart);
+            el.removeEventListener('touchmove', onTouchMove);
+            el.removeEventListener('touchend', endPinch);
+            el.removeEventListener('touchcancel', endPinch);
+        };
+    }, [isMinimized, miniSize.width, miniSize.height, size.width]);
 
     if (!isOpen) return null;
 
@@ -171,7 +268,7 @@ export default function PomodoroTimer() {
             {/* ── Full mode ───────────────────────────────────────────────── */}
             {!isMinimized && (
                 <>
-                    <div className="pomodoro-header" onMouseDown={handleMouseDownDrag}>
+                    <div className="pomodoro-header" onPointerDown={handlePointerDownDrag}>
                         <div className="pomodoro-drag-handle">
                             <span className="pomodoro-title">{getModeLabel()}</span>
                         </div>
@@ -247,9 +344,9 @@ export default function PomodoroTimer() {
                     </div>
 
                     {/* 3 resize handles */}
-                    <div className="pomodoro-resize-e" onMouseDown={startResize('e')} />
-                    <div className="pomodoro-resize-s" onMouseDown={startResize('s')} />
-                    <div className="pomodoro-resize-se" onMouseDown={startResize('se')} />
+                    <div className="pomodoro-resize-e" onPointerDown={startResize('e')} />
+                    <div className="pomodoro-resize-s" onPointerDown={startResize('s')} />
+                    <div className="pomodoro-resize-se" onPointerDown={startResize('se')} />
                 </>
             )}
 
@@ -258,7 +355,7 @@ export default function PomodoroTimer() {
                 <>
                     <div
                         className="pomodoro-minimized-content"
-                        onMouseDown={handleMouseDownDrag}
+                        onPointerDown={handlePointerDownDrag}
                         onClick={handleMinimizedClick}
                     >
                         <span
@@ -274,9 +371,9 @@ export default function PomodoroTimer() {
                         {isActive && <div className="minimized-active-dot" style={{ background: getModeColor() }} />}
                     </div>
                     {/* Minimized also gets resize handles */}
-                    <div className="pomodoro-resize-e" onMouseDown={startResize('e')} />
-                    <div className="pomodoro-resize-s" onMouseDown={startResize('s')} />
-                    <div className="pomodoro-resize-se" onMouseDown={startResize('se')} />
+                    <div className="pomodoro-resize-e" onPointerDown={startResize('e')} />
+                    <div className="pomodoro-resize-s" onPointerDown={startResize('s')} />
+                    <div className="pomodoro-resize-se" onPointerDown={startResize('se')} />
                 </>
             )}
         </div>

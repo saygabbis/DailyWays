@@ -492,3 +492,12 @@ select option {
 .empty-state svg {
     opacity: 0.3;
 }
+
+/* Durante drag @hello-pangea/dnd: evita snap; não usar touch-action:none (atrapalha o sensor de toque) */
+body.dnd-dragging .board-scroller {
+    scroll-snap-type: none !important;
+}
+
+body.dnd-dragging .app-main.has-mobile-nav .app-content {
+    overflow: hidden !important;
+}

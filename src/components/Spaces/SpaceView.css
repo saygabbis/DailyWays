@@ -63,6 +63,14 @@
     transition: all var(--transition-fast);
 }
 
+@media (max-width: 768px) {
+    .space-reset-btn {
+        bottom: calc(var(--space-md) + env(safe-area-inset-bottom, 0px));
+        right: var(--space-md);
+        padding: 10px;
+    }
+}
+
 .space-reset-btn:hover {
     color: var(--text-primary);
     transform: translateY(-2px);

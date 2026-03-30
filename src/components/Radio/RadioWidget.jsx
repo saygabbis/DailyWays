@@ -1,11 +1,27 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRadio } from '../../context/RadioContext';
 import { Play, Pause, SkipBack, SkipForward, X, Minimize2, Music, Volume2 } from 'lucide-react';
+import { touchPairDistance } from '../../utils/pointerSession';
 import './RadioWidget.css';
 
 const DEFAULT_SIZE = { width: 360, height: 180 };
 const DEFAULT_MINI_SIZE = { width: 64, height: 64 };
-const DEFAULT_POS = () => ({ x: window.innerWidth - 420, y: window.innerHeight - 300 });
+
+function clamp(n, min, max) {
+    return Math.max(min, Math.min(n, max));
+}
+
+function getDefaultPos(widgetW = DEFAULT_SIZE.width, widgetH = DEFAULT_SIZE.height) {
+    const pad = 12;
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    const x = vw - widgetW - pad;
+    const y = vh - widgetH - pad;
+    return {
+        x: clamp(x, pad, Math.max(pad, vw - pad - 40)),
+        y: clamp(y, pad, Math.max(pad, vh - pad - 40)),
+    };
+}
 
 export default function RadioWidget() {
     const {
@@ -13,62 +29,95 @@ export default function RadioWidget() {
         setIsOpen, togglePlay, nextStation, prevStation, toggleMinimize, closeRadio
     } = useRadio();
 
-    const [position, setPosition] = useState(DEFAULT_POS);
+    const [position, setPosition] = useState(() => getDefaultPos(DEFAULT_SIZE.width, DEFAULT_SIZE.height));
     const [size, setSize] = useState(DEFAULT_SIZE);
     const miniSize = DEFAULT_MINI_SIZE;
 
     useEffect(() => {
         if (isOpen) {
             if (position.x > window.innerWidth - 80 || position.y > window.innerHeight - 80) {
-                setPosition(DEFAULT_POS());
+                setPosition(getDefaultPos(size.width, size.height));
             }
         }
     }, [isOpen]);
 
+    useEffect(() => {
+        const onResize = () => {
+            setPosition((p) => {
+                const el = widgetRef.current;
+                const w = el?.offsetWidth || (isMinimized ? DEFAULT_MINI_SIZE.width : size.width);
+                const h = el?.offsetHeight || (isMinimized ? DEFAULT_MINI_SIZE.height : size.height);
+                const pad = 12;
+                const vw = window.innerWidth || 0;
+                const vh = window.innerHeight || 0;
+                return {
+                    x: clamp(p.x, pad, Math.max(pad, vw - w - pad)),
+                    y: clamp(p.y, pad, Math.max(pad, vh - h - pad)),
+                };
+            });
+        };
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, [isMinimized, size.width, size.height]);
+
     // Drag & Resize logic ──────────────────────────────────────────────────
     const [isDragging, setIsDragging] = useState(false);
     const [isActuallyDragging, setIsActuallyDragging] = useState(false);
+    const isActuallyDraggingRef = useRef(false);
     const dragDistance = useRef(0);
     const dragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
     const [resizeDir, setResizeDir] = useState(null);
     const resizeStart = useRef({ width: 0, height: 0, mouseX: 0, mouseY: 0 });
     const widgetRef = useRef(null);
 
-    const handleMouseDownDrag = useCallback((e) => {
+    const handlePointerDownDrag = useCallback((e) => {
         if (e.target.closest('button') || e.target.closest('.slider-wrapper-mini')) return;
+        if (!e.isPrimary) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
         e.preventDefault();
         dragDistance.current = 0;
+        isActuallyDraggingRef.current = false;
         dragStart.current = { x: e.clientX, y: e.clientY, posX: position.x, posY: position.y };
         setIsDragging(true);
+        try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+        } catch (_) { /* noop */ }
     }, [position]);
 
     const startResize = useCallback((dir) => (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (!e.isPrimary) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
         const currentW = widgetRef.current?.offsetWidth || size.width;
         const currentH = widgetRef.current?.offsetHeight || size.height;
         resizeStart.current = { width: currentW, height: currentH, mouseX: e.clientX, mouseY: e.clientY };
         setResizeDir(dir);
+        try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+        } catch (_) { /* noop */ }
     }, [size]);
 
-    // Custom Volume Slider Drag Logic (FIXED 1:1 Mapping) ────────────────────
     const [isDraggingVolume, setIsDraggingVolume] = useState(false);
     const volumeRef = useRef(null);
 
     const updateVolume = useCallback((e) => {
         if (!volumeRef.current) return;
         const rect = volumeRef.current.getBoundingClientRect();
-        // Calculate raw relative position [0, 1]
         const x = e.clientX - rect.left;
         const relX = Math.max(0, Math.min(x / rect.width, 1));
         setVolume(relX);
     }, [setVolume]);
 
-    const handleVolumeMouseDown = (e) => {
+    const handleVolumePointerDown = (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (!e.isPrimary) return;
         setIsDraggingVolume(true);
         updateVolume(e);
+        try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+        } catch (_) { /* noop */ }
     };
 
     useEffect(() => {
@@ -77,8 +126,11 @@ export default function RadioWidget() {
                 const dx = e.clientX - dragStart.current.x;
                 const dy = e.clientY - dragStart.current.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist > 3 || isActuallyDragging) {
-                    if (!isActuallyDragging) setIsActuallyDragging(true);
+                if (dist > 3 || isActuallyDraggingRef.current) {
+                    if (!isActuallyDraggingRef.current) {
+                        isActuallyDraggingRef.current = true;
+                        setIsActuallyDragging(true);
+                    }
                     dragDistance.current = dist;
                     const w = widgetRef.current?.offsetWidth || 300;
                     const h = widgetRef.current?.offsetHeight || 180;
@@ -103,20 +155,69 @@ export default function RadioWidget() {
 
         const onUp = () => {
             setIsDragging(false);
+            isActuallyDraggingRef.current = false;
             setIsActuallyDragging(false);
             setResizeDir(null);
             setIsDraggingVolume(false);
         };
 
         if (isDragging || resizeDir || isDraggingVolume) {
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
+            document.addEventListener('pointermove', onMove, { passive: false });
+            document.addEventListener('pointerup', onUp);
+            document.addEventListener('pointercancel', onUp);
         }
         return () => {
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onUp);
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+            document.removeEventListener('pointercancel', onUp);
         };
-    }, [isDragging, isActuallyDragging, resizeDir, isDraggingVolume, updateVolume]);
+    }, [isDragging, resizeDir, isDraggingVolume, updateVolume]);
+
+    const pinchRef = useRef({ dist: 0, w: 0, h: 0 });
+    useEffect(() => {
+        const el = widgetRef.current;
+        if (!el) return;
+
+        const onTouchStart = (ev) => {
+            if (ev.touches.length !== 2) return;
+            const d = touchPairDistance(ev.touches);
+            if (d < 24) return;
+            pinchRef.current = {
+                dist: d,
+                w: size.width,
+                h: size.height,
+            };
+            ev.preventDefault();
+        };
+
+        const onTouchMove = (ev) => {
+            const p = pinchRef.current;
+            if (!p.dist || ev.touches.length < 2) return;
+            const scale = touchPairDistance(ev.touches) / p.dist;
+            ev.preventDefault();
+            if (!isMinimized) {
+                setSize({
+                    width: Math.min(600, Math.max(300, p.w * scale)),
+                    height: Math.min(400, Math.max(160, p.h * scale)),
+                });
+            }
+        };
+
+        const endPinch = () => {
+            pinchRef.current.dist = 0;
+        };
+
+        el.addEventListener('touchstart', onTouchStart, { passive: false });
+        el.addEventListener('touchmove', onTouchMove, { passive: false });
+        el.addEventListener('touchend', endPinch);
+        el.addEventListener('touchcancel', endPinch);
+        return () => {
+            el.removeEventListener('touchstart', onTouchStart);
+            el.removeEventListener('touchmove', onTouchMove);
+            el.removeEventListener('touchend', endPinch);
+            el.removeEventListener('touchcancel', endPinch);
+        };
+    }, [isMinimized, size.width, size.height]);
 
     if (!isOpen) return null;
 
@@ -143,7 +244,7 @@ export default function RadioWidget() {
         >
             {!isMinimized ? (
                 <>
-                    <div className="radio-glass-header" onMouseDown={handleMouseDownDrag}>
+                    <div className="radio-glass-header" onPointerDown={handlePointerDownDrag}>
                         <div className="radio-header-brand">
                             <Music size={14} />
                             <span>RADIO TUNER</span>
@@ -201,7 +302,7 @@ export default function RadioWidget() {
                                 <div
                                     ref={volumeRef}
                                     className={`slider-wrapper-mini ${isDraggingVolume ? 'is-dragging' : ''}`}
-                                    onMouseDown={handleVolumeMouseDown}
+                                    onPointerDown={handleVolumePointerDown}
                                 >
                                     <div className="v-track-mini" style={{ width: `${volume * 100}%`, background: currentStation.color }}>
                                         <div className="v-thumb-mini" style={{ background: currentStation.color }} />
@@ -210,13 +311,13 @@ export default function RadioWidget() {
                             </div>
                         </div>
 
-                        <div className="resize-handle-modern" onMouseDown={startResize('se')} />
+                        <div className="resize-handle-modern" onPointerDown={startResize('se')} />
                     </div>
                 </>
             ) : (
                 <div
                     className={`radio-bolinha ${isPlaying ? 'is-playing' : ''}`}
-                    onMouseDown={handleMouseDownDrag}
+                    onPointerDown={handlePointerDownDrag}
                     onClick={handleMiniClick}
                     style={{ '--accent-station': currentStation.color }}
                 >

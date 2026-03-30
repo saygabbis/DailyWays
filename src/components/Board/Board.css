@@ -6,6 +6,7 @@
     padding: 0;
     /* Padding moved to scroller */
     height: calc(100vh - var(--header-height));
+    height: calc(100dvh - var(--header-height));
     min-height: 0;
     position: relative;
     /* Remove overflow: hidden to help DND nested scroll detection */
@@ -606,6 +607,7 @@
     margin-bottom: var(--space-xs);
 }
 
+/* Por defeito visível: touch não tem :hover fiável; com vários cards o último “hover” sintético falha. */
 .board-card-menu-btn {
     margin-left: auto;
     background: transparent;
@@ -614,14 +616,32 @@
     cursor: pointer;
     padding: 2px;
     border-radius: var(--radius-sm);
-    opacity: 0;
-    pointer-events: none;
+    opacity: 1;
+    pointer-events: auto;
+    flex-shrink: 0;
     transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
 }
 
-.board-card:hover .board-card-menu-btn {
-    opacity: 1;
-    pointer-events: auto;
+/* Só em rato com hover real: esconde até passar o rato por cima do card */
+@media (hover: hover) and (pointer: fine) {
+    .board-card-menu-btn {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .board-card:hover .board-card-menu-btn {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+/* Garante toque: alguns WebViews reportam hover incorretamente */
+@media (pointer: coarse) {
+    .board-card-menu-btn,
+    .board-card:hover .board-card-menu-btn {
+        opacity: 1;
+        pointer-events: auto;
+    }
 }
 
 .board-card-menu-btn:hover {
@@ -848,39 +868,83 @@
 /* ── Tablet ── */
 @media (max-width: 768px) {
     .board-view {
+        padding: 0;
+        /* Header + barra inferior (Trello-like) */
+        height: calc(100vh - var(--header-height) - var(--mobile-bottom-nav-height));
+        height: calc(100dvh - var(--header-height) - var(--mobile-bottom-nav-height));
+    }
+
+    .board-scroller {
         padding: var(--space-md);
-        padding-bottom: 0;
-        height: calc(100vh - var(--header-height));
-        /* Enable horizontal snap scrolling between lists */
+        padding-bottom: calc(var(--space-md) + env(safe-area-inset-bottom, 0px));
+        /* Enable horizontal snap scrolling between lists (no scroller, não no container) */
         scroll-snap-type: x mandatory;
+        scroll-padding-inline: var(--space-md);
         -webkit-overflow-scrolling: touch;
+    }
+
+    /* Touch: sem portal o card precisa ficar acima das outras colunas durante o drag */
+    .board-card-drag-wrap.board-card-drag-touch {
+        z-index: calc(var(--z-modal-backdrop) + 50);
+        isolation: isolate;
+    }
+
+    /* Durante drag: o browser não rouba o gesto para scroll da board */
+    body.dnd-dragging .board-card-drag-wrap {
+        touch-action: none;
     }
 
     .board-lists {
         gap: var(--space-md);
-        /* Ensure lists have enough space to breathe */
+        /* Garante “peek” da próxima coluna (estilo Trello mobile) */
         padding-right: var(--space-md);
     }
 
-    .board-list {
-        /* Fill most of the screen — leave a peek of the next list */
-        width: calc(100vw - var(--space-xl) * 2);
-        min-width: 260px;
-        max-width: 360px;
+    .board-list,
+    .board-list-wrapper {
+        /* Colunas mais estreitas que o viewport — vê-se o próximo cartão/lista ao lado */
+        width: clamp(220px, 72vw, 272px);
+        min-width: 0;
+        max-width: 272px;
         scroll-snap-align: center;
-        max-height: calc(100vh - var(--header-height) - var(--space-2xl));
+        max-height: calc(100dvh - var(--header-height) - var(--mobile-bottom-nav-height) - 88px);
     }
 
     .board-add-list {
-        width: calc(100vw - var(--space-xl) * 2);
-        min-width: 260px;
-        max-width: 360px;
+        width: clamp(220px, 72vw, 272px);
+        min-width: 0;
+        max-width: 272px;
         scroll-snap-align: center;
     }
 
     .board-toolbar {
         flex-wrap: wrap;
         gap: var(--space-sm);
+    }
+
+    /* Toolbar do board no mobile: acima da barra inferior de navegação */
+    .board-toolbar.floating {
+        position: fixed !important;
+        left: 12px !important;
+        right: 12px !important;
+        bottom: calc(12px + var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom, 0px)) !important;
+        top: auto !important;
+        transform: none !important;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 16px;
+        z-index: 120;
+        max-width: none;
+        width: auto;
+    }
+
+    .board-toolbar-handle {
+        display: none;
+    }
+
+    .board-toolbar-members {
+        display: none;
     }
 
     .board-card {
@@ -906,13 +970,27 @@
     .board-add-card-btn {
         padding: 8px var(--space-md);
     }
+
+    /* Menu da lista: largura limitada ao viewport (evita cortar na coluna estreita) */
+    .board-list-menu {
+        max-width: min(280px, calc(100vw - 24px));
+        width: max-content;
+        right: 0;
+        left: auto;
+        z-index: var(--z-modal);
+    }
 }
 
 /* ── Mobile Small ── */
 @media (max-width: 480px) {
     .board-view {
+        padding: 0;
+    }
+
+    .board-scroller {
         padding: var(--space-sm);
-        padding-bottom: 0;
+        padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom, 0px));
+        scroll-padding-inline: var(--space-sm);
     }
 
     .board-lists {
@@ -920,16 +998,17 @@
         padding-right: var(--space-sm);
     }
 
-    .board-list {
-        /* Almost full width on small phones */
-        width: calc(100vw - var(--space-lg) * 2);
-        max-width: none;
-        max-height: calc(100vh - var(--header-height) - var(--space-lg));
+    .board-list,
+    .board-list-wrapper {
+        /* Mantém peek também em telas estreitas */
+        width: clamp(210px, 70vw, 260px);
+        max-width: 260px;
+        max-height: calc(100dvh - var(--header-height) - var(--mobile-bottom-nav-height) - 80px);
     }
 
     .board-add-list {
-        width: calc(100vw - var(--space-lg) * 2);
-        max-width: none;
+        width: clamp(210px, 70vw, 260px);
+        max-width: 260px;
     }
 
     .board-list-title {

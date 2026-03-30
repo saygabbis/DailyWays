@@ -18,6 +18,14 @@
     pointer-events: auto;
 }
 
+@media (max-width: 768px) {
+    .floating-save {
+        right: var(--space-md);
+        bottom: calc(96px + var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+        max-width: calc(100vw - var(--space-md) * 2);
+    }
+}
+
 .floating-save--saving {
     border-color: var(--accent-primary);
     box-shadow: var(--glass-shadow), 0 0 0 2px color-mix(in srgb, var(--accent-primary) 20%, transparent);

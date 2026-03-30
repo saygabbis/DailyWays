@@ -379,6 +379,17 @@
     .header-right {
         gap: var(--space-sm);
     }
+
+    /* Board / space: título não compete com ações */
+    .header--workspace .header-title-group {
+        flex: 1;
+        min-width: 0;
+        max-width: min(200px, 46vw);
+    }
+
+    .header--workspace .header-title {
+        font-size: var(--font-size-md);
+    }
 }
 
 @media (max-width: 480px) {

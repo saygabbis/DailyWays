@@ -50,4 +50,35 @@
   .app-main.sidebar-pushed {
     margin-left: 0;
   }
+
+  /*
+   * body tem overflow:hidden — o scroll precisa acontecer em .app-content.
+   * Prende o shell ao viewport e evita height:100% quebrado nas views (dashboard, diário, etc.).
+   */
+  .app-main.has-mobile-nav {
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .app-main.has-mobile-nav .app-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    padding-bottom: var(--mobile-bottom-nav-height);
+    box-sizing: border-box;
+  }
+
+  /* Deixa o conteúdo crescer e rolar no pai; não compete com overflow interno */
+  .app-main.has-mobile-nav .app-content .dashboard-view,
+  .app-main.has-mobile-nav .app-content .myday-view,
+  .app-main.has-mobile-nav .app-content .smart-view {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
 }

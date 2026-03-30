@@ -1207,13 +1207,13 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                             <div
                                                                 ref={provided.innerRef}
                                                                 {...provided.draggableProps}
-                                                                {...provided.dragHandleProps}
                                                                 className={`sidebar-item board-item ${state.selectedItems?.includes(board.id) ? 'selected' : ''} ${activeView === 'board' && state.activeBoard === board.id ? 'sidebar-item-active' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(board.id) && !snapshot.isDragging ? 'bulk-hidden' : ''} ${recentlyAddedId === board.id ? 'animate-slide-up-jelly' : ''}`}
                                                                 onClick={(e) => handleBoardClick(e, board.id)}
                                                                 onContextMenu={(e) => handleBoardContextMenu(e, board)}
                                                                 onDoubleClick={() => isDesktop && handleStartRename(board)}
                                                             >
                                                                 <div className={`sidebar-item-inner ${lastReorderedIds.includes(board.id) ? 'sidebar-jelly-reorder' : ''}`}>
+                                                                <div {...provided.dragHandleProps} className="sidebar-board-drag-handle">
                                                                 <div
                                                                     className={`sidebar-board-checkbox ${state.selectedItems?.includes(board.id) ? 'selected' : ''}`}
                                                                     title="Selecionar"
@@ -1229,6 +1229,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                                 ) : (
                                                                     <span className="truncate">{board.emoji} {board.title}</span>
                                                                 )}
+                                                                </div>
                                                                 <div className="board-item-end">
                                                                     <span className="sidebar-badge-subtle">{board.lists.reduce((acc, l) => acc + l.cards.length, 0)}</span>
                                                                     <button className="board-item-menu-btn" onClick={(e) => { e.stopPropagation(); handleBoardContextMenu(e, board); }} title="Opções">
@@ -1270,13 +1271,13 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                         <div
                                                             ref={provided.innerRef}
                                                             {...provided.draggableProps}
-                                                            {...provided.dragHandleProps}
                                                             className={`sidebar-item board-item ${activeView === 'board' && state.activeBoard === board.id ? 'sidebar-item-active' : ''} ${state.selectedItems?.includes(board.id) ? 'selected' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(board.id) && !snapshot.isDragging ? 'bulk-hidden' : ''} ${recentlyAddedId === board.id ? 'animate-slide-up-jelly' : ''}`}
                                                             onClick={(e) => handleBoardClick(e, board.id)}
                                                             onContextMenu={(e) => handleBoardContextMenu(e, board)}
                                                             onDoubleClick={() => isDesktop && handleStartRename(board)}
                                                         >
                                                             <div className={`sidebar-item-inner ${lastReorderedIds.includes(board.id) ? 'sidebar-jelly-reorder' : ''}`}>
+                                                            <div {...provided.dragHandleProps} className="sidebar-board-drag-handle">
                                                             <div
                                                                 className={`sidebar-board-checkbox ${state.selectedItems?.includes(board.id) ? 'selected' : ''}`}
                                                                 title="Selecionar"
@@ -1292,6 +1293,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                             ) : (
                                                                 <span className="truncate">{board.emoji} {board.title}</span>
                                                             )}
+                                                            </div>
                                                             <div className="board-item-end">
                                                                 <span className="sidebar-badge-subtle">{board.lists.reduce((acc, l) => acc + l.cards.length, 0)}</span>
                                                                 <button className="board-item-menu-btn" onClick={(e) => { e.stopPropagation(); handleBoardContextMenu(e, board); }} title="Opções">
@@ -1388,12 +1390,12 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                             <div
                                                                 ref={provided.innerRef}
                                                                 {...provided.draggableProps}
-                                                                {...provided.dragHandleProps}
                                                                 className={`sidebar-item board-item ${state.selectedItems?.includes(space.id) ? 'selected' : ''} ${activeView === `space-${space.id}` ? 'sidebar-item-active' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(space.id) && !snapshot.isDragging ? 'bulk-hidden' : ''} ${recentlyAddedId === space.id ? 'animate-slide-up-jelly' : ''}`}
                                                                 onClick={(e) => handleSpaceClick(e, space.id)}
                                                                 onContextMenu={(e) => handleSpaceContextMenu(e, space)}
                                                             >
                                                                 <div className={`sidebar-item-inner ${lastReorderedIds.includes(space.id) ? 'sidebar-jelly-reorder' : ''}`}>
+                                                                <div {...provided.dragHandleProps} className="sidebar-board-drag-handle">
                                                                 <div
                                                                     className={`sidebar-board-checkbox ${state.selectedItems?.includes(space.id) ? 'selected' : ''}`}
                                                                     title="Selecionar"
@@ -1403,6 +1405,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                                 </div>
                                                                 <span className="sidebar-board-dot" style={{ background: space.color || '#9b59b6' }} />
                                                                 <span className="truncate">{space.emoji} {space.title}</span>
+                                                                </div>
                                                                 <div className="board-item-end">
                                                                     <button className="board-item-menu-btn" onClick={(e) => { e.stopPropagation(); handleSpaceContextMenu(e, space); }} title="Opções">
                                                                         <MoreHorizontal size={13} />
@@ -1443,12 +1446,12 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                         <div
                                                             ref={provided.innerRef}
                                                             {...provided.draggableProps}
-                                                            {...provided.dragHandleProps}
                                                             className={`sidebar-item board-item ${activeView === `space-${space.id}` ? 'sidebar-item-active' : ''} ${state.selectedItems?.includes(space.id) ? 'selected' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(space.id) && !snapshot.isDragging ? 'bulk-hidden' : ''} ${recentlyAddedId === space.id ? 'animate-slide-up-jelly' : ''}`}
                                                             onClick={(e) => handleSpaceClick(e, space.id)}
                                                             onContextMenu={(e) => handleSpaceContextMenu(e, space)}
                                                         >
                                                             <div className={`sidebar-item-inner ${lastReorderedIds.includes(space.id) ? 'sidebar-jelly-reorder' : ''}`}>
+                                                            <div {...provided.dragHandleProps} className="sidebar-board-drag-handle">
                                                             <div
                                                                 className={`sidebar-board-checkbox ${state.selectedItems?.includes(space.id) ? 'selected' : ''}`}
                                                                 title="Selecionar"
@@ -1458,6 +1461,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                                             </div>
                                                             <span className="sidebar-board-dot" style={{ background: space.color || '#9b59b6' }} />
                                                             <span className="truncate">{space.emoji} {space.title}</span>
+                                                            </div>
                                                             <div className="board-item-end">
                                                                 <button className="board-item-menu-btn" onClick={(e) => { e.stopPropagation(); handleSpaceContextMenu(e, space); }} title="Opções">
                                                                     <MoreHorizontal size={13} />

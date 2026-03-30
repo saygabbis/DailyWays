@@ -125,6 +125,14 @@
     opacity: 1 !important;
 }
 
+@media (pointer: coarse) {
+    .pomodoro-resize-e,
+    .pomodoro-resize-s,
+    .pomodoro-resize-se {
+        display: none;
+    }
+}
+
 /* ── Header ── */
 .pomodoro-header {
     display: flex;

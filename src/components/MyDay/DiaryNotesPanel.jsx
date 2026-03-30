@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
 import { insertJournalNote, fetchJournalNotes, updateJournalNote, deleteJournalNote } from '../../services/journalService';
 import { Maximize2, Minimize2, ExternalLink, Trash2, Plus } from 'lucide-react';
@@ -245,7 +246,7 @@ export default function DiaryNotesPanel() {
                 )}
             </div>
 
-            {isModalOpen && selectedNote && (
+            {isModalOpen && selectedNote && createPortal(
                 <div className="diary-notes-modal-backdrop" onClick={() => setIsModalOpen(false)}>
                     <div className="diary-notes-modal" onClick={e => e.stopPropagation()}>
                         <div className="diary-notes-editor-header">
@@ -322,7 +323,8 @@ export default function DiaryNotesPanel() {
                             </div>
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </section>
     );

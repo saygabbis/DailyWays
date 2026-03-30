@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../services/supabaseClient';
@@ -230,7 +231,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         return () => document.removeEventListener('keydown', onKey);
     }, [onClose]);
 
-    return (
+    return createPortal(
         <>
             <div className="modal-backdrop" onClick={onClose} />
             <div className="task-detail-modal animate-scale-in-centered">
@@ -490,6 +491,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                     </div>
                 </div>
             </div>
-        </>
+        </>,
+        document.body
     );
 }

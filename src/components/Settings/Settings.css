@@ -12,7 +12,7 @@
     border: 1.5px solid var(--border-color);
     border-radius: var(--radius-xl);
     box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25), 0 0 0 1px var(--glass-border);
-    z-index: 1001;
+    z-index: calc(var(--z-modal-backdrop) + 1);
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -752,6 +752,7 @@
 
 .settings-identity-status {
     flex: 1;
+    min-width: 0;
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
 }
@@ -894,26 +895,54 @@
     color: var(--accent-primary);
 }
 
-/* ── Mobile ── */
+/* ── Mobile: cartão flutuante (não fullscreen) + abas compactas ── */
 @media (max-width: 768px) {
     .settings-modal {
-        width: 95%;
-        max-height: 90vh;
+        top: 50%;
+        left: 50%;
+        width: calc(100vw - 24px) !important;
+        max-width: 520px !important;
+        max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px));
+        border-radius: var(--radius-xl);
+        box-shadow:
+            0 24px 64px rgba(0, 0, 0, 0.35),
+            0 0 0 1px var(--glass-border);
+    }
+
+    .settings-modal-close {
+        top: var(--space-sm);
+        right: var(--space-sm);
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 20;
     }
 
     .settings-container {
         flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        max-height: 100%;
     }
 
+    /* Uma linha: 6 ícones iguais, baixo perfil vertical */
     .settings-tabs {
         width: 100%;
+        flex-shrink: 0;
         border-right: none;
         border-bottom: 1.5px solid var(--border-color);
         display: flex;
+        flex-direction: row;
         flex-wrap: nowrap;
-        gap: 4px;
-        overflow-x: auto;
-        padding: var(--space-md);
+        align-items: stretch;
+        justify-content: stretch;
+        gap: 6px;
+        padding: 10px 10px 12px;
+        padding-right: 44px;
+        overflow: hidden;
+        background: var(--bg-secondary);
     }
 
     .settings-tabs-title {
@@ -921,15 +950,166 @@
     }
 
     .settings-tab {
-        white-space: nowrap;
+        white-space: normal;
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 32px;
+        max-height: 36px;
+        width: auto;
+        padding: 4px 2px;
+        margin: 0;
+        flex-direction: row;
+        justify-content: center;
+        align-items: center;
+        gap: 0;
+        text-align: center;
+        font-size: 0;
+        border-radius: var(--radius-md);
+    }
+
+    .settings-tab-label {
+        display: none;
+    }
+
+    .settings-tab .settings-tab-icon {
         flex-shrink: 0;
+    }
+
+    .settings-tab svg {
+        width: 17px;
+        height: 17px;
     }
 
     .settings-tab-arrow {
         display: none;
     }
 
+    /* Aba ativa: destaque compacto (evita faixa vermelha larga como na sidebar) */
+    .settings-tab.settings-tab-active {
+        background: color-mix(in srgb, var(--accent-primary) 22%, var(--bg-secondary)) !important;
+        color: var(--text-primary) !important;
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 55%, transparent);
+    }
+
+    .settings-tab.settings-tab-active svg {
+        color: var(--accent-primary) !important;
+    }
+
+    .settings-content {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: var(--space-md) max(16px, env(safe-area-inset-right, 0px)) calc(var(--space-xl) + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+        box-sizing: border-box;
+    }
+
+    .settings-panel {
+        gap: var(--space-lg);
+    }
+
+    .settings-panel-header {
+        margin-bottom: var(--space-xs);
+    }
+
+    .settings-panel-header h2 {
+        font-size: var(--font-size-lg);
+        line-height: 1.25;
+    }
+
+    .settings-panel-header p {
+        font-size: var(--font-size-sm);
+        line-height: 1.35;
+    }
+
+    .settings-section {
+        padding: var(--space-md);
+    }
+
     .settings-accent-grid {
         grid-template-columns: repeat(3, 1fr);
+    }
+
+    /* Tema: 2 colunas no telemóvel — cartões legíveis */
+    .settings-theme-grid-4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-md);
+    }
+
+    .settings-theme-preview {
+        height: 76px;
+        margin-bottom: var(--space-xs);
+    }
+
+    .settings-theme-label {
+        font-size: var(--font-size-xs);
+        flex-wrap: wrap;
+        justify-content: center;
+        text-align: center;
+    }
+
+    .settings-theme-label span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 100%;
+    }
+
+    /* Contas vinculadas: email por baixo, botão não cortado */
+    .settings-identity-row {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        column-gap: var(--space-sm);
+        row-gap: var(--space-xs);
+    }
+
+    .settings-identity-row > svg {
+        grid-column: 1;
+        grid-row: 1;
+        flex-shrink: 0;
+    }
+
+    .settings-identity-row > span:nth-child(2) {
+        grid-column: 2;
+        grid-row: 1;
+        min-width: 0;
+    }
+
+    .settings-identity-row > .settings-identity-status {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        flex: none;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .settings-identity-row > button {
+        grid-column: 3;
+        grid-row: 1;
+        align-self: center;
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+
+    .settings-language-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-avatar-section {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .settings-danger-card {
+        flex-wrap: wrap;
+        gap: var(--space-sm);
+        padding: var(--space-md) 0;
+    }
+
+    .settings-danger-card .btn {
+        min-height: 44px;
+        padding-left: var(--space-md);
+        padding-right: var(--space-md);
     }
 }

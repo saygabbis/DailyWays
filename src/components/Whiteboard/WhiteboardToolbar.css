@@ -1,6 +1,6 @@
 .whiteboard-top-toolbar {
     position: fixed;
-    top: 60px;
+    top: calc(var(--header-height) + 8px);
     left: 50%;
     transform: translateX(-50%);
     z-index: 9998;
@@ -12,6 +12,16 @@
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md, 8px);
     box-shadow: var(--shadow-lg);
+}
+
+@media (max-width: 768px) {
+    .whiteboard-top-toolbar {
+        top: calc(var(--header-height) + 6px);
+        left: 12px;
+        right: 12px;
+        transform: none;
+        justify-content: space-between;
+    }
 }
 
 .whiteboard-top-toolbar .toolbar-btn {

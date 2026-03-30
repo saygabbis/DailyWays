@@ -12,7 +12,7 @@
     border-radius: var(--radius-xl);
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-xl);
-    z-index: var(--z-modal);
+    z-index: calc(var(--z-modal-backdrop) + 1);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -407,21 +407,137 @@
     color: var(--text-tertiary);
 }
 
-/* Mobile */
-@media (max-width: 600px) {
+/* Mobile — cartão flutuante (mesma ideia que Configurações / Board) */
+@media (max-width: 768px) {
     .task-detail-modal {
-        width: 100%;
-        height: 100%;
-        max-height: 100%;
-        border-radius: 0;
+        top: 50%;
+        left: 50%;
+        width: calc(100vw - 24px) !important;
+        max-width: min(calc(100vw - 24px), 540px) !important;
+        max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px));
+        height: auto;
+        border-radius: var(--radius-xl);
+        box-shadow:
+            0 24px 64px rgba(0, 0, 0, 0.38),
+            0 0 0 1px var(--border-color);
+        box-sizing: border-box;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .task-detail-header {
+        padding: var(--space-md) var(--space-md);
+        flex-shrink: 0;
+    }
+
+    .task-detail-header h2 {
+        font-size: var(--font-size-sm);
+        font-weight: 700;
+    }
+
+    .task-detail-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding: var(--space-md);
+        padding-left: max(var(--space-md), env(safe-area-inset-left, 0px));
+        padding-right: max(var(--space-md), env(safe-area-inset-right, 0px));
+        padding-bottom: max(var(--space-md), env(safe-area-inset-bottom, 0px));
+        gap: var(--space-md);
+    }
+
+    .task-detail-title {
+        font-size: var(--font-size-lg);
+    }
+
+    .task-detail-desc {
+        min-height: 72px;
+        font-size: var(--font-size-sm);
     }
 
     .task-detail-fields {
         grid-template-columns: 1fr;
+        gap: var(--space-md);
+    }
+
+    .task-detail-color-row {
+        gap: 8px;
+    }
+
+    .task-detail-color-chip {
+        width: 28px;
+        height: 28px;
+    }
+
+    .task-detail-priority-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        padding: 8px;
     }
 
     .task-detail-priority-btn {
-        font-size: 0.6rem;
+        min-height: 44px;
+        padding: 8px 6px;
+        font-size: var(--font-size-xs);
+        white-space: normal;
+        line-height: 1.2;
+    }
+
+    .task-detail-label-btn {
+        min-height: 36px;
+        font-size: var(--font-size-xs);
+    }
+
+    .task-detail-footer {
+        flex-shrink: 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-sm);
+        padding: var(--space-md);
+        padding-left: max(var(--space-md), env(safe-area-inset-left, 0px));
+        padding-right: max(var(--space-md), env(safe-area-inset-right, 0px));
+        padding-bottom: max(var(--space-md), env(safe-area-inset-bottom, 0px));
+    }
+
+    .task-detail-footer .btn {
+        width: 100%;
+        min-height: 44px;
+        justify-content: center;
+    }
+
+    .task-detail-footer-info {
+        font-size: 0.75rem;
+        text-align: center;
+        line-height: 1.35;
+    }
+
+    .label-popover {
+        position: fixed;
+        left: 50%;
+        right: auto;
+        top: auto;
+        bottom: max(12px, env(safe-area-inset-bottom, 0px));
+        transform: translateX(-50%);
+        width: min(92vw, 320px);
+        max-width: calc(100vw - 24px);
+        z-index: var(--z-dropdown);
+        box-sizing: border-box;
+    }
+
+    .task-detail-quick-actions {
+        flex-direction: column;
+    }
+
+    .task-detail-quick-btn {
+        width: 100%;
+        justify-content: center;
+        min-height: 44px;
+        font-size: var(--font-size-sm);
     }
 }
 

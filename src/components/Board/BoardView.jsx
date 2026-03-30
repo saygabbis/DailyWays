@@ -70,13 +70,12 @@ function BoardView({ onCardClick }, ref) {
         moved: false
     });
 
-    const handleMouseDown = (e) => {
-        // Allow Left (0), Middle (1), and Right (2) buttons
-        // Ignore if clicking on interactive elements (buttons, inputs, cards, lists)
-        // We want to drag when clicking on the "background" or "scroller"
+    // Pan horizontal só com mouse — no touch o scroll nativo do .board-scroller não conflita com o DnD
+    const handlePanPointerDown = (e) => {
+        if (e.pointerType !== 'mouse') return;
+        if (e.button !== 0 && e.button !== 1 && e.button !== 2) return;
         const target = e.target;
         const isInteractive = target.closest('button, a, input, textarea, .board-card, .board-list-header, .board-list-footer');
-
         if (isInteractive) return;
 
         panningData.current = {
@@ -86,30 +85,25 @@ function BoardView({ onCardClick }, ref) {
             moved: false
         };
         setIsPanning(true);
-        // Prevent default text selection
         if (e.button === 1) e.preventDefault();
-    };
 
-    const handleMouseMove = (e) => {
-        if (!panningData.current.isDown) return;
-
-        e.preventDefault();
-        const walk = (e.pageX - panningData.current.startX) * 1; // 1:1 scroll speed
-        scrollerRef.current.scrollLeft = panningData.current.scrollLeft - walk;
-
-        if (Math.abs(walk) > 5) {
-            panningData.current.moved = true;
-        }
-    };
-
-    const handleMouseUp = (e) => {
-        panningData.current.isDown = false;
-        setIsPanning(false);
-    };
-
-    const handleMouseLeave = () => {
-        panningData.current.isDown = false;
-        setIsPanning(false);
+        const onMove = (ev) => {
+            if (ev.pointerType !== 'mouse' || !panningData.current.isDown) return;
+            ev.preventDefault();
+            const walk = (ev.pageX - panningData.current.startX) * 1;
+            scrollerRef.current.scrollLeft = panningData.current.scrollLeft - walk;
+            if (Math.abs(walk) > 5) panningData.current.moved = true;
+        };
+        const onUp = () => {
+            panningData.current.isDown = false;
+            setIsPanning(false);
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+            document.removeEventListener('pointercancel', onUp);
+        };
+        document.addEventListener('pointermove', onMove, { passive: false });
+        document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onUp);
     };
 
     const handleContextMenu = (e) => {
@@ -208,11 +202,11 @@ function BoardView({ onCardClick }, ref) {
     };
 
     // Draggable Logic
-    const handleToolbarMouseDown = (e) => {
-        // Avoid dragging if clicking on a button or other interactive element
+    const handleToolbarPointerDown = (e) => {
         if (e.target.closest('button') || e.target.closest('input') || e.target.closest('a')) return;
+        if (!e.isPrimary) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
 
-        // If it's the first drag, get the current position from the DOM
         let currentX = toolbarPos?.x;
         let currentY = toolbarPos?.y;
 
@@ -230,45 +224,47 @@ function BoardView({ onCardClick }, ref) {
             posY: currentY
         };
         setIsDragging(true);
+        try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+        } catch (_) { /* noop */ }
     };
 
-    const handleMouseUpGlobal = useCallback(() => {
+    const handleToolbarPointerUpGlobal = useCallback(() => {
         setIsDragging(false);
     }, []);
 
     useEffect(() => {
-        const handleMouseMove = (e) => {
-            if (isDragging) {
-                const deltaX = e.clientX - dragStartRef.current.x;
-                const deltaY = e.clientY - dragStartRef.current.y;
+        const handleMove = (e) => {
+            if (!isDragging) return;
+            const deltaX = e.clientX - dragStartRef.current.x;
+            const deltaY = e.clientY - dragStartRef.current.y;
 
-                let newX = dragStartRef.current.posX + deltaX;
-                let newY = dragStartRef.current.posY + deltaY;
+            let newX = dragStartRef.current.posX + deltaX;
+            let newY = dragStartRef.current.posY + deltaY;
 
-                // Bounds checking
-                const width = toolbarRef.current?.offsetWidth || 300;
-                const height = toolbarRef.current?.offsetHeight || 50;
-                const containerWidth = containerRef.current?.offsetWidth || window.innerWidth;
-                const containerHeight = containerRef.current?.offsetHeight || window.innerHeight;
-                const padding = 10;
+            const width = toolbarRef.current?.offsetWidth || 300;
+            const height = toolbarRef.current?.offsetHeight || 50;
+            const containerWidth = containerRef.current?.offsetWidth || window.innerWidth;
+            const containerHeight = containerRef.current?.offsetHeight || window.innerHeight;
+            const padding = 10;
 
-                newX = Math.max(padding, Math.min(newX, containerWidth - width - padding));
-                newY = Math.max(padding, Math.min(newY, containerHeight - height - padding));
+            newX = Math.max(padding, Math.min(newX, containerWidth - width - padding));
+            newY = Math.max(padding, Math.min(newY, containerHeight - height - padding));
 
-                const newPos = { x: newX, y: newY };
-                setToolbarPos(newPos);
-            }
+            setToolbarPos({ x: newX, y: newY });
         };
 
         if (isDragging) {
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUpGlobal);
+            document.addEventListener('pointermove', handleMove, { passive: false });
+            document.addEventListener('pointerup', handleToolbarPointerUpGlobal);
+            document.addEventListener('pointercancel', handleToolbarPointerUpGlobal);
         }
         return () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUpGlobal);
+            document.removeEventListener('pointermove', handleMove);
+            document.removeEventListener('pointerup', handleToolbarPointerUpGlobal);
+            document.removeEventListener('pointercancel', handleToolbarPointerUpGlobal);
         };
-    }, [isDragging, handleMouseUpGlobal]);
+    }, [isDragging, handleToolbarPointerUpGlobal]);
 
     if (!board) {
         return (
@@ -295,7 +291,7 @@ function BoardView({ onCardClick }, ref) {
                         position: 'absolute',
                         transition: isDragging ? 'none' : 'opacity 0.2s ease, transform 0.2s ease'
                     }}
-                    onMouseDown={handleToolbarMouseDown}
+                    onPointerDown={handleToolbarPointerDown}
                 >
                     <div className="board-toolbar-handle">
                         <GripVertical size={14} />
@@ -365,10 +361,7 @@ function BoardView({ onCardClick }, ref) {
             <div
                 className={`board-scroller ${isPanning ? 'is-panning' : ''}`}
                 ref={scrollerRef}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseLeave}
+                onPointerDown={handlePanPointerDown}
                 onContextMenu={handleContextMenu}
             >
                 <>

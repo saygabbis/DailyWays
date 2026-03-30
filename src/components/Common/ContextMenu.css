@@ -2,9 +2,9 @@
 
 .context-menu {
     position: fixed;
-    z-index: 9999;
+    z-index: 99999;
     min-width: 200px;
-    max-width: 280px;
+    max-width: min(280px, calc(100vw - 16px));
     /* Base neutra; quando há tint, o JS injeta gradiente/borda por cima */
     background: var(--bg-secondary);
     border: 1.5px solid var(--border-color);

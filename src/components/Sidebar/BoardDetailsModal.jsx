@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Save, Users, Mail, Shield, Trash2, ChevronDown } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { fetchBoardMembers, inviteBoardMember, updateMemberRole, removeMember } from '../../services/boardService';
@@ -14,7 +15,11 @@ function RoleSelect({ value, onChange, options, className = '', disabled = false
             if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
         };
         document.addEventListener('mousedown', onDown);
-        return () => document.removeEventListener('mousedown', onDown);
+        document.addEventListener('pointerdown', onDown);
+        return () => {
+            document.removeEventListener('mousedown', onDown);
+            document.removeEventListener('pointerdown', onDown);
+        };
     }, [open]);
 
     const selectedLabel = options.find(o => o.value === value)?.label ?? value;
@@ -144,7 +149,7 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
         }
     };
 
-    return (
+    return createPortal(
         <>
             <div className="modal-backdrop" onClick={onClose} />
             <div className="modal-content board-details-modal animate-scale-in-centered">
@@ -155,18 +160,24 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
 
                 <div className="board-details-tabs">
                     <button
+                        type="button"
                         className={`board-details-tab ${activeTab === 'details' ? 'active' : ''}`}
                         onClick={() => setActiveTab('details')}
+                        aria-label="Detalhes do board"
+                        title="Detalhes"
                     >
-                        <Shield size={14} />
-                        Detalhes
+                        <Shield size={14} aria-hidden />
+                        <span className="board-details-tab-label">Detalhes</span>
                     </button>
                     <button
+                        type="button"
                         className={`board-details-tab ${activeTab === 'share' ? 'active' : ''}`}
                         onClick={() => setActiveTab('share')}
+                        aria-label="Compartilhar board"
+                        title="Compartilhar"
                     >
-                        <Users size={14} />
-                        Compartilhar
+                        <Users size={14} aria-hidden />
+                        <span className="board-details-tab-label">Compartilhar</span>
                     </button>
                 </div>
 
@@ -346,6 +357,7 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
                     </div>
                 )}
             </div>
-        </>
+        </>,
+        document.body
     );
 }

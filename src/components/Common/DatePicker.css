@@ -321,3 +321,26 @@ button.dp-month-btn:hover {
     top: auto;
     bottom: calc(100% + 8px);
 }
+
+@media (max-width: 600px) {
+    .dp-popup {
+        position: fixed;
+        left: 50%;
+        right: auto;
+        top: auto;
+        bottom: max(12px, env(safe-area-inset-bottom, 0px));
+        transform: translateX(-50%);
+        width: min(92vw, 300px);
+        max-width: calc(100vw - 24px);
+        max-height: min(72vh, 420px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        z-index: var(--z-modal);
+        box-sizing: border-box;
+    }
+
+    .dp-popup.above {
+        top: auto;
+        bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    }
+}

@@ -10,7 +10,7 @@
     border: 1.5px solid var(--border-color);
     border-radius: var(--radius-xl);
     box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
-    z-index: 1002;
+    z-index: calc(var(--z-modal-backdrop) + 1);
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -138,6 +138,11 @@
     box-shadow: var(--accent-glow);
 }
 
+.board-details-tab-label {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+}
+
 /* ── Inputs / mensagens (reutiliza tokens do site) ── */
 
 .board-details-modal .settings-field {
@@ -177,6 +182,8 @@
     border-radius: var(--radius-xl);
     padding: var(--space-lg);
     box-shadow: var(--shadow-sm);
+    min-width: 0;
+    overflow-x: hidden;
 }
 
 .board-share-invite-section {
@@ -419,4 +426,127 @@
     width: 36px;
     height: 36px;
     padding: 0;
+}
+
+@media (max-width: 600px) {
+    /* Cartão flutuante — mesma ideia do modal de Configurações */
+    .board-details-modal {
+        top: 50%;
+        left: 50%;
+        width: calc(100vw - 24px) !important;
+        max-width: 420px !important;
+        max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px));
+        height: auto;
+        border-radius: var(--radius-xl);
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+        padding-bottom: 0;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .modal-header {
+        padding: var(--space-md) var(--space-md);
+        flex-shrink: 0;
+    }
+
+    .board-details-tabs {
+        padding: 6px 10px 8px;
+        gap: 6px;
+        flex-shrink: 0;
+        overflow: hidden;
+    }
+
+    .board-details-tab {
+        flex: 1;
+        min-height: 0;
+        padding: 6px 8px;
+        gap: 0;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        font-size: 0;
+        line-height: 0;
+    }
+
+    .board-details-tab svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    .board-details-tab-label {
+        display: none;
+    }
+
+    .board-details-tab.active {
+        box-shadow: none;
+        outline: 2px solid var(--accent-primary);
+        outline-offset: -2px;
+    }
+
+    .modal-body {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        flex: 1;
+        min-height: 0;
+        padding: var(--space-md);
+    }
+
+    .modal-footer {
+        flex-shrink: 0;
+        padding: var(--space-md);
+    }
+
+    .board-details-modal .settings-accent-grid {
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+        margin-top: 6px;
+    }
+
+    .board-details-modal .settings-accent-btn {
+        max-width: 100%;
+    }
+
+    .board-details-modal .settings-accent-btn.active {
+        transform: scale(1.04);
+    }
+
+    /* Dropdown relativo ao botão — full width no mobile (evita “voar” por causa de ancestor) */
+    .board-share-role-select-wrap {
+        position: relative;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .board-share-role-menu {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(100% + 6px);
+        bottom: auto;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        transform: none;
+        z-index: 20;
+    }
+
+    .board-share-member-row {
+        flex-wrap: wrap;
+    }
+
+    .board-share-member-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .board-share-invite-bottom {
+        flex-wrap: wrap;
+    }
+
+    .board-share-invite-send {
+        flex: 1;
+        min-width: min(100%, 140px);
+    }
 }

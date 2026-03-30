@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
+import { createPortal } from 'react-dom';
 import { Trash2, Edit3, Palette, Copy, Sun, Star, Calendar, Tag, ArrowRight, SortAsc } from 'lucide-react';
 import './ContextMenu.css';
 
@@ -99,54 +100,55 @@ export function ContextMenuProvider({ children }) {
         };
     }, [menu, hideContextMenu]);
 
+    const menuEl = menu && (
+        <div
+            ref={menuRef}
+            className="context-menu animate-scale-in"
+            style={{
+                left: menu.x,
+                top: menu.y,
+                ...(menu.options?.tint && (() => {
+                    const rgb = hexToRgb(menu.options.tint);
+                    if (!rgb) return {};
+                    return {
+                        '--ctx-hover-bg': `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.22)`,
+                        borderColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.55)`,
+                        backgroundImage: `linear-gradient(135deg, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.18), transparent)`,
+                    };
+                })())
+            }}
+            onClick={(e) => e.stopPropagation()}
+        >
+            {menu.options.title && (
+                <div className="context-menu-title">{menu.options.title}</div>
+            )}
+            {menu.items.map((item, i) => {
+                if (item.type === 'divider') {
+                    return <div key={`div-${i}`} className="context-menu-divider" />;
+                }
+                return (
+                    <button
+                        key={item.label}
+                        className={`context-menu-item ${item.danger ? 'context-menu-danger' : ''}`}
+                        onClick={() => {
+                            item.action();
+                            hideContextMenu();
+                        }}
+                        disabled={item.disabled}
+                    >
+                        {item.icon && <span className="context-menu-icon">{item.icon}</span>}
+                        <span className="context-menu-label">{item.label}</span>
+                        {item.shortcut && <span className="context-menu-shortcut">{item.shortcut}</span>}
+                    </button>
+                );
+            })}
+        </div>
+    );
+
     return (
         <ContextMenuContext.Provider value={{ showContextMenu, hideContextMenu }}>
             {children}
-            {menu && (
-                <div
-                    ref={menuRef}
-                    className="context-menu animate-scale-in"
-                    style={{
-                        left: menu.x,
-                        top: menu.y,
-                        ...(menu.options?.tint && (() => {
-                            const rgb = hexToRgb(menu.options.tint);
-                            if (!rgb) return {};
-                            // Fundo base bem escuro vem do CSS; aqui só adicionamos um brilho de cor.
-                            return {
-                                '--ctx-hover-bg': `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.22)`,
-                                borderColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.55)`,
-                                backgroundImage: `linear-gradient(135deg, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.18), transparent)`,
-                            };
-                        })())
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    {menu.options.title && (
-                        <div className="context-menu-title">{menu.options.title}</div>
-                    )}
-                    {menu.items.map((item, i) => {
-                        if (item.type === 'divider') {
-                            return <div key={`div-${i}`} className="context-menu-divider" />;
-                        }
-                        return (
-                            <button
-                                key={item.label}
-                                className={`context-menu-item ${item.danger ? 'context-menu-danger' : ''}`}
-                                onClick={() => {
-                                    item.action();
-                                    hideContextMenu();
-                                }}
-                                disabled={item.disabled}
-                            >
-                                {item.icon && <span className="context-menu-icon">{item.icon}</span>}
-                                <span className="context-menu-label">{item.label}</span>
-                                {item.shortcut && <span className="context-menu-shortcut">{item.shortcut}</span>}
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
+            {menuEl ? createPortal(menuEl, document.body) : null}
         </ContextMenuContext.Provider>
     );
 }
@@ -157,28 +159,20 @@ export const useContextMenu = () => {
     return ctx;
 };
 
-// ── Hook for long-press (mobile) ──
-export function useLongPress(callback, ms = 500) {
+// ── Hook for long-press (mobile) — mais longo que o gesto de drag do DnD; move leve não cancela ──
+// `disabled`: ex. cards com DnD em touch — usar só o botão ⋮ para o menu
+const MOVE_CANCEL_PX = 12;
+
+export function useLongPress(callback, ms, { disabled = false } = {}) {
     const timerRef = useRef(null);
+    const posRef = useRef({ x: 0, y: 0 });
     const callbackRef = useRef(callback);
     callbackRef.current = callback;
 
-    const start = useCallback((e) => {
-        // Prevent default to avoid text selection on mobile
-        timerRef.current = setTimeout(() => {
-            // Create a synthetic event with touch position
-            const touch = e.touches?.[0];
-            if (touch) {
-                callbackRef.current({
-                    preventDefault: () => e.preventDefault(),
-                    stopPropagation: () => e.stopPropagation(),
-                    clientX: touch.clientX,
-                    clientY: touch.clientY,
-                    pageX: touch.pageX,
-                    pageY: touch.pageY,
-                });
-            }
-        }, ms);
+    const resolveMs = useCallback(() => {
+        if (ms != null) return ms;
+        if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) return 880;
+        return 550;
     }, [ms]);
 
     const cancel = useCallback(() => {
@@ -188,9 +182,59 @@ export function useLongPress(callback, ms = 500) {
         }
     }, []);
 
+    const start = useCallback((e) => {
+        if (disabled) return;
+        const touch = e.touches?.[0];
+        if (touch) {
+            posRef.current = { x: touch.clientX, y: touch.clientY };
+        } else {
+            posRef.current = { x: e.clientX, y: e.clientY };
+        }
+        const delay = resolveMs();
+        timerRef.current = setTimeout(() => {
+            callbackRef.current({
+                preventDefault: () => {},
+                stopPropagation: () => {},
+                clientX: posRef.current.x,
+                clientY: posRef.current.y,
+                pageX: posRef.current.x,
+                pageY: posRef.current.y,
+            });
+        }, delay);
+    }, [disabled, resolveMs]);
+
+    const onTouchMove = useCallback((e) => {
+        if (disabled) return;
+        const touch = e.touches?.[0];
+        if (!touch || !timerRef.current) return;
+        const dx = touch.clientX - posRef.current.x;
+        const dy = touch.clientY - posRef.current.y;
+        if (dx * dx + dy * dy > MOVE_CANCEL_PX * MOVE_CANCEL_PX) cancel();
+    }, [cancel, disabled]);
+
+    const onTouchEndWrap = useCallback((e) => {
+        cancel();
+    }, [cancel]);
+
+    const onTouchCancelWrap = useCallback((e) => {
+        cancel();
+    }, [cancel]);
+
+    if (disabled) {
+        return {
+            cancel,
+            onTouchStart: undefined,
+            onTouchEnd: undefined,
+            onTouchMove: undefined,
+            onTouchCancel: undefined,
+        };
+    }
+
     return {
+        cancel,
         onTouchStart: start,
-        onTouchEnd: cancel,
-        onTouchMove: cancel,
+        onTouchEnd: onTouchEndWrap,
+        onTouchMove: onTouchMove,
+        onTouchCancel: onTouchCancelWrap,
     };
 }

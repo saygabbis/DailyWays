@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Palette, CheckCircle } from 'lucide-react';
 import './ListDetailsModal.css';
 
@@ -42,7 +43,7 @@ export default function ListDetailsModal({ list, boardId, onSave, onClose }) {
 
     if (!list) return null;
 
-    return (
+    return createPortal(
         <>
             <div className="modal-backdrop" onClick={onClose} />
             <div className="list-details-modal animate-scale-in-centered" onClick={e => e.stopPropagation()}>
@@ -102,6 +103,7 @@ export default function ListDetailsModal({ list, boardId, onSave, onClose }) {
                     </div>
                 </form>
             </div>
-        </>
+        </>,
+        document.body
     );
 }

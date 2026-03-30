@@ -122,6 +122,16 @@
     display: flex;
     flex-direction: column;
     padding-bottom: var(--space-lg);
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile: barra inferior fixa (z-index > sidebar) cobre o fim da lista — padding para “Sair” rolar acima */
+@media (max-width: 768px) {
+    .sidebar-body {
+        padding-bottom: calc(
+            var(--mobile-bottom-nav-height, 56px) + env(safe-area-inset-bottom, 0px) + var(--space-lg)
+        );
+    }
 }
 
 /* ── Section Labels ── */
@@ -499,6 +509,7 @@
     padding-left: 8px !important;
 }
 
+/* Toque: sempre visível; rato só mostra ao hover (pastas usam .group-header-item) */
 .board-drag-indicator {
     position: absolute;
     right: 8px;
@@ -509,7 +520,7 @@
     background: var(--bg-hover);
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
-    opacity: 0;
+    opacity: 1;
     transition: opacity var(--transition-fast), color var(--transition-fast);
 }
 
@@ -533,6 +544,12 @@
     opacity: 1;
 }
 
+@media (pointer: coarse) {
+    .sidebar-board-checkbox {
+        opacity: 1;
+    }
+}
+
 .sidebar-board-checkbox.selected {
     background: var(--accent-primary);
     border-color: var(--accent-primary);
@@ -546,12 +563,19 @@
     background: rgba(99, 102, 241, 0.15);
 }
 
-.board-item:hover .board-drag-indicator {
-    opacity: 1;
-}
+@media (hover: hover) and (pointer: fine) {
+    .board-drag-indicator {
+        opacity: 0;
+    }
 
-.board-item:hover .sidebar-badge-subtle {
-    opacity: 0;
+    .board-item:hover .board-drag-indicator,
+    .group-header-item:hover .board-drag-indicator {
+        opacity: 1;
+    }
+
+    .board-item:hover .sidebar-badge-subtle {
+        opacity: 0;
+    }
 }
 
 /* ── Three-dots end area ── */
@@ -582,15 +606,22 @@
     cursor: pointer;
     padding: 2px;
     border-radius: var(--radius-sm);
-    opacity: 0;
+    opacity: 1;
     transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
-    pointer-events: none;
+    pointer-events: auto;
     transform: translateX(-50%);
 }
 
-.board-item:hover .board-item-menu-btn {
-    opacity: 1;
-    pointer-events: auto;
+@media (hover: hover) and (pointer: fine) {
+    .board-item-menu-btn {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .board-item:hover .board-item-menu-btn {
+        opacity: 1;
+        pointer-events: auto;
+    }
 }
 
 .board-item-menu-btn:hover {
@@ -601,6 +632,60 @@
 
 .board-item-menu-btn:active {
     transform: translateX(-50%) scale(0.9) rotate(-5deg);
+}
+
+@media (pointer: coarse) {
+    .board-item-menu-btn,
+    .board-item:hover .board-item-menu-btn {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .board-item-end .sidebar-badge-subtle {
+        opacity: 0;
+    }
+
+    /* Zona de toque maior + prioridade de hit sobre o handle de arrasto */
+    .board-item-end {
+        z-index: 2;
+        min-width: 48px;
+        min-height: 44px;
+        margin-left: 4px;
+        padding: 4px 2px 4px 8px;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+    .board-item-menu-btn {
+        position: relative;
+        left: auto;
+        transform: none;
+        min-width: 44px;
+        min-height: 44px;
+        padding: 10px 12px;
+        box-sizing: border-box;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .board-item-menu-btn svg {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+    }
+
+    .board-item-menu-btn:hover {
+        transform: scale(1.08) rotate(4deg);
+    }
+
+    .board-item-menu-btn:active {
+        transform: scale(0.96) rotate(-3deg);
+    }
+
+    .board-item .sidebar-item-inner {
+        gap: 10px;
+    }
 }
 
 .sidebar-board-dot:hover {
@@ -629,6 +714,15 @@
     width: 100%;
     min-width: 0;
     flex: 1;
+}
+/* Área de arrasto (DnD) — não inclui ⋮/badge; evita drag ao tocar no menu no mobile */
+.sidebar-board-drag-handle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    touch-action: none;
 }
 .sidebar-group-inner {
     display: flex;

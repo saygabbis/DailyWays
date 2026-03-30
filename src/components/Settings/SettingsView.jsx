@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo, lazy, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { useTheme, useI18n } from '../../context/ThemeContext';
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Chrome, Command, Github, Plus } from 'lucide-react';
 import { ENABLE_MICROSOFT_LOGIN } from '../../config';
+import pkg from '../../../package.json';
 import { fetchMyInvitations, acceptInvitation, declineInvitation } from '../../services/boardService';
 import logoWhite from '../../assets/Logo - Branco.png';
 import logoBlack from '../../assets/Logo - Preto.png';
@@ -632,7 +634,7 @@ const AppPanel = memo(function AppPanel({ t }) {
             </div>
             <div className="settings-section">
                 <h3 className="settings-section-title">{t.sData}</h3>
-                <div className="settings-info-row"><span>{t.sVersion}</span><span className="settings-info-value">2.0.0</span></div>
+                <div className="settings-info-row"><span>{t.sVersion}</span><span className="settings-info-value">{pkg.version}</span></div>
                 <div className="settings-info-row"><span>{t.sStorage}</span><span className="settings-info-value">Supabase (PostgreSQL)</span></div>
             </div>
         </div>
@@ -802,7 +804,7 @@ export default function SettingsModal({ onClose, initialTab = 'account' }) {
         return () => document.removeEventListener('keydown', handleKey);
     }, [onClose]);
 
-    return (
+    return createPortal(
         <>
             <div className="modal-backdrop" onClick={onClose} />
             <div className="settings-modal animate-scale-in-centered">
@@ -820,12 +822,15 @@ export default function SettingsModal({ onClose, initialTab = 'account' }) {
                         {tabs.map(tab => (
                             <button
                                 key={tab.id}
+                                type="button"
                                 className={`settings-tab ${activeTab === tab.id ? 'settings-tab-active' : ''}`}
                                 onClick={() => setActiveTab(tab.id)}
+                                aria-label={tab.label}
+                                title={tab.label}
                             >
-                                <tab.icon size={18} />
-                                <span>{tab.label}</span>
-                                <ChevronRight size={14} className="settings-tab-arrow" />
+                                <tab.icon size={18} className="settings-tab-icon" aria-hidden />
+                                <span className="settings-tab-label">{tab.label}</span>
+                                <ChevronRight size={14} className="settings-tab-arrow" aria-hidden />
                             </button>
                         ))}
                     </div>
@@ -870,6 +875,7 @@ export default function SettingsModal({ onClose, initialTab = 'account' }) {
                     </div>
                 </div>
             </div>
-        </>
+        </>,
+        document.body
     );
 }

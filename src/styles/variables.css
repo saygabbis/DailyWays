@@ -391,6 +391,8 @@
   /* ── Layout ── */
   --sidebar-width: 260px;
   --header-height: 64px;
+  /* Barra inferior mobile (Trello-like); 0 em desktop */
+  --mobile-bottom-nav-height: 0px;
 
   /* ── Z-index ── */
   --z-sidebar: 100;
@@ -419,4 +421,11 @@
 [data-anim="flat"] .btn,
 [data-anim="flat"] .btn-icon {
   transform: none !important;
+}
+
+/* Mobile: altura da barra inferior (MobileBottomNav) */
+@media (max-width: 768px) {
+  :root {
+    --mobile-bottom-nav-height: 56px;
+  }
 }

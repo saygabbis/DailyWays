@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { useApp } from '../../context/AppContext';
-import { useContextMenu, useLongPress } from '../Common/ContextMenu';
+import { useContextMenu } from '../Common/ContextMenu';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import BoardCard from './BoardCard';
 import ListDetailsModal from './ListDetailsModal';
 import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy, Settings2, CheckCircle } from 'lucide-react';
@@ -10,6 +11,7 @@ import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy, Settings2, CheckCir
 export default function BoardList({ list, boardId, onCardClick, index, onOpenListDetails, dragHandleProps, isDropped, entryDelay = 0, editingByCardId }) {
     const { dispatch, state, persistBoard, showConfirm } = useApp();
     const { showContextMenu } = useContextMenu();
+    const coarsePointer = useCoarsePointer();
     const [addingCard, setAddingCard] = useState(false);
     const [newCardTitle, setNewCardTitle] = useState('');
     const [editing, setEditing] = useState(false);
@@ -108,8 +110,6 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
         showContextMenu(e, getListContextItems(), { title: list.title, tint: list.color || null });
     };
 
-    const longPressProps = useLongPress(handleListContextMenu);
-
     // Animação de entrada (dispara só na montagem, com stagger por index)
     const [shouldAnimate, setShouldAnimate] = useState(true);
     useEffect(() => {
@@ -134,7 +134,6 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
         <div
             className="board-list"
             onContextMenu={handleListContextMenu}
-            {...longPressProps}
             style={list.color ? { '--list-accent': list.color } : {}}
             data-colored={list.color ? 'true' : undefined}
         >
@@ -187,6 +186,11 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
                                                 ref={provided.innerRef}
                                                 {...provided.draggableProps}
                                                 {...provided.dragHandleProps}
+                                                className={[
+                                                    'board-card-drag-wrap',
+                                                    provided.draggableProps.className,
+                                                    snapshot.isDragging && coarsePointer ? 'board-card-drag-touch' : '',
+                                                ].filter(Boolean).join(' ')}
                                                 style={{
                                                     ...provided.draggableProps.style,
                                                     cursor: snapshot.isDragging ? 'grabbing' : 'pointer',
@@ -204,7 +208,8 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
                                             </div>
                                         );
 
-                                        if (snapshot.isDragging) {
+                                        /* Portal para body quebra a cadeia de touch no iOS/Android; no touch mantém no DOM. */
+                                        if (snapshot.isDragging && !coarsePointer) {
                                             return ReactDOM.createPortal(cardContent, document.body);
                                         }
                                         return cardContent;

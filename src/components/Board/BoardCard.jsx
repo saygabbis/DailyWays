@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useContextMenu, useLongPress } from '../Common/ContextMenu';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { Calendar, CheckSquare, AlertCircle, Sun, Edit3, Trash2, Star, Tag, Copy, ArrowRight, Circle, CheckCircle2, MoreHorizontal, FileText } from 'lucide-react';
 import { format, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -113,7 +114,12 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
         showContextMenu(e, getContextMenuItems(), { title: card.title, tint: effectiveColor || null });
     };
 
-    const longPressProps = useLongPress(handleContextMenu);
+    const coarsePointer = useCoarsePointer();
+    const { cancel: cancelLongPress, ...cardLongPressTouch } = useLongPress(handleContextMenu, undefined, { disabled: coarsePointer });
+
+    useEffect(() => {
+        if (isDragging) cancelLongPress?.();
+    }, [isDragging, cancelLongPress]);
 
     // Animation auto-cleanup to prevent restart on DND portal remount
     const [shouldAnimate, setShouldAnimate] = useState(true);
@@ -129,7 +135,7 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
             className={`board-card ${isDragging ? 'board-card-dragging' : ''} ${isCompleted ? 'board-card-done-state' : ''} ${allDone ? 'board-card-all-subtasks-done' : ''} ${isBeingEdited ? 'board-card-presence-active' : ''}`}
             onClick={onClick}
             onContextMenu={handleContextMenu}
-            {...longPressProps}
+            {...cardLongPressTouch}
             style={{
               ...(effectiveColor ? { '--card-accent': effectiveColor } : {}),
               ...(isBeingEdited ? { '--presence-color': presenceColor } : {}),

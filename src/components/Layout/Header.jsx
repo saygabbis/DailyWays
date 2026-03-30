@@ -8,7 +8,7 @@ import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import './Header.css';
 import { fetchMyInvitations } from '../../services/boardService';
 
-export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOpenSettings, onOpenSearch, editableBoardTitle, editableSpaceTitle }) {
+export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOpenSettings, onOpenSearch, editableBoardTitle, editableSpaceTitle, variant = 'default' }) {
     const { user, logout } = useAuth();
     const { getActiveBoard, showBoardToolbar, dispatch, showConfirm } = useApp();
     const t = useI18n();
@@ -93,7 +93,7 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
     }, [user?.id, showNotifications]);
 
     return (
-        <header className="header">
+        <header className={`header ${variant === 'workspace' ? 'header--workspace' : ''}`}>
             <div className="header-left">
                 <button className="btn-icon header-menu" onClick={onMenuClick} aria-label="Menu">
                     {sidebarOpen ? <X size={22} /> : <Menu size={22} />}

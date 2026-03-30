@@ -5,6 +5,7 @@ import { useTheme } from './context/ThemeContext';
 import AuthPage from './components/Auth/AuthPage';
 import Sidebar from './components/Layout/Sidebar';
 import Header from './components/Layout/Header';
+import MobileBottomNav from './components/Layout/MobileBottomNav';
 import BoardView from './components/Board/BoardView';
 import MyDayView from './components/MyDay/MyDayView';
 import ImportantView from './components/SmartViews/ImportantView';
@@ -53,20 +54,23 @@ function AppContent() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState('account');
   const [showSearch, setShowSearch] = useState(false);
-  const { showContextMenu } = useContextMenu();
+  const { showContextMenu, hideContextMenu } = useContextMenu();
   const boardViewRef = useRef(null);
   const [plannedDropCard, setPlannedDropCard] = useState(null);
 
   // Global DragDropContext handler — intercepts sidebar drops, delegates the rest
   const handleGlobalDragStart = useCallback((start) => {
+    hideContextMenu();
+    document.body.classList.add('dnd-dragging');
     if (['board', 'space', 'board-group', 'space-group'].includes(start.type)) {
       if (state.selectedItems?.includes(start.draggableId) && state.selectedItems.length > 1) {
         dispatch({ type: 'SET_DRAGGING_BULK', payload: true });
       }
     }
-  }, [state.selectedItems, dispatch]);
+  }, [state.selectedItems, dispatch, hideContextMenu]);
 
   const handleGlobalDragEnd = useCallback((result) => {
+    document.body.classList.remove('dnd-dragging');
     dispatch({ type: 'SET_DRAGGING_BULK', payload: false });
     const { source, destination, draggableId, type } = result;
     if (!destination) return;
@@ -227,7 +231,7 @@ function AppContent() {
     return null;
   };
 
-  const mainClass = `app-main${sidebarOpen && isDesktop ? ' sidebar-pushed' : ''}`;
+  const mainClass = `app-main${sidebarOpen && isDesktop ? ' sidebar-pushed' : ''}${!isDesktop ? ' has-mobile-nav' : ''}`;
 
   // Global right-click context menu
   const handleGlobalContextMenu = useCallback((e) => {
@@ -300,6 +304,7 @@ function AppContent() {
           <Header
             title={getTitle()}
             subtitle={getSubtitle()}
+            variant={activeView === 'board' || activeView.startsWith('space-') ? 'workspace' : 'default'}
             onMenuClick={toggleSidebar}
             sidebarOpen={sidebarOpen}
             onOpenSettings={(tab) => {
@@ -356,6 +361,16 @@ function AppContent() {
 
         {/* Floating save button — shown when there are unsaved local changes */}
         <FloatingSaveButton />
+
+        {!isDesktop && (
+          <MobileBottomNav
+            visible
+            activeView={activeView}
+            onViewChange={handleViewChange}
+            onOpenBoards={() => setSidebarOpen(true)}
+            hasBoardContext={!!activeBoard}
+          />
+        )}
 
         {/* Task detail floating modal */}
         {selectedCard && (

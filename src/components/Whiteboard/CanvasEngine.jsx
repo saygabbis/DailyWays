@@ -34,6 +34,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
     const viewportRef = useRef(null);
     const initialPan = { x: space?.panX ?? 0, y: space?.panY ?? 0 };
     const initialZoom = space?.zoom ?? 1;
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
 
     useEffect(() => {
         const onKeyDown = (e) => { if (e.key === ' ') setIsSpacePressed(true); };
@@ -671,7 +672,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                 </div>
             </div>
             </div>
-            <DraggablePanel id="whiteboard-toolbar" defaultBottom={16} hideHandle>
+            <DraggablePanel id="whiteboard-toolbar" defaultBottom={16} hideHandle style={isMobile ? { left: 12, right: 12, transform: 'none' } : undefined}>
                 <LeftToolbar
                     onUploadImage={handleUploadImage}
                     onUploadFile={handleUploadFile}

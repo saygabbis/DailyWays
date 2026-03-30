@@ -39,6 +39,36 @@
     padding: 0 4px;
 }
 
+/* Mobile polish: barra inferior mais "tocável" e sem cortar conteúdo */
+@media (max-width: 768px) {
+    .left-toolbar-bottom {
+        width: 100%;
+        border-radius: 14px;
+        padding: 6px 10px;
+        gap: 6px;
+        box-sizing: border-box;
+    }
+
+    .left-toolbar-bottom .left-toolbar-tools {
+        gap: 6px;
+        scrollbar-width: none;
+    }
+
+    .left-toolbar-bottom .left-toolbar-tools::-webkit-scrollbar {
+        display: none;
+    }
+
+    .left-toolbar-btn {
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
+    }
+
+    .left-toolbar-bottom .left-toolbar-actions {
+        padding: 0 10px;
+    }
+}
+
 .left-toolbar-btn {
     width: 40px;
     height: 40px;

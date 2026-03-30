@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { useI18n } from '../../context/ThemeContext';
 import { Plus } from 'lucide-react';
 import { endOfWeek, endOfMonth, endOfYear } from 'date-fns';
 import SmartTaskItem from '../SmartViews/SmartTaskItem';
+import DiarySelect from './DiarySelect';
 
 const PERIODS = [
     { id: 'day', label: 'Dia' },
@@ -21,7 +21,6 @@ const CHARGES = [
 
 export default function DiaryQuickPlanner({ onCardClick }) {
     const { state, getMyDayCards, getActiveBoard, dispatch, persistBoard } = useApp();
-    const t = useI18n();
 
     const boards = state.boards || [];
     const activeBoard = getActiveBoard();
@@ -44,6 +43,29 @@ export default function DiaryQuickPlanner({ onCardClick }) {
         const board = boards.find(b => b.id === selectedBoardId);
         return board?.lists || [];
     }, [boards, selectedBoardId]);
+
+    const boardOptions = useMemo(
+        () => boards.map(b => ({ value: b.id, label: `${b.emoji} ${b.title}` })),
+        [boards]
+    );
+
+    const listOptions = useMemo(
+        () => listsForBoard.map(l => ({ value: l.id, label: l.title })),
+        [listsForBoard]
+    );
+
+    const chargeOptions = useMemo(
+        () => CHARGES.map(c => ({ value: c.id, label: c.label })),
+        []
+    );
+
+    const timeUnitOptions = useMemo(
+        () => [
+            { value: 'min', label: 'min' },
+            { value: 'h', label: 'h' },
+        ],
+        []
+    );
 
     const myDayCards = getMyDayCards();
     const quickPlannerCards = myDayCards
@@ -112,9 +134,9 @@ export default function DiaryQuickPlanner({ onCardClick }) {
     const isSubmitDisabled = !title.trim() || !selectedBoardId || !selectedListId;
 
     return (
-        <section className="diary-column diary-column-center">
+        <section className="diary-column diary-column-center diary-quick-planner">
             <div className="diary-column-header diary-column-header-quick">
-                <div>
+                <div className="diary-quick-heading">
                     <div className="diary-column-title">
                         Plano rápido pra HOJE – Organizar
                     </div>
@@ -137,93 +159,87 @@ export default function DiaryQuickPlanner({ onCardClick }) {
             </div>
 
             <form className="diary-quick-form" onSubmit={handleSubmit}>
-                <input
-                    type="text"
-                    className="diary-quick-input"
-                    placeholder="Descreva rapidamente o objetivo..."
-                    value={title}
-                    onChange={e => setTitle(e.target.value)}
-                />
+                <div className="diary-quick-panel">
+                    <input
+                        type="text"
+                        className="diary-quick-input"
+                        placeholder="Descreva rapidamente o objetivo..."
+                        value={title}
+                        onChange={e => setTitle(e.target.value)}
+                    />
 
-                <div className="diary-quick-row">
-                    <div className="diary-quick-field">
-                        <label className="diary-quick-label">Board</label>
-                        <select
-                            className="diary-quick-select"
-                            value={selectedBoardId || ''}
-                            onChange={e => handleChangeBoard(e.target.value || null)}
-                        >
-                            {boards.length === 0 && <option value="">Nenhum board disponível</option>}
-                            {boards.map(board => (
-                                <option key={board.id} value={board.id}>
-                                    {board.emoji} {board.title}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="diary-quick-field">
-                        <label className="diary-quick-label">Lista</label>
-                        <select
-                            className="diary-quick-select"
-                            value={selectedListId || ''}
-                            onChange={e => setSelectedListId(e.target.value || null)}
-                            disabled={!selectedBoardId}
-                        >
-                            {(!listsForBoard || listsForBoard.length === 0) && (
-                                <option value="">Nenhuma lista</option>
-                            )}
-                            {listsForBoard.map(list => (
-                                <option key={list.id} value={list.id}>
-                                    {list.title}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="diary-quick-field">
-                        <label className="diary-quick-label">Cobrança</label>
-                        <select
-                            className="diary-quick-select"
-                            value={charge}
-                            onChange={e => setCharge(e.target.value)}
-                        >
-                            {CHARGES.map(c => (
-                                <option key={c.id} value={c.id}>{c.label}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="diary-quick-field diary-quick-time">
-                        <label className="diary-quick-label">Tempo</label>
-                        <div className="diary-quick-time-inputs">
-                            <input
-                                type="number"
-                                min="0"
-                                className="diary-quick-input-mini"
-                                value={timeValue}
-                                onChange={e => setTimeValue(e.target.value)}
-                                placeholder="0"
+                    <div className="diary-quick-section-label">Onde salvar</div>
+                    <div className="diary-quick-row-pair">
+                        <div className="diary-quick-field">
+                            <label className="diary-quick-label" htmlFor="dq-board">Board</label>
+                            <DiarySelect
+                                id="dq-board"
+                                value={selectedBoardId ?? ''}
+                                onChange={(v) => handleChangeBoard(v || null)}
+                                options={boardOptions}
+                                disabled={boards.length === 0}
+                                emptyLabel="Nenhum board disponível"
                             />
-                            <select
-                                className="diary-quick-select-mini"
-                                value={timeUnit}
-                                onChange={e => setTimeUnit(e.target.value)}
-                            >
-                                <option value="min">min</option>
-                                <option value="h">h</option>
-                            </select>
+                        </div>
+                        <div className="diary-quick-field">
+                            <label className="diary-quick-label" htmlFor="dq-list">Lista</label>
+                            <DiarySelect
+                                id="dq-list"
+                                value={selectedListId ?? ''}
+                                onChange={(v) => setSelectedListId(v || null)}
+                                options={listOptions}
+                                disabled={!selectedBoardId || listOptions.length === 0}
+                                emptyLabel="Nenhuma lista"
+                            />
                         </div>
                     </div>
+
+                    <details className="diary-quick-details">
+                        <summary className="diary-quick-details-summary">
+                            Cobrança e tempo estimado
+                            <span className="diary-quick-details-hint">opcional</span>
+                        </summary>
+                        <div className="diary-quick-row-pair diary-quick-row-pair--extras">
+                            <div className="diary-quick-field">
+                                <label className="diary-quick-label" htmlFor="dq-charge">Cobrança</label>
+                                <DiarySelect
+                                    id="dq-charge"
+                                    value={charge}
+                                    onChange={setCharge}
+                                    options={chargeOptions}
+                                />
+                            </div>
+                            <div className="diary-quick-field diary-quick-time">
+                                <label className="diary-quick-label" htmlFor="dq-time-unit">Tempo</label>
+                                <div className="diary-quick-time-inputs">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        className="diary-quick-input-mini"
+                                        value={timeValue}
+                                        onChange={e => setTimeValue(e.target.value)}
+                                        placeholder="0"
+                                    />
+                                    <DiarySelect
+                                        id="dq-time-unit"
+                                        value={timeUnit}
+                                        onChange={setTimeUnit}
+                                        options={timeUnitOptions}
+                                        variant="mini"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </details>
 
                     <div className="diary-quick-actions">
                         <button
                             type="submit"
-                            className="btn btn-primary diary-quick-submit"
+                            className="diary-quick-submit"
                             disabled={isSubmitDisabled}
                         >
-                            <Plus size={16} />
-                            Adicionar
+                            <Plus size={18} strokeWidth={2.25} />
+                            Adicionar ao Meu Dia
                         </button>
                     </div>
                 </div>

@@ -8,7 +8,7 @@
     background: var(--bg-card);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-xl);
-    z-index: 1001;
+    z-index: calc(var(--z-modal-backdrop) + 1);
     display: flex;
     flex-direction: column;
     border: 1px solid var(--border-color);
@@ -185,4 +185,38 @@ input:checked+.list-toggle-slider:before {
     justify-content: flex-end;
     gap: var(--space-sm);
     padding-top: var(--space-sm);
+}
+
+/* Mobile: cartão flutuante centralizado — sem faixa vazia embaixo */
+@media (max-width: 600px) {
+    .list-details-modal {
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) !important;
+        width: min(92vw, 400px) !important;
+        max-width: min(92vw, 400px) !important;
+        height: auto;
+        max-height: min(88dvh, 680px);
+        border-radius: var(--radius-xl);
+        box-sizing: border-box;
+        margin: 0;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: var(--shadow-xl), 0 24px 64px rgba(0, 0, 0, 0.35);
+    }
+
+    .list-details-header {
+        flex-shrink: 0;
+    }
+
+    .list-details-body {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        flex: 0 1 auto;
+        min-height: 0;
+        /* Só rola se passar do teto; conteúdo curto = modal compacto */
+        max-height: min(70dvh, 520px);
+    }
 }
