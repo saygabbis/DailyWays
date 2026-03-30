@@ -17,6 +17,7 @@ import LeftToolbar from './LeftToolbar';
 import DraggablePanel from './DraggablePanel';
 import WhiteboardContextMenu from './WhiteboardContextMenu';
 import { Grid3X3, ZoomIn, ZoomOut } from 'lucide-react';
+import { uuidv4 } from '../../utils/uuid';
 import './CanvasEngine.css';
 
 export default function CanvasEngine({ spaceId, space, onViewportChange }) {
@@ -242,10 +243,6 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                     if (e.currentTarget && typeof e.currentTarget.setPointerCapture === 'function') {
                         e.currentTarget.setPointerCapture(e.pointerId);
                     }
-                    // #region agent log
-                    const r = containerRef.current?.getBoundingClientRect?.();
-                    fetch('http://127.0.0.1:7243/ingest/8b95bb3b-076b-4faa-a3ef-36d8587cd594',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hypothesisId:'H5',location:'CanvasEngine.jsx:handleMouseDown',message:'Pending create set',data:{clientX:e.clientX,clientY:e.clientY,targetTag:e.target?.tagName,targetClass:e.target?.className,rectCenter:r?{x:r.left+r.width/2,y:r.top+r.height/2}:null},timestamp:Date.now()})}).catch(()=>{});
-                    // #endregion
                 }
             }
         },
@@ -321,7 +318,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                         setConnectorFromNodeId(null);
                         return;
                     }
-                    const connId = crypto.randomUUID();
+                    const connId = uuidv4();
                     (async () => {
                         const res = await insertConnector(spaceId, {
                             id: connId,
@@ -444,9 +441,6 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                         const [ox, oy] = offsets[activeTool] || [50, 50];
                         const finalX = w1.x - ox;
                         const finalY = w1.y - oy;
-                        // #region agent log
-                        fetch('http://127.0.0.1:7243/ingest/8b95bb3b-076b-4faa-a3ef-36d8587cd594',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hypothesisId:'H1',location:'CanvasEngine.jsx:handleMouseUp',message:'Node creation coords',data:{rect:{left:rect?.left,top:rect?.top,width:rect?.width,height:rect?.height},cx:rect?rect.left+rect.width/2:null,cy:rect?rect.top+rect.height/2:null,viewport:{panX:viewportForChildren?.panX,panY:viewportForChildren?.panY,zoom:viewportForChildren?.zoom},sx,sy,w1x:w1.x,w1y:w1.y,ox,oy,finalX,finalY,activeTool},timestamp:Date.now()})}).catch(()=>{});
-                        // #endregion
                         createNodeAt(activeTool, finalX, finalY);
                     }
                     pendingCreateRef.current = null;

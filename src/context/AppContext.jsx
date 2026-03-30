@@ -4,35 +4,10 @@ import { fetchBoards, saveBoards, insertBoardFull, updateBoardFull, updateBoards
 import { fetchGroups, fetchSpaces } from '../services/workspaceService';
 import { useAuth } from './AuthContext';
 import { supabase } from '../services/supabaseClient';
+import { uuidv4 } from '../utils/uuid';
 import ConfirmModal from '../components/Common/ConfirmModal';
 import FloatingSaveError from '../components/Common/FloatingSaveError';
 import FloatingInvitationToast from '../components/Common/FloatingInvitationToast';
-
-const DEBUG_ENDPOINT = 'http://127.0.0.1:7248/ingest/0093f15a-2614-4c0e-9862-18929ca449cb';
-const DEBUG_SESSION_ID = 'f6ad57';
-
-function debugLog(hypothesisId, location, message, data, runId = 'pre-fix') {
-    // #region agent log
-    try {
-        fetch(DEBUG_ENDPOINT, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Debug-Session-Id': DEBUG_SESSION_ID,
-            },
-            body: JSON.stringify({
-                sessionId: DEBUG_SESSION_ID,
-                runId,
-                hypothesisId,
-                location,
-                message,
-                data,
-                timestamp: Date.now(),
-            }),
-        }).catch(() => { });
-    } catch (_) { }
-    // #endregion
-}
 
 const AppContext = createContext(null);
 
@@ -91,7 +66,7 @@ const initialState = {
 };
 
 function createDefaultBoards() {
-    const boardId = crypto.randomUUID();
+    const boardId = uuidv4();
     return [{
         id: boardId,
         title: 'Meu Primeiro Board',
@@ -100,13 +75,13 @@ function createDefaultBoards() {
         createdAt: new Date().toISOString(),
         lists: [
             {
-                id: crypto.randomUUID(),
+                id: uuidv4(),
                 title: 'A Fazer',
                 color: null,
                 isCompletionList: false,
                 cards: [
                     {
-                        id: crypto.randomUUID(),
+                        id: uuidv4(),
                         title: 'Bem-vindo ao DailyWays! 🎉',
                         description: 'Arraste este card para "Em Progresso" para começar!',
                         labels: ['blue'],
@@ -114,23 +89,23 @@ function createDefaultBoards() {
                         dueDate: null,
                         myDay: true,
                         subtasks: [
-                            { id: crypto.randomUUID(), title: 'Explorar o board', done: false },
-                            { id: crypto.randomUUID(), title: 'Criar uma nova tarefa', done: false },
-                            { id: crypto.randomUUID(), title: 'Experimentar drag & drop', done: false },
+                            { id: uuidv4(), title: 'Explorar o board', done: false },
+                            { id: uuidv4(), title: 'Criar uma nova tarefa', done: false },
+                            { id: uuidv4(), title: 'Experimentar drag & drop', done: false },
                         ],
                         createdAt: new Date().toISOString(),
                     },
                 ],
             },
             {
-                id: crypto.randomUUID(),
+                id: uuidv4(),
                 title: 'Em Progresso',
                 color: null,
                 isCompletionList: false,
                 cards: [],
             },
             {
-                id: crypto.randomUUID(),
+                id: uuidv4(),
                 title: 'Concluído',
                 color: null,
                 isCompletionList: true,
@@ -261,7 +236,7 @@ function appReducer(state, action) {
         case 'ADD_BOARD': {
             const newBoard = {
                 // Aceita id pré-gerado (para consistência com o que foi salvo no servidor)
-                id: action.payload.id || crypto.randomUUID(),
+                id: action.payload.id || uuidv4(),
                 title: action.payload.title || 'Novo Board',
                 color: action.payload.color || DEFAULT_BOARD_COLORS[Math.floor(Math.random() * DEFAULT_BOARD_COLORS.length)],
                 emoji: action.payload.emoji || '📋',
@@ -270,9 +245,9 @@ function appReducer(state, action) {
                 position: action.payload.position ?? state.boards.length,
                 // Aceita listas pré-criadas para manter IDs consistentes com o servidor
                 lists: action.payload.lists || [
-                    { id: crypto.randomUUID(), title: 'A Fazer', color: null, isCompletionList: false, cards: [] },
-                    { id: crypto.randomUUID(), title: 'Em Progresso', color: null, isCompletionList: false, cards: [] },
-                    { id: crypto.randomUUID(), title: 'Concluído', color: null, isCompletionList: true, cards: [] },
+                    { id: uuidv4(), title: 'A Fazer', color: null, isCompletionList: false, cards: [] },
+                    { id: uuidv4(), title: 'Em Progresso', color: null, isCompletionList: false, cards: [] },
+                    { id: uuidv4(), title: 'Concluído', color: null, isCompletionList: true, cards: [] },
                 ],
             };
             return { ...state, boards: [...state.boards, newBoard], activeBoard: newBoard.id };
@@ -374,17 +349,17 @@ function appReducer(state, action) {
             const duplicateBoardStructure = (board) => {
                 const dup = {
                     ...JSON.parse(JSON.stringify(board)),
-                    id: crypto.randomUUID(),
+                    id: uuidv4(),
                     title: `${board.title} (cópia)`,
                     createdAt: new Date().toISOString(),
                 };
                 dup.lists = dup.lists.map(l => ({
                     ...l,
-                    id: crypto.randomUUID(),
+                    id: uuidv4(),
                     cards: l.cards.map(c => ({
                         ...c,
-                        id: crypto.randomUUID(),
-                        subtasks: c.subtasks.map(st => ({ ...st, id: crypto.randomUUID() })),
+                        id: uuidv4(),
+                        subtasks: c.subtasks.map(st => ({ ...st, id: uuidv4() })),
                     })),
                 }));
                 return dup;
@@ -411,7 +386,7 @@ function appReducer(state, action) {
         // ── Lists ──
         case 'ADD_LIST': {
             const newList = {
-                id: crypto.randomUUID(),
+                id: uuidv4(),
                 title: action.payload.title || 'Nova Lista',
                 color: null,
                 isCompletionList: false,
@@ -454,7 +429,7 @@ function appReducer(state, action) {
         // ── Cards ──
         case 'ADD_CARD': {
             const newCard = {
-                id: crypto.randomUUID(),
+                id: uuidv4(),
                 title: action.payload.title || 'Nova Tarefa',
                 description: '',
                 labels: [],
@@ -568,7 +543,7 @@ function appReducer(state, action) {
 
         case 'ADD_SUBTASK': {
             const newSubtask = {
-                id: crypto.randomUUID(),
+                id: uuidv4(),
                 title: action.payload.title,
                 done: false,
             };
@@ -1211,35 +1186,8 @@ export function AppProvider({ children }) {
                 const suppressedByActiveSaves = activeSavesRef.current > 0;
 
                 if (suppressedByWindow || suppressedByActiveSaves) {
-                    debugLog(
-                        'RT-A',
-                        'AppContext.jsx:realtime:handleChange suppressed',
-                        'skip refetch due to suppression',
-                        {
-                            now,
-                            realtimeSuppressUntilRef: realtimeSuppressUntilRef.current,
-                            activeSaves: activeSavesRef.current,
-                            table: payload?.table,
-                            eventType: payload?.eventType,
-                        },
-                        'post-fix',
-                    );
                     return;
                 }
-
-                debugLog(
-                    'RT-ENTER',
-                    'AppContext.jsx:realtime:handleChange',
-                    'event received (not suppressed)',
-                    {
-                        now,
-                        table: payload?.table,
-                        eventType: payload?.eventType,
-                        realtimeSuppressUntilRef: realtimeSuppressUntilRef.current,
-                        activeSaves: activeSavesRef.current,
-                    },
-                    'post-fix',
-                );
 
                 if (debounceTimer) clearTimeout(debounceTimer);
                 // Realtime: refetch curto para melhorar sensação de "instantâneo"
@@ -1247,40 +1195,13 @@ export function AppProvider({ children }) {
                     if (cancelled) return;
                     console.log('[AppContext] Realtime refetch for user', userId.slice(0, 8));
 
-                    debugLog(
-                        'RT-B',
-                        'AppContext.jsx:realtime:refetch',
-                        'before fetchBoards',
-                        { userIdPrefix: String(userId).slice(0, 8) },
-                        'post-fix',
-                    );
-
                     const { data, error } = await fetchBoards(userId);
 
                     if (cancelled || error) {
-                        debugLog(
-                            'RT-C',
-                            'AppContext.jsx:realtime:refetch result',
-                            'fetchBoards failed or cancelled',
-                            {
-                                error: error?.message || String(error || ''),
-                                cancelled,
-                                boardsLen: data?.length || 0,
-                            },
-                            'post-fix',
-                        );
                         return;
                     }
                     dispatch({ type: 'SET_BOARDS', payload: data });
                     // Sem localStorage — servidor é a fonte de verdade
-
-                    debugLog(
-                        'RT-D',
-                        'AppContext.jsx:realtime:refetch result',
-                        'dispatch SET_BOARDS',
-                        { boardsLen: data?.length || 0 },
-                        'post-fix',
-                    );
                 }, 250);
             };
 
@@ -1292,23 +1213,7 @@ export function AppProvider({ children }) {
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'lists' }, handleChange)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'cards' }, handleChange)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'subtasks' }, handleChange)
-                .subscribe((status) => {
-                    debugLog(
-                        'RT-STATUS',
-                        'AppContext.jsx:realtime:subscribe status',
-                        'channel status changed',
-                        { status, userIdPrefix: String(userId).slice(0, 8) },
-                        'post-fix',
-                    );
-                });
-
-            debugLog(
-                'RT-READY',
-                'AppContext.jsx:realtime:setup',
-                'realtime subscription created',
-                { userIdPrefix: String(userId).slice(0, 8) },
-                'post-fix',
-            );
+                .subscribe();
         };
 
         waitAndSubscribe();

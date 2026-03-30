@@ -1,31 +1,5 @@
 import { supabase } from './supabaseClient';
 
-const DEBUG_ENDPOINT = 'http://127.0.0.1:7248/ingest/0093f15a-2614-4c0e-9862-18929ca449cb';
-const DEBUG_SESSION_ID = 'f6ad57';
-
-function debugLog(hypothesisId, location, message, data, runId = 'pre-fix') {
-  // #region agent log
-  try {
-    fetch(DEBUG_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Debug-Session-Id': DEBUG_SESSION_ID,
-      },
-      body: JSON.stringify({
-        sessionId: DEBUG_SESSION_ID,
-        runId,
-        hypothesisId,
-        location,
-        message,
-        data,
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  } catch (_) { }
-  // #endregion
-}
-
 /**
  * Formato esperado de um board (como no AppContext):
  * { id, title, color, emoji, createdAt, lists: [ { id, title, cards: [ { id, title, description, labels, priority, dueDate, myDay, subtasks, createdAt } ] } ] }
@@ -157,9 +131,6 @@ export async function fetchBoards(userId) {
   if (!userId) return { data: [], error: null };
 
   const t0 = Date.now();
-  // #region agent log
-  debugLog('D', 'boardService.js:fetchBoards', 'start fetchBoards', { userIdLen: String(userId || '').length }, 'pre-fix');
-  // #endregion
 
   const hasPosition = await cardsHasPositionColumn();
 
@@ -208,9 +179,6 @@ export async function fetchBoards(userId) {
     console.error('[boardService] fetchBoards lists error', listsError);
     return { data: [], error: listsError.message || 'Erro ao carregar listas.' };
   }
-  // #region agent log
-  debugLog('D', 'boardService.js:fetchBoards', 'lists query done', { ms: Date.now() - tLists0, listsCount: (listsData || []).length }, 'pre-fix');
-  // #endregion
 
   // ── Cards ──
   const listIds = (listsData ?? []).map(l => l.id);
@@ -229,9 +197,6 @@ export async function fetchBoards(userId) {
     console.error('[boardService] fetchBoards cards error', cardsError);
     return { data: [], error: cardsError.message || 'Erro ao carregar cards.' };
   }
-  // #region agent log
-  debugLog('D', 'boardService.js:fetchBoards', 'cards query done', { ms: Date.now() - tCards0, cardsCount: (cardsData || []).length }, 'pre-fix');
-  // #endregion
 
   // ── Subtasks ──
   const cardIds = (cardsData ?? []).map(c => c.id);
@@ -246,9 +211,6 @@ export async function fetchBoards(userId) {
       console.error('[boardService] fetchBoards subtasks error', stErr);
     }
     subtasksData = stData ?? [];
-    // #region agent log
-    debugLog('D', 'boardService.js:fetchBoards', 'subtasks query done', { ms: Date.now() - tSub0, subtasksCount: (subtasksData || []).length }, 'pre-fix');
-    // #endregion
   }
 
   // ── Montar estrutura ──
@@ -276,22 +238,6 @@ export async function fetchBoards(userId) {
   })).sort((a, b) => (a.position - b.position) || (new Date(a.createdAt) - new Date(b.createdAt)));
 
   console.log(`[boardService] fetchBoards OK: ${data.length} boards, ${(listsData ?? []).length} lists, ${(cardsData ?? []).length} cards, ${subtasksData.length} subtasks`);
-  // #region agent log
-  debugLog(
-    'D',
-    'boardService.js:fetchBoards',
-    'fetchBoards total done',
-    {
-      ms: Date.now() - t0,
-      boardsCount: data.length,
-      firstBoardIds: data.slice(0, 5).map(b => b.id),
-      listsCount: (listsData ?? []).length,
-      cardsCount: (cardsData ?? []).length,
-      subtasksCount: subtasksData.length,
-    },
-    'pre-fix'
-  );
-  // #endregion
   return { data, error: null };
 }
 
@@ -333,20 +279,6 @@ export async function fetchBoardMembers(boardId) {
       // Não aborta a listagem dos membros; só ficariam sem name/username.
       profileById = {};
     } else {
-      // #region agent log
-      debugLog(
-        'A',
-        'boardService.js:fetchBoardMembers',
-        'profiles query done',
-        {
-          boardIdPresent: !!boardId,
-          membersCount: rows.length,
-          profilesCount: (profiles || []).length,
-          firstPhotoUrlPresent: !!(profiles || [])[0]?.photo_url,
-        },
-        'pre-fix'
-      );
-      // #endregion
       profileById = (profiles || []).reduce((acc, p) => {
         acc[p.id] = p;
         return acc;
@@ -405,20 +337,6 @@ export async function fetchMyInvitations() {
   }
   const user = sessionData.session.user;
 
-  // #region agent log
-  debugLog(
-    'I',
-    'boardService.js:fetchMyInvitations',
-    'start',
-    {
-      userIdLen: String(user?.id || '').length,
-      emailLen: String(user?.email || '').length,
-      emailHasAt: (user?.email || '').includes('@'),
-    },
-    'pre-fix'
-  );
-  // #endregion
-
   const baseSelect = 'id, board_id, inviter_id, invitee_email, invitee_user_id, role, status, created_at';
 
   // Importante: evitamos `boards!inner` aqui porque o convidado ainda não está em `board_members` até aceitar.
@@ -448,21 +366,6 @@ export async function fetchMyInvitations() {
   const merged = [...(r1.data || []), ...(r2.data || [])];
   const uniqueById = new Map();
   for (const row of merged) uniqueById.set(row.id, row);
-
-  // #region agent log
-  debugLog(
-    'I',
-    'boardService.js:fetchMyInvitations',
-    'queries done',
-    {
-      pendingCountUserId: (r1.data || []).length,
-      pendingCountEmail: (r2.data || []).length,
-      mergedCount: merged.length,
-      uniqueCount: uniqueById.size,
-    },
-    'pre-fix'
-  );
-  // #endregion
 
   const invitations = Array.from(uniqueById.values()).map((row) => ({
     id: row.id,
@@ -494,23 +397,6 @@ export async function acceptInvitation(inviteId) {
     if (!rErr && r) inviteRow = r;
   } catch (_) { }
 
-  // #region agent log
-  try {
-    debugLog(
-      'RLS-invitee-insert',
-      'boardService.js:acceptInvitation',
-      'before rpc',
-      {
-        inviteId,
-        userIdPrefix: userId ? String(userId).slice(0, 8) : null,
-        inviteBoardIdPrefix: inviteRow?.board_id ? String(inviteRow.board_id).slice(0, 8) : null,
-        inviteStatus: inviteRow?.status ?? null,
-      },
-      'pre-fix',
-    );
-  } catch (_) { }
-  // #endregion
-
   const { error } = await supabase.rpc('accept_board_invitation', { p_invite_id: inviteId });
   if (error) {
     console.error('[boardService] acceptInvitation error', error);
@@ -530,21 +416,6 @@ export async function acceptInvitation(inviteId) {
       if (!bmErr) membersCountAfter = (bmRows || []).length;
     }
   } catch (_) { }
-
-  // #region agent log
-  try {
-    debugLog(
-      'RLS-invitee-insert',
-      'boardService.js:acceptInvitation',
-      'after rpc / board_members check',
-      {
-        inviteId,
-        membersCountAfter,
-      },
-      'pre-fix',
-    );
-  } catch (_) { }
-  // #endregion
 
   return { success: true };
 }
