@@ -2,7 +2,21 @@ import { supabase } from './supabaseClient';
 
 /**
  * Formato esperado de um board (como no AppContext):
- * { id, title, color, emoji, createdAt, lists: [ { id, title, cards: [ { id, title, description, labels, priority, dueDate, myDay, subtasks, createdAt } ] } ] }
+ * {
+ *   id, title, color, emoji, createdAt,
+ *   lists: [
+ *     {
+ *       id, title,
+ *       cards: [
+ *         {
+ *           id, title, description, labels, priority,
+ *           dueDate, startDate, isAllDay, recurrenceRule,
+ *           coverAttachmentId, myDay, subtasks, createdAt, updatedAt
+ *         }
+ *       ]
+ *     }
+ *   ]
+ * }
  */
 
 // ── Helpers: app → DB row ──────────────────────────────────────────
@@ -26,21 +40,31 @@ function cardToRow(card, listId, position = 0) {
     description: card.description ?? '',
     priority: card.priority ?? 'none',
     due_date: card.dueDate ?? null,
+    start_date: card.startDate ?? null,
+    is_all_day: card.isAllDay ?? true,
+    recurrence_rule: card.recurrenceRule ?? null,
     my_day: card.myDay ?? false,
     labels: Array.isArray(card.labels) ? card.labels : [],
     color: card.color ?? null,
+    cover_attachment_id: card.coverAttachmentId ?? null,
     created_at: card.createdAt ?? new Date().toISOString(),
+    updated_at: card.updatedAt ?? new Date().toISOString(),
     completed: card.completed ?? false,
     position,
   };
 }
 
-function subtaskToRow(st, cardId) {
+function subtaskToRow(st, cardId, position = 0) {
   return {
     id: st.id,
     card_id: cardId,
     title: st.title ?? '',
     done: st.done ?? false,
+    position: st.position ?? position,
+    link_url: st.linkUrl ?? null,
+    link_label: st.linkLabel ?? null,
+    created_at: st.createdAt ?? new Date().toISOString(),
+    updated_at: st.updatedAt ?? new Date().toISOString(),
   };
 }
 
@@ -64,11 +88,25 @@ function rowToCard(row, subtasks = []) {
     labels: row.labels ?? [],
     priority: row.priority ?? 'none',
     dueDate: row.due_date ?? null,
+    startDate: row.start_date ?? null,
+    isAllDay: row.is_all_day ?? true,
+    recurrenceRule: row.recurrence_rule ?? null,
     myDay: row.my_day ?? false,
     color: row.color ?? null,
-    subtasks: subtasks.map(s => ({ id: s.id, title: s.title, done: s.done })),
+    coverAttachmentId: row.cover_attachment_id ?? null,
+    subtasks: subtasks.map(s => ({
+      id: s.id,
+      title: s.title,
+      done: s.done,
+      position: s.position ?? 0,
+      linkUrl: s.link_url ?? null,
+      linkLabel: s.link_label ?? null,
+      createdAt: s.created_at ?? null,
+      updatedAt: s.updated_at ?? null,
+    })),
     completed: row.completed ?? false,
     createdAt: row.created_at,
+    updatedAt: row.updated_at ?? null,
   };
 }
 
@@ -230,7 +268,7 @@ export async function fetchBoards(userId) {
   const listIds = (listsData ?? []).map(l => l.id);
 
   // Usa position se existir, senão created_at
-  const baseCardSelect = 'id, list_id, title, description, priority, due_date, my_day, labels, color, created_at, completed';
+  const baseCardSelect = 'id, list_id, title, description, priority, due_date, start_date, is_all_day, recurrence_rule, my_day, labels, color, cover_attachment_id, created_at, updated_at, completed';
   let cardsQuery = supabase.from('cards').select(hasPosition ? `${baseCardSelect}, position` : baseCardSelect).in('list_id', listIds);
   if (hasPosition) {
     cardsQuery = cardsQuery.order('position', { ascending: true });
@@ -251,7 +289,7 @@ export async function fetchBoards(userId) {
     const tSub0 = Date.now();
     const { data: stData, error: stErr } = await supabase
       .from('subtasks')
-      .select('id, card_id, title, done')
+      .select('id, card_id, title, done, position, link_url, link_label, created_at, updated_at')
       .in('card_id', cardIds);
     if (stErr) {
       console.error('[boardService] fetchBoards subtasks error', stErr);
@@ -592,8 +630,9 @@ export async function insertBoardFull(userId, board) {
       }
 
       const subtasks = card.subtasks ?? [];
-      for (const st of subtasks) {
-        const { error: stErr } = await supabase.from('subtasks').insert(subtaskToRow(st, card.id));
+      for (let si = 0; si < subtasks.length; si++) {
+        const st = subtasks[si];
+        const { error: stErr } = await supabase.from('subtasks').insert(subtaskToRow(st, card.id, si));
         if (stErr) {
           console.error('[boardService] insertBoardFull subtask error', st.id, stErr);
           return { success: false, error: stErr.message };
@@ -634,15 +673,25 @@ export async function updateBoardFull(userId, board) {
             description: card.description ?? '',
             priority: card.priority ?? 'none',
             dueDate: card.dueDate ?? null,
+            startDate: card.startDate ?? null,
+            isAllDay: card.isAllDay ?? true,
+            recurrenceRule: card.recurrenceRule ?? null,
             myDay: card.myDay ?? false,
             labels: Array.isArray(card.labels) ? card.labels : [],
             color: card.color ?? null,
+            coverAttachmentId: card.coverAttachmentId ?? null,
             createdAt: card.createdAt ?? new Date().toISOString(),
+            updatedAt: card.updatedAt ?? new Date().toISOString(),
             completed: card.completed ?? false,
-            subtasks: (card.subtasks ?? []).map(st => ({
+            subtasks: (card.subtasks ?? []).map((st, index) => ({
               id: st.id,
               title: st.title ?? '',
               done: st.done ?? false,
+              position: st.position ?? index,
+              linkUrl: st.linkUrl ?? null,
+              linkLabel: st.linkLabel ?? null,
+              createdAt: st.createdAt ?? new Date().toISOString(),
+              updatedAt: st.updatedAt ?? new Date().toISOString(),
             })),
           })),
         })),

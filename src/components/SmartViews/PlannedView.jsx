@@ -1,30 +1,27 @@
 import { useApp } from '../../context/AppContext';
 import { CalendarDays, AlertTriangle, Sun } from 'lucide-react';
-import { isToday, isTomorrow, isPast, isThisWeek, format, startOfDay } from 'date-fns';
+import { format, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import {
+    getCardTemporalBucket,
+    getCardTimelineDayKey,
+    parseCardDate,
+} from '../../utils/cardDateTime';
 import SmartTaskItem from './SmartTaskItem';
 import './SmartViews.css';
 
 export default function PlannedView({ onCardClick }) {
     const { getPlannedCards, dispatch, persistBoard } = useApp();
-    const cards = getPlannedCards();
+    const cards = getPlannedCards()
+        .filter(card => parseCardDate(card.dueDate))
+        .sort((a, b) => parseCardDate(a.dueDate) - parseCardDate(b.dueDate));
     const today = startOfDay(new Date());
 
-    // Categorize
-    const overdue = cards.filter(c => {
-        const d = startOfDay(new Date(c.dueDate));
-        return isPast(d) && !isToday(d) && !c.completed;
-    });
-    const todayCards = cards.filter(c => isToday(new Date(c.dueDate)));
-    const tomorrowCards = cards.filter(c => isTomorrow(new Date(c.dueDate)));
-    const thisWeekCards = cards.filter(c => {
-        const d = new Date(c.dueDate);
-        return isThisWeek(d, { weekStartsOn: 1 }) && !isToday(d) && !isTomorrow(d) && !isPast(startOfDay(d));
-    });
-    const laterCards = cards.filter(c => {
-        const d = new Date(c.dueDate);
-        return !isThisWeek(d, { weekStartsOn: 1 }) && !isPast(startOfDay(d));
-    });
+    const overdue = cards.filter(c => getCardTemporalBucket(c) === 'overdue');
+    const todayCards = cards.filter(c => getCardTemporalBucket(c) === 'today');
+    const tomorrowCards = cards.filter(c => getCardTemporalBucket(c) === 'tomorrow');
+    const thisWeekCards = cards.filter(c => getCardTemporalBucket(c) === 'this_week');
+    const laterCards = cards.filter(c => getCardTemporalBucket(c) === 'later');
 
     const toggleMyDay = (card) => {
         dispatch({
@@ -66,7 +63,7 @@ export default function PlannedView({ onCardClick }) {
         const d = new Date(today);
         d.setDate(d.getDate() + i);
         const dayStr = format(d, 'yyyy-MM-dd');
-        const count = cards.filter(c => c.dueDate === dayStr).length;
+        const count = cards.filter(c => getCardTimelineDayKey(c) === dayStr).length;
         timelineDays.push({
             day: format(d, 'EEE', { locale: ptBR }),
             date: format(d, 'dd'),

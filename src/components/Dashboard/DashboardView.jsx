@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getCardTemporalBucket, parseCardDate } from '../../utils/cardDateTime';
 import './Dashboard.css';
 
 const CIRCLE_R = 52;
@@ -48,11 +49,14 @@ export default function DashboardView() {
 
     const urgentCount = allCardsWithList.filter(c => c.priority === 'urgent' && !isCardInCompletionList(c)).length;
     const highCount = allCardsWithList.filter(c => c.priority === 'high' && !isCardInCompletionList(c)).length;
+    const overdueCount = allCardsWithList.filter(c => !isCardInCompletionList(c) && getCardTemporalBucket(c) === 'overdue').length;
+    const todayCount = allCardsWithList.filter(c => !isCardInCompletionList(c) && getCardTemporalBucket(c) === 'today').length;
+    const plannedCount = allCardsWithList.filter(c => !isCardInCompletionList(c) && parseCardDate(c.dueDate)).length;
+    const noDueDateCount = allCardsWithList.filter(c => !isCardInCompletionList(c) && !parseCardDate(c.dueDate)).length;
 
     const myDayCount = getMyDayCards().length;
     const myDayCompleted = getMyDayCards().filter(c => c.completed).length;
 
-    // Recém concluídos: apenas cards que estão em listas de conclusão
     const recentlyCompleted = allCardsWithList
         .filter(isCardInCompletionList)
         .slice(0, 5);
@@ -140,6 +144,42 @@ export default function DashboardView() {
                         <div className="stat-info">
                             <span className="stat-value">{myDayCompleted}/{myDayCount}</span>
                             <span className="stat-label">Meu Dia</span>
+                        </div>
+                    </div>
+                    <div className="stat-card stat-highlight animate-slide-up" style={{ animationDelay: '500ms' }}>
+                        <div className="stat-icon-bg" style={{ background: 'var(--danger)' }}>
+                            <AlertCircle size={24} color="white" />
+                        </div>
+                        <div className="stat-info">
+                            <span className="stat-value">{overdueCount}</span>
+                            <span className="stat-label">Atrasadas</span>
+                        </div>
+                    </div>
+                    <div className="stat-card stat-highlight animate-slide-up" style={{ animationDelay: '600ms' }}>
+                        <div className="stat-icon-bg" style={{ background: 'var(--success)' }}>
+                            <Calendar size={24} color="white" />
+                        </div>
+                        <div className="stat-info">
+                            <span className="stat-value">{todayCount}</span>
+                            <span className="stat-label">Hoje</span>
+                        </div>
+                    </div>
+                    <div className="stat-card stat-highlight animate-slide-up" style={{ animationDelay: '700ms' }}>
+                        <div className="stat-icon-bg" style={{ background: 'var(--info)' }}>
+                            <Calendar size={24} color="white" />
+                        </div>
+                        <div className="stat-info">
+                            <span className="stat-value">{plannedCount}</span>
+                            <span className="stat-label">Planejadas</span>
+                        </div>
+                    </div>
+                    <div className="stat-card stat-highlight animate-slide-up" style={{ animationDelay: '800ms' }}>
+                        <div className="stat-icon-bg" style={{ background: 'var(--text-tertiary)' }}>
+                            <Calendar size={24} color="white" />
+                        </div>
+                        <div className="stat-info">
+                            <span className="stat-value">{noDueDateCount}</span>
+                            <span className="stat-label">Sem prazo</span>
                         </div>
                     </div>
                 </div>

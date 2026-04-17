@@ -1,16 +1,206 @@
-# React + Vite
+# DailyWays
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+DailyWays é um app de produtividade visual construído com React + Vite + Supabase.
 
-Currently, two official plugins are available:
+O projeto combina:
+- boards estilo kanban,
+- listas e tarefas,
+- subtarefas,
+- smart views como My Day, Planned e Important,
+- compartilhamento de boards,
+- realtime entre abas/usuários,
+- base em evolução para task detail rico com comentários, anexos, activity e assignees.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Stack principal
 
-## React Compiler
+- React 19
+- Vite 7
+- Supabase
+- date-fns
+- lucide-react
+- @hello-pangea/dnd
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Scripts
 
-## Expanding the ESLint configuration
+```bash
+npm install
+npm run dev
+npm run build
+npm run preview
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Estrutura principal
+
+- `src/components/` — UI do app
+- `src/context/` — estado global e providers
+- `src/services/` — integração com Supabase e serviços de domínio
+- `src/utils/` — utilitários compartilhados
+- `supabase/migrations/` — migrations SQL do banco
+
+## Fluxos centrais atuais
+
+### Boards
+
+O app usa boards com listas e cards, persistidos no Supabase.
+
+Arquivo principal:
+- `src/services/boardService.js`
+
+### Estado global
+
+O estado global do app fica em:
+- `src/context/AppContext.jsx`
+
+Ele coordena:
+- boards,
+- grupos,
+- spaces,
+- persistência otimista,
+- realtime,
+- erros de save,
+- seleção,
+- filtros e helpers de consulta.
+
+### Task Detail
+
+O modal de detalhe da task fica em:
+- `src/components/TaskDetail/TaskDetailModal.jsx`
+
+Hoje ele já suporta a base estrutural de:
+- título,
+- descrição,
+- prioridade,
+- due date,
+- start date,
+- all day,
+- recorrência,
+- labels,
+- cor,
+- subtasks.
+
+## Evolução recente implementada
+
+Foi concluída a fundação para a nova geração de task do DailyWays.
+
+### Pacote 1A — fundação estrutural
+
+Implementado:
+- expansão do schema de `cards`
+- expansão do schema de `subtasks`
+- atualização da RPC `upsert_board_full`
+- atualização de `boardService`
+- alinhamento do `AppContext`
+- alinhamento do `TaskDetailModal`
+- criação da base temporal central em `src/utils/cardDateTime.js`
+- primeiros consumidores dessa base temporal no board, planned e dashboard
+
+Migrations:
+- `supabase/migrations/20260417120000_task_foundation_pack_1a.sql`
+
+### Pacote 1B — fundação colaborativa
+
+Implementado:
+- helpers SQL por card
+- tabela `card_attachments`
+- tabela `card_comments`
+- tabela `card_activity_logs`
+- tabela `card_assignees`
+- bucket `task-attachments`
+- policies iniciais de storage
+- publication realtime para as novas tabelas
+
+Migrations:
+- `supabase/migrations/20260417140000_task_collaboration_foundation.sql`
+
+## Utilitários temporais
+
+Arquivo:
+- `src/utils/cardDateTime.js`
+
+Essa base centraliza:
+- parse seguro de datas da task
+- formatação
+- overdue
+- due today
+- due tomorrow
+- due this week
+- bucket temporal
+- chave diária da timeline
+
+## Banco / Supabase
+
+A pasta de migrations fica em:
+- `supabase/migrations/`
+
+### Importante
+
+As migrations novas foram criadas localmente, mas ainda precisam ser aplicadas no projeto Supabase remoto.
+
+Arquivos para executar:
+- `supabase/migrations/20260417120000_task_foundation_pack_1a.sql`
+- `supabase/migrations/20260417140000_task_collaboration_foundation.sql`
+
+## Como aplicar no Supabase
+
+### Opção 1 — SQL Editor
+
+Executar no SQL Editor do projeto Supabase, em ordem:
+
+1. `20260417120000_task_foundation_pack_1a.sql`
+2. `20260417140000_task_collaboration_foundation.sql`
+
+### Opção 2 — Supabase CLI
+
+Se a CLI estiver autenticada:
+
+```bash
+npx supabase login
+npx supabase db push
+```
+
+## Status atual do projeto
+
+Hoje o projeto já está preparado estruturalmente para suportar:
+- due date + start date,
+- all day,
+- recurrence rule,
+- cover attachment id,
+- subtasks mais ricas,
+- attachments,
+- comments,
+- activity logs,
+- assignees,
+- realtime das novas entidades.
+
+O que ainda falta é a camada de serviço e UI real desses novos domínios.
+
+## Próximos passos recomendados
+
+### Imediato
+
+- aplicar as novas migrations no Supabase
+- validar o banco remoto
+- confirmar storage bucket e policies
+- validar realtime das novas tabelas
+
+### Próxima fase de produto
+
+Implementar no frontend:
+- `attachmentService`
+- `commentService`
+- `activityService`
+- `assigneeService`
+- hooks específicos do Task Detail
+- seções reais de attachments/comments/activity/assignees no modal
+
+## Build
+
+A build foi validada com:
+
+```bash
+npm run build
+```
+
+Resultado:
+- build OK
+- warnings apenas de chunking/imports dinâmicos já existentes

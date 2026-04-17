@@ -3,9 +3,9 @@ import { useApp } from '../../context/AppContext';
 import { useContextMenu, useLongPress } from '../Common/ContextMenu';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { Calendar, CheckSquare, AlertCircle, Sun, Edit3, Trash2, Star, Tag, Copy, ArrowRight, Circle, CheckCircle2, MoreHorizontal, FileText } from 'lucide-react';
-import { format, isPast, isToday } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { formatCardDateTime, isCardDueToday, isCardOverdue } from '../../utils/cardDateTime';
 import { uuidv4 } from '../../utils/uuid';
+import { useCardCoverImage } from '../../hooks/useCardCoverImage';
 
 export default function BoardCard({ card, boardId, listId, listColor, isDragging, onClick, editingEditors = [] }) {
     const { LABEL_COLORS, dispatch, persistBoard, showConfirm } = useApp();
@@ -32,12 +32,14 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
         low: { color: '#8b949e', label: 'Baixa' },
     };
 
-    const isOverdue = card.dueDate && isPast(new Date(card.dueDate)) && !isToday(new Date(card.dueDate));
+    const isOverdue = isCardOverdue(card);
+    const isDueToday = isCardDueToday(card);
     const hasDescription = Boolean(card.description && card.description.trim().length > 0);
     const effectiveColor = card.color === '__glass__' ? (listColor || null) : card.color || null;
     const primaryEditor = editingEditors?.[0] || null;
     const presenceColor = primaryEditor?.color || 'var(--accent-primary)';
     const isBeingEdited = Array.isArray(editingEditors) && editingEditors.length > 0;
+    const coverUrl = useCardCoverImage(card.id, card.coverAttachmentId);
 
     const getContextMenuItems = () => [
         {
@@ -78,11 +80,20 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
                         labels: [...card.labels],
                         priority: card.priority,
                         dueDate: card.dueDate,
+                        startDate: card.startDate,
+                        isAllDay: card.isAllDay ?? true,
+                        recurrenceRule: card.recurrenceRule ?? null,
+                        coverAttachmentId: card.coverAttachmentId ?? null,
                         myDay: false,
-                        subtasks: card.subtasks.map(st => ({
+                        subtasks: card.subtasks.map((st, index) => ({
                             id: uuidv4(),
                             title: st.title,
                             done: false,
+                            position: st.position ?? index,
+                            linkUrl: st.linkUrl ?? null,
+                            linkLabel: st.linkLabel ?? null,
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString(),
                         })),
                     },
                 },
@@ -143,6 +154,13 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
             }}
             data-colored={effectiveColor ? 'true' : undefined}
         >
+            {card.coverAttachmentId && (
+                <div
+                    className="board-card-cover board-card-cover-active"
+                    aria-hidden="true"
+                    style={coverUrl ? { backgroundImage: `url(${coverUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+                />
+            )}
             {isBeingEdited && (
                 <div className="board-card-presence-indicator" aria-label={`Sendo editado por ${primaryEditor?.name || 'alguém'}`}>
                     {primaryEditor?.photoUrl ? (
@@ -216,9 +234,9 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
                     )}
 
                     {card.dueDate && (
-                        <span className={`board-card-due ${isOverdue ? 'overdue' : ''} ${isToday(new Date(card.dueDate)) ? 'today' : ''}`}>
+                        <span className={`board-card-due ${isOverdue ? 'overdue' : ''} ${isDueToday ? 'today' : ''}`}>
                             <Calendar size={12} />
-                            {format(new Date(card.dueDate), 'dd MMM', { locale: ptBR })}
+                            {formatCardDateTime(card.dueDate, card.isAllDay ?? true)}
                         </span>
                     )}
 

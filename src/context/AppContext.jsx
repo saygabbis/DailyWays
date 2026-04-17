@@ -92,13 +92,18 @@ function createDefaultBoards() {
                         labels: ['blue'],
                         priority: 'medium',
                         dueDate: null,
+                        startDate: null,
+                        isAllDay: true,
+                        recurrenceRule: null,
+                        coverAttachmentId: null,
                         myDay: true,
                         subtasks: [
-                            { id: uuidv4(), title: 'Explorar o board', done: false },
-                            { id: uuidv4(), title: 'Criar uma nova tarefa', done: false },
-                            { id: uuidv4(), title: 'Experimentar drag & drop', done: false },
+                            { id: uuidv4(), title: 'Explorar o board', done: false, position: 0, linkUrl: null, linkLabel: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                            { id: uuidv4(), title: 'Criar uma nova tarefa', done: false, position: 1, linkUrl: null, linkLabel: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                            { id: uuidv4(), title: 'Experimentar drag & drop', done: false, position: 2, linkUrl: null, linkLabel: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
                         ],
                         createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
                     },
                 ],
             },
@@ -445,6 +450,7 @@ function appReducer(state, action) {
 
         // ── Cards ──
         case 'ADD_CARD': {
+            const now = new Date().toISOString();
             const newCard = {
                 id: uuidv4(),
                 title: action.payload.title || 'Nova Tarefa',
@@ -452,9 +458,14 @@ function appReducer(state, action) {
                 labels: [],
                 priority: 'none',
                 dueDate: null,
+                startDate: null,
+                isAllDay: true,
+                recurrenceRule: null,
+                coverAttachmentId: null,
                 myDay: false,
                 subtasks: [],
-                createdAt: new Date().toISOString(),
+                createdAt: now,
+                updatedAt: now,
                 ...action.payload.cardData,
             };
             return {
@@ -563,6 +574,11 @@ function appReducer(state, action) {
                 id: uuidv4(),
                 title: action.payload.title,
                 done: false,
+                position: Date.now(),
+                linkUrl: null,
+                linkLabel: null,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
             };
             return {
                 ...state,
@@ -1354,7 +1370,7 @@ export function AppProvider({ children }) {
 
     const getImportantCards = () => getAllCards().filter(c => c.important || c.priority === 'high' || c.priority === 'urgent');
 
-    const getPlannedCards = () => getAllCards().filter(c => c.dueDate);
+    const getPlannedCards = () => getAllCards().filter(c => c.dueDate || c.startDate);
 
     const searchCards = (query) => {
         if (!query) return [];

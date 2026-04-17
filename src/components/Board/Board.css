@@ -497,10 +497,22 @@
     border-radius: var(--radius-md);
     padding: var(--space-md);
     cursor: pointer;
-    /* Outer container has NO transition on transform/all to avoid DND lag */
     transition: background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
     position: relative;
     box-shadow: var(--shadow-card);
+    overflow: hidden;
+}
+
+.board-card-cover {
+    height: 96px;
+    margin: calc(var(--space-md) * -1);
+    margin-bottom: var(--space-md);
+    background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.02));
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.board-card-cover-active {
+    background: linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.04));
 }
 
 /* ── Colored Card: full background theming (similar to lists) ── */
