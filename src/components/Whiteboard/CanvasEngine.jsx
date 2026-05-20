@@ -4,15 +4,16 @@ import { useViewport } from './ViewportController';
 import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { getDefaultNodePayload, isCreationTool } from '../../stores/whiteboardStore';
 import { insertNode, insertConnector, uploadSpaceAsset } from '../../services/whiteboardService';
-import { fetchNodes, fetchConnectors, fetchComments } from '../../services/whiteboardService';
+import CollabSync from '../../collab/CollabSync.jsx';
+import PresenceLayer from '../../collab/PresenceLayer.jsx';
+import { useCollabPatch } from '../../collab/CollabOpsContext.jsx';
+import { useCollabPresence } from '../../collab/useCollabPresence.js';
 import { screenToWorldWithContainer, rectIntersects, findContainerAt } from './viewportUtils';
 import NodeLayer from './NodeLayer';
 import ConnectorLayer from './ConnectorLayer';
 import SelectionManager from './SelectionManager';
 import ResizeHandles from './ResizeHandles';
 import FloatingToolbar from './FloatingToolbar';
-import RealtimeSync from './RealtimeSync';
-import Autosave from './Autosave';
 import LeftToolbar from './LeftToolbar';
 import DraggablePanel from './DraggablePanel';
 import WhiteboardContextMenu from './WhiteboardContextMenu';
@@ -49,10 +50,15 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
 
     const { user } = useAuth();
     const {
+        collabPatchNode,
+        collabPatchNodes,
+        collabCreateNode,
+        collabCreateConnector,
+        connected: collabConnected,
+    } = useCollabPatch();
+    const { updateCursor, updateSelection } = useCollabPresence(spaceId);
+    const {
         setSpaceId,
-        setNodes,
-        setConnectors,
-        setComments,
         setViewport: setStoreViewport,
         setSelection,
         addNode,
@@ -64,7 +70,6 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
         nodes,
         connectors,
         selectedNodeIds,
-        setSuppressRealtimeUntil,
         gridVisible,
         setGridVisible,
         setLastCreatedNodeId,
@@ -94,13 +99,18 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                 payload.x = worldX - container.x;
                 payload.y = worldY - container.y;
             }
-            const res = await insertNode(spaceId, payload, user?.id);
-            if (res.success) {
-                addNode(payload);
+            if (collabConnected) {
+                collabCreateNode({ ...payload, createdBy: user?.id ?? null });
                 setLastCreatedNodeId(payload.id);
+            } else {
+                const res = await insertNode(spaceId, payload, user?.id);
+                if (res.success) {
+                    addNode(payload);
+                    setLastCreatedNodeId(payload.id);
+                }
             }
         },
-        [spaceId, user?.id, addNode, setLastCreatedNodeId]
+        [spaceId, user?.id, addNode, collabCreateNode, collabConnected, setLastCreatedNodeId]
     );
 
     const getViewportCenterWorld = useCallback(() => {
@@ -118,7 +128,6 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                 console.warn('[CanvasEngine] handleUploadImage: not an image file', file.name);
                 return;
             }
-            setSuppressRealtimeUntil(2000);
             try {
                 const result = await uploadSpaceAsset(spaceId, file, user?.id);
                 if (!result.url) {
@@ -134,19 +143,22 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                 const sizeStr = file.size != null ? (file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`) : '';
                 const payload = getDefaultNodePayload('image', place.x, place.y);
                 Object.assign(payload.data, { url: result.url, filename: file.name, size: sizeStr });
-                const res = await insertNode(spaceId, payload, user?.id);
-                if (res.success) addNode(payload);
+                if (collabConnected) {
+                    collabCreateNode({ ...payload, createdBy: user?.id ?? null });
+                } else {
+                    const res = await insertNode(spaceId, payload, user?.id);
+                    if (res.success) addNode(payload);
+                }
             } catch (err) {
                 console.error('[CanvasEngine] handleUploadImage error', err);
             }
         },
-        [spaceId, user?.id, addNode, getViewportCenterWorld, setSuppressRealtimeUntil]
+        [spaceId, user?.id, addNode, collabCreateNode, collabConnected, getViewportCenterWorld]
     );
 
     const handleUploadFile = useCallback(
         async (file) => {
             if (!spaceId || !file) return;
-            setSuppressRealtimeUntil(2000);
             try {
                 const result = await uploadSpaceAsset(spaceId, file, user?.id);
                 if (!result.url) {
@@ -165,13 +177,17 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                 const type = isImage ? 'image' : 'file_card';
                 const payload = getDefaultNodePayload(type, place.x, place.y);
                 Object.assign(payload.data, { url: result.url, filename: file.name, size: sizeStr });
-                const res = await insertNode(spaceId, payload, user?.id);
-                if (res.success) addNode(payload);
+                if (collabConnected) {
+                    collabCreateNode({ ...payload, createdBy: user?.id ?? null });
+                } else {
+                    const res = await insertNode(spaceId, payload, user?.id);
+                    if (res.success) addNode(payload);
+                }
             } catch (err) {
                 console.error('[CanvasEngine] handleUploadFile error', err);
             }
         },
-        [spaceId, user?.id, addNode, getViewportCenterWorld, setSuppressRealtimeUntil]
+        [spaceId, user?.id, addNode, collabCreateNode, collabConnected, getViewportCenterWorld]
     );
 
     const persistViewport = useCallback(
@@ -201,21 +217,8 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
     }, [spaceId]);
 
     useEffect(() => {
-        if (!spaceId) return;
-        let cancelled = false;
-        (async () => {
-            const [nodesRes, connRes, commentsRes] = await Promise.all([
-                fetchNodes(spaceId),
-                fetchConnectors(spaceId),
-                fetchComments(spaceId),
-            ]);
-            if (cancelled) return;
-            if (nodesRes.data) setNodes(nodesRes.data);
-            if (connRes.data) setConnectors(connRes.data);
-            if (commentsRes.data) setComments(commentsRes.data);
-        })();
-        return () => { cancelled = true; };
-    }, [spaceId, setNodes, setConnectors, setComments]);
+        updateSelection(selectedNodeIds);
+    }, [selectedNodeIds, updateSelection]);
 
     const isCanvasBackground = (e) =>
         !e.target?.closest?.('.whiteboard-node-wrapper') && !e.target?.closest?.('.whiteboard-viewport-controls');
@@ -298,7 +301,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                 default:
                     break;
             }
-            state.patchNode(nodeId, { x, y, width: w, height: h });
+            collabPatchNode(nodeId, { x, y, width: w, height: h });
         };
         const onUp = () => setResizeState(null);
         window.addEventListener('pointermove', onMove);
@@ -307,7 +310,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
         };
-    }, [resizeState]);
+    }, [resizeState, collabPatchNode]);
 
     const handleNodePointerDown = useCallback(
         (e, nodeId) => {
@@ -320,16 +323,21 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                         return;
                     }
                     const connId = uuidv4();
-                    (async () => {
-                        const res = await insertConnector(spaceId, {
-                            id: connId,
-                            fromNodeId: connectorFromNodeId,
-                            toNodeId: nodeId,
-                            controlPoints: [],
-                            style: {},
-                        });
-                        if (res.success) addConnector({ id: connId, fromNodeId: connectorFromNodeId, toNodeId: nodeId, controlPoints: [], style: {} });
-                    })();
+                    const conn = {
+                        id: connId,
+                        fromNodeId: connectorFromNodeId,
+                        toNodeId: nodeId,
+                        controlPoints: [],
+                        style: {},
+                    };
+                    if (collabConnected) {
+                        collabCreateConnector(conn);
+                    } else {
+                        (async () => {
+                            const res = await insertConnector(spaceId, conn);
+                            if (res.success) addConnector(conn);
+                        })();
+                    }
                     setConnectorFromNodeId(null);
                 } else {
                     setConnectorFromNodeId(nodeId);
@@ -345,7 +353,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                 startScreen: { x: e.clientX, y: e.clientY },
             };
         },
-        [viewportForChildren, activeTool, connectorFromNodeId, setConnectorFromNodeId, spaceId, addConnector]
+        [viewportForChildren, activeTool, connectorFromNodeId, setConnectorFromNodeId, spaceId, addConnector, collabConnected, collabCreateConnector]
     );
 
     useEffect(() => {
@@ -358,14 +366,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
             const dx = curWorld.x - ref.startWorld.x;
             const dy = curWorld.y - ref.startWorld.y;
             ref.startWorld = curWorld;
-            const { patchNodes } = useWhiteboardStore.getState();
             const state = useWhiteboardStore.getState();
             const ids = state.selectedNodeIds.includes(ref.nodeId) ? state.selectedNodeIds : [ref.nodeId];
             const patches = ids.map((id) => {
                 const n = state.nodes.find((node) => node.id === id);
                 return n ? { id, patch: { x: n.x + dx, y: n.y + dy } } : null;
             }).filter(Boolean);
-            if (patches.length) patchNodes(patches);
+            if (patches.length) collabPatchNodes(patches);
         };
         const onUp = () => {
             const ref = nodeDragRef.current;
@@ -385,7 +392,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                     const h = node.height ?? 0;
                     const inside = px >= 0 && py >= 0 && px + w <= pw && py + h <= ph;
                     if (!inside) {
-                        useWhiteboardStore.getState().patchNode(id, {
+                        collabPatchNode(id, {
                             parentId: null,
                             x: parent.x + px,
                             y: parent.y + py,
@@ -401,7 +408,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
         };
-    }, []);
+    }, [collabPatchNode, collabPatchNodes]);
 
     const handleDoubleClick = useCallback(
         async (e) => {
@@ -498,8 +505,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
             } else {
                 viewportState.handleMouseMove(e);
             }
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (rect && viewportRef.current && isCanvasBackground(e)) {
+                const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
+                updateCursor({ x: world.x, y: world.y });
+            }
         },
-        [selectionBox, viewportState]
+        [selectionBox, viewportState, updateCursor]
     );
 
     const handleContextMenu = useCallback(
@@ -565,7 +577,6 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
             }
             const files = e.dataTransfer.files;
             if (!files?.length) return;
-            setSuppressRealtimeUntil(2000);
             const nodes = useWhiteboardStore.getState().nodes;
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
@@ -591,8 +602,12 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                             payload.x = wx - container.x;
                             payload.y = wy - container.y;
                         }
-                        const res = await insertNode(spaceId, payload, user?.id);
-                        if (res.success) addNode(payload);
+                        if (collabConnected) {
+                            collabCreateNode({ ...payload, createdBy: user?.id ?? null });
+                        } else {
+                            const res = await insertNode(spaceId, payload, user?.id);
+                            if (res.success) addNode(payload);
+                        }
                     }
                 } else {
                     const result = await uploadSpaceAsset(spaceId, file, user?.id);
@@ -605,19 +620,22 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                             payload.x = wx - container.x;
                             payload.y = wy - container.y;
                         }
-                        const res = await insertNode(spaceId, payload, user?.id);
-                        if (res.success) addNode(payload);
+                        if (collabConnected) {
+                            collabCreateNode({ ...payload, createdBy: user?.id ?? null });
+                        } else {
+                            const res = await insertNode(spaceId, payload, user?.id);
+                            if (res.success) addNode(payload);
+                        }
                     }
                 }
             }
         },
-        [viewportForChildren, spaceId, user?.id, createNodeAt, addNode, setSuppressRealtimeUntil]
+        [viewportForChildren, spaceId, user?.id, createNodeAt, addNode, collabCreateNode, collabConnected]
     );
 
     return (
         <>
-            <RealtimeSync spaceId={spaceId} />
-            <Autosave />
+            <CollabSync spaceId={spaceId} />
             <div className="whiteboard-editor-layout">
                 <div
                     className={`whiteboard-viewport ${viewportState.isPanning ? 'panning' : ''} ${isSpacePressed ? 'space-pressed' : ''} ${!gridVisible ? 'grid-hidden' : ''}`}
@@ -646,6 +664,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                     </div>
                 </div>
                 <SelectionManager selectionBox={selectionBox} />
+                <PresenceLayer viewport={viewportForChildren} />
                 <div className="whiteboard-viewport-controls" onMouseDown={(e) => e.stopPropagation()}>
                     <button
                         type="button"

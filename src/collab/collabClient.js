@@ -1,0 +1,92 @@
+import { io } from 'socket.io-client';
+import { CLIENT_EVENTS, SERVER_EVENTS } from '@dailyways/collab-protocol';
+import { getCollabServerUrl } from './collabConfig.js';
+
+let socketInstance = null;
+
+export function getCollabSocket() {
+  return socketInstance;
+}
+
+export function connectCollabSocket(token) {
+  const url = getCollabServerUrl();
+  if (!url || !token) return null;
+
+  if (socketInstance?.connected) {
+    socketInstance.auth = { token };
+    return socketInstance;
+  }
+
+  if (socketInstance) {
+    socketInstance.disconnect();
+    socketInstance = null;
+  }
+
+  socketInstance = io(url, {
+    auth: { token },
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 500,
+    reconnectionDelayMax: 5000,
+  });
+
+  return socketInstance;
+}
+
+export function disconnectCollabSocket() {
+  if (socketInstance) {
+    socketInstance.disconnect();
+    socketInstance = null;
+  }
+}
+
+export function joinRoom(socket, payload) {
+  return new Promise((resolve, reject) => {
+    if (!socket?.connected) {
+      reject(new Error('Socket not connected'));
+      return;
+    }
+    socket.emit(CLIENT_EVENTS.JOIN, payload, (res) => {
+      if (res?.ok) resolve(res);
+      else reject(new Error(res?.error || 'Join failed'));
+    });
+  });
+}
+
+export function joinSpaceRoom(socket, spaceId) {
+  return joinRoom(socket, { spaceId });
+}
+
+export function joinBoardRoom(socket, boardId) {
+  return joinRoom(socket, { boardId });
+}
+
+export function leaveRoom(socket) {
+  if (socket?.connected) {
+    socket.emit(CLIENT_EVENTS.LEAVE);
+  }
+}
+
+export const leaveSpaceRoom = leaveRoom;
+
+export function submitOp(socket, op) {
+  return new Promise((resolve, reject) => {
+    if (!socket?.connected) {
+      reject(new Error('Socket not connected'));
+      return;
+    }
+    socket.emit(CLIENT_EVENTS.OP, op, (res) => {
+      if (res?.ok) resolve(res);
+      else reject(new Error(res?.error || 'Op rejected'));
+    });
+  });
+}
+
+export function emitPresence(socket, payload) {
+  if (socket?.connected) {
+    socket.emit(CLIENT_EVENTS.PRESENCE, payload);
+  }
+}
+
+export { CLIENT_EVENTS, SERVER_EVENTS };

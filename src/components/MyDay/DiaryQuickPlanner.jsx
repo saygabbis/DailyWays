@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
 import { Plus } from 'lucide-react';
 import { endOfWeek, endOfMonth, endOfYear } from 'date-fns';
 import SmartTaskItem from '../SmartViews/SmartTaskItem';
@@ -20,7 +21,8 @@ const CHARGES = [
 ];
 
 export default function DiaryQuickPlanner({ onCardClick }) {
-    const { state, getMyDayCards, getActiveBoard, dispatch, persistBoard } = useApp();
+    const { state, getMyDayCards, getActiveBoard } = useApp();
+    const { collabDispatch } = useBoardCollabDispatch();
 
     const boards = state.boards || [];
     const activeBoard = getActiveBoard();
@@ -109,7 +111,7 @@ export default function DiaryQuickPlanner({ onCardClick }) {
             ? numericTime * (timeUnit === 'h' ? 60 : 1)
             : null;
 
-        dispatch({
+        collabDispatch({
             type: 'ADD_CARD',
             payload: {
                 boardId: selectedBoardId,
@@ -126,7 +128,6 @@ export default function DiaryQuickPlanner({ onCardClick }) {
                 },
             },
         });
-        persistBoard(selectedBoardId);
         setTitle('');
         setTimeValue('');
     };

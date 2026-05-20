@@ -1,0 +1,229 @@
+function newId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/**
+ * Applies a single AppContext-style board action to one board object (immutable).
+ */
+export function applyBoardAction(board, action) {
+  if (!board || !action?.type) return board;
+
+  switch (action.type) {
+    case 'UPDATE_BOARD':
+      if (board.id !== action.payload?.id) return board;
+      return { ...board, ...action.payload.updates };
+
+    case 'ADD_LIST': {
+      if (board.id !== action.payload?.boardId) return board;
+      const newList = {
+        id: action.payload.id || newId(),
+        title: action.payload.title || 'Nova Lista',
+        color: null,
+        isCompletionList: false,
+        cards: [],
+      };
+      return { ...board, lists: [...board.lists, newList] };
+    }
+
+    case 'UPDATE_LIST':
+      if (board.id !== action.payload?.boardId) return board;
+      return {
+        ...board,
+        lists: board.lists.map((l) =>
+          l.id === action.payload.listId ? { ...l, ...action.payload.updates } : l
+        ),
+      };
+
+    case 'DELETE_LIST':
+      if (board.id !== action.payload?.boardId) return board;
+      return {
+        ...board,
+        lists: board.lists.filter((l) => l.id !== action.payload.listId),
+      };
+
+    case 'MOVE_LIST': {
+      const { boardId, sourceIndex, destIndex } = action.payload || {};
+      if (board.id !== boardId) return board;
+      const newLists = [...board.lists];
+      const [moved] = newLists.splice(sourceIndex, 1);
+      if (!moved) return board;
+      newLists.splice(destIndex, 0, moved);
+      return { ...board, lists: newLists };
+    }
+
+    case 'ADD_CARD': {
+      const { boardId, listId, title, cardData } = action.payload || {};
+      if (board.id !== boardId) return board;
+      const now = new Date().toISOString();
+      const newCard = {
+        id: cardData?.id || newId(),
+        title: title || 'Nova Tarefa',
+        description: '',
+        labels: [],
+        priority: 'none',
+        dueDate: null,
+        startDate: null,
+        isAllDay: true,
+        recurrenceRule: null,
+        coverAttachmentId: null,
+        myDay: false,
+        subtasks: [],
+        createdAt: now,
+        updatedAt: now,
+        ...cardData,
+      };
+      return {
+        ...board,
+        lists: board.lists.map((l) =>
+          l.id === listId ? { ...l, cards: [...l.cards, newCard] } : l
+        ),
+      };
+    }
+
+    case 'UPDATE_CARD': {
+      const { boardId, listId, cardId, updates } = action.payload || {};
+      if (board.id !== boardId) return board;
+      return {
+        ...board,
+        lists: board.lists.map((l) =>
+          l.id === listId
+            ? {
+                ...l,
+                cards: l.cards.map((c) =>
+                  c.id === cardId ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c
+                ),
+              }
+            : l
+        ),
+      };
+    }
+
+    case 'DELETE_CARD': {
+      const { boardId, listId, cardId } = action.payload || {};
+      if (board.id !== boardId) return board;
+      return {
+        ...board,
+        lists: board.lists.map((l) =>
+          l.id === listId ? { ...l, cards: l.cards.filter((c) => c.id !== cardId) } : l
+        ),
+      };
+    }
+
+    case 'MOVE_CARD': {
+      const { boardId, sourceListId, destListId, sourceIndex, destIndex } = action.payload || {};
+      if (board.id !== boardId) return board;
+      const newLists = board.lists.map((l) => ({ ...l, cards: [...l.cards] }));
+      const sourceList = newLists.find((l) => l.id === sourceListId);
+      const destList = newLists.find((l) => l.id === destListId);
+      if (!sourceList || !destList) return board;
+      const [movedCard] = sourceList.cards.splice(sourceIndex, 1);
+      if (!movedCard) return board;
+      destList.cards.splice(destIndex, 0, movedCard);
+      return { ...board, lists: newLists };
+    }
+
+    case 'TOGGLE_SUBTASK': {
+      const { boardId, listId, cardId, subtaskId } = action.payload || {};
+      if (board.id !== boardId) return board;
+      return {
+        ...board,
+        lists: board.lists.map((l) =>
+          l.id === listId
+            ? {
+                ...l,
+                cards: l.cards.map((c) =>
+                  c.id === cardId
+                    ? {
+                        ...c,
+                        subtasks: c.subtasks.map((st) =>
+                          st.id === subtaskId ? { ...st, done: !st.done } : st
+                        ),
+                      }
+                    : c
+                ),
+              }
+            : l
+        ),
+      };
+    }
+
+    case 'ADD_SUBTASK': {
+      const { boardId, listId, cardId, title, subtaskId } = action.payload || {};
+      if (board.id !== boardId) return board;
+      const newSubtask = {
+        id: subtaskId || newId(),
+        title,
+        done: false,
+        position: Date.now(),
+        linkUrl: null,
+        linkLabel: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      return {
+        ...board,
+        lists: board.lists.map((l) =>
+          l.id === listId
+            ? {
+                ...l,
+                cards: l.cards.map((c) =>
+                  c.id === cardId ? { ...c, subtasks: [...c.subtasks, newSubtask] } : c
+                ),
+              }
+            : l
+        ),
+      };
+    }
+
+    case 'UPDATE_SUBTASK': {
+      const { boardId, listId, cardId, subtaskId, updates } = action.payload || {};
+      if (board.id !== boardId) return board;
+      return {
+        ...board,
+        lists: board.lists.map((l) =>
+          l.id === listId
+            ? {
+                ...l,
+                cards: l.cards.map((c) =>
+                  c.id === cardId
+                    ? {
+                        ...c,
+                        subtasks: c.subtasks.map((st) =>
+                          st.id === subtaskId ? { ...st, ...updates } : st
+                        ),
+                      }
+                    : c
+                ),
+              }
+            : l
+        ),
+      };
+    }
+
+    case 'DELETE_SUBTASK': {
+      const { boardId, listId, cardId, subtaskId } = action.payload || {};
+      if (board.id !== boardId) return board;
+      return {
+        ...board,
+        lists: board.lists.map((l) =>
+          l.id === listId
+            ? {
+                ...l,
+                cards: l.cards.map((c) =>
+                  c.id === cardId
+                    ? { ...c, subtasks: c.subtasks.filter((st) => st.id !== subtaskId) }
+                    : c
+                ),
+              }
+            : l
+        ),
+      };
+    }
+
+    default:
+      return board;
+  }
+}

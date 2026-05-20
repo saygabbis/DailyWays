@@ -7,7 +7,17 @@ import ListDetailsModal from './ListDetailsModal';
 import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import { Plus, Loader2, X, GripVertical, Share2 } from 'lucide-react';
 import { fetchBoardMembers, sortBoardMembersOwnerFirst } from '../../services/boardService';
-import { useBoardPresence } from '../../hooks/useBoardPresence';
+import { useBoardEditorsFromCollab } from '../../hooks/useBoardEditorsFromCollab';
+import BoardCollabSync from '../../collab/BoardCollabSync.jsx';
+import BoardCollabStatusBanner from '../../collab/BoardCollabStatusBanner.jsx';
+import CollabPresenceLayer from '../../collab/CollabPresenceLayer.jsx';
+import RemoteDragLayer from '../../collab/RemoteDragLayer.jsx';
+import PresenceOnlineList from '../../collab/PresenceOnlineList.jsx';
+import { setLastBoardPointer } from '../../collab/lastBoardPointer.js';
+import { useBoardPresenceHighlights } from '../../hooks/useBoardPresenceHighlights';
+import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
+import { useCollabPresence } from '../../collab/useCollabPresence.js';
+import { uuidv4 } from '../../utils/uuid';
 import './Board.css';
 
 /** Zona do menu de perfil (viewport): padding horizontal + respiro por baixo do dropdown (como na zona vermelha). */
@@ -63,7 +73,7 @@ function rectsIntersect(a, b) {
 }
 
 function BoardView({ onCardClick }, ref) {
-    const { state, getActiveBoard, dispatch, persistBoard, isSavingBoard, showBoardToolbar, profileMenuOpen } = useApp();
+    const { state, getActiveBoard, dispatch, isSavingBoard, showBoardToolbar, profileMenuOpen } = useApp();
     const { user } = useAuth();
     const [addingList, setAddingList] = useState(false);
     const [newListTitle, setNewListTitle] = useState('');
@@ -99,7 +109,18 @@ function BoardView({ onCardClick }, ref) {
     }, []);
 
     const board = getActiveBoard();
-    const { editorsByCardId } = useBoardPresence(board?.id);
+    const { editorsByCardId } = useBoardEditorsFromCollab();
+    const { collabDispatch, connected: collabConnected } = useBoardCollabDispatch(board?.id);
+    const {
+        updateCursor: updateBoardCursor,
+        setHoverTarget,
+        clearHoverTarget,
+    } = useCollabPresence(board?.id, { mode: 'screen' });
+    const { hoverByCardId, hoverByListId, remoteDrags } = useBoardPresenceHighlights();
+    const remoteDraggingCardIds = useMemo(
+        () => new Set(remoteDrags.map((d) => d.cardId)),
+        [remoteDrags],
+    );
 
     // Board partilhado: mostrar toolbar por defeito (o utilizador pode fechar; persistimos por board)
     useEffect(() => {
@@ -196,24 +217,27 @@ function BoardView({ onCardClick }, ref) {
         }
     };
 
-    const handleDragEnd = (result) => {
-        const { source, destination, type } = result;
+    const handleDragEnd = useCallback((result) => {
+        const b = getActiveBoard();
+        if (!b) return;
+
+        const { source, destination, type, draggableId } = result;
         if (!destination) return;
         if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
         // Handle List Reordering
         if (type === 'list') {
-            const movedListId = board.lists[source.index]?.id;
-            dispatch({
+            const movedListId = b.lists[source.index]?.id;
+            collabDispatch({
                 type: 'MOVE_LIST',
                 payload: {
-                    boardId: board.id,
+                    boardId: b.id,
+                    listId: movedListId,
                     sourceIndex: source.index,
                     destIndex: destination.index,
                     userId: state.user?.id
                 }
             });
-            persistBoard(board.id);
             // Anima a lista que foi solta
             if (movedListId) {
                 setDroppedListId(movedListId);
@@ -222,29 +246,37 @@ function BoardView({ onCardClick }, ref) {
             return;
         }
 
-        // Handle Card Movement
-        const sourceList = board.lists.find(l => l.id === source.droppableId);
-        const destList = board.lists.find(l => l.id === destination.droppableId);
-        const movedCard = sourceList?.cards[source.index];
+        // Handle Card Movement (use draggableId — indices break when list is filtered)
+        const sourceList = b.lists.find(l => l.id === source.droppableId);
+        const destList = b.lists.find(l => l.id === destination.droppableId);
+        if (!sourceList || !destList) return;
 
-        dispatch({
+        const cardId = draggableId;
+        const sourceIndex = sourceList.cards.findIndex((c) => c.id === cardId);
+        if (sourceIndex < 0) return;
+
+        const movedCard = sourceList.cards[sourceIndex];
+        const destIndex = destination.index;
+
+        collabDispatch({
             type: 'MOVE_CARD',
             payload: {
-                boardId: board.id,
+                boardId: b.id,
+                cardId: movedCard.id,
                 sourceListId: source.droppableId,
                 destListId: destination.droppableId,
-                sourceIndex: source.index,
-                destIndex: destination.index,
+                sourceIndex,
+                destIndex,
             },
         });
 
         if (destList?.isCompletionList && movedCard) {
             const allSubtasksDone = movedCard.subtasks?.every(st => st.done);
             if (!movedCard.completed || !allSubtasksDone) {
-                dispatch({
+                collabDispatch({
                     type: 'UPDATE_CARD',
                     payload: {
-                        boardId: board.id,
+                        boardId: b.id,
                         listId: destination.droppableId,
                         cardId: movedCard.id,
                         updates: {
@@ -256,31 +288,26 @@ function BoardView({ onCardClick }, ref) {
             }
         }
 
-        // Persistir mudança estrutural imediatamente
-        persistBoard(board.id);
-    };
+    }, [getActiveBoard, collabDispatch, state.user?.id]);
 
     // Expose handleDragEnd so the parent App can call it from a unified DragDropContext
     useImperativeHandle(ref, () => ({
         handleDragEnd,
-    }));
+    }), [handleDragEnd]);
 
     const handleSaveListDetails = (updates) => {
         if (!listDetails) return;
-        dispatch({ type: 'UPDATE_LIST', payload: { boardId: board.id, listId: listDetails.id, updates } });
-        persistBoard(board.id);
+        collabDispatch({ type: 'UPDATE_LIST', payload: { boardId: board.id, listId: listDetails.id, updates } });
         setListDetails(null);
     };
 
     const handleAddList = async (e) => {
         e.preventDefault();
         if (!newListTitle.trim()) return;
-        dispatch({ type: 'ADD_LIST', payload: { boardId: board.id, title: newListTitle } });
+        collabDispatch({ type: 'ADD_LIST', payload: { boardId: board.id, title: newListTitle, id: uuidv4() } });
         setNewListTitle('');
         setAddingList(false);
 
-        // Persistir mudança estrutural imediatamente
-        persistBoard(board.id);
     };
 
     // Draggable Logic
@@ -418,8 +445,44 @@ function BoardView({ onCardClick }, ref) {
         );
     }
 
+    const handleBoardPointerMove = useCallback((e) => {
+        const el = scrollerRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const x = e.clientX - rect.left + el.scrollLeft;
+        const y = e.clientY - rect.top + el.scrollTop;
+        const cursorScreen = { x: e.clientX, y: e.clientY };
+        if (board?.id) {
+            setLastBoardPointer(board.id, { x, y, cursorScreen });
+        }
+        updateBoardCursor({
+            x,
+            y,
+            cursorScreen,
+        });
+    }, [updateBoardCursor, board?.id]);
+
+    const handleCardHover = useCallback((cardId) => {
+        setHoverTarget({ cardId, listId: null });
+    }, [setHoverTarget]);
+
+    const handleListHover = useCallback((listId) => {
+        setHoverTarget({ listId, cardId: null });
+    }, [setHoverTarget]);
+
+    const handlePresenceHoverEnd = useCallback(() => {
+        clearHoverTarget();
+    }, [clearHoverTarget]);
+
     return (
-        <div className="board-view" ref={containerRef}>
+        <div
+            className="board-view"
+            ref={containerRef}
+            onPointerMove={handleBoardPointerMove}
+            onPointerLeave={() => updateBoardCursor(null)}
+        >
+            {board?.id && <BoardCollabSync boardId={board.id} />}
+            <BoardCollabStatusBanner />
             {/* Board Toolbar - Floating & Draggable */}
             {showBoardToolbar && (
                 <div
@@ -444,6 +507,11 @@ function BoardView({ onCardClick }, ref) {
                             <span className="board-saving-indicator" title="Salvando alterações no servidor...">
                                 <Loader2 size={13} className="spinning" />
                             </span>
+                        </div>
+                    )}
+                    {collabConnected && (
+                        <div className="board-toolbar-section board-toolbar-live">
+                            <PresenceOnlineList />
                         </div>
                     )}
                     {showBoardToolbar && (
@@ -546,6 +614,7 @@ function BoardView({ onCardClick }, ref) {
             <div
                 className={`board-scroller ${isPanning ? 'is-panning' : ''}`}
                 ref={scrollerRef}
+                onPointerMove={handleBoardPointerMove}
                 onPointerDown={handlePanPointerDown}
                 onContextMenu={handleContextMenu}
             >
@@ -584,6 +653,12 @@ function BoardView({ onCardClick }, ref) {
                                                                 boardId={board.id}
                                                                 onCardClick={onCardClick}
                                                                 editingByCardId={editorsByCardId}
+                                                                hoverByCardId={hoverByCardId}
+                                                                hoverByListId={hoverByListId}
+                                                                remoteDraggingCardIds={remoteDraggingCardIds}
+                                                                onCardHover={handleCardHover}
+                                                                onListHover={handleListHover}
+                                                                onPresenceHoverEnd={handlePresenceHoverEnd}
                                                                 index={index}
                                                                 onOpenListDetails={setListDetails}
                                                                 dragHandleProps={provided.dragHandleProps}
@@ -629,9 +704,10 @@ function BoardView({ onCardClick }, ref) {
                             </div>
                         )}
                     </Droppable>
+                    <CollabPresenceLayer mode="screen" />
+                    <RemoteDragLayer boardId={board.id} />
                 </>
             </div>
-
 
             {listDetails && (
                 <ListDetailsModal

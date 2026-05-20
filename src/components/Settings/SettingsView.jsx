@@ -18,6 +18,7 @@ import logoWhite from '../../assets/Logo - Branco.png';
 import logoBlack from '../../assets/Logo - Preto.png';
 import CustomAccentPopover from './CustomAccentPopover';
 import { CUSTOM_ACCENT_ID } from '../../context/ThemeContext';
+import { PRESENCE_COLOR_PRESETS } from '../../utils/presenceColor';
 import './Settings.css';
 import './AvatarCropper.css';
 const AvatarCropper = lazy(() => import('./AvatarCropper'));
@@ -378,7 +379,20 @@ const SecurityPanel = memo(function SecurityPanel({ user, getLinkedIdentities, l
 // ─────────────────────────────────────────────
 const ITEMS_PER_PAGE = 10; // 2 rows × 5 columns
 
-const AppearancePanel = memo(function AppearancePanel({ theme, toggleTheme, setTheme, THEME_PRESETS, accentId, setAccent, ACCENT_PRESETS, customAccentValue, setCustomAccent, fontId, setFont, FONT_PRESETS, animStyle, setAnimStyle, t }) {
+const AppearancePanel = memo(function AppearancePanel({
+    theme, toggleTheme, setTheme, THEME_PRESETS, accentId, setAccent, ACCENT_PRESETS,
+    customAccentValue, setCustomAccent, fontId, setFont, FONT_PRESETS, animStyle, setAnimStyle,
+    user, updateProfile, t,
+}) {
+    const [presenceAuto, setPresenceAuto] = useState(user?.presence_color_auto !== false);
+    const [presenceColor, setPresenceColor] = useState(
+        user?.presence_color || PRESENCE_COLOR_PRESETS[0]
+    );
+
+    useEffect(() => {
+        setPresenceAuto(user?.presence_color_auto !== false);
+        setPresenceColor(user?.presence_color || PRESENCE_COLOR_PRESETS[0]);
+    }, [user?.presence_color, user?.presence_color_auto]);
     const accentItemsWithCustom = useMemo(() => [...ACCENT_PRESETS, { id: CUSTOM_ACCENT_ID, isCustom: true }], [ACCENT_PRESETS]);
     const [zoom, setZoom] = useState(() => {
         const stored = localStorage.getItem('dailyways_zoom');
@@ -540,6 +554,58 @@ const AppearancePanel = memo(function AppearancePanel({ theme, toggleTheme, setT
                         onApply={(v) => { setCustomAccent(v); }}
                         onClose={() => setCustomPopoverOpen(false)}
                     />
+                )}
+            </div>
+
+            {/* Collab presence color */}
+            <div className="settings-section">
+                <h3 className="settings-section-title">Cor de presença</h3>
+                <p className="settings-section-desc">
+                    Cursor e destaque em boards partilhados. Automático usa a foto de perfil.
+                </p>
+                <label className="settings-presence-auto-row">
+                    <span>Automático (da foto)</span>
+                    <input
+                        type="checkbox"
+                        checked={presenceAuto}
+                        onChange={async (e) => {
+                            const auto = e.target.checked;
+                            setPresenceAuto(auto);
+                            await updateProfile({
+                                presence_color_auto: auto,
+                                presence_color: auto ? null : presenceColor,
+                            });
+                        }}
+                    />
+                </label>
+                {!presenceAuto && (
+                    <div className="settings-presence-colors">
+                        {PRESENCE_COLOR_PRESETS.map((c) => (
+                            <button
+                                key={c}
+                                type="button"
+                                className={`settings-presence-swatch ${presenceColor === c ? 'active' : ''}`}
+                                style={{ background: c }}
+                                title={c}
+                                onClick={async () => {
+                                    setPresenceColor(c);
+                                    await updateProfile({ presence_color: c, presence_color_auto: false });
+                                }}
+                            />
+                        ))}
+                        <input
+                            type="color"
+                            className="settings-presence-picker"
+                            value={presenceColor}
+                            onChange={async (e) => {
+                                setPresenceColor(e.target.value);
+                                await updateProfile({
+                                    presence_color: e.target.value,
+                                    presence_color_auto: false,
+                                });
+                            }}
+                        />
+                    </div>
                 )}
             </div>
 
@@ -864,6 +930,8 @@ export default function SettingsModal({ onClose, initialTab = 'account' }) {
                                 customAccentValue={customAccentValue} setCustomAccent={setCustomAccent}
                                 fontId={fontId} setFont={setFont} FONT_PRESETS={FONT_PRESETS}
                                 animStyle={animStyle} setAnimStyle={setAnimStyle}
+                                user={user}
+                                updateProfile={updateProfile}
                                 t={t}
                             />
                         )}

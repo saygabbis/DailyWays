@@ -1,4 +1,5 @@
 import { useApp } from '../../context/AppContext';
+import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
 import { CalendarDays, AlertTriangle, Sun } from 'lucide-react';
 import { format, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -8,10 +9,12 @@ import {
     parseCardDate,
 } from '../../utils/cardDateTime';
 import SmartTaskItem from './SmartTaskItem';
+import { updatesToggleImportant } from '../../utils/cardImportant';
 import './SmartViews.css';
 
 export default function PlannedView({ onCardClick }) {
-    const { getPlannedCards, dispatch, persistBoard } = useApp();
+    const { getPlannedCards } = useApp();
+    const { collabDispatch } = useBoardCollabDispatch();
     const cards = getPlannedCards()
         .filter(card => parseCardDate(card.dueDate))
         .sort((a, b) => parseCardDate(a.dueDate) - parseCardDate(b.dueDate));
@@ -24,7 +27,7 @@ export default function PlannedView({ onCardClick }) {
     const laterCards = cards.filter(c => getCardTemporalBucket(c) === 'later');
 
     const toggleMyDay = (card) => {
-        dispatch({
+        collabDispatch({
             type: 'UPDATE_CARD',
             payload: {
                 boardId: card.boardId,
@@ -33,20 +36,30 @@ export default function PlannedView({ onCardClick }) {
                 updates: { myDay: !card.myDay },
             },
         });
-        persistBoard(card.boardId);
     };
 
     const toggleImportant = (card) => {
-        dispatch({
+        collabDispatch({
             type: 'UPDATE_CARD',
             payload: {
                 boardId: card.boardId,
                 listId: card.listId,
                 cardId: card.id,
-                updates: { important: !card.important },
+                updates: updatesToggleImportant(card),
             },
         });
-        persistBoard(card.boardId);
+    };
+
+    const removeFromPlanned = (card) => {
+        collabDispatch({
+            type: 'UPDATE_CARD',
+            payload: {
+                boardId: card.boardId,
+                listId: card.listId,
+                cardId: card.id,
+                updates: { dueDate: null, startDate: null, myDay: false },
+            },
+        });
     };
 
     const groups = [
@@ -139,6 +152,7 @@ export default function PlannedView({ onCardClick }) {
                                             onClick={() => onCardClick(card, card.boardId, card.listId)}
                                             onToggleMyDay={() => toggleMyDay(card)}
                                             onToggleImportant={() => toggleImportant(card)}
+                                            onRemoveFromPlanned={removeFromPlanned}
                                             showLocation={true}
                                         />
                                     </div>

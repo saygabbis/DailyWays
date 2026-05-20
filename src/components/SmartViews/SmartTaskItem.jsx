@@ -1,18 +1,23 @@
 import { useApp } from '../../context/AppContext';
+import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
 import {
-    Calendar, Star, Sun, CheckCircle2, Circle, AlertCircle,
-    ArrowRight, CheckSquare, Clock
+    Calendar, Star, Sun, CheckCircle2, Circle,
+    ArrowRight, CheckSquare, CalendarOff,
 } from 'lucide-react';
+import { isCardImportant } from '../../utils/cardImportant';
 import { format, isPast, isToday, isTomorrow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import './SmartTaskItem.css';
 
-export default function SmartTaskItem({ card, board, list, onClick, onToggleMyDay, onToggleImportant, showLocation = true }) {
-    const { dispatch, LABEL_COLORS, persistBoard } = useApp();
+export default function SmartTaskItem({
+    card, board, list, onClick, onToggleMyDay, onToggleImportant, onRemoveFromPlanned, showLocation = true,
+}) {
+    const { LABEL_COLORS } = useApp();
+    const { collabDispatch } = useBoardCollabDispatch(board.id);
 
     const handleToggleComplete = (e) => {
         e.stopPropagation();
-        dispatch({
+        collabDispatch({
             type: 'UPDATE_CARD',
             payload: {
                 boardId: board.id,
@@ -21,7 +26,6 @@ export default function SmartTaskItem({ card, board, list, onClick, onToggleMyDa
                 updates: { completed: !card.completed }
             }
         });
-        persistBoard(board.id);
     };
 
     const priorityColor = {
@@ -105,11 +109,20 @@ export default function SmartTaskItem({ card, board, list, onClick, onToggleMyDa
                 )}
                 {onToggleImportant && (
                     <button
-                        className={`smart-task-action-btn ${card.important ? 'active-star' : ''}`}
+                        className={`smart-task-action-btn ${isCardImportant(card) ? 'active-star' : ''}`}
                         onClick={(e) => { e.stopPropagation(); onToggleImportant(card); }}
-                        title={card.important ? 'Remover importância' : 'Marcar como importante'}
+                        title={isCardImportant(card) ? 'Remover importância' : 'Marcar como importante'}
                     >
-                        <Star size={16} fill={card.important ? 'currentColor' : 'none'} />
+                        <Star size={16} fill={isCardImportant(card) ? 'currentColor' : 'none'} />
+                    </button>
+                )}
+                {onRemoveFromPlanned && (
+                    <button
+                        className="smart-task-action-btn"
+                        onClick={(e) => { e.stopPropagation(); onRemoveFromPlanned(card); }}
+                        title="Remover do Planejado (limpa data)"
+                    >
+                        <CalendarOff size={16} />
                     </button>
                 )}
             </div>

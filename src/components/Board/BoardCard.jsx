@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useRemoteCardAnim } from '../../hooks/useBoardRemoteAnim';
 import { useApp } from '../../context/AppContext';
+import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
 import { useContextMenu, useLongPress } from '../Common/ContextMenu';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { Calendar, CheckSquare, AlertCircle, Sun, Edit3, Trash2, Star, Tag, Copy, ArrowRight, Circle, CheckCircle2, MoreHorizontal, FileText } from 'lucide-react';
@@ -7,14 +9,27 @@ import { formatCardDateTime, isCardDueToday, isCardOverdue } from '../../utils/c
 import { uuidv4 } from '../../utils/uuid';
 import { useCardCoverImage } from '../../hooks/useCardCoverImage';
 
-export default function BoardCard({ card, boardId, listId, listColor, isDragging, onClick, editingEditors = [] }) {
-    const { LABEL_COLORS, dispatch, persistBoard, showConfirm } = useApp();
+export default function BoardCard({
+    card,
+    boardId,
+    listId,
+    listColor,
+    isDragging,
+    isRemoteDragging,
+    onClick,
+    editingEditors = [],
+    hoverPeers = [],
+    onHoverStart,
+    onHoverEnd,
+}) {
+    const { LABEL_COLORS, showConfirm } = useApp();
+    const { collabDispatch } = useBoardCollabDispatch(boardId);
     const { showContextMenu } = useContextMenu();
     const isCompleted = card.completed || false;
 
     const handleToggleComplete = (e) => {
         e.stopPropagation();
-        dispatch({
+        collabDispatch({
             type: 'UPDATE_CARD',
             payload: { boardId, listId, cardId: card.id, updates: { completed: !isCompleted } },
         });
@@ -37,8 +52,10 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
     const hasDescription = Boolean(card.description && card.description.trim().length > 0);
     const effectiveColor = card.color === '__glass__' ? (listColor || null) : card.color || null;
     const primaryEditor = editingEditors?.[0] || null;
-    const presenceColor = primaryEditor?.color || 'var(--accent-primary)';
+    const hoverPeer = hoverPeers?.[0] || null;
+    const presenceColor = primaryEditor?.color || hoverPeer?.color || 'var(--accent-primary)';
     const isBeingEdited = Array.isArray(editingEditors) && editingEditors.length > 0;
+    const isRemoteHover = !isBeingEdited && Boolean(hoverPeer);
     const coverUrl = useCardCoverImage(card.id, card.coverAttachmentId);
 
     const getContextMenuItems = () => [
@@ -50,7 +67,7 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
         {
             label: card.myDay ? 'Remover do Meu Dia' : 'Adicionar ao Meu Dia',
             icon: <Sun size={15} />,
-            action: () => dispatch({
+            action: () => collabDispatch({
                 type: 'UPDATE_CARD',
                 payload: { boardId, listId, cardId: card.id, updates: { myDay: !card.myDay } },
             }),
@@ -58,7 +75,7 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
         {
             label: card.priority === 'high' ? 'Remover importância' : 'Marcar como importante',
             icon: <Star size={15} />,
-            action: () => dispatch({
+            action: () => collabDispatch({
                 type: 'UPDATE_CARD',
                 payload: {
                     boardId, listId, cardId: card.id,
@@ -70,7 +87,7 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
         {
             label: 'Duplicar tarefa',
             icon: <Copy size={15} />,
-            action: () => dispatch({
+            action: () => collabDispatch({
                 type: 'ADD_CARD',
                 payload: {
                     boardId, listId,
@@ -112,11 +129,10 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
                     type: 'danger'
                 });
                 if (confirmed) {
-                    dispatch({
+                    collabDispatch({
                         type: 'DELETE_CARD',
                         payload: { boardId, listId, cardId: card.id },
                     });
-                    persistBoard(boardId);
                 }
             },
         },
@@ -133,6 +149,8 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
         if (isDragging) cancelLongPress?.();
     }, [isDragging, cancelLongPress]);
 
+    const remoteAnim = useRemoteCardAnim(card.id);
+
     // Animation auto-cleanup to prevent restart on DND portal remount
     const [shouldAnimate, setShouldAnimate] = useState(true);
     useEffect(() => {
@@ -142,15 +160,24 @@ export default function BoardCard({ card, boardId, listId, listColor, isDragging
         return () => clearTimeout(timer);
     }, []);
 
+    useEffect(() => {
+        if (!remoteAnim) return;
+        setShouldAnimate(true);
+        const timer = setTimeout(() => setShouldAnimate(false), 700);
+        return () => clearTimeout(timer);
+    }, [remoteAnim]);
+
     return (
         <div
-            className={`board-card ${isDragging ? 'board-card-dragging' : ''} ${isCompleted ? 'board-card-done-state' : ''} ${allDone ? 'board-card-all-subtasks-done' : ''} ${isBeingEdited ? 'board-card-presence-active' : ''}`}
+            className={`board-card ${isDragging ? 'board-card-dragging' : ''} ${isRemoteDragging ? 'board-card-remote-drag-source' : ''} ${isCompleted ? 'board-card-done-state' : ''} ${allDone ? 'board-card-all-subtasks-done' : ''} ${isBeingEdited ? 'board-card-presence-active' : ''} ${isRemoteHover ? 'board-card-remote-hover' : ''}`}
             onClick={onClick}
             onContextMenu={handleContextMenu}
+            onMouseEnter={() => onHoverStart?.()}
+            onMouseLeave={() => onHoverEnd?.()}
             {...cardLongPressTouch}
             style={{
               ...(effectiveColor ? { '--card-accent': effectiveColor } : {}),
-              ...(isBeingEdited ? { '--presence-color': presenceColor } : {}),
+              ...((isBeingEdited || isRemoteHover) ? { '--presence-color': presenceColor } : {}),
             }}
             data-colored={effectiveColor ? 'true' : undefined}
         >

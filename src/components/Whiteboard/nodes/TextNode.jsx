@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import BaseNode from './BaseNode';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { useCollabPatch } from '../../../collab/CollabOpsContext.jsx';
 
 export default function TextNode({ node, onNodePointerDown }) {
     const text = node.data?.text ?? 'Text';
-    const { editingNodeId, setEditingNodeId, patchNode } = useWhiteboardStore();
+    const { editingNodeId, setEditingNodeId } = useWhiteboardStore();
+    const { collabPatchNode } = useCollabPatch();
     const isEditing = editingNodeId === node.id;
     const [editValue, setEditValue] = useState(text);
     useEffect(() => {
@@ -12,7 +14,7 @@ export default function TextNode({ node, onNodePointerDown }) {
     }, [isEditing, text]);
 
     const handleBlur = () => {
-        if (editValue !== text) patchNode(node.id, { data: { ...node.data, text: editValue } });
+        if (editValue !== text) collabPatchNode(node.id, { data: { ...node.data, text: editValue } });
         setEditingNodeId(null);
     };
 

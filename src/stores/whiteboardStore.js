@@ -55,6 +55,9 @@ export const useWhiteboardStore = create((set, get) => ({
     history: [],
     historyIndex: -1,
     suppressRealtimeUntil: 0,
+    revision: 0,
+    /** @type {Record<string, { entity: string, snapshot: unknown }>} */
+    pendingOps: {},
 
     setSpaceId: (spaceId) => set({
         spaceId,
@@ -68,6 +71,8 @@ export const useWhiteboardStore = create((set, get) => ({
         dirtyNodeIds: [],
         history: [],
         historyIndex: -1,
+        revision: 0,
+        pendingOps: {},
     }),
 
     setActiveTool: (activeTool) => set({ activeTool }),
@@ -100,27 +105,39 @@ export const useWhiteboardStore = create((set, get) => ({
         nodes: [...state.nodes, node],
     })),
 
-    patchNode: (nodeId, patch) => set((state) => {
+    patchNode: (nodeId, patch, options = {}) => set((state) => {
         const idx = state.nodes.findIndex((n) => n.id === nodeId);
         if (idx < 0) return state;
         const next = [...state.nodes];
         next[idx] = { ...next[idx], ...patch };
+        const markDirty = options.remote !== true;
         return {
             nodes: next,
-            dirtyNodeIds: state.dirtyNodeIds.includes(nodeId)
-                ? state.dirtyNodeIds
-                : [...state.dirtyNodeIds, nodeId],
+            dirtyNodeIds: markDirty && !state.dirtyNodeIds.includes(nodeId)
+                ? [...state.dirtyNodeIds, nodeId]
+                : state.dirtyNodeIds,
         };
     }),
 
-    patchNodes: (patches) => set((state) => {
+    applyRemotePatch: (nodeId, patch) => {
+        get().patchNode(nodeId, patch, { remote: true });
+    },
+
+    patchNodes: (patches, options = {}) => set((state) => {
         const byId = new Map(patches.map((p) => [p.id, p.patch]));
         const next = state.nodes.map((n) =>
             byId.has(n.id) ? { ...n, ...byId.get(n.id) } : n
         );
-        const dirty = [...new Set([...state.dirtyNodeIds, ...patches.map((p) => p.id)])];
+        const markDirty = options.remote !== true;
+        const dirty = markDirty
+            ? [...new Set([...state.dirtyNodeIds, ...patches.map((p) => p.id)])]
+            : state.dirtyNodeIds;
         return { nodes: next, dirtyNodeIds: dirty };
     }),
+
+    applyRemotePatches: (patches) => {
+        get().patchNodes(patches, { remote: true });
+    },
 
     deleteNodes: (ids) => set((state) => {
         const setIds = new Set(ids);
@@ -243,5 +260,91 @@ export const useWhiteboardStore = create((set, get) => ({
 
     mergeCommentsFromServer: (serverComments) => set({
         comments: serverComments ?? [],
+    }),
+
+    setRevision: (revision) => set({ revision: revision ?? 0 }),
+
+    hydrateRoom: ({ nodes, connectors, comments, revision }) => set({
+        nodes: nodes ?? [],
+        connectors: connectors ?? [],
+        comments: comments ?? [],
+        revision: revision ?? 0,
+        dirtyNodeIds: [],
+        selectedNodeIds: [],
+        pendingOps: {},
+    }),
+
+    registerPendingOp: (opId, entity, snapshot) => set((state) => ({
+        pendingOps: { ...state.pendingOps, [opId]: { entity, snapshot } },
+    })),
+
+    clearPendingOp: (opId) => set((state) => {
+        const next = { ...state.pendingOps };
+        delete next[opId];
+        return { pendingOps: next };
+    }),
+
+    rollbackPendingOp: (opId) => set((state) => {
+        const pending = state.pendingOps[opId];
+        if (!pending) return state;
+        const nextPending = { ...state.pendingOps };
+        delete nextPending[opId];
+        if (pending.entity === 'node' && pending.snapshot) {
+            const idx = state.nodes.findIndex((n) => n.id === pending.snapshot.id);
+            if (idx < 0) {
+                return {
+                    nodes: state.nodes.filter((n) => n.id !== pending.snapshot?.id),
+                    pendingOps: nextPending,
+                };
+            }
+            const nodes = [...state.nodes];
+            nodes[idx] = pending.snapshot;
+            return { nodes, pendingOps: nextPending };
+        }
+        return { pendingOps: nextPending };
+    }),
+
+    addNodeRemote: (node) => set((state) => {
+        if (state.nodes.some((n) => n.id === node.id)) return state;
+        return { nodes: [...state.nodes, node] };
+    }),
+
+    removeNodeRemote: (nodeId) => set((state) => ({
+        nodes: state.nodes.filter((n) => n.id !== nodeId),
+        selectedNodeIds: state.selectedNodeIds.filter((id) => id !== nodeId),
+    })),
+
+    addConnectorRemote: (connector) => set((state) => {
+        if (state.connectors.some((c) => c.id === connector.id)) return state;
+        return { connectors: [...state.connectors, connector] };
+    }),
+
+    removeConnectorRemote: (connectorId) => set((state) => ({
+        connectors: state.connectors.filter((c) => c.id !== connectorId),
+    })),
+
+    patchConnectorRemote: (connectorId, patch) => set((state) => {
+        const idx = state.connectors.findIndex((c) => c.id === connectorId);
+        if (idx < 0) return state;
+        const next = [...state.connectors];
+        next[idx] = { ...next[idx], ...patch };
+        return { connectors: next };
+    }),
+
+    addCommentRemote: (comment) => set((state) => {
+        if (state.comments.some((c) => c.id === comment.id)) return state;
+        return { comments: [...state.comments, comment] };
+    }),
+
+    removeCommentRemote: (commentId) => set((state) => ({
+        comments: state.comments.filter((c) => c.id !== commentId),
+    })),
+
+    patchCommentRemote: (commentId, patch) => set((state) => {
+        const idx = state.comments.findIndex((c) => c.id === commentId);
+        if (idx < 0) return state;
+        const next = [...state.comments];
+        next[idx] = { ...next[idx], ...patch };
+        return { comments: next };
     }),
 }));

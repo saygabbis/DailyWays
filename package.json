@@ -3,13 +3,20 @@
   "private": true,
   "version": "2.0.1",
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "server/*"
+  ],
   "scripts": {
     "dev": "vite --host",
+    "dev:collab": "npm run dev -w @dailyways/collab-server",
+    "dev:all": "concurrently -k -n collab,vite -c blue,green \"npm run dev:collab\" \"wait-on http://127.0.0.1:2525/health -t 60000 && npm run dev\"",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dailyways/collab-protocol": "file:packages/collab-protocol",
     "@hello-pangea/dnd": "^18.0.1",
     "@supabase/supabase-js": "^2.47.0",
     "date-fns": "^4.1.0",
@@ -17,6 +24,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.0",
+    "socket.io-client": "^4.8.1",
     "uuid": "^13.0.0",
     "zustand": "^5.0.11"
   },
@@ -26,10 +34,12 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "concurrently": "^9.1.2",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "wait-on": "^9.0.10"
   }
 }

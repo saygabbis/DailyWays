@@ -1,15 +1,34 @@
 import { useState, useEffect } from 'react';
+import { useRemoteListAnim } from '../../hooks/useBoardRemoteAnim';
 import ReactDOM from 'react-dom';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { useApp } from '../../context/AppContext';
+import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
 import { useContextMenu } from '../Common/ContextMenu';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import BoardCard from './BoardCard';
 import ListDetailsModal from './ListDetailsModal';
 import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy, Settings2, CheckCircle } from 'lucide-react';
 
-export default function BoardList({ list, boardId, onCardClick, index, onOpenListDetails, dragHandleProps, isDropped, entryDelay = 0, editingByCardId }) {
-    const { dispatch, state, persistBoard, showConfirm } = useApp();
+export default function BoardList({
+    list,
+    boardId,
+    onCardClick,
+    index,
+    onOpenListDetails,
+    dragHandleProps,
+    isDropped,
+    entryDelay = 0,
+    editingByCardId,
+    hoverByCardId,
+    hoverByListId,
+    onCardHover,
+    onListHover,
+    onPresenceHoverEnd,
+    remoteDraggingCardIds,
+}) {
+    const { state, showConfirm } = useApp();
+    const { collabDispatch } = useBoardCollabDispatch(boardId);
     const { showContextMenu } = useContextMenu();
     const coarsePointer = useCoarsePointer();
     const [addingCard, setAddingCard] = useState(false);
@@ -18,6 +37,11 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
     const [editTitle, setEditTitle] = useState(list.title);
 
     const searchQuery = state.searchQuery?.toLowerCase() || '';
+
+    const isFiltering =
+        Boolean(searchQuery) ||
+        state.filterPriority !== 'all' ||
+        state.filterLabel !== 'all';
 
     const filteredCards = list.cards.filter(card => {
         if (searchQuery && !card.title.toLowerCase().includes(searchQuery) &&
@@ -32,11 +56,10 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
     const handleAddCard = (e) => {
         e.preventDefault();
         if (!newCardTitle.trim()) return;
-        dispatch({
+        collabDispatch({
             type: 'ADD_CARD',
             payload: { boardId, listId: list.id, title: newCardTitle },
         });
-        persistBoard(boardId);
         setNewCardTitle('');
         setAddingCard(false);
     };
@@ -50,22 +73,19 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
         });
 
         if (confirmed) {
-            dispatch({ type: 'DELETE_LIST', payload: { boardId, listId: list.id } });
-            persistBoard(boardId);
+            collabDispatch({ type: 'DELETE_LIST', payload: { boardId, listId: list.id } });
         }
         setShowMenu(false);
     };
 
     const handleRenameList = (e) => {
         e.preventDefault();
-        dispatch({ type: 'UPDATE_LIST', payload: { boardId, listId: list.id, updates: { title: editTitle } } });
-        persistBoard(boardId);
+        collabDispatch({ type: 'UPDATE_LIST', payload: { boardId, listId: list.id, updates: { title: editTitle } } });
         setEditing(false);
     };
 
     const handleSaveListDetails = (updates) => {
-        dispatch({ type: 'UPDATE_LIST', payload: { boardId, listId: list.id, updates } });
-        persistBoard(boardId);
+        collabDispatch({ type: 'UPDATE_LIST', payload: { boardId, listId: list.id, updates } });
         if (updates.title !== undefined) setEditTitle(updates.title);
         setShowListDetails(false);
     };
@@ -90,11 +110,10 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
                 const sortedCards = [...list.cards].sort(
                     (a, b) => (priorityOrder[a.priority] || 4) - (priorityOrder[b.priority] || 4)
                 );
-                dispatch({
+                collabDispatch({
                     type: 'UPDATE_LIST',
                     payload: { boardId, listId: list.id, updates: { cards: sortedCards } },
                 });
-                persistBoard(boardId);
             },
         },
         { type: 'divider' },
@@ -110,6 +129,8 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
         showContextMenu(e, getListContextItems(), { title: list.title, tint: list.color || null });
     };
 
+    const remoteListAnim = useRemoteListAnim(list.id);
+
     // Animação de entrada (dispara só na montagem, com stagger por index)
     const [shouldAnimate, setShouldAnimate] = useState(true);
     useEffect(() => {
@@ -121,20 +142,28 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
 
     // Animação de drop: re-aciona ao soltar a lista após drag
     useEffect(() => {
-        if (!isDropped) return;
+        if (!isDropped && !remoteListAnim) return;
         setShouldAnimate(true);
         const timer = setTimeout(() => setShouldAnimate(false), 900);
         return () => clearTimeout(timer);
-    }, [isDropped]);
+    }, [isDropped, remoteListAnim]);
 
     // delay: 0 se solta por drag; usa entryDelay (calculado pelo BoardView) na entrada
     const animDelay = isDropped ? '0ms' : `${entryDelay}ms`;
 
+    const listHoverPeers = hoverByListId?.[list.id] || [];
+    const listPresenceColor = listHoverPeers[0]?.color;
+
     return (
         <div
-            className="board-list"
+            className={`board-list ${listHoverPeers.length ? 'board-list-remote-hover' : ''}`}
             onContextMenu={handleListContextMenu}
-            style={list.color ? { '--list-accent': list.color } : {}}
+            onMouseEnter={() => onListHover?.(list.id)}
+            onMouseLeave={() => onPresenceHoverEnd?.()}
+            style={{
+                ...(list.color ? { '--list-accent': list.color } : {}),
+                ...(listPresenceColor ? { '--presence-color': listPresenceColor } : {}),
+            }}
             data-colored={list.color ? 'true' : undefined}
         >
             <div
@@ -179,7 +208,12 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
                             {...provided.droppableProps}
                         >
                             {filteredCards.map((card, index) => (
-                                <Draggable key={card.id} draggableId={card.id} index={index}>
+                                <Draggable
+                                    key={card.id}
+                                    draggableId={card.id}
+                                    index={index}
+                                    isDragDisabled={isFiltering}
+                                >
                                     {(provided, snapshot) => {
                                         const cardContent = (
                                             <div
@@ -202,8 +236,12 @@ export default function BoardList({ list, boardId, onCardClick, index, onOpenLis
                                                     listId={list.id}
                                                     listColor={list.color}
                                                     isDragging={snapshot.isDragging}
+                                                    isRemoteDragging={remoteDraggingCardIds?.has(card.id)}
                                                     onClick={() => onCardClick(card, boardId, list.id)}
                                                     editingEditors={editingByCardId?.[card.id] || []}
+                                                    hoverPeers={hoverByCardId?.[card.id] || []}
+                                                    onHoverStart={() => onCardHover?.(card.id)}
+                                                    onHoverEnd={() => onPresenceHoverEnd?.()}
                                                 />
                                             </div>
                                         );

@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../services/supabaseClient';
+import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
+import { useCollabPresence } from '../../collab/useCollabPresence.js';
+import CollabPresenceLayer from '../../collab/CollabPresenceLayer.jsx';
+import { usePresenceStore } from '../../collab/presenceStore';
+import { useCollab } from '../../collab/CollabContext.jsx';
 import {
     X, Tag, AlertCircle, Sun, CheckSquare,
     Plus, Trash2, Edit3, Repeat, Clock, ImagePlus,
@@ -10,8 +14,8 @@ import {
     Download, Send, ChevronDown, Ban
 } from 'lucide-react';
 import './TaskDetail.css';
-import { colorFromUserId, initialFromName } from '../../utils/userColor';
 import { uuidv4 } from '../../utils/uuid';
+import { initialFromName } from '../../utils/userColor';
 import {
     fetchAttachments,
     uploadAttachment,
@@ -37,8 +41,17 @@ const RECURRENCE_OPTIONS = [
 ];
 
 export default function TaskDetailModal({ card, boardId, listId, onClose }) {
-    const { dispatch, LABEL_COLORS, state, persistBoard, showConfirm } = useApp();
+    const { dispatch, LABEL_COLORS, state, showConfirm } = useApp();
+    const { collabDispatch } = useBoardCollabDispatch(boardId);
+    const { updateCursor, setSelectedCardId } = useCollabPresence(boardId, { mode: 'screen' });
+    const collab = useCollab();
+    const peers = usePresenceStore((s) => s.peers);
+    const modalRef = useRef(null);
     const { user } = useAuth();
+
+    const sharedModalPeers = (peers || []).filter(
+        (p) => p.userId && p.userId !== collab?.userId && p.selectedCardId === card.id
+    );
 
     const liveCard = (() => {
         const board = state.boards.find(b => b.id === boardId);
@@ -114,7 +127,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
 
     useEffect(() => {
         const timeout = setTimeout(() => {
-            dispatch({
+            collabDispatch({
                 type: 'UPDATE_CARD',
                 payload: {
                     boardId, listId, cardId: card.id,
@@ -133,46 +146,27 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                     }
                 },
             });
-            persistBoard(boardId);
         }, 300);
         return () => clearTimeout(timeout);
-    }, [title, description, priority, startDate, dueDate, recurrenceRule, isAllDay, myDay, labels, cardColor, boardId, listId, card.id, dispatch, persistBoard]);
+    }, [title, description, priority, startDate, dueDate, recurrenceRule, isAllDay, myDay, labels, cardColor, boardId, listId, card.id, collabDispatch]);
 
     useEffect(() => {
-        if (!boardId || !card?.id || !user?.id) return;
+        if (!boardId || !card?.id) return undefined;
+        setSelectedCardId(card.id);
+        return () => setSelectedCardId(null);
+    }, [boardId, card?.id, setSelectedCardId]);
 
-        const channelName = `board-presence:${boardId}`;
-        const channel = supabase.channel(channelName, {
-            config: { presence: { key: user.id } },
+    const handleModalPointerMove = (e) => {
+        const el = modalRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        updateCursor({
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+            selectedCardId: card.id,
+            cursorScreen: { x: e.clientX, y: e.clientY },
         });
-
-        const payload = {
-            cardId: card.id,
-            name: user.name || user.email || user.id,
-            photoUrl: user.photo_url || null,
-            avatarInitial: initialFromName(user.name || user.email || user.id),
-            color: colorFromUserId(user.id),
-        };
-
-        const handleSub = (status) => {
-            const raw = typeof status === 'string' ? status : status?.status;
-            if (raw !== 'SUBSCRIBED') return;
-            try {
-                channel.track(payload);
-            } catch (_) { }
-        };
-
-        channel.subscribe(handleSub);
-
-        return () => {
-            try {
-                channel.untrack?.();
-            } catch (_) { }
-            try {
-                supabase.removeChannel(channel);
-            } catch (_) { }
-        };
-    }, [boardId, card?.id, user?.id, user?.name, user?.email, user?.photo_url]);
+    };
 
     useEffect(() => {
         let active = true;
@@ -237,8 +231,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         });
 
         if (confirmed) {
-            dispatch({ type: 'DELETE_CARD', payload: { boardId, listId, cardId: card.id } });
-            persistBoard(boardId);
+            collabDispatch({ type: 'DELETE_CARD', payload: { boardId, listId, cardId: card.id } });
             onClose();
         }
     };
@@ -267,29 +260,26 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const handleAddSubtask = (e) => {
         e.preventDefault();
         if (!newSubtask.trim()) return;
-        dispatch({
+        collabDispatch({
             type: 'ADD_SUBTASK',
             payload: { boardId, listId, cardId: card.id, title: newSubtask.trim() },
         });
-        persistBoard(boardId);
         setNewSubtask('');
         subtaskInputRef.current?.focus();
     };
 
     const handleToggleSubtask = (subtaskId) => {
-        dispatch({
+        collabDispatch({
             type: 'TOGGLE_SUBTASK',
             payload: { boardId, listId, cardId: card.id, subtaskId },
         });
-        persistBoard(boardId);
     };
 
     const handleDeleteSubtask = (subtaskId) => {
-        dispatch({
+        collabDispatch({
             type: 'DELETE_SUBTASK',
             payload: { boardId, listId, cardId: card.id, subtaskId },
         });
-        persistBoard(boardId);
     };
 
     const startEditSubtask = (st) => {
@@ -299,20 +289,19 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
 
     const saveEditSubtask = () => {
         if (editingSubtaskId && editingSubtaskTitle.trim()) {
-            dispatch({
-                type: 'UPDATE_CARD',
+            collabDispatch({
+                type: 'UPDATE_SUBTASK',
                 payload: {
-                    boardId, listId, cardId: card.id,
+                    boardId,
+                    listId,
+                    cardId: card.id,
+                    subtaskId: editingSubtaskId,
                     updates: {
-                        subtasks: liveCard.subtasks.map(st =>
-                            st.id === editingSubtaskId
-                                ? { ...st, title: editingSubtaskTitle.trim(), updatedAt: new Date().toISOString() }
-                                : st
-                        )
-                    }
+                        title: editingSubtaskTitle.trim(),
+                        updatedAt: new Date().toISOString(),
+                    },
                 },
             });
-            persistBoard(boardId);
         }
         setEditingSubtaskId(null);
         setEditingSubtaskTitle('');
@@ -376,7 +365,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         if (result.success && user?.id) {
             setAttachments((prev) => prev.filter((item) => item.id !== attachment.id));
             if (liveCard.coverAttachmentId === attachment.id) {
-                dispatch({
+                collabDispatch({
                     type: 'UPDATE_CARD',
                     payload: {
                         boardId,
@@ -385,7 +374,6 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                         updates: { coverAttachmentId: null, updatedAt: new Date().toISOString() },
                     },
                 });
-                persistBoard(boardId);
             }
             await createActivity(card.id, user.id, 'attachment_removed', { attachmentId: attachment.id });
         } else if (!result.success) {
@@ -396,7 +384,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const handleSetCover = async (attachment) => {
         const result = await setCardCover(card.id, attachment.id);
         if (result.success) {
-            dispatch({
+            collabDispatch({
                 type: 'UPDATE_CARD',
                 payload: {
                     boardId,
@@ -405,7 +393,6 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                     updates: { coverAttachmentId: attachment.id, updatedAt: new Date().toISOString() },
                 },
             });
-            persistBoard(boardId);
             setShowCoverPanel(false);
             if (user?.id) await createActivity(card.id, user.id, 'cover_set', { attachmentId: attachment.id });
         } else {
@@ -416,7 +403,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const handleClearCover = async () => {
         const result = await clearCardCover(card.id);
         if (result.success) {
-            dispatch({
+            collabDispatch({
                 type: 'UPDATE_CARD',
                 payload: {
                     boardId,
@@ -425,7 +412,6 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                     updates: { coverAttachmentId: null, updatedAt: new Date().toISOString() },
                 },
             });
-            persistBoard(boardId);
             setShowCoverPanel(false);
             if (user?.id) await createActivity(card.id, user.id, 'cover_cleared', {});
         } else {
@@ -536,7 +522,19 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     return createPortal(
         <>
             <div className="modal-backdrop" onClick={onClose} />
-            <div className="task-detail-modal animate-scale-in-centered">
+            <div
+                ref={modalRef}
+                className="task-detail-modal animate-scale-in-centered"
+                onPointerMove={handleModalPointerMove}
+                onPointerLeave={() => setSelectedCardId(card.id)}
+            >
+                {collab?.connected && sharedModalPeers.length > 0 && (
+                    <CollabPresenceLayer
+                        mode="screen"
+                        elevated
+                        peerFilter={(p) => p.selectedCardId === card.id}
+                    />
+                )}
                 {coverAttachment?.publicUrl && (
                     <div className="task-detail-cover">
                         <img src={coverAttachment.publicUrl} alt={coverAttachment.fileName || liveCard.title} />

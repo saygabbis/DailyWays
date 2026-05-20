@@ -1,19 +1,22 @@
 import { useApp } from '../../context/AppContext';
+import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
 import { Sun, Star, AlertTriangle, TrendingUp } from 'lucide-react';
 import SmartTaskItem from './SmartTaskItem';
+import { isCardImportant, updatesToggleImportant } from '../../utils/cardImportant';
 import './SmartViews.css';
 
 export default function ImportantView({ onCardClick }) {
-    const { getImportantCards, dispatch, persistBoard } = useApp();
+    const { getImportantCards } = useApp();
+    const { collabDispatch } = useBoardCollabDispatch();
     const cards = getImportantCards();
 
     // Categorize cards
-    const starredCards = cards.filter(c => c.important);
     const urgentCards = cards.filter(c => c.priority === 'urgent');
-    const highCards = cards.filter(c => c.priority === 'high' && !c.important);
+    const highCards = cards.filter(c => c.priority === 'high');
+    const starredCards = cards.filter(c => c.important && c.priority !== 'high' && c.priority !== 'urgent');
 
     const toggleMyDay = (card) => {
-        dispatch({
+        collabDispatch({
             type: 'UPDATE_CARD',
             payload: {
                 boardId: card.boardId,
@@ -22,20 +25,18 @@ export default function ImportantView({ onCardClick }) {
                 updates: { myDay: !card.myDay },
             },
         });
-        persistBoard(card.boardId);
     };
 
     const toggleImportant = (card) => {
-        dispatch({
+        collabDispatch({
             type: 'UPDATE_CARD',
             payload: {
                 boardId: card.boardId,
                 listId: card.listId,
                 cardId: card.id,
-                updates: { important: !card.important },
+                updates: updatesToggleImportant(card),
             },
         });
-        persistBoard(card.boardId);
     };
 
     const groups = [

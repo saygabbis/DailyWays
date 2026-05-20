@@ -15,8 +15,18 @@ import TaskDetailModal from './components/TaskDetail/TaskDetailModal';
 import SettingsModal from './components/Settings/SettingsView';
 import SearchOverlay from './components/Search/SearchOverlay';
 import SpaceView from './components/Spaces/SpaceView';
-import SpacesComingSoon from './components/Spaces/SpacesComingSoon';
+import BoardCollabBridge from './collab/BoardCollabBridge.jsx';
+import { pushPresenceFields } from './collab/presenceBridge.js';
+import { setLastBoardPointer } from './collab/lastBoardPointer.js';
+import { BoardCollabProvider, useBoardCollabDispatch } from './collab/BoardCollabContext.jsx';
 import PasswordResetPage from './components/Auth/PasswordResetPage';
+import {
+  readPersistedView,
+  persistNavigation,
+  resolveRestoredNavigation,
+  isWorkspaceDataReady,
+  isGeneralView,
+} from './utils/restoreNavigation';
 
 import PomodoroTimer from './components/Pomodoro/PomodoroTimer';
 import RadioWidget from './components/Radio/RadioWidget';
@@ -30,9 +40,14 @@ import './App.css';
 
 function AppContent() {
   const { user, profile } = useAuth();
-  const { getActiveBoard, confirmConfig, dispatch, persistBoard, getAllCards, state, updateBoardsOrder, suppressRealtime, updateBoardAndPersist, updateWorkspaceOrder, boardsLoadError } = useApp();
+  const { getActiveBoard, confirmConfig, dispatch, getAllCards, state, updateBoardsOrder, suppressRealtime, updateWorkspaceOrder, boardsLoadError } = useApp();
+  const { collabDispatch, updateBoardMeta } = useBoardCollabDispatch();
   const { initPreferences } = useTheme();
-  const [activeView, setActiveView] = useState(() => localStorage.getItem('dailyways_active_view') || 'myday');
+  const initialView = readPersistedView();
+  const [activeView, setActiveView] = useState(initialView);
+  const viewRestoreDoneRef = useRef(false);
+  const navPersistReadyRef = useRef(isGeneralView(initialView));
+  const [navReady, setNavReady] = useState(() => isGeneralView(initialView));
   const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
 
@@ -46,10 +61,52 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // Persist view change
   useEffect(() => {
-    localStorage.setItem('dailyways_active_view', activeView);
-  }, [activeView]);
+    if (!navPersistReadyRef.current) return;
+    persistNavigation(activeView, state.activeBoard);
+  }, [activeView, state.activeBoard]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      viewRestoreDoneRef.current = false;
+      navPersistReadyRef.current = false;
+      setNavReady(false);
+    }
+  }, [user?.id]);
+
+  // After F5 / open: restore last screen (board, space, dashboard, myday, …)
+  useEffect(() => {
+    if (!user?.id || viewRestoreDoneRef.current) return;
+    if (!isWorkspaceDataReady({
+      userId: user.id,
+      boards: state.boards,
+      boardsLoadError,
+    })) {
+      return;
+    }
+
+    const { view, boardId } = resolveRestoredNavigation({
+      boards: state.boards,
+      spaces: state.spaces,
+      activeBoardHint: state.activeBoard,
+    });
+
+    if (boardId && state.activeBoard !== boardId) {
+      dispatch({ type: 'SET_ACTIVE_BOARD', payload: boardId });
+    }
+    setActiveView(view);
+    persistNavigation(view, boardId || state.activeBoard);
+    viewRestoreDoneRef.current = true;
+    navPersistReadyRef.current = true;
+    setNavReady(true);
+  }, [
+    user?.id,
+    state.boards,
+    state.spaces,
+    state.activeBoard,
+    boardsLoadError,
+    dispatch,
+  ]);
   const [selectedCard, setSelectedCard] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState('account');
@@ -58,19 +115,60 @@ function AppContent() {
   const boardViewRef = useRef(null);
   const [plannedDropCard, setPlannedDropCard] = useState(null);
 
+  const activeBoardId = getActiveBoard()?.id;
+
+  useEffect(() => {
+    const onPointerMove = (e) => {
+      if (!document.body.classList.contains('dnd-dragging') || !activeBoardId) return;
+      const scroller = document.querySelector('.board-scroller');
+      const partial = {
+        cursorScreen: { x: e.clientX, y: e.clientY },
+      };
+      if (scroller) {
+        const rect = scroller.getBoundingClientRect();
+        partial.cursor = {
+          x: e.clientX - rect.left + scroller.scrollLeft,
+          y: e.clientY - rect.top + scroller.scrollTop,
+          mode: 'screen',
+        };
+      }
+      if (partial.cursor) {
+        setLastBoardPointer(activeBoardId, {
+          x: partial.cursor.x,
+          y: partial.cursor.y,
+          cursorScreen: partial.cursorScreen,
+        });
+      }
+      pushPresenceFields(activeBoardId, partial);
+    };
+    document.addEventListener('pointermove', onPointerMove, { passive: true });
+    return () => document.removeEventListener('pointermove', onPointerMove);
+  }, [activeBoardId]);
+
   // Global DragDropContext handler — intercepts sidebar drops, delegates the rest
   const handleGlobalDragStart = useCallback((start) => {
     hideContextMenu();
     document.body.classList.add('dnd-dragging');
+    const boardId = getActiveBoard()?.id;
+    if (boardId && start.type === 'list') {
+      pushPresenceFields(boardId, { draggingListId: start.draggableId, draggingCardId: null });
+    } else if (boardId && start.source?.droppableId && start.source.droppableId !== 'boards') {
+      pushPresenceFields(boardId, {
+        draggingCardId: start.draggableId,
+        draggingListId: start.source.droppableId,
+      });
+    }
     if (['board', 'space', 'board-group', 'space-group'].includes(start.type)) {
       if (state.selectedItems?.includes(start.draggableId) && state.selectedItems.length > 1) {
         dispatch({ type: 'SET_DRAGGING_BULK', payload: true });
       }
     }
-  }, [state.selectedItems, dispatch, hideContextMenu]);
+  }, [state.selectedItems, dispatch, hideContextMenu, getActiveBoard]);
 
   const handleGlobalDragEnd = useCallback((result) => {
     document.body.classList.remove('dnd-dragging');
+    const boardId = getActiveBoard()?.id;
+    if (boardId) pushPresenceFields(boardId, { draggingCardId: null, draggingListId: null });
     dispatch({ type: 'SET_DRAGGING_BULK', payload: false });
     const { source, destination, draggableId, type } = result;
     if (!destination) return;
@@ -94,17 +192,15 @@ function AppContent() {
       if (!card) return;
 
       if (destination.droppableId === 'sidebar-myday') {
-        dispatch({
+        collabDispatch({
           type: 'UPDATE_CARD',
           payload: { boardId, listId, cardId: card.id, updates: { myDay: true } },
         });
-        persistBoard(boardId);
       } else if (destination.droppableId === 'sidebar-important') {
-        dispatch({
+        collabDispatch({
           type: 'UPDATE_CARD',
           payload: { boardId, listId, cardId: card.id, updates: { important: true } },
         });
-        persistBoard(boardId);
       } else if (destination.droppableId === 'sidebar-planned') {
         setPlannedDropCard({ card, boardId, listId });
       }
@@ -140,16 +236,15 @@ function AppContent() {
     if (boardViewRef.current?.handleDragEnd) {
       boardViewRef.current.handleDragEnd(result);
     }
-  }, [state.boards, dispatch, persistBoard, user?.id, updateBoardsOrder, suppressRealtime]);
+  }, [state.boards, collabDispatch, user?.id, updateBoardsOrder, suppressRealtime]);
 
   const handlePlannedDateSelect = (date) => {
     if (!plannedDropCard) return;
     const { boardId, listId, card } = plannedDropCard;
-    dispatch({
+    collabDispatch({
       type: 'UPDATE_CARD',
       payload: { boardId, listId, cardId: card.id, updates: { dueDate: date } },
     });
-    persistBoard(boardId);
     setPlannedDropCard(null);
   };
 
@@ -194,12 +289,17 @@ function AppContent() {
   };
 
   // Handle view change — intercept "settings" to open modal instead
-  const handleViewChange = (view) => {
+  const handleViewChange = (view, boardIdOverride = null) => {
     if (view === 'settings') {
       setShowSettings(true);
       return;
     }
+    viewRestoreDoneRef.current = true;
+    navPersistReadyRef.current = true;
+    setNavReady(true);
     setActiveView(view);
+    const boardId = view === 'board' ? (boardIdOverride || state.activeBoard) : state.activeBoard;
+    persistNavigation(view, boardId);
   };
 
   const getTitle = () => {
@@ -290,7 +390,9 @@ function AppContent() {
   }, [activeView, activeBoard, sidebarOpen, showContextMenu, toggleSidebar]);
 
   return (
+    <BoardCollabProvider>
     <DragDropContext onDragStart={handleGlobalDragStart} onDragEnd={handleGlobalDragEnd}>
+      <BoardCollabBridge />
       <div className="app-layout" onContextMenu={handleGlobalContextMenu}>
         <Sidebar
           activeView={activeView}
@@ -312,7 +414,7 @@ function AppContent() {
               setShowSettings(true);
             }}
             onOpenSearch={() => setShowSearch(true)}
-            editableBoardTitle={activeView === 'board' && activeBoard ? { board: activeBoard, onSave: (newTitle) => updateBoardAndPersist(activeBoard.id, { title: newTitle }) } : null}
+            editableBoardTitle={activeView === 'board' && activeBoard ? { board: activeBoard, onSave: (newTitle) => updateBoardMeta({ title: newTitle }) } : null}
             editableSpaceTitle={activeView.startsWith('space-') && (() => {
               const spaceId = activeView.replace('space-', '');
               const space = state.spaces.find(s => s.id === spaceId);
@@ -341,12 +443,17 @@ function AppContent() {
           <div className="app-content" onClick={() => {
             if (state.selectedItems?.length > 0 && !state.isDraggingBulk) dispatch({ type: 'CLEAR_SELECTION' });
           }}>
-            {activeView === 'dashboard' && <DashboardView key="dashboard" />}
-            {activeView === 'myday' && <MyDayView key="myday" onCardClick={handleCardClick} />}
-            {activeView === 'important' && <ImportantView key="important" onCardClick={handleCardClick} />}
-            {activeView === 'planned' && <PlannedView key="planned" onCardClick={handleCardClick} />}
-            {activeView === 'board' && activeBoard && <BoardView key={`board-${activeBoard.id}`} ref={boardViewRef} onCardClick={handleCardClick} />}
-            {activeView.startsWith('space-') && <SpacesComingSoon key={activeView} />}
+            {navReady && activeView === 'dashboard' && <DashboardView key="dashboard" />}
+            {navReady && activeView === 'myday' && <MyDayView key="myday" onCardClick={handleCardClick} />}
+            {navReady && activeView === 'important' && <ImportantView key="important" onCardClick={handleCardClick} />}
+            {navReady && activeView === 'planned' && <PlannedView key="planned" onCardClick={handleCardClick} />}
+            {navReady && activeView === 'board' && activeBoard && (
+              <BoardView key={`board-${activeBoard.id}`} ref={boardViewRef} onCardClick={handleCardClick} />
+            )}
+            {navReady && activeView.startsWith('space-') && (() => {
+              const spaceId = activeView.replace('space-', '');
+              return <SpaceView key={`space-${spaceId}`} spaceId={spaceId} />;
+            })()}
             {activeView === 'help' && (
               <div style={{ padding: 'var(--space-xl)', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '80px' }}>
                 <h2 style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🤝 Central de Ajuda</h2>
@@ -408,6 +515,7 @@ function AppContent() {
 
       </div>
     </DragDropContext>
+    </BoardCollabProvider>
   );
 }
 

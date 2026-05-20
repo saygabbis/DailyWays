@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Users, Mail, Shield, Trash2, ChevronDown, LogOut, Star } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useBoardCollabContext } from '../../collab/BoardCollabContext.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { fetchBoardMembers, inviteBoardMember, updateMemberRole, removeMember, isBoardOwnerClient, sortBoardMembersOwnerFirst } from '../../services/boardService';
 import './BoardDetailsModal.css';
@@ -63,7 +64,8 @@ function RoleSelect({ value, onChange, options, className = '', disabled = false
 }
 
 export default function BoardDetailsModal({ board, onClose, initialTab = 'details' }) {
-    const { updateBoardAndPersist, DEFAULT_BOARD_COLORS, showConfirm, reloadBoards } = useApp();
+    const { DEFAULT_BOARD_COLORS, showConfirm, reloadBoards } = useApp();
+    const boardCollab = useBoardCollabContext();
     const { user } = useAuth();
     const isBoardOwner = isBoardOwnerClient(board, user?.id);
     const [activeTab, setActiveTab] = useState(initialTab);
@@ -82,8 +84,11 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
     const [shareError, setShareError] = useState('');
     const [shareSuccess, setShareSuccess] = useState('');
 
-    const handleSave = async () => {
-        await updateBoardAndPersist(board.id, { title, emoji, color });
+    const handleSave = () => {
+        boardCollab?.collabDispatchForBoard(board.id, {
+            type: 'UPDATE_BOARD',
+            payload: { id: board.id, updates: { title, emoji, color } },
+        });
         setSaved(true);
         setTimeout(() => {
             setSaved(false);

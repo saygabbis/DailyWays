@@ -25,6 +25,8 @@ function buildUserData(authUser, profile) {
     font_id: profile?.font_id ?? null,
     language: profile?.language ?? null,
     anim_style: profile?.anim_style ?? null,
+    presence_color: profile?.presence_color ?? null,
+    presence_color_auto: profile?.presence_color_auto !== false,
   };
 }
 

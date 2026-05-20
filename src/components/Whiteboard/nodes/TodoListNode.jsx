@@ -1,18 +1,19 @@
 import React from 'react';
 import BaseNode from './BaseNode';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { useCollabPatch } from '../../../collab/CollabOpsContext.jsx';
 import { Check, Square } from 'lucide-react';
 import { uuidv4 } from '../../../utils/uuid';
 
 export default function TodoListNode({ node, onNodePointerDown }) {
     const items = node.data?.items ?? [{ id: uuidv4(), text: 'Item', done: false }];
-    const { patchNode } = useWhiteboardStore();
+    const { collabPatchNode } = useCollabPatch();
 
     const toggle = (itemId) => {
         const next = items.map((it) =>
             it.id === itemId ? { ...it, done: !it.done } : it
         );
-        patchNode(node.id, { data: { ...node.data, items: next } });
+        collabPatchNode(node.id, { data: { ...node.data, items: next } });
     };
 
     return (

@@ -9,6 +9,8 @@ import ConfirmModal from '../components/Common/ConfirmModal';
 import FloatingSaveError from '../components/Common/FloatingSaveError';
 import FloatingInvitationToast from '../components/Common/FloatingInvitationToast';
 import { logger } from '../utils/logger';
+import { isCollabEnabled } from '../collab/collabConfig.js';
+import { persistLastBoardId } from '../utils/restoreNavigation.js';
 
 const AppContext = createContext(null);
 
@@ -131,12 +133,11 @@ function appReducer(state, action) {
         case 'SET_BOARDS': {
             const boards = action.payload ?? [];
             const validActive = state.activeBoard && boards.some((b) => b.id === state.activeBoard);
-            const nextActive = validActive ? state.activeBoard : (boards.length > 0 ? boards[0].id : null);
-            if (nextActive) {
-                storageService.save(STORAGE_KEYS.ACTIVE_BOARD, nextActive);
-            } else {
-                storageService.remove(STORAGE_KEYS.ACTIVE_BOARD);
-            }
+            const lastStored = storageService.load(STORAGE_KEYS.ACTIVE_BOARD);
+            const storedValid = lastStored && boards.some((b) => b.id === lastStored);
+            const nextActive = validActive
+                ? state.activeBoard
+                : (storedValid ? lastStored : state.activeBoard);
             return { ...state, boards, activeBoard: nextActive };
         }
 
@@ -301,13 +302,15 @@ function appReducer(state, action) {
             };
         }
 
-        case 'SET_ACTIVE_BOARD':
+        case 'SET_ACTIVE_BOARD': {
             if (action.payload) {
                 storageService.save(STORAGE_KEYS.ACTIVE_BOARD, action.payload);
+                persistLastBoardId(action.payload);
             } else {
                 storageService.remove(STORAGE_KEYS.ACTIVE_BOARD);
             }
             return { ...state, activeBoard: action.payload };
+        }
 
         case 'MOVE_WORKSPACE_ITEM': {
             const { itemType, itemIds, destGroupId, destIndex, sourceGroupIds: payloadSourceGroupIds } = action.payload;
@@ -408,7 +411,7 @@ function appReducer(state, action) {
         // ── Lists ──
         case 'ADD_LIST': {
             const newList = {
-                id: uuidv4(),
+                id: action.payload.id || uuidv4(),
                 title: action.payload.title || 'Nova Lista',
                 color: null,
                 isCompletionList: false,
@@ -604,6 +607,37 @@ function appReducer(state, action) {
             };
         }
 
+        case 'UPDATE_SUBTASK':
+            return {
+                ...state,
+                boards: state.boards.map(b =>
+                    b.id === action.payload.boardId
+                        ? {
+                            ...b,
+                            lists: b.lists.map(l =>
+                                l.id === action.payload.listId
+                                    ? {
+                                        ...l,
+                                        cards: l.cards.map(c =>
+                                            c.id === action.payload.cardId
+                                                ? {
+                                                    ...c,
+                                                    subtasks: c.subtasks.map(st =>
+                                                        st.id === action.payload.subtaskId
+                                                            ? { ...st, ...action.payload.updates }
+                                                            : st
+                                                    ),
+                                                }
+                                                : c
+                                        ),
+                                    }
+                                    : l
+                            ),
+                        }
+                        : b
+                ),
+            };
+
         case 'DELETE_SUBTASK':
             return {
                 ...state,
@@ -751,6 +785,16 @@ export function AppProvider({ children }) {
     // Counter de saves ativos: enquanto > 0, o Realtime NÃO deve sobrescrever o estado local.
     // Isso evita que dados stale do servidor apaguem mudanças locais quando o upsert ainda está em andamento.
     const activeSavesRef = useRef(0);
+    const collabActiveBoardIdRef = useRef(null);
+    const collabConnectedRef = useRef(false);
+
+    const setCollabActiveBoardId = useCallback((boardId) => {
+        collabActiveBoardIdRef.current = boardId || null;
+    }, []);
+
+    const setCollabConnectedForBoard = useCallback((connected) => {
+        collabConnectedRef.current = !!connected;
+    }, []);
     // Timestamp até quando aguardar antes de fazer HTTP (após TOKEN_REFRESHED).
     // O Supabase client tem um lock interno durante o refresh que trava requisições HTTP.
     // Após TOKEN_REFRESHED, aguardamos 2s para o lock ser liberado.
@@ -841,11 +885,13 @@ export function AppProvider({ children }) {
 
                 // Restaurar último board ativo (apenas preferência de UI, não dados)
                 const lastActive = storageService.load(STORAGE_KEYS.ACTIVE_BOARD);
-                const activeId = (lastActive && boards.find(b => b.id === lastActive))
+                const activeId = lastActive && boards.find((b) => b.id === lastActive)
                     ? lastActive
-                    : boards[0].id;
+                    : null;
 
-                dispatch({ type: 'SET_ACTIVE_BOARD', payload: activeId });
+                if (activeId) {
+                    dispatch({ type: 'SET_ACTIVE_BOARD', payload: activeId });
+                }
                 // Sem localStorage para boards — fonte de verdade é 100% o servidor
             }
         };
@@ -953,9 +999,23 @@ export function AppProvider({ children }) {
         }
     }, []);
 
+    const shouldPersistBoard = useCallback((boardId, { force = false } = {}) => {
+        if (!boardId) return true;
+        if (force) return true;
+        if (
+            isCollabEnabled() &&
+            collabActiveBoardIdRef.current === boardId &&
+            collabConnectedRef.current
+        ) {
+            return false;
+        }
+        return true;
+    }, []);
+
     // Helper para salvar um board específico de forma eficiente
-    const persistBoard = useCallback(async (boardId) => {
+    const persistBoard = useCallback(async (boardId, options = {}) => {
         if (!userId || !initialLoadDone.current || !boardId) return;
+        if (!options.ensureSave && !shouldPersistBoard(boardId, options)) return;
 
         // Debounce por boardId: evita flood de updates caso o usuário faça várias
         // alterações rápidas (drag, check/uncheck subtasks, etc.).
@@ -1122,8 +1182,12 @@ export function AppProvider({ children }) {
     }, [suppressRealtime, getFreshUserId]);
 
     // Helper interno compartilhado para persistência imediata com rollback + token refresh
-    const persistBoardImmediate = useCallback(async (boardId, updates) => {
+    const persistBoardImmediate = useCallback(async (boardId, updates, options = {}) => {
         if (!boardId) return;
+        if (!shouldPersistBoard(boardId, options)) {
+            dispatch({ type: 'UPDATE_BOARD', payload: { id: boardId, updates } });
+            return;
+        }
         // Snapshot do estado ANTES das mudanças locais (para rollback)
         const prevBoard = stateRef.current.boards.find(b => b.id === boardId);
         const boardSnapshot = prevBoard ? JSON.parse(JSON.stringify(prevBoard)) : null;
@@ -1221,6 +1285,16 @@ export function AppProvider({ children }) {
             const localKey = STORAGE_KEYS.BOARDS + '_' + userId;
 
             const handleChange = (payload) => {
+                const table = payload?.table;
+                if (
+                    isCollabEnabled() &&
+                    collabActiveBoardIdRef.current &&
+                    collabConnectedRef.current &&
+                    ['lists', 'cards', 'subtasks'].includes(table)
+                ) {
+                    return;
+                }
+
                 // If THIS tab triggered this write, skip the echo to avoid overwriting
                 // optimistic local state with potentially stale server data.
                 const now = Date.now();
@@ -1508,6 +1582,9 @@ export function AppProvider({ children }) {
             DEFAULT_BOARD_COLORS,
             updateWorkspaceOrder,
             reloadBoards,
+            setCollabActiveBoardId,
+            setCollabConnectedForBoard,
+            shouldPersistBoard,
         }}>
             {children}
             {/* Global Confirm Modal */}

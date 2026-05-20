@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
+import { useBoardCollabContext } from '../../collab/BoardCollabContext.jsx';
 import { insertBoardFull, deleteBoard, removeMember, isBoardOwnerClient } from '../../services/boardService';
 
 import { usePomodoro } from '../../context/PomodoroContext';
@@ -113,9 +114,10 @@ const BulkDragFollowers = ({ count, items = [] }) => {
 
 export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isDesktop }) {
     const { user, logout } = useAuth();
+    const boardCollab = useBoardCollabContext();
     const {
         state, dispatch, getMyDayCards, getImportantCards, getPlannedCards,
-        DEFAULT_BOARD_COLORS, updateBoardAndPersist, updateBoardAndPersistImmediate,
+        DEFAULT_BOARD_COLORS,
         updateBoardsOrder, persistBoard, getActiveBoard, isSavingBoard, suppressRealtime,
         showConfirm, reloadBoards, lastReorderedIds = [], setLastReorderedIds,
     } = useApp();
@@ -238,7 +240,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         setTimeout(() => setRecentlyAddedId(null), 700);
         setNewBoardTitle('');
         setShowNewBoard(false);
-        onViewChange('board');
+        onViewChange('board', newBoard.id);
 
         // Ativa o floating save durante a operação no servidor
         dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: true } });
@@ -385,7 +387,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
             dispatch({ type: 'CLEAR_SELECTION' });
         }
         dispatch({ type: 'SET_ACTIVE_BOARD', payload: boardId });
-        onViewChange('board');
+        onViewChange('board', boardId);
         if (!isDesktop) onClose?.();
     };
 
@@ -550,7 +552,10 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
         setEditingBoardId(null); // Close UI immediately
 
         if (titleToSave) {
-            await updateBoardAndPersist(boardId, { title: titleToSave });
+            boardCollab?.collabDispatchForBoard(boardId, {
+                type: 'UPDATE_BOARD',
+                payload: { id: boardId, updates: { title: titleToSave } },
+            });
         }
     };
 
@@ -661,7 +666,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                     if (remaining.length > 0) {
                         const next = remaining[boardIndex] ?? remaining[boardIndex - 1];
                         dispatch({ type: 'SET_ACTIVE_BOARD', payload: next.id });
-                        onViewChange('board');
+                        onViewChange('board', next.id);
                     } else {
                         onViewChange('dashboard');
                     }

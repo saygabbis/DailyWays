@@ -2,6 +2,8 @@ import React, { useRef, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Focus } from 'lucide-react';
 import CanvasEngine from '../Whiteboard/CanvasEngine';
+import { CollabOpsProvider } from '../../collab/CollabOpsContext.jsx';
+import PresenceOnlineList from '../../collab/PresenceOnlineList.jsx';
 import './SpaceView.css';
 
 export default function SpaceView({ spaceId }) {
@@ -44,7 +46,12 @@ export default function SpaceView({ spaceId }) {
 
     return (
         <div className="space-view-container" style={{ position: 'relative', width: '100%', height: '100%' }}>
-            <CanvasEngine spaceId={spaceId} space={space} onViewportChange={onViewportChange} />
+            <CollabOpsProvider>
+                <div className="space-presence-bar">
+                    <PresenceOnlineList />
+                </div>
+                <CanvasEngine spaceId={spaceId} space={space} onViewportChange={onViewportChange} />
+            </CollabOpsProvider>
             <button className="space-reset-btn btn-floating" onClick={handleReset} title="Centralizar">
                 <Focus size={18} />
             </button>

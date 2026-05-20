@@ -3,18 +3,19 @@ import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { useAuth } from '../../context/AuthContext';
 import { uploadSpaceAsset } from '../../services/whiteboardService';
 import { insertNode } from '../../services/whiteboardService';
+import { useCollabPatch } from '../../collab/CollabOpsContext.jsx';
 import { ImagePlus } from 'lucide-react';
 import { uuidv4 } from '../../utils/uuid';
 
 export default function AssetUploader({ viewport, containerRef }) {
     const inputRef = useRef(null);
     const { user } = useAuth();
-    const { spaceId, addNode, setSuppressRealtimeUntil } = useWhiteboardStore();
+    const { spaceId, addNode } = useWhiteboardStore();
+    const { collabCreateNode, connected: collabConnected } = useCollabPatch();
 
     const handleFile = async (e) => {
         const file = e.target?.files?.[0];
         if (!file || !spaceId || !file.type.startsWith('image/')) return;
-        setSuppressRealtimeUntil(2000);
         const { url } = await uploadSpaceAsset(spaceId, file, user?.id);
         if (!url) return;
         const rect = containerRef?.current?.getBoundingClientRect();
@@ -34,8 +35,12 @@ export default function AssetUploader({ viewport, containerRef }) {
             parentId: null,
             zIndex: 0,
         };
-        const res = await insertNode(spaceId, node, user?.id);
-        if (res.success) addNode(node);
+        if (collabConnected) {
+            collabCreateNode({ ...node, createdBy: user?.id ?? null });
+        } else {
+            const res = await insertNode(spaceId, node, user?.id);
+            if (res.success) addNode(node);
+        }
         e.target.value = '';
     };
 

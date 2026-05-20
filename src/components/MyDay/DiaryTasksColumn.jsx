@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
 import { Sun, Star, Calendar, Sparkles, ChevronDown, Trash2, CheckCircle2 } from 'lucide-react';
 import { format, isToday, isTomorrow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import SmartTaskItem from '../SmartViews/SmartTaskItem';
+import { updatesToggleImportant } from '../../utils/cardImportant';
 
 export default function DiaryTasksColumn({ onCardClick }) {
-    const { getMyDayCards, getPlannedCards, dispatch, persistBoard } = useApp();
+    const { getMyDayCards, getPlannedCards } = useApp();
+    const { collabDispatch } = useBoardCollabDispatch();
     const [selectedBoardId, setSelectedBoardId] = useState('all');
 
     const allMyDayCards = getMyDayCards();
@@ -56,7 +59,7 @@ export default function DiaryTasksColumn({ onCardClick }) {
         : dueTodayNotInMyDayRaw.filter(c => c.boardId === selectedBoardId);
 
     const addToMyDay = (card) => {
-        dispatch({
+        collabDispatch({
             type: 'UPDATE_CARD',
             payload: {
                 boardId: card.boardId,
@@ -65,11 +68,10 @@ export default function DiaryTasksColumn({ onCardClick }) {
                 updates: { myDay: true },
             },
         });
-        persistBoard(card.boardId);
     };
 
     const removeFromMyDay = (card) => {
-        dispatch({
+        collabDispatch({
             type: 'UPDATE_CARD',
             payload: {
                 boardId: card.boardId,
@@ -78,26 +80,23 @@ export default function DiaryTasksColumn({ onCardClick }) {
                 updates: { myDay: false },
             },
         });
-        persistBoard(card.boardId);
     };
 
     const toggleImportant = (card) => {
-        dispatch({
+        collabDispatch({
             type: 'UPDATE_CARD',
             payload: {
                 boardId: card.boardId,
                 listId: card.listId,
                 cardId: card.id,
-                updates: { important: !card.important },
+                updates: updatesToggleImportant(card),
             },
         });
-        persistBoard(card.boardId);
     };
 
     const clearCompleted = () => {
-        const boardsToPersist = new Set();
         completedCards.forEach(card => {
-            dispatch({
+            collabDispatch({
                 type: 'UPDATE_CARD',
                 payload: {
                     boardId: card.boardId,
@@ -106,15 +105,12 @@ export default function DiaryTasksColumn({ onCardClick }) {
                     updates: { myDay: false },
                 },
             });
-            boardsToPersist.add(card.boardId);
         });
-        boardsToPersist.forEach(id => persistBoard(id));
     };
 
     const addAllDueToday = () => {
-        const boardsToPersist = new Set();
         dueTodayNotInMyDay.forEach(card => {
-            dispatch({
+            collabDispatch({
                 type: 'UPDATE_CARD',
                 payload: {
                     boardId: card.boardId,
@@ -123,9 +119,7 @@ export default function DiaryTasksColumn({ onCardClick }) {
                     updates: { myDay: true },
                 },
             });
-            boardsToPersist.add(card.boardId);
         });
-        boardsToPersist.forEach(id => persistBoard(id));
     };
 
     const currentBoardLabel = (() => {
