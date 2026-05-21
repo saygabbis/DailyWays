@@ -42,10 +42,13 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
     return () => { cancelled = true; };
   }, [user?.id, profile?.photo_url, profile?.presence_color_auto]);
 
+  const authRef = useRef({ user, profile });
+  authRef.current = { user, profile };
+
   const buildPayload = useCallback(() => {
     if (!roomId) return {};
-    return buildBoardPresencePayload(roomId, { user, profile });
-  }, [user?.id, user?.email, profile, roomId]);
+    return buildBoardPresencePayload(roomId, authRef.current);
+  }, [roomId, user?.id, profile?.name, profile?.photo_url, profile?.presence_color]);
 
   const flushPresence = useCallback(() => {
     const socket = collab?.socket;
@@ -56,7 +59,7 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
   const flushCursor = useCallback(() => {
     const socket = collab?.socket;
     if (!socket?.connected || !roomId) return;
-    const payload = buildCursorPresencePayload(roomId);
+    const payload = buildCursorPresencePayload(roomId, authRef.current);
     if (payload.cursor) emitPresence(socket, payload);
   }, [collab?.socket, roomId]);
 

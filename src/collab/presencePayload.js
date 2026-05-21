@@ -2,13 +2,20 @@ import { initialFromName } from '../utils/userColor';
 import { resolvePresenceColor } from '../utils/presenceColor';
 import { getPresenceFields } from './presenceBridge.js';
 
-export function buildBoardPresencePayload(boardId, { user, profile }) {
-  const name =
-    profile?.full_name ||
-    profile?.name ||
-    profile?.username ||
-    user?.email?.split('@')[0] ||
-    'Usuário';
+export function resolvePresenceDisplayName({ user, profile }) {
+  return (
+    profile?.name
+    || user?.name
+    || user?.user_metadata?.name
+    || profile?.username
+    || user?.email?.split('@')[0]
+    || 'Usuário'
+  );
+}
+
+function buildIdentity(boardId, auth) {
+  const { user, profile } = auth || {};
+  const name = resolvePresenceDisplayName({ user, profile });
   return {
     name,
     photoUrl: profile?.photo_url || null,
@@ -20,14 +27,20 @@ export function buildBoardPresencePayload(boardId, { user, profile }) {
       photoUrl: profile?.photo_url,
     }),
     roomId: boardId,
+  };
+}
+
+export function buildBoardPresencePayload(boardId, auth) {
+  return {
+    ...buildIdentity(boardId, auth),
     ...getPresenceFields(boardId),
   };
 }
 
-/** Lightweight cursor-only update (merged server-side with existing presence). */
-export function buildCursorPresencePayload(boardId) {
+/** Cursor update — always carries identity so peers never stick on "Usuário". */
+export function buildCursorPresencePayload(boardId, auth) {
   const fields = getPresenceFields(boardId);
-  const payload = { roomId: boardId };
+  const payload = { ...buildIdentity(boardId, auth) };
   if (fields.cursor) payload.cursor = fields.cursor;
   if (fields.cursorScreen) payload.cursorScreen = fields.cursorScreen;
   return payload;

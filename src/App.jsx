@@ -17,6 +17,8 @@ import SearchOverlay from './components/Search/SearchOverlay';
 import SpaceView from './components/Spaces/SpaceView';
 import BoardCollabBridge from './collab/BoardCollabBridge.jsx';
 import { pushPresenceFields } from './collab/presenceBridge.js';
+import { publishBoardPresenceFull } from './collab/boardPresencePublish.js';
+import { useCollab } from './collab/CollabContext.jsx';
 import { setLastBoardPointer } from './collab/lastBoardPointer.js';
 import { BoardCollabProvider, useBoardCollabDispatch } from './collab/BoardCollabContext.jsx';
 import PasswordResetPage from './components/Auth/PasswordResetPage';
@@ -40,6 +42,7 @@ function AppContent() {
   const { user, profile } = useAuth();
   const { getActiveBoard, confirmConfig, dispatch, getAllCards, state, updateBoardsOrder, suppressRealtime, updateWorkspaceOrder, boardsLoadError } = useApp();
   const { collabDispatch, updateBoardMeta } = useBoardCollabDispatch();
+  const collab = useCollab();
   const { initPreferences } = useTheme();
   const [activeView, setActiveView] = useState('dashboard');
   const viewRestoreDoneRef = useRef(false);
@@ -155,17 +158,25 @@ function AppContent() {
         draggingListId: start.source.droppableId,
       });
     }
+    if (boardId && collab?.socket?.connected) {
+      publishBoardPresenceFull(collab.socket, boardId, { user, profile });
+    }
     if (['board', 'space', 'board-group', 'space-group'].includes(start.type)) {
       if (state.selectedItems?.includes(start.draggableId) && state.selectedItems.length > 1) {
         dispatch({ type: 'SET_DRAGGING_BULK', payload: true });
       }
     }
-  }, [state.selectedItems, dispatch, hideContextMenu, getActiveBoard]);
+  }, [state.selectedItems, dispatch, hideContextMenu, getActiveBoard, collab?.socket, collab?.connected, user, profile]);
 
   const handleGlobalDragEnd = useCallback((result) => {
     document.body.classList.remove('dnd-dragging');
     const boardId = getActiveBoard()?.id;
-    if (boardId) pushPresenceFields(boardId, { draggingCardId: null, draggingListId: null });
+    if (boardId) {
+      pushPresenceFields(boardId, { draggingCardId: null, draggingListId: null });
+      if (collab?.socket?.connected) {
+        publishBoardPresenceFull(collab.socket, boardId, { user, profile });
+      }
+    }
     dispatch({ type: 'SET_DRAGGING_BULK', payload: false });
     const { source, destination, draggableId, type } = result;
     if (!destination) return;
@@ -233,7 +244,7 @@ function AppContent() {
     if (boardViewRef.current?.handleDragEnd) {
       boardViewRef.current.handleDragEnd(result);
     }
-  }, [state.boards, collabDispatch, user?.id, updateBoardsOrder, suppressRealtime]);
+  }, [state.boards, collabDispatch, user?.id, profile, collab?.socket, collab?.connected, getActiveBoard, updateBoardsOrder, suppressRealtime]);
 
   const handlePlannedDateSelect = (date) => {
     if (!plannedDropCard) return;

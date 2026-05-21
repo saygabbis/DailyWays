@@ -142,5 +142,11 @@ export default function BoardCollabSync({ boardId }) {
     };
   }, [boardId]);
 
+  useEffect(() => {
+    if (!joinedRef.current || joinedRef.current !== boardId) return;
+    if (!collab?.socket?.connected) return;
+    publishNow();
+  }, [boardId, user?.id, profile?.name, profile?.photo_url, profile?.presence_color, collab?.connected, publishNow]);
+
   return null;
 }

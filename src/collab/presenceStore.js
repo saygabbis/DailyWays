@@ -98,8 +98,14 @@ export const usePresenceStore = create((set) => ({
         patch.peers = next;
         patch._metaSig = mSig;
       } else if (cursorChanged) {
-        const merged = patchInteractiveCursors(state.peers, next);
-        if (merged !== state.peers) patch.peers = merged;
+        const prevIds = new Set((state.peers || []).map((p) => p.userId));
+        const hasNewPeer = next.some((p) => p.userId && !prevIds.has(p.userId));
+        if (hasNewPeer) {
+          patch.peers = next;
+        } else {
+          const merged = patchInteractiveCursors(state.peers, next);
+          if (merged !== state.peers) patch.peers = merged;
+        }
       }
       return { ...state, ...patch };
     });

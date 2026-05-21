@@ -64,7 +64,7 @@ export default function RemoteDragLayer({ boardId }) {
       const label = document.createElement('span');
       label.className = 'collab-remote-drag-ghost-label';
       label.style.background = color;
-      label.textContent = drag.name || drag.avatarInitial || '?';
+      label.textContent = drag.name || drag.avatarInitial || 'Usuário';
 
       inner.appendChild(title);
       inner.appendChild(label);
@@ -81,6 +81,13 @@ export default function RemoteDragLayer({ boardId }) {
       const key = `${drag.userId}-${drag.cardId}`;
       const el = nodeRefs.current.get(key);
       if (!el) continue;
+      const label = el.querySelector('.collab-remote-drag-ghost-label');
+      if (label) {
+        const color = drag.color || '#7c3aed';
+        label.textContent = drag.name || drag.avatarInitial || 'Usuário';
+        label.style.background = color;
+        el.style.setProperty('--presence-color', color);
+      }
       const cur = cursors[drag.userId];
       const x = typeof cur?.x === 'number' ? cur.x : drag.x;
       const y = typeof cur?.y === 'number' ? cur.y : drag.y;

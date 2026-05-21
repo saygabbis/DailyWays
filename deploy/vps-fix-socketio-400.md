@@ -2,7 +2,27 @@
 
 Sintoma no browser: handshake com `sid`, depois `POST .../socket.io/...&sid=...` → **400** e `[collab] connect error xhr post error`.
 
-## Causa mais comum (90%)
+## Causa #1 (confirmada em produção): CORS do collab
+
+Se o **Response** do POST 400 for `{"code":3,"message":"Bad request"}`, o nginx está ok — falta o domínio em `CORS_ORIGIN`.
+
+No `server/collab-server/.env` da VPS:
+
+```env
+CORS_ORIGIN=https://dailyways.saygabbis.cloud,http://31.97.90.13:5174,http://localhost:5174
+NODE_ENV=production
+```
+
+Depois: `pm2 restart dailyways-collab` (ou reinicie o processo manual).
+
+Teste rápido na VPS:
+
+```bash
+bash scripts/vps-diagnose.sh
+# seção 6 deve mostrar HTTP 200, não 400
+```
+
+## Causa #2: nginx (se Response for `Session ID unknown`)
 
 Nginx com `proxy_set_header Connection "upgrade";` **fixo** no `location /socket.io/`. Isso quebra o **long-polling POST**.
 

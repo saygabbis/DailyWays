@@ -8,6 +8,7 @@ import {
 } from '@dailyways/collab-protocol';
 import { verifyToken, canAccessSpace, canAccessBoard } from './auth.js';
 import { roomManager } from './roomManager.js';
+import { enrichPresenceFromProfile } from './presenceProfile.js';
 
 const MAX_OPS_PER_SEC = 120;
 
@@ -147,15 +148,16 @@ export function registerSocketHandlers(io) {
       ack?.({ ok: true, revision: result.revision });
     });
 
-    socket.on(CLIENT_EVENTS.PRESENCE, (payload) => {
+    socket.on(CLIENT_EVENTS.PRESENCE, async (payload) => {
       const roomId = socket.data.roomId;
       if (!roomId) return;
       const err = validatePresence(payload);
       if (err) return;
-      const full = {
-        ...payload,
-        userId: socket.data.userId,
-      };
+      const full = await enrichPresenceFromProfile(
+        socket.data.userId,
+        { ...payload, userId: socket.data.userId },
+        socket.data.userEmail,
+      );
       const peers = roomManager.setPresence(roomId, socket.data.userId, full);
       socket.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
     });

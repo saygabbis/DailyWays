@@ -36,6 +36,19 @@ export default function CollabPresenceLayer({
       .filter((p) => (peerFilter ? peerFilter(p) : true));
   }, [peers, myId, peerFilter, collab?.connected]);
 
+  const applyPeerMetaToNode = (el, peer) => {
+    const color = peer.color || '#7c3aed';
+    const displayName = peer.name || peer.avatarInitial || 'Usuário';
+    el.style.setProperty('--presence-color', color);
+    const label = el.querySelector('.collab-presence-label');
+    if (label) {
+      label.textContent = displayName;
+      label.style.background = color;
+    }
+    const path = el.querySelector('.collab-presence-pointer path');
+    if (path) path.setAttribute('fill', color);
+  };
+
   useEffect(() => {
     const layer = layerRef.current;
     if (!layer) return;
@@ -49,34 +62,37 @@ export default function CollabPresenceLayer({
     }
 
     for (const peer of visibleMeta) {
-      if (nodeRefs.current.has(peer.userId)) continue;
-      const color = peer.color || '#7c3aed';
-      const displayName = peer.name || peer.avatarInitial || 'Usuário';
-      const el = document.createElement('div');
-      el.className = 'collab-presence-cursor';
-      el.dataset.userId = peer.userId;
-      el.style.setProperty('--presence-color', color);
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('class', 'collab-presence-pointer');
-      svg.setAttribute('width', '20');
-      svg.setAttribute('height', '24');
-      svg.setAttribute('viewBox', '0 0 20 24');
-      svg.setAttribute('aria-hidden', 'true');
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', 'M2 2 L2 17 L7 12 L10.5 21 L13 19.5 L9.5 11.5 L16 11.5 Z');
-      path.setAttribute('fill', color);
-      path.setAttribute('stroke', '#fff');
-      path.setAttribute('stroke-width', '1.5');
-      path.setAttribute('stroke-linejoin', 'round');
-      svg.appendChild(path);
-      el.appendChild(svg);
-      const label = document.createElement('span');
-      label.className = 'collab-presence-label';
-      label.style.background = color;
-      label.textContent = displayName;
-      el.appendChild(label);
-      layer.appendChild(el);
-      nodeRefs.current.set(peer.userId, el);
+      let el = nodeRefs.current.get(peer.userId);
+      if (!el) {
+        const color = peer.color || '#7c3aed';
+        el = document.createElement('div');
+        el.className = 'collab-presence-cursor';
+        el.dataset.userId = peer.userId;
+        el.style.setProperty('--presence-color', color);
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'collab-presence-pointer');
+        svg.setAttribute('width', '20');
+        svg.setAttribute('height', '24');
+        svg.setAttribute('viewBox', '0 0 20 24');
+        svg.setAttribute('aria-hidden', 'true');
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M2 2 L2 17 L7 12 L10.5 21 L13 19.5 L9.5 11.5 L16 11.5 Z');
+        path.setAttribute('fill', color);
+        path.setAttribute('stroke', '#fff');
+        path.setAttribute('stroke-width', '1.5');
+        path.setAttribute('stroke-linejoin', 'round');
+        svg.appendChild(path);
+        el.appendChild(svg);
+        const label = document.createElement('span');
+        label.className = 'collab-presence-label';
+        label.style.background = color;
+        label.textContent = peer.name || peer.avatarInitial || 'Usuário';
+        el.appendChild(label);
+        layer.appendChild(el);
+        nodeRefs.current.set(peer.userId, el);
+      } else {
+        applyPeerMetaToNode(el, peer);
+      }
     }
   }, [visibleMeta]);
 

@@ -50,4 +50,22 @@ else
 fi
 
 echo ""
+echo "=== 6. CORS (POST com Origin do site — deve ser 200, não 400) ==="
+HS=$(curl -s "https://${DOMAIN}/socket.io/?EIO=4&transport=polling" 2>/dev/null || true)
+SID=$(echo "$HS" | sed -n 's/.*"sid":"\([^"]*\)".*/\1/p')
+if [ -z "$SID" ]; then
+  echo "FALHA: não obteve sid no handshake"
+else
+  CODE=$(curl -s -o /tmp/sio-post.txt -w "%{http_code}" -X POST \
+    "https://${DOMAIN}/socket.io/?EIO=4&transport=polling&sid=${SID}" \
+    -H "Content-Type: text/plain" \
+    -H "Origin: https://${DOMAIN}" \
+    -d "40")
+  echo "HTTP ${CODE} body: $(head -c 120 /tmp/sio-post.txt)"
+  if [ "$CODE" = "400" ] && grep -q 'Bad request' /tmp/sio-post.txt 2>/dev/null; then
+    echo "PROBLEMA: CORS — adicione https://${DOMAIN} em server/collab-server/.env CORS_ORIGIN e reinicie o collab"
+  fi
+fi
+
+echo ""
 echo "=== Fim ==="
