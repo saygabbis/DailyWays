@@ -16,6 +16,8 @@ import SettingsModal from './components/Settings/SettingsView';
 import SearchOverlay from './components/Search/SearchOverlay';
 import SpaceView from './components/Spaces/SpaceView';
 import BoardCollabBridge from './collab/BoardCollabBridge.jsx';
+import BoardCollabSync from './collab/BoardCollabSync.jsx';
+import { isCollabEnabled } from './collab/collabConfig.js';
 import { pushPresenceFields } from './collab/presenceBridge.js';
 import { publishBoardPresenceFull } from './collab/boardPresencePublish.js';
 import { useCollab } from './collab/CollabContext.jsx';
@@ -116,6 +118,10 @@ function AppContent() {
   const [plannedDropCard, setPlannedDropCard] = useState(null);
 
   const activeBoardId = getActiveBoard()?.id;
+  const keepBoardCollabSession =
+    !!activeBoardId
+    && isCollabEnabled()
+    && !activeView.startsWith('space-');
 
   useEffect(() => {
     const onPointerMove = (e) => {
@@ -407,6 +413,12 @@ function AppContent() {
     <BoardCollabProvider>
     <DragDropContext onDragStart={handleGlobalDragStart} onDragEnd={handleGlobalDragEnd}>
       <BoardCollabBridge />
+      {navReady && keepBoardCollabSession && (
+        <BoardCollabSync
+          boardId={activeBoardId}
+          boardViewActive={activeView === 'board'}
+        />
+      )}
       <div className="app-layout" onContextMenu={handleGlobalContextMenu}>
         <Sidebar
           activeView={activeView}

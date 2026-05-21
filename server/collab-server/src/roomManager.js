@@ -31,6 +31,7 @@ function createSpaceRoom() {
       comments: new Set(),
     },
     presence: new Map(),
+    presenceSockets: new Map(),
     clientCount: 0,
     flushTimer: null,
     lastActivity: Date.now(),
@@ -44,10 +45,33 @@ function createBoardRoom() {
     revision: 0,
     dirty: false,
     presence: new Map(),
+    presenceSockets: new Map(),
     clientCount: 0,
     flushTimer: null,
     lastActivity: Date.now(),
   };
+}
+
+function trackPresenceSocket(room, userId, socketId) {
+  if (!userId || !socketId) return;
+  if (!room.presenceSockets) room.presenceSockets = new Map();
+  if (!room.presenceSockets.has(userId)) room.presenceSockets.set(userId, new Set());
+  room.presenceSockets.get(userId).add(socketId);
+}
+
+/** @returns {boolean} true se era o último socket desse usuário na sala */
+function untrackPresenceSocket(room, userId, socketId) {
+  if (!userId || !socketId) return true;
+  const set = room.presenceSockets?.get(userId);
+  if (set) {
+    set.delete(socketId);
+    if (set.size > 0) return false;
+    room.presenceSockets.delete(userId);
+    return true;
+  }
+  const entry = room.presence.get(userId);
+  if (entry?.socketId && entry.socketId !== socketId) return false;
+  return true;
 }
 
 export class RoomManager {
@@ -134,25 +158,46 @@ export class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room) return null;
     const prev = room.presence.get(userId) || {};
-    room.presence.set(userId, {
+    const sid = socketId || payload?.socketId || prev.socketId || null;
+    if (sid) trackPresenceSocket(room, userId, sid);
+    const merged = {
       ...prev,
       ...payload,
       userId,
-      socketId: socketId || payload?.socketId || prev.socketId || null,
+      socketId: sid,
       updatedAt: Date.now(),
-    });
+    };
+    const hasCursor = payload?.cursor
+      && typeof payload.cursor.x === 'number'
+      && typeof payload.cursor.y === 'number';
+    if (!hasCursor) {
+      if (prev.cursor) merged.cursor = prev.cursor;
+      else delete merged.cursor;
+    }
+    const hasCursorScreen = payload?.cursorScreen
+      && typeof payload.cursorScreen.x === 'number';
+    if (!hasCursorScreen) {
+      if (prev.cursorScreen) merged.cursorScreen = prev.cursorScreen;
+      else delete merged.cursorScreen;
+    }
+    room.presence.set(userId, merged);
     return this.getPresenceList(room);
   }
 
-  /** Só remove se socketId for da mesma conexão (evita F5/reconnect apagar presença nova). */
+  /** Remove presença só quando não há outro socket ativo do mesmo usuário (F5 / multi-tab). */
   removePresence(roomId, userId, socketId = null) {
     const room = this.rooms.get(roomId);
     if (!room) return null;
-    const entry = room.presence.get(userId);
-    if (socketId && entry?.socketId && entry.socketId !== socketId) {
-      return this.getPresenceList(room);
+    if (socketId) {
+      const lastSocket = untrackPresenceSocket(room, userId, socketId);
+      if (!lastSocket) return this.getPresenceList(room);
+      const entry = room.presence.get(userId);
+      if (entry?.socketId && entry.socketId !== socketId) {
+        return this.getPresenceList(room);
+      }
     }
     room.presence.delete(userId);
+    room.presenceSockets?.delete(userId);
     return this.getPresenceList(room);
   }
 
@@ -160,8 +205,9 @@ export class RoomManager {
     const now = Date.now();
     const peers = [];
     for (const [userId, p] of room.presence.entries()) {
-      if (now - (p.updatedAt || 0) > 60000) {
+      if (p.updatedAt != null && now - p.updatedAt > 60000) {
         room.presence.delete(userId);
+        room.presenceSockets?.delete(userId);
         continue;
       }
       peers.push(p);

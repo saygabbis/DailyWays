@@ -37,6 +37,24 @@ export default function CollabSync({ spaceId }) {
     const socket = collab.socket;
     let cancelled = false;
 
+    const onSocketDisconnect = () => {
+      joinedRef.current = null;
+    };
+    const onSocketConnect = () => {
+      if (!cancelled && socket.connected) {
+        (async () => {
+          try {
+            const res = await joinSpaceRoom(socket, spaceId);
+            if (cancelled) return;
+            joinedRef.current = spaceId;
+            if (res.peers) flushPresenceSyncNow(res.peers);
+          } catch (err) {
+            console.warn('[CollabSync] rejoin failed', err.message);
+          }
+        })();
+      }
+    };
+
     const onState = (payload) => {
       if (cancelled) return;
       useWhiteboardStore.getState().hydrateRoom({
@@ -54,6 +72,8 @@ export default function CollabSync({ spaceId }) {
 
     socket.on(SERVER_EVENTS.STATE, onState);
     socket.on(SERVER_EVENTS.PRESENCE_SYNC, onPresenceSync);
+    socket.on('disconnect', onSocketDisconnect);
+    socket.on('connect', onSocketConnect);
 
     (async () => {
       try {
@@ -80,13 +100,14 @@ export default function CollabSync({ spaceId }) {
       cancelled = true;
       socket.off(SERVER_EVENTS.STATE, onState);
       socket.off(SERVER_EVENTS.PRESENCE_SYNC, onPresenceSync);
+      socket.off('disconnect', onSocketDisconnect);
+      socket.off('connect', onSocketConnect);
       if (joinedRef.current === spaceId) {
         leaveRoom(socket);
         joinedRef.current = null;
-        usePresenceStore.getState().clearPeers();
       }
     };
-  }, [spaceId, collab?.socket, collab?.connected]);
+  }, [spaceId, collab?.socket]);
 
   return null;
 }

@@ -56,7 +56,8 @@ export default function BoardCard({
     const presenceColor = primaryEditor?.color || hoverPeer?.color || 'var(--accent-primary)';
     const isBeingEdited = Array.isArray(editingEditors) && editingEditors.length > 0;
     const isRemoteHover = !isBeingEdited && Boolean(hoverPeer);
-    const coverUrl = useCardCoverImage(card.id, card.coverAttachmentId);
+    const fetchedCoverUrl = useCardCoverImage(card.id, card.coverAttachmentId);
+    const coverUrl = fetchedCoverUrl || card.coverPreviewUrl || null;
 
     const getContextMenuItems = () => [
         {
@@ -183,10 +184,19 @@ export default function BoardCard({
         >
             {card.coverAttachmentId && (
                 <div
-                    className="board-card-cover board-card-cover-active"
+                    className={`board-card-cover board-card-cover-active${coverUrl ? ' board-card-cover-loaded' : ''}`}
                     aria-hidden="true"
-                    style={coverUrl ? { backgroundImage: `url(${coverUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
-                />
+                >
+                    {coverUrl ? (
+                        <img
+                            src={coverUrl}
+                            alt=""
+                            className="board-card-cover-img"
+                            loading="lazy"
+                            decoding="async"
+                        />
+                    ) : null}
+                </div>
             )}
             {isBeingEdited && (
                 <div

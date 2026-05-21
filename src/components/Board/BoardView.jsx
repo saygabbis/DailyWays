@@ -8,7 +8,6 @@ import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import { Plus, Loader2, X, GripVertical, Share2 } from 'lucide-react';
 import { fetchBoardMembers, sortBoardMembersOwnerFirst } from '../../services/boardService';
 import { useMergedBoardEditors } from '../../hooks/useMergedBoardEditors';
-import BoardCollabSync from '../../collab/BoardCollabSync.jsx';
 import BoardCollabStatusBanner from '../../collab/BoardCollabStatusBanner.jsx';
 import CollabPresenceLayer from '../../collab/CollabPresenceLayer.jsx';
 import RemoteDragLayer from '../../collab/RemoteDragLayer.jsx';
@@ -479,9 +478,7 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
             className="board-view"
             ref={containerRef}
             onPointerMove={handleBoardPointerMove}
-            onPointerLeave={() => updateBoardCursor(null)}
         >
-            {board?.id && <BoardCollabSync boardId={board.id} />}
             <BoardCollabStatusBanner />
             {/* Board Toolbar - Floating & Draggable */}
             {showBoardToolbar && (
@@ -704,7 +701,7 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
                             </div>
                         )}
                     </Droppable>
-                    <CollabPresenceLayer mode="screen" />
+                    {!focusedCardId && <CollabPresenceLayer mode="screen" />}
                     <RemoteDragLayer boardId={board.id} />
                 </>
             </div>

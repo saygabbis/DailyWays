@@ -1,18 +1,44 @@
 import { emitPresence } from './collabClient.js';
 import { getPresenceFields } from './presenceBridge.js';
 import { buildBoardPresencePayload } from './presencePayload.js';
-import { seedBoardCursorFields } from './lastBoardPointer.js';
+import { getLastBoardPointer, seedBoardCursorFields } from './lastBoardPointer.js';
+
+function applySeededCursor(boardId, seeded) {
+  if (!seeded) return false;
+  const f = getPresenceFields(boardId);
+  f.cursor = { x: seeded.x, y: seeded.y, mode: 'screen' };
+  f.cursorScreen = seeded.cursorScreen || null;
+  return true;
+}
 
 /** Apply last-known or default cursor, then emit presence once (join / reconnect). */
 export function publishBoardPresenceFull(socket, boardId, auth) {
-  if (!socket?.connected || !boardId) return;
+  if (!socket?.connected || !boardId) return false;
 
-  const seeded = seedBoardCursorFields(boardId);
-  if (seeded) {
-    const f = getPresenceFields(boardId);
-    f.cursor = { x: seeded.x, y: seeded.y, mode: 'screen' };
-    f.cursorScreen = seeded.cursorScreen || null;
+  let hasCursor = applySeededCursor(boardId, seedBoardCursorFields(boardId));
+  if (!hasCursor) {
+    const last = getLastBoardPointer(boardId);
+    hasCursor = applySeededCursor(boardId, last);
+  }
+
+  const fields = getPresenceFields(boardId);
+  if (!hasCursor && fields.cursor && typeof fields.cursor.x === 'number') {
+    hasCursor = true;
   }
 
   emitPresence(socket, buildBoardPresencePayload(boardId, auth));
+  return hasCursor;
+}
+
+/** Republish until cursor is on screen or retries exhausted (F5 / remount). */
+export function scheduleBoardPresencePublish(socket, boardId, auth, { maxAttempts = 12 } = {}) {
+  let attempts = 0;
+  const tick = () => {
+    if (!socket?.connected || !boardId) return;
+    const ok = publishBoardPresenceFull(socket, boardId, auth);
+    attempts += 1;
+    if (ok || attempts >= maxAttempts) return;
+    requestAnimationFrame(tick);
+  };
+  tick();
 }

@@ -40,9 +40,12 @@ export function pushPresenceFields(roomId, partial) {
   }
 }
 
-/** Clear local presence fields when leaving a board room (avoid stale null cursor on rejoin). */
+/** Clear local presence fields when leaving a board room (não emite presença — evita cursor:null no servidor). */
 export function resetPresenceFields(roomId) {
   if (!roomId) return;
+  for (const entry of [...sendersByRoom]) {
+    if (entry.roomId === roomId) sendersByRoom.delete(entry);
+  }
   const f = roomFields(roomId);
   f.cursor = null;
   f.cursorScreen = null;

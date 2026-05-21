@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../context/AppContext';
 import { useBoardPresenceHighlights } from '../hooks/useBoardPresenceHighlights';
 import { usePresenceStore } from './presenceStore';
+import { presenceLabelTextColor } from '../utils/presenceLabelContrast.js';
 import './PresenceLayer.css';
 
 /**
@@ -64,6 +66,7 @@ export default function RemoteDragLayer({ boardId }) {
       const label = document.createElement('span');
       label.className = 'collab-remote-drag-ghost-label';
       label.style.background = color;
+      label.style.color = presenceLabelTextColor(color);
       label.textContent = drag.name || drag.avatarInitial || 'Usuário';
 
       inner.appendChild(title);
@@ -86,13 +89,15 @@ export default function RemoteDragLayer({ boardId }) {
         const color = drag.color || '#7c3aed';
         label.textContent = drag.name || drag.avatarInitial || 'Usuário';
         label.style.background = color;
+        label.style.color = presenceLabelTextColor(color);
         el.style.setProperty('--presence-color', color);
       }
-      const cur = cursors[drag.userId] ?? usePresenceStore.getState().peers.find(
-        (p) => p.userId === drag.userId,
-      )?.cursor;
-      const x = typeof cur?.x === 'number' ? cur.x : drag.x;
-      const y = typeof cur?.y === 'number' ? cur.y : drag.y;
+      const remote = cursors[drag.userId];
+      const peer = usePresenceStore.getState().peers.find((p) => p.userId === drag.userId);
+      const cs = remote?.cursorScreen ?? peer?.cursorScreen;
+      const cur = remote ?? peer?.cursor;
+      const x = typeof cs?.x === 'number' ? cs.x : (typeof cur?.x === 'number' ? cur.x : drag.x);
+      const y = typeof cs?.y === 'number' ? cs.y : (typeof cur?.y === 'number' ? cur.y : drag.y);
       if (x == null || y == null) {
         el.style.display = 'none';
         continue;
@@ -104,7 +109,12 @@ export default function RemoteDragLayer({ boardId }) {
 
   if (!remoteDrags.length) return null;
 
-  return (
-    <div ref={layerRef} className="collab-remote-drag-layer" aria-hidden />
+  const layer = (
+    <div ref={layerRef} className="collab-remote-drag-layer collab-remote-drag-layer--viewport" aria-hidden />
   );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(layer, document.body);
+  }
+  return layer;
 }

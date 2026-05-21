@@ -30,10 +30,29 @@ function buildIdentity(boardId, auth) {
   };
 }
 
+function presenceFieldsForEmit(boardId) {
+  const f = getPresenceFields(boardId);
+  const out = {
+    selectedCardId: f.selectedCardId ?? null,
+    draggingCardId: f.draggingCardId ?? null,
+    draggingListId: f.draggingListId ?? null,
+    hoverCardId: f.hoverCardId ?? null,
+    hoverListId: f.hoverListId ?? null,
+  };
+  if (f.selectedNodeIds != null) out.selectedNodeIds = f.selectedNodeIds;
+  if (f.cursor && typeof f.cursor.x === 'number' && typeof f.cursor.y === 'number') {
+    out.cursor = f.cursor;
+  }
+  if (f.cursorScreen && typeof f.cursorScreen.x === 'number') {
+    out.cursorScreen = f.cursorScreen;
+  }
+  return out;
+}
+
 export function buildBoardPresencePayload(boardId, auth) {
   return {
     ...buildIdentity(boardId, auth),
-    ...getPresenceFields(boardId),
+    ...presenceFieldsForEmit(boardId),
   };
 }
 

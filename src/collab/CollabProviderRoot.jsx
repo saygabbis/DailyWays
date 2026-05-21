@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { SERVER_EVENTS } from '@dailyways/collab-protocol';
+import { flushPresenceSyncNow } from './queuePresenceSync.js';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabaseClient';
 import { useWhiteboardStore } from '../stores/whiteboardStore';
@@ -11,8 +12,6 @@ import {
 } from './collabClient.js';
 import { CollabProvider } from './CollabContext.jsx';
 import { applyRemoteOp } from './applyOp.js';
-import { clearGlobalJoinedBoardId } from './boardCollabSession.js';
-
 export default function CollabProviderRoot({ children }) {
   const { user } = useAuth();
   const [connected, setConnected] = useState(false);
@@ -49,12 +48,12 @@ export default function CollabProviderRoot({ children }) {
         setConnected(true);
         console.info('[collab] connected', {
           url: getCollabServerUrl(),
+          origin: typeof window !== 'undefined' ? window.location.origin : undefined,
           transport: sock.io?.engine?.transport?.name,
         });
       };
       const onDisconnect = () => {
         setConnected(false);
-        clearGlobalJoinedBoardId();
       };
       const onConnectError = (err) => {
         const xhr = err?.context?.xhr;
@@ -64,6 +63,7 @@ export default function CollabProviderRoot({ children }) {
             : undefined;
         console.warn('[collab] connect error', err?.message || err, {
           url: getCollabServerUrl(),
+          origin: typeof window !== 'undefined' ? window.location.origin : undefined,
           type: err?.type,
           description: err?.description,
           httpStatus: xhr?.status,
@@ -105,6 +105,9 @@ export default function CollabProviderRoot({ children }) {
       sock.on('connect_error', onConnectError);
       sock.on(SERVER_EVENTS.APPLIED, onApplied);
       sock.on(SERVER_EVENTS.REJECTED, onRejected);
+      sock.on(SERVER_EVENTS.PRESENCE_SYNC, (payload) => {
+        if (payload?.peers) flushPresenceSyncNow(payload.peers);
+      });
 
       if (sock.connected) setConnected(true);
 
@@ -125,6 +128,7 @@ export default function CollabProviderRoot({ children }) {
         sock.off('connect_error');
         sock.off(SERVER_EVENTS.APPLIED);
         sock.off(SERVER_EVENTS.REJECTED);
+        sock.off(SERVER_EVENTS.PRESENCE_SYNC);
       }
       disconnectCollabSocket();
       setSocket(null);

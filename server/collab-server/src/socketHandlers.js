@@ -6,6 +6,7 @@ import {
   SERVER_EVENTS,
   roomIdForSpace,
   roomIdForBoard,
+  parseBoardIdFromRoom,
   validateOp,
   validatePresence,
 } from '@dailyways/collab-protocol';
@@ -15,6 +16,13 @@ import { enrichPresenceFromProfile } from './presenceProfile.js';
 
 const MAX_OPS_PER_SEC = 120;
 const DEBUG_LOG = join(dirname(fileURLToPath(import.meta.url)), '../../../debug-ed15fe.log');
+
+function boardIdMatchesRoom(reqBoardId, roomId) {
+  if (!reqBoardId || !roomId) return true;
+  if (reqBoardId === roomId) return true;
+  if (roomId === roomIdForBoard(reqBoardId)) return true;
+  return parseBoardIdFromRoom(roomId) === reqBoardId;
+}
 
 function agentLog(location, message, data, hypothesisId) {
   try {
@@ -79,17 +87,22 @@ export function registerSocketHandlers(io) {
           socket.data.boardId = null;
         }
 
-        if (socket.data.roomId) {
-          const prevRoom = socket.data.roomId;
-          socket.leave(prevRoom);
-          await roomManager.clientLeft(prevRoom);
-          roomManager.removePresence(prevRoom, socket.data.userId, socket.id);
+        const prevRoomId = socket.data.roomId;
+        const alreadyInRoom = prevRoomId === roomId;
+
+        if (prevRoomId && prevRoomId !== roomId) {
+          socket.leave(prevRoomId);
+          await roomManager.clientLeft(prevRoomId);
+          roomManager.removePresence(prevRoomId, socket.data.userId, socket.id);
         }
 
         socket.data.roomId = roomId;
         socket.data.canWrite = access.canWrite;
         socket.join(roomId);
-        roomManager.clientJoined(roomId);
+        if (!alreadyInRoom) {
+          roomManager.clientJoined(roomId);
+        }
+
         const room = await roomManager.getOrLoad(roomId);
         if (boardId && !room.board) {
           ack?.({ ok: false, error: 'Board not found' });
@@ -103,9 +116,16 @@ export function registerSocketHandlers(io) {
         );
         roomManager.setPresence(roomId, socket.data.userId, stub, socket.id);
         const peers = roomManager.getPresenceList(room);
+        agentLog('socketHandlers.js:JOIN', 'join room', {
+          roomId,
+          socketId: socket.id?.slice(0, 8),
+          alreadyInRoom,
+          peerCount: peers.length,
+        }, 'H3');
         ack?.({ ok: true, ...state, peers });
         socket.emit(SERVER_EVENTS.STATE, { ...state, peers });
-        io.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
+        socket.emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
+        socket.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
       } catch (err) {
         console.error('[collab-server] join error', err);
         ack?.({ ok: false, error: err.message });
@@ -118,7 +138,7 @@ export function registerSocketHandlers(io) {
         ack?.({ ok: true, peers: [] });
         return;
       }
-      if (payload?.boardId && payload.boardId !== roomId) {
+      if (payload?.boardId && !boardIdMatchesRoom(payload.boardId, roomId)) {
         agentLog('socketHandlers.js:LEAVE', 'leave skipped stale board', { reqBoard: payload.boardId, roomId, socketId: socket.id?.slice(0, 8) }, 'H2');
         ack?.({ ok: true, skipped: true, peers: [] });
         return;
@@ -126,7 +146,7 @@ export function registerSocketHandlers(io) {
       socket.leave(roomId);
       const peers = roomManager.removePresence(roomId, socket.data.userId, socket.id) || [];
       agentLog('socketHandlers.js:LEAVE', 'leave room', { roomId, socketId: socket.id?.slice(0, 8), peerCount: peers.length }, 'H1-H4');
-      io.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
+      socket.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
       await roomManager.clientLeft(roomId);
       socket.data.roomId = null;
       ack?.({ ok: true, peers });
@@ -188,15 +208,21 @@ export function registerSocketHandlers(io) {
         socket.data.userEmail,
       );
       const peers = roomManager.setPresence(roomId, socket.data.userId, full, socket.id);
-      io.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
+      socket.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
     });
 
     socket.on('disconnect', async () => {
       const roomId = socket.data.roomId;
       if (!roomId) return;
+      socket.data.roomId = null;
       const peers = roomManager.removePresence(roomId, socket.data.userId, socket.id) || [];
-      agentLog('socketHandlers.js:disconnect', 'disconnect', { roomId, socketId: socket.id?.slice(0, 8), peerCount: peers.length }, 'H4');
-      io.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
+      agentLog('socketHandlers.js:disconnect', 'disconnect', {
+        roomId,
+        socketId: socket.id?.slice(0, 8),
+        peerCount: peers.length,
+        keptNewerSocket: peers.some((p) => p.userId === socket.data.userId),
+      }, 'H4');
+      socket.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
       await roomManager.clientLeft(roomId);
     });
   });

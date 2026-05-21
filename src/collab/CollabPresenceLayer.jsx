@@ -1,12 +1,30 @@
 import React, { useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { usePresenceStore } from './presenceStore';
 import { useCollab } from './CollabContext.jsx';
+import { presenceLabelTextColor } from '../utils/presenceLabelContrast.js';
 import './PresenceLayer.css';
 
-function toScreen(cursor, mode, panX, panY, zoom) {
+function toWorldScreen(cursor, panX, panY, zoom) {
   if (!cursor) return null;
-  if (mode === 'screen') return { x: cursor.x, y: cursor.y };
   return { x: cursor.x * zoom + panX, y: cursor.y * zoom + panY };
+}
+
+/** Posição em coordenadas de viewport (evita clip por overflow do board-scroller / modal). */
+function resolveViewportPosition(peer, remoteCursors, mode, panX, panY, zoom) {
+  const remote = remoteCursors[peer.userId];
+  const cur = remote ?? peer.cursor;
+  if (mode === 'screen') {
+    const cs = remote?.cursorScreen ?? peer.cursorScreen;
+    if (cs && typeof cs.x === 'number' && typeof cs.y === 'number') {
+      return { x: cs.x, y: cs.y };
+    }
+    if (cur && typeof cur.x === 'number' && typeof cur.y === 'number') {
+      return { x: cur.x, y: cur.y };
+    }
+    return null;
+  }
+  return toWorldScreen(cur, panX, panY, zoom);
 }
 
 /**
@@ -44,6 +62,7 @@ export default function CollabPresenceLayer({
     if (label) {
       label.textContent = displayName;
       label.style.background = color;
+      label.style.color = presenceLabelTextColor(color);
     }
     const path = el.querySelector('.collab-presence-pointer path');
     if (path) path.setAttribute('fill', color);
@@ -86,6 +105,7 @@ export default function CollabPresenceLayer({
         const label = document.createElement('span');
         label.className = 'collab-presence-label';
         label.style.background = color;
+        label.style.color = presenceLabelTextColor(color);
         label.textContent = peer.name || peer.avatarInitial || 'Usuário';
         el.appendChild(label);
         layer.appendChild(el);
@@ -101,12 +121,8 @@ export default function CollabPresenceLayer({
     const { panX: px = 0, panY: py = 0, zoom: z = 1 } = viewportRef.current || {};
     for (const peer of visibleMeta) {
       const el = nodeRefs.current.get(peer.userId);
-      const cur = remoteCursors[peer.userId] ?? peer.cursor;
-      if (!el || !cur) {
-        if (el) el.style.display = 'none';
-        continue;
-      }
-      const screen = toScreen(cur, mode, px, py, z);
+      if (!el) continue;
+      const screen = resolveViewportPosition(peer, remoteCursors, mode, px, py, z);
       if (!screen) {
         el.style.display = 'none';
         continue;
@@ -118,11 +134,21 @@ export default function CollabPresenceLayer({
 
   if (!collab?.connected || !visibleMeta.length) return null;
 
-  return (
+  const useViewportPortal = mode === 'screen';
+  const layer = (
     <div
       ref={layerRef}
-      className={`collab-presence-layer ${elevated ? 'collab-presence-layer--elevated' : ''}`}
+      className={[
+        'collab-presence-layer',
+        useViewportPortal ? 'collab-presence-layer--viewport' : 'collab-presence-layer--embedded',
+        elevated ? 'collab-presence-layer--elevated' : '',
+      ].filter(Boolean).join(' ')}
       aria-hidden
     />
   );
+
+  if (useViewportPortal && typeof document !== 'undefined') {
+    return createPortal(layer, document.body);
+  }
+  return layer;
 }

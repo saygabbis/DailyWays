@@ -9,11 +9,19 @@ const PORT = Number(process.env.PORT || 3001);
 const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5174';
 const allowedOrigins = corsOrigin.split(',').map((s) => s.trim()).filter(Boolean);
 
+/** localhost + rede local (amigo no http://192.168.x.x:5174) — sempre permitido. */
+function isPrivateLanOrigin(origin) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/i.test(
+    origin || '',
+  );
+}
+
 function isAllowedOrigin(origin) {
   if (!origin) return true;
   if (allowedOrigins.includes(origin)) return true;
-  if (process.env.NODE_ENV === 'production') return false;
-  return /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/i.test(origin);
+  if (isPrivateLanOrigin(origin)) return true;
+  if (process.env.NODE_ENV !== 'production') return true;
+  return false;
 }
 
 const corsOptions = {
@@ -45,10 +53,13 @@ const io = new Server(httpServer, {
 registerSocketHandlers(io);
 
 io.engine.on('connection_error', (err) => {
+  // code 1 = "Session ID unknown" — aba/dispositivo com sid antigo após restart do collab (inofensivo).
+  if (err.code === 1) return;
   const h = err.req?.headers || {};
   console.warn('[collab-server] connection_error', {
     code: err.code,
     message: err.message,
+    origin: h.origin,
     connection: h.connection,
     upgrade: h.upgrade,
   });

@@ -19,6 +19,34 @@ async function resolveAttachmentUrl(storagePath) {
   return data?.signedUrl ?? null;
 }
 
+/** URL assinada da capa (1 query) — usado no card do board. */
+export async function fetchCoverAttachmentUrl(cardId, coverAttachmentId) {
+  if (!cardId || !coverAttachmentId) {
+    return { url: null, error: null };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('card_attachments')
+      .select('id, storage_path, kind')
+      .eq('id', coverAttachmentId)
+      .eq('card_id', cardId)
+      .maybeSingle();
+
+    if (error) {
+      return { url: null, error: error.message || 'Erro ao carregar capa.' };
+    }
+    if (!data?.storage_path || data.kind !== 'image') {
+      return { url: null, error: 'Capa não encontrada.' };
+    }
+
+    const url = await resolveAttachmentUrl(data.storage_path);
+    return { url, error: url ? null : 'URL da capa indisponível.' };
+  } catch (err) {
+    return { url: null, error: err?.message || 'Erro ao carregar capa.' };
+  }
+}
+
 export async function fetchAttachments(cardId) {
   if (!cardId) return { data: [], error: null };
 

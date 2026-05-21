@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@dailyways/collab-protocol';
 import { getCollabServerUrl } from './collabConfig.js';
+import { getBoardCollabMountGen } from './boardCollabSession.js';
 
 let socketInstance = null;
 
@@ -30,6 +31,7 @@ export function connectCollabSocket(token) {
   socketInstance = io(url, {
     auth: { token },
     path: '/socket.io',
+    forceNew: true,
     transports: pollingOnly ? ['polling'] : ['polling', 'websocket'],
     upgrade: !pollingOnly,
     reconnection: true,
@@ -46,6 +48,28 @@ export function disconnectCollabSocket() {
     socketInstance.disconnect();
     socketInstance = null;
   }
+}
+
+export function waitForSocketConnected(socket, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    if (!socket) {
+      reject(new Error('Socket not connected'));
+      return;
+    }
+    if (socket.connected) {
+      resolve(socket);
+      return;
+    }
+    const timer = setTimeout(() => {
+      socket.off('connect', onConnect);
+      reject(new Error('Socket not connected'));
+    }, timeoutMs);
+    const onConnect = () => {
+      clearTimeout(timer);
+      resolve(socket);
+    };
+    socket.once('connect', onConnect);
+  });
 }
 
 export function joinRoom(socket, payload) {
@@ -65,14 +89,23 @@ export function joinSpaceRoom(socket, spaceId) {
   return joinRoom(socket, { spaceId });
 }
 
-export function joinBoardRoom(socket, boardId) {
+export async function joinBoardRoom(socket, boardId) {
+  await waitForSocketConnected(socket);
   return joinRoom(socket, { boardId });
 }
 
-/** @param {string} [boardId] — se informado, só sai se o socket ainda estiver nesta sala (evita cleanup atrasado apagar sala nova). */
-export function leaveRoom(socket, boardId = null) {
+/**
+ * @param {string} [boardId] — se informado, só sai se o socket ainda estiver nesta sala.
+ * @param {{ mountGen?: number }} [opts] — cleanup com mountGen: não emite se um mount mais novo já existe.
+ */
+export function leaveRoom(socket, boardId = null, opts = {}) {
+  const { mountGen } = opts;
   return new Promise((resolve) => {
     if (!socket?.connected) {
+      resolve();
+      return;
+    }
+    if (mountGen != null && mountGen !== getBoardCollabMountGen()) {
       resolve();
       return;
     }
@@ -83,8 +116,14 @@ export function leaveRoom(socket, boardId = null) {
       resolve();
     };
     const payload = boardId ? { boardId } : {};
-    socket.emit(CLIENT_EVENTS.LEAVE, payload, () => done());
-    setTimeout(done, 400);
+    socket.emit(CLIENT_EVENTS.LEAVE, payload, () => {
+      if (mountGen != null && mountGen !== getBoardCollabMountGen()) return;
+      done();
+    });
+    setTimeout(() => {
+      if (mountGen != null && mountGen !== getBoardCollabMountGen()) return;
+      done();
+    }, 400);
   });
 }
 

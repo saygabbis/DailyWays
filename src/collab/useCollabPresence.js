@@ -130,9 +130,7 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
     if (!roomId) return;
     const fields = getPresenceFields(roomId);
     if (!coords) {
-      fields.cursor = null;
-      fields.cursorScreen = null;
-      flushPresence();
+      // Não emitir cursor:null — apagava o cursor no servidor para os outros.
       return;
     }
     if (mode === 'screen') {

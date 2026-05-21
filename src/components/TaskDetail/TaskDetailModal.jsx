@@ -376,7 +376,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                         boardId,
                         listId,
                         cardId: card.id,
-                        updates: { coverAttachmentId: null, updatedAt: new Date().toISOString() },
+                        updates: { coverAttachmentId: null, coverPreviewUrl: null, updatedAt: new Date().toISOString() },
                     },
                 });
             }
@@ -389,13 +389,23 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const handleSetCover = async (attachment) => {
         const result = await setCardCover(card.id, attachment.id);
         if (result.success) {
+            let coverPreviewUrl = attachment.publicUrl || null;
+            if (!coverPreviewUrl && attachment.storagePath) {
+                const { fetchCoverAttachmentUrl } = await import('../../services/attachmentService');
+                const resolved = await fetchCoverAttachmentUrl(card.id, attachment.id);
+                coverPreviewUrl = resolved.url || null;
+            }
             collabDispatch({
                 type: 'UPDATE_CARD',
                 payload: {
                     boardId,
                     listId,
                     cardId: card.id,
-                    updates: { coverAttachmentId: attachment.id, updatedAt: new Date().toISOString() },
+                    updates: {
+                        coverAttachmentId: attachment.id,
+                        coverPreviewUrl,
+                        updatedAt: new Date().toISOString(),
+                    },
                 },
             });
             setShowCoverPanel(false);
@@ -414,7 +424,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                     boardId,
                     listId,
                     cardId: card.id,
-                    updates: { coverAttachmentId: null, updatedAt: new Date().toISOString() },
+                    updates: { coverAttachmentId: null, coverPreviewUrl: null, updatedAt: new Date().toISOString() },
                 },
             });
             setShowCoverPanel(false);
