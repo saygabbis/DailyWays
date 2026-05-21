@@ -12,6 +12,7 @@
     "dev:collab": "npm run dev -w @dailyways/collab-server",
     "dev:all": "node scripts/dev-all.mjs",
     "start:collab": "npm run start -w @dailyways/collab-server",
+    "start:vps": "node scripts/start-vps.mjs",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

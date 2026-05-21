@@ -36,20 +36,56 @@ location /socket.io/ {
 
 Exemplo completo: `deploy/nginx-dailyways.example.conf`
 
-## 3. Collab-server na VPS
+## 3. Dois processos na VPS (obrigatório)
+
+O nginx manda `/` → **5174** (Vite) e `/socket.io/` → **2529** (collab).
+
+Se só subir o Vite (`npm run dev`), o terminal mostra:
+
+`ECONNREFUSED 127.0.0.1:2529` — **collab não está rodando**.
+
+### Opção A — um comando (terminal aberto)
 
 ```bash
-cd /caminho/DailyWays/server/collab-server
-# .env:
-#   PORT=2529
-#   NODE_ENV=production
-#   SUPABASE_URL=...
-#   SUPABASE_SERVICE_ROLE_KEY=...
-#   CORS_ORIGIN=https://dailyways.saygabbis.cloud
-
+cd ~/Bots/DailyWays
 npm install
-npm run start
-# ou PM2: pm2 start npm --name dailyways-collab -- run start
+npm run start:vps
+```
+
+Sobe collab + Vite juntos.
+
+### Opção B — PM2 (recomendado, sobrevive ao logout)
+
+```bash
+cd ~/Bots/DailyWays
+npm install
+pm2 start ecosystem.config.cjs
+pm2 save
+pm2 status
+```
+
+### Opção C — dois terminais
+
+Terminal 1:
+
+```bash
+cd ~/Bots/DailyWays && npm run start:collab
+```
+
+Terminal 2:
+
+```bash
+cd ~/Bots/DailyWays && npm run dev -- --host
+```
+
+### `.env` do collab (`server/collab-server/.env`)
+
+```env
+PORT=2529
+NODE_ENV=production
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+CORS_ORIGIN=https://dailyways.saygabbis.cloud,http://31.97.90.13:5174
 ```
 
 Teste na VPS:
