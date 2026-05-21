@@ -22,9 +22,11 @@ export function connectCollabSocket(token) {
     socketInstance = null;
   }
 
+  // Polling primeiro: atrás de nginx/cloudflare o upgrade WebSocket costuma falhar sem proxy_set_header Upgrade.
   socketInstance = io(url, {
     auth: { token },
-    transports: ['websocket', 'polling'],
+    path: '/socket.io',
+    transports: ['polling', 'websocket'],
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 500,

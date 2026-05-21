@@ -10,7 +10,8 @@
   "scripts": {
     "dev": "vite --host",
     "dev:collab": "npm run dev -w @dailyways/collab-server",
-    "dev:all": "concurrently -k -n collab,vite -c blue,green \"npm run dev:collab\" \"wait-on http://127.0.0.1:2525/health -t 60000 && npm run dev\"",
+    "dev:all": "node scripts/dev-all.mjs",
+    "start:collab": "npm run start -w @dailyways/collab-server",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

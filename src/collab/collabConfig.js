@@ -1,26 +1,26 @@
 /**
  * Collab server URL.
- * - DEV + `auto` / empty / `proxy`: same origin → Vite proxies /socket.io → localhost:2525
- * - LAN: friend opens http://YOUR_LAN_IP:5174 — both use that origin automatically
- * - Production: set VITE_COLLAB_SERVER_URL to your collab host (e.g. https://collab.example.com)
+ * - `auto` / empty / `proxy` / `same-origin`: mesmo host do app (Vite proxy em dev, nginx em prod)
+ * - Produção com host separado: VITE_COLLAB_SERVER_URL=https://collab.seudominio.com
  */
 export function getCollabServerUrl() {
   const raw = import.meta.env.VITE_COLLAB_SERVER_URL?.trim() ?? '';
+  const useSameOrigin =
+    !raw ||
+    raw === 'auto' ||
+    raw === 'proxy' ||
+    raw === 'same-origin' ||
+    raw === 'same';
 
-  if (import.meta.env.DEV) {
-    const useProxy =
-      !raw ||
-      raw === 'auto' ||
-      raw === 'proxy' ||
-      raw === 'same-origin' ||
-      raw === 'same';
-    if (useProxy && typeof window !== 'undefined') {
-      return window.location.origin;
-    }
+  if (useSameOrigin && typeof window !== 'undefined') {
+    return window.location.origin;
   }
 
   if (raw) return raw.replace(/\/$/, '');
-  if (import.meta.env.DEV) return 'http://localhost:2525';
+  if (import.meta.env.DEV) {
+    const devPort = import.meta.env.VITE_COLLAB_DEV_PORT || '2529';
+    return `http://localhost:${devPort}`;
+  }
   return '';
 }
 

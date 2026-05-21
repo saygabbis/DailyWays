@@ -1,3 +1,4 @@
+import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { defineConfig } from 'vite'
@@ -6,10 +7,30 @@ import strip from '@rollup/plugin-strip'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+/** Lê PORT de server/collab-server/.env para o proxy bater com o collab local. */
+function getCollabPort() {
+  const envPath = path.resolve(__dirname, 'server/collab-server/.env')
+  try {
+    const match = fs.readFileSync(envPath, 'utf8').match(/^PORT\s*=\s*(\d+)/m)
+    if (match) return Number(match[1])
+  } catch {
+    /* ignore */
+  }
+  return 2529
+}
+
+const collabPort = getCollabPort()
+const collabTarget = `http://127.0.0.1:${collabPort}`
+
 export default defineConfig({
+  envDir: __dirname,
   plugins: [
     react(),
   ],
+
+  define: {
+    'import.meta.env.VITE_COLLAB_DEV_PORT': JSON.stringify(String(collabPort)),
+  },
 
   resolve: {
     alias: {
@@ -24,7 +45,7 @@ export default defineConfig({
     port: 5174,
     proxy: {
       '/socket.io': {
-        target: 'http://localhost:2525',
+        target: collabTarget,
         ws: true,
       },
     },

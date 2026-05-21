@@ -20,9 +20,9 @@ export function readPersistedView() {
     const session = readSessionNavigation();
     if (session?.view) return session.view;
     const v = localStorage.getItem(ACTIVE_VIEW_KEY);
-    return parseStoredString(v) || 'myday';
+    return parseStoredString(v) || 'dashboard';
   } catch {
-    return 'myday';
+    return 'dashboard';
   }
 }
 
@@ -100,13 +100,15 @@ function resolveBoardId(boards, ...candidates) {
 export function resolveRestoredNavigation({ boards = [], spaces = [], activeBoardHint = null }) {
   const session = readSessionNavigation();
   const saved = session?.view || readPersistedView();
-  const storedBoard =
-    session?.boardId
-    || storageService.load(STORAGE_KEYS.ACTIVE_BOARD)
-    || activeBoardHint;
+  const storedBoard = resolveBoardId(
+    boards,
+    session?.boardId,
+    storageService.load(STORAGE_KEYS.ACTIVE_BOARD),
+    activeBoardHint,
+  );
 
-  if (GENERAL_VIEWS.has(saved)) {
-    return { view: saved, boardId: null };
+  if (saved === 'board' && storedBoard) {
+    return { view: 'board', boardId: storedBoard };
   }
 
   if (saved.startsWith('space-')) {
@@ -114,18 +116,19 @@ export function resolveRestoredNavigation({ boards = [], spaces = [], activeBoar
     if (spaces.some((s) => s.id === spaceId)) {
       return { view: saved, boardId: null };
     }
-    return { view: 'myday', boardId: null };
+    if (storedBoard) return { view: 'board', boardId: storedBoard };
+    return { view: 'dashboard', boardId: null };
   }
 
-  if (saved === 'board') {
-    const boardId = resolveBoardId(boards, storedBoard);
-    if (boardId) {
-      return { view: 'board', boardId };
-    }
-    return { view: 'myday', boardId: null };
+  if (GENERAL_VIEWS.has(saved)) {
+    return { view: saved, boardId: null };
   }
 
-  return { view: 'myday', boardId: null };
+  if (storedBoard) {
+    return { view: 'board', boardId: storedBoard };
+  }
+
+  return { view: 'dashboard', boardId: null };
 }
 
 export function isGeneralView(view) {

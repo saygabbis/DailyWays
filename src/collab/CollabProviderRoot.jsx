@@ -3,7 +3,7 @@ import { SERVER_EVENTS } from '@dailyways/collab-protocol';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabaseClient';
 import { useWhiteboardStore } from '../stores/whiteboardStore';
-import { isCollabEnabled } from './collabConfig.js';
+import { getCollabServerUrl, isCollabEnabled } from './collabConfig.js';
 import {
   connectCollabSocket,
   disconnectCollabSocket,
@@ -46,13 +46,18 @@ export default function CollabProviderRoot({ children }) {
 
       const onConnect = () => {
         setConnected(true);
-        if (import.meta.env.DEV) {
-          console.info('[collab] connected', sock.io?.uri ?? '');
-        }
+        console.info('[collab] connected', {
+          url: getCollabServerUrl(),
+          transport: sock.io?.engine?.transport?.name,
+        });
       };
       const onDisconnect = () => setConnected(false);
       const onConnectError = (err) => {
-        console.warn('[collab] connect error', err?.message || err);
+        console.warn('[collab] connect error', err?.message || err, {
+          url: getCollabServerUrl(),
+          type: err?.type,
+          description: err?.description,
+        });
         setConnected(false);
       };
 

@@ -147,10 +147,6 @@ export function BoardCollabProvider({ children }) {
       && activeBoardId === boardId
       && !live;
 
-    // #region agent log
-    fetch('http://127.0.0.1:7493/ingest/0093f15a-2614-4c0e-9862-18929ca449cb', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ed15fe' }, body: JSON.stringify({ sessionId: 'ed15fe', location: 'BoardCollabContext.jsx:collabDispatchForBoard', message: 'board-mutate', data: { actionType: action.type, boardId, live, joiningActiveBoard, collabOn, connected: !!collab?.connected }, timestamp: Date.now(), hypothesisId: 'H-unified' }) }).catch(() => {});
-    // #endregion
-
     if (collabOn && collab?.connected) {
       if (live) {
         emitBoardAction(boardId, action);

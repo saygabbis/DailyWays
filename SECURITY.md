@@ -54,9 +54,11 @@ Se servires a pasta `dist/` com Nginx, podes espelhar os mesmos cabeçalhos:
 add_header X-Frame-Options "DENY" always;
 add_header X-Content-Type-Options "nosniff" always;
 add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-# Ajustar a linha CSP à tua necessidade (OAuth, etc.)
-add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.supabase.in; frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
+# Ajustar a linha CSP à tua necessidade (OAuth, collab em subdomínio, etc.)
+add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.supabase.in wss://SEU_DOMINIO; frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
 ```
+
+Collab na mesma origem (`VITE_COLLAB_SERVER_URL=auto`): `connect-src 'self'` já cobre `wss://` do teu domínio. Configuração completa do proxy: `deploy/nginx-dailyways.example.conf`.
 
 ## Reportar problemas
 

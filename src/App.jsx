@@ -21,11 +21,9 @@ import { setLastBoardPointer } from './collab/lastBoardPointer.js';
 import { BoardCollabProvider, useBoardCollabDispatch } from './collab/BoardCollabContext.jsx';
 import PasswordResetPage from './components/Auth/PasswordResetPage';
 import {
-  readPersistedView,
   persistNavigation,
   resolveRestoredNavigation,
   isWorkspaceDataReady,
-  isGeneralView,
 } from './utils/restoreNavigation';
 
 import PomodoroTimer from './components/Pomodoro/PomodoroTimer';
@@ -43,11 +41,10 @@ function AppContent() {
   const { getActiveBoard, confirmConfig, dispatch, getAllCards, state, updateBoardsOrder, suppressRealtime, updateWorkspaceOrder, boardsLoadError } = useApp();
   const { collabDispatch, updateBoardMeta } = useBoardCollabDispatch();
   const { initPreferences } = useTheme();
-  const initialView = readPersistedView();
-  const [activeView, setActiveView] = useState(initialView);
+  const [activeView, setActiveView] = useState('dashboard');
   const viewRestoreDoneRef = useRef(false);
-  const navPersistReadyRef = useRef(isGeneralView(initialView));
-  const [navReady, setNavReady] = useState(() => isGeneralView(initialView));
+  const navPersistReadyRef = useRef(false);
+  const [navReady, setNavReady] = useState(false);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
 
