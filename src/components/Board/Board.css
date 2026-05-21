@@ -567,7 +567,8 @@
     filter: saturate(0.85);
 }
 
-.board-card-remote-drag-source .board-card-inner {
+/* Só bloqueia animação de entrada durante o arraste remoto ativo; no drop (remote-drop-anim) a jelly roda */
+.board-card-remote-drag-source:not(.board-card-remote-drop-anim) .board-card-inner {
     animation: none !important;
 }
 
@@ -587,6 +588,22 @@
     box-shadow:
         0 0 0 2px color-mix(in srgb, var(--presence-color) 55%, transparent),
         0 0 22px color-mix(in srgb, var(--presence-color) 35%, transparent),
+        var(--shadow-card-hover);
+}
+
+.board-card-presence-indicator--self {
+    animation: none;
+    box-shadow:
+        0 0 0 2px var(--presence-color),
+        0 10px 26px rgba(0, 0, 0, 0.28);
+}
+
+.board-card-presence-active:has(.board-card-presence-indicator--self) {
+    border-width: 2px;
+    border-color: var(--presence-color);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--presence-color) 65%, transparent),
+        0 0 18px color-mix(in srgb, var(--presence-color) 40%, transparent),
         var(--shadow-card-hover);
 }
 

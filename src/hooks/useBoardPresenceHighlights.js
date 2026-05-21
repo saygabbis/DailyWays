@@ -47,7 +47,8 @@ export function useBoardPresenceHighlights() {
         hoverByListId[peer.hoverListId].push(meta);
       }
       if (peer.draggingCardId) {
-        const c = remoteCursors[peer.userId] || peer.cursor || peer.cursorScreen;
+        const rc = remoteCursors[peer.userId];
+        const c = (rc && typeof rc.x === 'number') ? rc : peer.cursor;
         remoteDrags.push({
           ...meta,
           cardId: peer.draggingCardId,

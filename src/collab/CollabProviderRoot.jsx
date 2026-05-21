@@ -11,6 +11,7 @@ import {
 } from './collabClient.js';
 import { CollabProvider } from './CollabContext.jsx';
 import { applyRemoteOp } from './applyOp.js';
+import { clearGlobalJoinedBoardId } from './boardCollabSession.js';
 
 export default function CollabProviderRoot({ children }) {
   const { user } = useAuth();
@@ -51,7 +52,10 @@ export default function CollabProviderRoot({ children }) {
           transport: sock.io?.engine?.transport?.name,
         });
       };
-      const onDisconnect = () => setConnected(false);
+      const onDisconnect = () => {
+        setConnected(false);
+        clearGlobalJoinedBoardId();
+      };
       const onConnectError = (err) => {
         const xhr = err?.context?.xhr;
         const responseSnippet =

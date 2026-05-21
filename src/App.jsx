@@ -152,7 +152,13 @@ function AppContent() {
     const boardId = getActiveBoard()?.id;
     if (boardId && start.type === 'list') {
       pushPresenceFields(boardId, { draggingListId: start.draggableId, draggingCardId: null });
-    } else if (boardId && start.source?.droppableId && start.source.droppableId !== 'boards') {
+    } else if (
+      boardId
+      && start.type !== 'list'
+      && start.source?.droppableId
+      && start.source.droppableId !== 'board'
+      && start.source.droppableId !== 'boards'
+    ) {
       pushPresenceFields(boardId, {
         draggingCardId: start.draggableId,
         draggingListId: start.source.droppableId,
@@ -456,7 +462,14 @@ function AppContent() {
             {navReady && activeView === 'important' && <ImportantView key="important" onCardClick={handleCardClick} />}
             {navReady && activeView === 'planned' && <PlannedView key="planned" onCardClick={handleCardClick} />}
             {navReady && activeView === 'board' && activeBoard && (
-              <BoardView key={`board-${activeBoard.id}`} ref={boardViewRef} onCardClick={handleCardClick} />
+              <BoardView
+                key={`board-${activeBoard.id}`}
+                ref={boardViewRef}
+                onCardClick={handleCardClick}
+                focusedCardId={
+                  selectedCard?.boardId === activeBoard.id ? selectedCard.card.id : null
+                }
+              />
             )}
             {navReady && activeView.startsWith('space-') && (() => {
               const spaceId = activeView.replace('space-', '');

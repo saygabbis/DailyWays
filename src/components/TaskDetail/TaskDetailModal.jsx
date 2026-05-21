@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
 import { useCollabPresence } from '../../collab/useCollabPresence.js';
+import { announcePresence } from '../../collab/presenceBridge.js';
 import CollabPresenceLayer from '../../collab/CollabPresenceLayer.jsx';
 import { usePresenceStore } from '../../collab/presenceStore';
 import { useCollab } from '../../collab/CollabContext.jsx';
@@ -153,7 +154,11 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     useEffect(() => {
         if (!boardId || !card?.id) return undefined;
         setSelectedCardId(card.id);
-        return () => setSelectedCardId(null);
+        announcePresence(boardId);
+        return () => {
+            setSelectedCardId(null);
+            announcePresence(boardId);
+        };
     }, [boardId, card?.id, setSelectedCardId]);
 
     const handleModalPointerMove = (e) => {

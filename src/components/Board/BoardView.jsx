@@ -7,7 +7,7 @@ import ListDetailsModal from './ListDetailsModal';
 import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import { Plus, Loader2, X, GripVertical, Share2 } from 'lucide-react';
 import { fetchBoardMembers, sortBoardMembersOwnerFirst } from '../../services/boardService';
-import { useBoardEditorsFromCollab } from '../../hooks/useBoardEditorsFromCollab';
+import { useMergedBoardEditors } from '../../hooks/useMergedBoardEditors';
 import BoardCollabSync from '../../collab/BoardCollabSync.jsx';
 import BoardCollabStatusBanner from '../../collab/BoardCollabStatusBanner.jsx';
 import CollabPresenceLayer from '../../collab/CollabPresenceLayer.jsx';
@@ -72,7 +72,7 @@ function rectsIntersect(a, b) {
     return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
 }
 
-function BoardView({ onCardClick }, ref) {
+function BoardView({ onCardClick, focusedCardId = null }, ref) {
     const { state, getActiveBoard, dispatch, isSavingBoard, showBoardToolbar, profileMenuOpen } = useApp();
     const { user } = useAuth();
     const [addingList, setAddingList] = useState(false);
@@ -109,7 +109,7 @@ function BoardView({ onCardClick }, ref) {
     }, []);
 
     const board = getActiveBoard();
-    const { editorsByCardId } = useBoardEditorsFromCollab();
+    const editorsByCardId = useMergedBoardEditors(focusedCardId, board?.id);
     const { collabDispatch, connected: collabConnected } = useBoardCollabDispatch(board?.id);
     const {
         updateCursor: updateBoardCursor,

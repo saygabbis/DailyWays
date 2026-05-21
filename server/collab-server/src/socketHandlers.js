@@ -1,3 +1,6 @@
+import { appendFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import {
   CLIENT_EVENTS,
   SERVER_EVENTS,
@@ -11,6 +14,18 @@ import { roomManager } from './roomManager.js';
 import { enrichPresenceFromProfile } from './presenceProfile.js';
 
 const MAX_OPS_PER_SEC = 120;
+const DEBUG_LOG = join(dirname(fileURLToPath(import.meta.url)), '../../../debug-ed15fe.log');
+
+function agentLog(location, message, data, hypothesisId) {
+  try {
+    appendFileSync(
+      DEBUG_LOG,
+      `${JSON.stringify({ sessionId: 'ed15fe', runId: 'post-fix', hypothesisId, location, message, data, timestamp: Date.now() })}\n`,
+    );
+  } catch {
+    /* ignore */
+  }
+}
 
 export function registerSocketHandlers(io) {
   io.use(async (socket, next) => {
@@ -65,9 +80,10 @@ export function registerSocketHandlers(io) {
         }
 
         if (socket.data.roomId) {
-          socket.leave(socket.data.roomId);
-          await roomManager.clientLeft(socket.data.roomId);
-          roomManager.removePresence(socket.data.roomId, socket.data.userId);
+          const prevRoom = socket.data.roomId;
+          socket.leave(prevRoom);
+          await roomManager.clientLeft(prevRoom);
+          roomManager.removePresence(prevRoom, socket.data.userId, socket.id);
         }
 
         socket.data.roomId = roomId;
@@ -85,7 +101,7 @@ export function registerSocketHandlers(io) {
           { userId: socket.data.userId },
           socket.data.userEmail,
         );
-        roomManager.setPresence(roomId, socket.data.userId, stub);
+        roomManager.setPresence(roomId, socket.data.userId, stub, socket.id);
         const peers = roomManager.getPresenceList(room);
         ack?.({ ok: true, ...state, peers });
         socket.emit(SERVER_EVENTS.STATE, { ...state, peers });
@@ -96,17 +112,24 @@ export function registerSocketHandlers(io) {
       }
     });
 
-    socket.on(CLIENT_EVENTS.LEAVE, async () => {
+    socket.on(CLIENT_EVENTS.LEAVE, async (payload, ack) => {
       const roomId = socket.data.roomId;
-      if (!roomId) return;
+      if (!roomId) {
+        ack?.({ ok: true, peers: [] });
+        return;
+      }
+      if (payload?.boardId && payload.boardId !== roomId) {
+        agentLog('socketHandlers.js:LEAVE', 'leave skipped stale board', { reqBoard: payload.boardId, roomId, socketId: socket.id?.slice(0, 8) }, 'H2');
+        ack?.({ ok: true, skipped: true, peers: [] });
+        return;
+      }
       socket.leave(roomId);
-      roomManager.removePresence(roomId, socket.data.userId);
-      const peers = roomManager.rooms.get(roomId)
-        ? roomManager.getPresenceList(roomManager.rooms.get(roomId))
-        : [];
-      socket.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
+      const peers = roomManager.removePresence(roomId, socket.data.userId, socket.id) || [];
+      agentLog('socketHandlers.js:LEAVE', 'leave room', { roomId, socketId: socket.id?.slice(0, 8), peerCount: peers.length }, 'H1-H4');
+      io.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
       await roomManager.clientLeft(roomId);
       socket.data.roomId = null;
+      ack?.({ ok: true, peers });
     });
 
     socket.on(CLIENT_EVENTS.OP, async (op, ack) => {
@@ -164,17 +187,16 @@ export function registerSocketHandlers(io) {
         { ...payload, userId: socket.data.userId },
         socket.data.userEmail,
       );
-      const peers = roomManager.setPresence(roomId, socket.data.userId, full);
+      const peers = roomManager.setPresence(roomId, socket.data.userId, full, socket.id);
       io.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
     });
 
     socket.on('disconnect', async () => {
       const roomId = socket.data.roomId;
       if (!roomId) return;
-      roomManager.removePresence(roomId, socket.data.userId);
-      const room = roomManager.rooms.get(roomId);
-      const peers = room ? roomManager.getPresenceList(room) : [];
-      socket.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
+      const peers = roomManager.removePresence(roomId, socket.data.userId, socket.id) || [];
+      agentLog('socketHandlers.js:disconnect', 'disconnect', { roomId, socketId: socket.id?.slice(0, 8), peerCount: peers.length }, 'H4');
+      io.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
       await roomManager.clientLeft(roomId);
     });
   });

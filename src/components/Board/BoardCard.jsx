@@ -169,7 +169,7 @@ export default function BoardCard({
 
     return (
         <div
-            className={`board-card ${isDragging ? 'board-card-dragging' : ''} ${isRemoteDragging ? 'board-card-remote-drag-source' : ''} ${isCompleted ? 'board-card-done-state' : ''} ${allDone ? 'board-card-all-subtasks-done' : ''} ${isBeingEdited ? 'board-card-presence-active' : ''} ${isRemoteHover ? 'board-card-remote-hover' : ''}`}
+            className={`board-card ${isDragging ? 'board-card-dragging' : ''} ${isRemoteDragging ? 'board-card-remote-drag-source' : ''} ${remoteAnim ? 'board-card-remote-drop-anim' : ''} ${isCompleted ? 'board-card-done-state' : ''} ${allDone ? 'board-card-all-subtasks-done' : ''} ${isBeingEdited ? 'board-card-presence-active' : ''} ${isRemoteHover ? 'board-card-remote-hover' : ''}`}
             onClick={onClick}
             onContextMenu={handleContextMenu}
             onMouseEnter={() => onHoverStart?.()}
@@ -189,7 +189,14 @@ export default function BoardCard({
                 />
             )}
             {isBeingEdited && (
-                <div className="board-card-presence-indicator" aria-label={`Sendo editado por ${primaryEditor?.name || 'alguém'}`}>
+                <div
+                    className={`board-card-presence-indicator${primaryEditor?.isSelf ? ' board-card-presence-indicator--self' : ''}`}
+                    aria-label={
+                        primaryEditor?.isSelf
+                            ? 'Você está nos detalhes desta tarefa'
+                            : `Sendo editado por ${primaryEditor?.name || 'alguém'}`
+                    }
+                >
                     {primaryEditor?.photoUrl ? (
                         <img
                             src={primaryEditor.photoUrl}

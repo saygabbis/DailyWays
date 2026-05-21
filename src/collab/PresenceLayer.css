@@ -79,7 +79,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 151;
+  z-index: 9990;
   overflow: visible;
 }
 

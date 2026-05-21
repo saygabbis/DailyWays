@@ -130,17 +130,28 @@ export class RoomManager {
     return { ...result, revision: room.revision };
   }
 
-  setPresence(roomId, userId, payload) {
+  setPresence(roomId, userId, payload, socketId = null) {
     const room = this.rooms.get(roomId);
     if (!room) return null;
     const prev = room.presence.get(userId) || {};
-    room.presence.set(userId, { ...prev, ...payload, userId, updatedAt: Date.now() });
+    room.presence.set(userId, {
+      ...prev,
+      ...payload,
+      userId,
+      socketId: socketId || payload?.socketId || prev.socketId || null,
+      updatedAt: Date.now(),
+    });
     return this.getPresenceList(room);
   }
 
-  removePresence(roomId, userId) {
+  /** Só remove se socketId for da mesma conexão (evita F5/reconnect apagar presença nova). */
+  removePresence(roomId, userId, socketId = null) {
     const room = this.rooms.get(roomId);
     if (!room) return null;
+    const entry = room.presence.get(userId);
+    if (socketId && entry?.socketId && entry.socketId !== socketId) {
+      return this.getPresenceList(room);
+    }
     room.presence.delete(userId);
     return this.getPresenceList(room);
   }

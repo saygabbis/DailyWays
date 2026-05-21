@@ -69,10 +69,23 @@ export function joinBoardRoom(socket, boardId) {
   return joinRoom(socket, { boardId });
 }
 
-export function leaveRoom(socket) {
-  if (socket?.connected) {
-    socket.emit(CLIENT_EVENTS.LEAVE);
-  }
+/** @param {string} [boardId] — se informado, só sai se o socket ainda estiver nesta sala (evita cleanup atrasado apagar sala nova). */
+export function leaveRoom(socket, boardId = null) {
+  return new Promise((resolve) => {
+    if (!socket?.connected) {
+      resolve();
+      return;
+    }
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    const payload = boardId ? { boardId } : {};
+    socket.emit(CLIENT_EVENTS.LEAVE, payload, () => done());
+    setTimeout(done, 400);
+  });
 }
 
 export const leaveSpaceRoom = leaveRoom;

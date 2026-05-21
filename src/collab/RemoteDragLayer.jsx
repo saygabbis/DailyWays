@@ -88,7 +88,9 @@ export default function RemoteDragLayer({ boardId }) {
         label.style.background = color;
         el.style.setProperty('--presence-color', color);
       }
-      const cur = cursors[drag.userId];
+      const cur = cursors[drag.userId] ?? usePresenceStore.getState().peers.find(
+        (p) => p.userId === drag.userId,
+      )?.cursor;
       const x = typeof cur?.x === 'number' ? cur.x : drag.x;
       const y = typeof cur?.y === 'number' ? cur.y : drag.y;
       if (x == null || y == null) {
