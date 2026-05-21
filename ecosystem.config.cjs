@@ -10,6 +10,8 @@ module.exports = {
       cwd: './server/collab-server',
       script: 'src/index.js',
       interpreter: 'node',
+      instances: 1,
+      exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
       },

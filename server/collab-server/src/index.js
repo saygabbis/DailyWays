@@ -44,6 +44,20 @@ const io = new Server(httpServer, {
 
 registerSocketHandlers(io);
 
+io.engine.on('connection_error', (err) => {
+  const h = err.req?.headers || {};
+  console.warn('[collab-server] connection_error', {
+    code: err.code,
+    message: err.message,
+    connection: h.connection,
+    upgrade: h.upgrade,
+  });
+});
+
+io.on('connection', (socket) => {
+  console.log('[collab-server] socket connected', socket.id);
+});
+
 httpServer.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     console.error(

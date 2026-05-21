@@ -53,10 +53,17 @@ export default function CollabProviderRoot({ children }) {
       };
       const onDisconnect = () => setConnected(false);
       const onConnectError = (err) => {
+        const xhr = err?.context?.xhr;
+        const responseSnippet =
+          typeof xhr?.responseText === 'string'
+            ? xhr.responseText.slice(0, 200)
+            : undefined;
         console.warn('[collab] connect error', err?.message || err, {
           url: getCollabServerUrl(),
           type: err?.type,
           description: err?.description,
+          httpStatus: xhr?.status,
+          responseSnippet,
         });
         setConnected(false);
       };
