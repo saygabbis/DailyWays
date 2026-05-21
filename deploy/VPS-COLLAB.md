@@ -122,3 +122,31 @@ Console deve mostrar:
 `[collab] connected { url: "https://dailyways.saygabbis.cloud", transport: "polling" }`
 
 Sem `connect error` em loop.
+
+---
+
+## Erro: `/socket.io/` HTTP 400 (Bad Request)
+
+Sintoma: handshake com `sid`, depois POST polling retorna **400** e `[collab] connect error xhr post error`.
+
+**Causa comum:** nginx com `proxy_set_header Connection "upgrade";` fixo no `/socket.io/` — quebra long-polling.
+
+**Correção:**
+
+1. Crie `/etc/nginx/conf.d/connection-upgrade.conf` (conteúdo em `deploy/nginx-connection-upgrade.conf`).
+
+2. No `location /socket.io/` use:
+
+```nginx
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection $connection_upgrade;
+proxy_buffering off;
+```
+
+**Não** use `Connection "upgrade";` fixo.
+
+3. `sudo nginx -t && sudo systemctl reload nginx`
+
+4. Confirme **um único** collab: `pm2 list` ou `ss -tlnp | grep 2529`
+
+5. `CORS_ORIGIN` no collab `.env` deve incluir `https://dailyways.saygabbis.cloud`
