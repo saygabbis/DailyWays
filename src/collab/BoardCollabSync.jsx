@@ -10,6 +10,7 @@ import { joinBoardRoom, leaveRoom } from './collabClient.js';
 import { resetPresenceFields } from './presenceBridge.js';
 import { publishBoardPresenceFull } from './boardPresencePublish.js';
 import { isCollabEnabled } from './collabConfig.js';
+import { collabDebugLog } from './collabDebug.js';
 
 export default function BoardCollabSync({ boardId }) {
   const collab = useCollab();
@@ -83,6 +84,15 @@ export default function BoardCollabSync({ boardId }) {
           hydratedBoardIdsRef.current.add(joiningBoardId);
         }
         if (res.peers) flushPresenceSyncNow(res.peers);
+        collabDebugLog('board-join-ok', {
+          boardId: joiningBoardId,
+          peerCount: res.peers?.length ?? 0,
+          peers: (res.peers || []).map((p) => ({
+            id: p.userId?.slice(0, 8),
+            name: p.name,
+            hasCursor: !!(p.cursor && typeof p.cursor.x === 'number'),
+          })),
+        });
       } catch (err) {
         console.warn('[BoardCollabSync] join failed', err.message);
         boardCollabRef.current?.setBoardRoomReady?.(joiningBoardId, false);

@@ -1,4 +1,5 @@
 import { usePresenceStore } from './presenceStore.js';
+import { collabDebugLog } from './collabDebug.js';
 
 let pendingPeers = null;
 let rafId = 0;
@@ -11,7 +12,18 @@ export function queuePresenceSync(peers) {
     rafId = 0;
     const batch = pendingPeers;
     pendingPeers = null;
-    if (batch) usePresenceStore.getState().setPeers(batch);
+    if (batch) {
+      collabDebugLog('presence-sync', {
+        count: batch.length,
+        peers: batch.map((p) => ({
+          id: p.userId?.slice(0, 8),
+          name: p.name,
+          hasCursor: !!(p.cursor && typeof p.cursor.x === 'number'),
+          dragging: p.draggingCardId || null,
+        })),
+      });
+      usePresenceStore.getState().setPeers(batch);
+    }
   });
 }
 

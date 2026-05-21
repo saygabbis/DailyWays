@@ -114,6 +114,13 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
     if (presenceColor) scheduleMetaSend();
   }, [presenceColor, scheduleMetaSend]);
 
+  useEffect(() => {
+    if (!roomId || !collab?.connected) return undefined;
+    flushPresence();
+    const intervalId = setInterval(flushPresence, 2500);
+    return () => clearInterval(intervalId);
+  }, [roomId, collab?.connected, flushPresence]);
+
   const mergeFields = useCallback((partial) => {
     if (!roomId) return;
     pushFields(roomId, partial);

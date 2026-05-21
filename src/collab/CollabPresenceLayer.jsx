@@ -101,7 +101,7 @@ export default function CollabPresenceLayer({
     const { panX: px = 0, panY: py = 0, zoom: z = 1 } = viewportRef.current || {};
     for (const peer of visibleMeta) {
       const el = nodeRefs.current.get(peer.userId);
-      const cur = remoteCursors[peer.userId];
+      const cur = remoteCursors[peer.userId] ?? peer.cursor;
       if (!el || !cur) {
         if (el) el.style.display = 'none';
         continue;

@@ -80,10 +80,16 @@ export function registerSocketHandlers(io) {
           return;
         }
         const state = roomManager.getRoomState(room);
+        const stub = await enrichPresenceFromProfile(
+          socket.data.userId,
+          { userId: socket.data.userId },
+          socket.data.userEmail,
+        );
+        roomManager.setPresence(roomId, socket.data.userId, stub);
         const peers = roomManager.getPresenceList(room);
         ack?.({ ok: true, ...state, peers });
         socket.emit(SERVER_EVENTS.STATE, { ...state, peers });
-        socket.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
+        io.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
       } catch (err) {
         console.error('[collab-server] join error', err);
         ack?.({ ok: false, error: err.message });
@@ -159,7 +165,7 @@ export function registerSocketHandlers(io) {
         socket.data.userEmail,
       );
       const peers = roomManager.setPresence(roomId, socket.data.userId, full);
-      socket.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
+      io.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, { peers });
     });
 
     socket.on('disconnect', async () => {

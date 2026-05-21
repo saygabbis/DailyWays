@@ -22,11 +22,16 @@ export function connectCollabSocket(token) {
     socketInstance = null;
   }
 
-  // Polling primeiro: atrás de nginx/cloudflare o upgrade WebSocket costuma falhar sem proxy_set_header Upgrade.
+  // Em produção (nginx/VPS) só polling — o upgrade WS falha e gera ruído/instabilidade.
+  const pollingOnly =
+    import.meta.env.PROD
+    || (typeof window !== 'undefined'
+      && !/localhost|127\.0\.0\.1/.test(window.location.hostname));
   socketInstance = io(url, {
     auth: { token },
     path: '/socket.io',
-    transports: ['polling', 'websocket'],
+    transports: pollingOnly ? ['polling'] : ['polling', 'websocket'],
+    upgrade: !pollingOnly,
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 500,
