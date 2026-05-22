@@ -1,34 +1,41 @@
-const STORAGE_KEY = 'dailyways_last_board_pointer';
+const STORAGE_KEY = 'dailyways_last_board_pointers_v2';
 
-/** Persist last pointer per board (survives F5). */
-export function setLastBoardPointer(boardId, { x, y, cursorScreen }) {
-  if (!boardId || typeof x !== 'number' || typeof y !== 'number') return;
+function readMap() {
   try {
-    sessionStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        boardId,
-        x,
-        y,
-        cursorScreen: cursorScreen || null,
-        ts: Date.now(),
-      }),
-    );
+    const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeMap(map) {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(map));
   } catch {
     /* ignore quota */
   }
 }
 
+/** Persist last pointer per board (survives F5 e troca na sidebar). */
+export function setLastBoardPointer(boardId, { x, y, cursorScreen }) {
+  if (!boardId || typeof x !== 'number' || typeof y !== 'number') return;
+  const map = readMap();
+  map[boardId] = {
+    x,
+    y,
+    cursorScreen: cursorScreen || null,
+    ts: Date.now(),
+  };
+  writeMap(map);
+}
+
 export function getLastBoardPointer(boardId) {
   if (!boardId) return null;
-  try {
-    const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
-    if (!raw || raw.boardId !== boardId) return null;
-    if (Date.now() - (raw.ts || 0) > 4 * 60 * 60 * 1000) return null;
-    return raw;
-  } catch {
-    return null;
-  }
+  const entry = readMap()[boardId];
+  if (!entry) return null;
+  if (Date.now() - (entry.ts || 0) > 4 * 60 * 60 * 1000) return null;
+  return entry;
 }
 
 /** Default cursor in board scroller space when no recent pointer. */

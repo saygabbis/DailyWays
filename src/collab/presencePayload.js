@@ -56,11 +56,10 @@ export function buildBoardPresencePayload(boardId, auth) {
   };
 }
 
-/** Cursor update — always carries identity so peers never stick on "Usuário". */
+/** Cursor + meta de contexto (selectedCardId, etc.) em cada movimento. */
 export function buildCursorPresencePayload(boardId, auth) {
-  const fields = getPresenceFields(boardId);
-  const payload = { ...buildIdentity(boardId, auth) };
-  if (fields.cursor) payload.cursor = fields.cursor;
-  if (fields.cursorScreen) payload.cursorScreen = fields.cursorScreen;
-  return payload;
+  return {
+    ...buildIdentity(boardId, auth),
+    ...presenceFieldsForEmit(boardId),
+  };
 }

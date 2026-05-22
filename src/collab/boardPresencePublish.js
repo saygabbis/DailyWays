@@ -3,6 +3,17 @@ import { getPresenceFields } from './presenceBridge.js';
 import { buildBoardPresencePayload } from './presencePayload.js';
 import { getLastBoardPointer, seedBoardCursorFields } from './lastBoardPointer.js';
 
+/** Estado local ao entrar na superfície do board (troca de board na sidebar, etc.). */
+export function prepareBoardSurfacePresence(boardId) {
+  if (!boardId) return;
+  const f = getPresenceFields(boardId);
+  f.selectedCardId = null;
+  f.hoverCardId = null;
+  f.hoverListId = null;
+  f.draggingCardId = null;
+  f.draggingListId = null;
+}
+
 function applySeededCursor(boardId, seeded) {
   if (!seeded) return false;
   const f = getPresenceFields(boardId);

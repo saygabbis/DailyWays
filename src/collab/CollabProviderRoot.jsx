@@ -10,6 +10,7 @@ import {
   disconnectCollabSocket,
   getCollabSocket,
 } from './collabClient.js';
+import { getGlobalJoinedBoardId } from './boardCollabSession.js';
 import { CollabProvider } from './CollabContext.jsx';
 import { applyRemoteOp } from './applyOp.js';
 export default function CollabProviderRoot({ children }) {
@@ -106,7 +107,12 @@ export default function CollabProviderRoot({ children }) {
       sock.on(SERVER_EVENTS.APPLIED, onApplied);
       sock.on(SERVER_EVENTS.REJECTED, onRejected);
       sock.on(SERVER_EVENTS.PRESENCE_SYNC, (payload) => {
-        if (payload?.peers) flushPresenceSyncNow(payload.peers);
+        const peers = payload?.peers;
+        if (!peers) return;
+        const joined = getGlobalJoinedBoardId();
+        const syncBoardId = payload?.boardId;
+        if (syncBoardId && joined && syncBoardId !== joined) return;
+        flushPresenceSyncNow(peers);
       });
 
       if (sock.connected) setConnected(true);

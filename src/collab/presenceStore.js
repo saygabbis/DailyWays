@@ -33,11 +33,36 @@ function cursorSignature(peers) {
     .join('|');
 }
 
+function hasCursorCoords(c) {
+  return c && typeof c.x === 'number' && typeof c.y === 'number';
+}
+
+function hasCursorScreenCoords(cs) {
+  return cs && typeof cs.x === 'number' && typeof cs.y === 'number';
+}
+
+/** Evita que um PRESENCE_SYNC antigo (JOIN sem cursor) apague coords já recebidas. */
+function mergePeersPreservingCursor(prevPeers, incoming) {
+  const prevById = new Map((prevPeers || []).map((p) => [p.userId, p]));
+  const next = (incoming || []).filter(Boolean).map((p) => {
+    const prev = prevById.get(p.userId);
+    if (!prev) return p;
+    const merged = { ...prev, ...p };
+    if (!hasCursorCoords(p.cursor) && hasCursorCoords(prev.cursor)) {
+      merged.cursor = { ...prev.cursor };
+    }
+    if (!hasCursorScreenCoords(p.cursorScreen) && hasCursorScreenCoords(prev.cursorScreen)) {
+      merged.cursorScreen = { ...prev.cursorScreen };
+    }
+    return merged;
+  });
+  return next;
+}
+
 function extractRemoteCursors(peers) {
   const out = {};
   for (const p of peers) {
-    if (!p?.userId || !p.cursor) continue;
-    if (typeof p.cursor.x !== 'number' || typeof p.cursor.y !== 'number') continue;
+    if (!p?.userId || !hasCursorCoords(p.cursor)) continue;
     out[p.userId] = {
       x: p.cursor.x,
       y: p.cursor.y,
@@ -56,7 +81,8 @@ export const usePresenceStore = create((set) => ({
   cursorFrame: 0,
 
   setPeers: (peers) => {
-    const next = normalizePeers(peers);
+    const state = usePresenceStore.getState();
+    const next = normalizePeers(mergePeersPreservingCursor(state.peers, peers));
     const mSig = metaSignature(next);
     const cSig = cursorSignature(next);
     const cursors = extractRemoteCursors(next);
@@ -72,7 +98,7 @@ export const usePresenceStore = create((set) => ({
         remoteCursors: cursors,
         _metaSig: mSig,
         _cursorSig: cSig,
-        cursorFrame: cursorChanged ? state.cursorFrame + 1 : state.cursorFrame,
+        cursorFrame: (metaChanged || cursorChanged) ? state.cursorFrame + 1 : state.cursorFrame,
       };
     });
   },

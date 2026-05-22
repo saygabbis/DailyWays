@@ -49,9 +49,10 @@ export default function CollabPresenceLayer({
 
   const visibleMeta = useMemo(() => {
     if (!collab?.connected || !peers?.length) return [];
-    return peers
+    const out = peers
       .filter((p) => p.userId && p.userId !== myId)
       .filter((p) => (peerFilter ? peerFilter(p) : true));
+    return out;
   }, [peers, myId, peerFilter, collab?.connected]);
 
   const applyPeerMetaToNode = (el, peer) => {
@@ -68,6 +69,47 @@ export default function CollabPresenceLayer({
     if (path) path.setAttribute('fill', color);
   };
 
+  const isNodeInLayer = (el, layer) => {
+    if (!el || !layer) return false;
+    return el.isConnected && layer.contains(el);
+  };
+
+  const createCursorNode = (peer) => {
+    const color = peer.color || '#7c3aed';
+    const el = document.createElement('div');
+    el.className = 'collab-presence-cursor';
+    el.dataset.userId = peer.userId;
+    el.style.setProperty('--presence-color', color);
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'collab-presence-pointer');
+    svg.setAttribute('width', '20');
+    svg.setAttribute('height', '24');
+    svg.setAttribute('viewBox', '0 0 20 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M2 2 L2 17 L7 12 L10.5 21 L13 19.5 L9.5 11.5 L16 11.5 Z');
+    path.setAttribute('fill', color);
+    path.setAttribute('stroke', '#fff');
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(path);
+    el.appendChild(svg);
+    const label = document.createElement('span');
+    label.className = 'collab-presence-label';
+    label.style.background = color;
+    label.style.color = presenceLabelTextColor(color);
+    label.textContent = peer.name || peer.avatarInitial || 'Usuário';
+    el.appendChild(label);
+    return el;
+  };
+
+  useEffect(() => () => {
+    for (const el of nodeRefs.current.values()) {
+      el.remove();
+    }
+    nodeRefs.current.clear();
+  }, []);
+
   useEffect(() => {
     const layer = layerRef.current;
     if (!layer) return;
@@ -82,32 +124,16 @@ export default function CollabPresenceLayer({
 
     for (const peer of visibleMeta) {
       let el = nodeRefs.current.get(peer.userId);
-      if (!el) {
-        const color = peer.color || '#7c3aed';
-        el = document.createElement('div');
-        el.className = 'collab-presence-cursor';
-        el.dataset.userId = peer.userId;
-        el.style.setProperty('--presence-color', color);
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('class', 'collab-presence-pointer');
-        svg.setAttribute('width', '20');
-        svg.setAttribute('height', '24');
-        svg.setAttribute('viewBox', '0 0 20 24');
-        svg.setAttribute('aria-hidden', 'true');
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', 'M2 2 L2 17 L7 12 L10.5 21 L13 19.5 L9.5 11.5 L16 11.5 Z');
-        path.setAttribute('fill', color);
-        path.setAttribute('stroke', '#fff');
-        path.setAttribute('stroke-width', '1.5');
-        path.setAttribute('stroke-linejoin', 'round');
-        svg.appendChild(path);
-        el.appendChild(svg);
-        const label = document.createElement('span');
-        label.className = 'collab-presence-label';
-        label.style.background = color;
-        label.style.color = presenceLabelTextColor(color);
-        label.textContent = peer.name || peer.avatarInitial || 'Usuário';
-        el.appendChild(label);
+      if (!isNodeInLayer(el, layer)) {
+        if (el) {
+          el.remove();
+          nodeRefs.current.delete(peer.userId);
+        }
+        el = createCursorNode(peer);
+        layer.appendChild(el);
+        nodeRefs.current.set(peer.userId, el);
+      } else if (!el) {
+        el = createCursorNode(peer);
         layer.appendChild(el);
         nodeRefs.current.set(peer.userId, el);
       } else {
@@ -130,7 +156,7 @@ export default function CollabPresenceLayer({
       el.style.display = '';
       el.style.transform = `translate3d(${screen.x}px, ${screen.y}px, 0)`;
     }
-  }, [cursorFrame, visibleMeta, mode, panX, panY, zoom]);
+  }, [cursorFrame, visibleMeta, peers, mode, panX, panY, zoom]);
 
   if (!collab?.connected || !visibleMeta.length) return null;
 

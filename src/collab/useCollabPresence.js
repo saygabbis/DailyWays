@@ -13,6 +13,7 @@ import {
   registerPresenceSender,
   pushPresenceFields as pushFields,
 } from './presenceBridge.js';
+import { getGlobalJoinedBoardId } from './boardCollabSession.js';
 
 const CURSOR_EMIT_MS = 16;
 const META_EMIT_MS = 80;
@@ -50,18 +51,23 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
     return buildBoardPresencePayload(roomId, authRef.current);
   }, [roomId, user?.id, profile?.name, profile?.photo_url, profile?.presence_color]);
 
+  const canEmitPresence = useCallback(() => {
+    if (!roomId || !collab?.socket?.connected) return false;
+    return getGlobalJoinedBoardId() === roomId;
+  }, [roomId, collab?.socket, collab?.connected]);
+
   const flushPresence = useCallback(() => {
     const socket = collab?.socket;
-    if (!socket?.connected || !roomId) return;
+    if (!canEmitPresence()) return;
     emitPresence(socket, buildPayload());
-  }, [collab?.socket, roomId, buildPayload]);
+  }, [collab?.socket, canEmitPresence, buildPayload]);
 
   const flushCursor = useCallback(() => {
     const socket = collab?.socket;
-    if (!socket?.connected || !roomId) return;
+    if (!canEmitPresence()) return;
     const payload = buildCursorPresencePayload(roomId, authRef.current);
     if (payload.cursor) emitPresence(socket, payload);
-  }, [collab?.socket, roomId]);
+  }, [collab?.socket, roomId, canEmitPresence]);
 
   const scheduleMetaSend = useCallback(() => {
     if (metaTimerRef.current) clearTimeout(metaTimerRef.current);
@@ -136,7 +142,9 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
     if (mode === 'screen') {
       fields.cursor = { x: coords.x, y: coords.y, mode: 'screen' };
       fields.cursorScreen = coords.cursorScreen ?? { x: coords.x, y: coords.y };
-      fields.selectedCardId = coords.selectedCardId ?? fields.selectedCardId ?? null;
+      if ('selectedCardId' in coords) {
+        fields.selectedCardId = coords.selectedCardId;
+      }
     } else {
       fields.cursor = { x: coords.x, y: coords.y };
       fields.selectedNodeIds = coords.selectedNodeIds;

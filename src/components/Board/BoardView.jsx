@@ -10,9 +10,13 @@ import { fetchBoardMembers, sortBoardMembersOwnerFirst } from '../../services/bo
 import { useMergedBoardEditors } from '../../hooks/useMergedBoardEditors';
 import BoardCollabStatusBanner from '../../collab/BoardCollabStatusBanner.jsx';
 import CollabPresenceLayer from '../../collab/CollabPresenceLayer.jsx';
+import { isPeerOnBoardSurface } from '../../collab/presenceVisibility.js';
 import RemoteDragLayer from '../../collab/RemoteDragLayer.jsx';
 import PresenceOnlineList from '../../collab/PresenceOnlineList.jsx';
 import { setLastBoardPointer } from '../../collab/lastBoardPointer.js';
+import { useCollab } from '../../collab/CollabContext.jsx';
+import { scheduleBoardPresencePublish, prepareBoardSurfacePresence } from '../../collab/boardPresencePublish.js';
+import { announcePresence } from '../../collab/presenceBridge.js';
 import { useBoardPresenceHighlights } from '../../hooks/useBoardPresenceHighlights';
 import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
 import { useCollabPresence } from '../../collab/useCollabPresence.js';
@@ -73,7 +77,8 @@ function rectsIntersect(a, b) {
 
 function BoardView({ onCardClick, focusedCardId = null }, ref) {
     const { state, getActiveBoard, dispatch, isSavingBoard, showBoardToolbar, profileMenuOpen } = useApp();
-    const { user } = useAuth();
+    const { user, profile } = useAuth();
+    const collab = useCollab();
     const [addingList, setAddingList] = useState(false);
     const [newListTitle, setNewListTitle] = useState('');
     const [listDetails, setListDetails] = useState(null);
@@ -115,6 +120,18 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
         setHoverTarget,
         clearHoverTarget,
     } = useCollabPresence(board?.id, { mode: 'screen' });
+
+    useEffect(() => {
+        if (!board?.id || !collab?.socket?.connected) return undefined;
+        prepareBoardSurfacePresence(board.id);
+        const auth = { user, profile };
+        const publish = () => scheduleBoardPresencePublish(collab.socket, board.id, auth);
+        publish();
+        const raf = requestAnimationFrame(publish);
+        announcePresence(board.id);
+        return () => cancelAnimationFrame(raf);
+    }, [board?.id, collab?.socket, collab?.connected, user?.id, profile]);
+
     const { hoverByCardId, hoverByListId, remoteDrags } = useBoardPresenceHighlights();
     const remoteDraggingCardIds = useMemo(
         () => new Set(remoteDrags.map((d) => d.cardId)),
@@ -458,6 +475,7 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
             x,
             y,
             cursorScreen,
+            selectedCardId: null,
         });
     }, [updateBoardCursor, board?.id]);
 
@@ -701,7 +719,7 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
                             </div>
                         )}
                     </Droppable>
-                    {!focusedCardId && <CollabPresenceLayer mode="screen" />}
+                    <CollabPresenceLayer mode="screen" peerFilter={isPeerOnBoardSurface} />
                     <RemoteDragLayer boardId={board.id} />
                 </>
             </div>

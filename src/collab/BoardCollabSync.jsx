@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 
 import { usePresenceStore } from './presenceStore';
 
-import { queuePresenceSync, flushPresenceSyncNow } from './queuePresenceSync.js';
+import { flushPresenceSyncNow } from './queuePresenceSync.js';
 
 import { useCollab } from './CollabContext.jsx';
 
@@ -21,6 +21,7 @@ import { resetPresenceFields, announcePresence } from './presenceBridge.js';
 import {
   publishBoardPresenceFull,
   scheduleBoardPresencePublish,
+  prepareBoardSurfacePresence,
 } from './boardPresencePublish.js';
 
 import { isCollabEnabled } from './collabConfig.js';
@@ -117,37 +118,29 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
 
 
-  /** Ao voltar à vista do board, re-publica presença para o outro cliente voltar a ver o cursor. */
+  /** Vista do board ativa: só republica (o join ao trocar board fica no efeito principal). */
   useEffect(() => {
     if (!boardViewActive || !boardId || !collab?.socket?.connected) return undefined;
+    if (joinedRef.current !== boardId) return undefined;
 
     const socket = collab.socket;
     let cancelled = false;
 
     const republish = () => {
       if (cancelled || !boardViewActiveRef.current || !socket?.connected) return;
+      prepareBoardSurfacePresence(boardId);
       scheduleBoardPresencePublish(socket, boardId, authRef.current);
       announcePresence(boardId);
     };
 
-    if (joinedRef.current === boardId) {
-      republish();
-      return () => { cancelled = true; };
-    }
+    republish();
+    const raf = requestAnimationFrame(republish);
 
-    joinBoardRoom(socket, boardId)
-      .then((res) => {
-        if (cancelled) return;
-        joinedRef.current = boardId;
-        setGlobalJoinedBoardId(boardId);
-        setCollabActiveBoardId(boardId);
-        if (res.peers) flushPresenceSyncNow(res.peers);
-        republish();
-      })
-      .catch(() => {});
-
-    return () => { cancelled = true; };
-  }, [boardViewActive, boardId, collab?.socket, collab?.connected, setCollabActiveBoardId]);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [boardViewActive, boardId, collab?.socket, collab?.connected]);
 
 
 
@@ -205,11 +198,19 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
       if (!peers) return;
 
+      const syncBoardId = payload?.boardId;
+      const activeBoard = joinedRef.current || joiningBoardId;
+      if (syncBoardId && activeBoard && syncBoardId !== activeBoard) return;
+
       const myId = authRef.current.user?.id;
+
+      const remoteIds = new Set();
 
       for (const peer of peers) {
 
         if (!peer?.userId || peer.userId === myId) continue;
+
+        remoteIds.add(peer.userId);
 
         const prevCard = prevDragCardByUserRef.current.get(peer.userId);
 
@@ -229,7 +230,13 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
       }
 
-      queuePresenceSync(peers);
+      for (const uid of [...prevDragCardByUserRef.current.keys()]) {
+
+        if (!remoteIds.has(uid)) prevDragCardByUserRef.current.delete(uid);
+
+      }
+
+      flushPresenceSyncNow(peers);
 
     };
 
@@ -241,9 +248,20 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
       try {
 
+        const prevBoard = getGlobalJoinedBoardId() || joinedRef.current;
+
         joinedRef.current = null;
+        clearGlobalJoinedBoardId();
 
         boardCollabRef.current?.setBoardRoomReady?.(joiningBoardId, false);
+
+        if (prevBoard && prevBoard !== joiningBoardId && socket.connected) {
+
+          await leaveRoom(socket, prevBoard);
+
+          clearGlobalJoinedBoardId();
+
+        }
 
 
 
@@ -267,6 +285,8 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
         boardCollabRef.current?.setBoardRoomReady?.(joiningBoardId, true);
 
+        prepareBoardSurfacePresence(joiningBoardId);
+
 
 
         const publishPresenceAfterPaint = () => {
@@ -274,6 +294,8 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
           if (cancelled || effectGenRef.current !== gen) return;
 
           scheduleBoardPresencePublish(socket, joiningBoardId, authRef.current);
+
+          announcePresence(joiningBoardId);
 
         };
 
@@ -299,12 +321,6 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
           if (cancelled || effectGenRef.current !== gen || joinedRef.current !== joiningBoardId) return;
           scheduleBoardPresencePublish(socket, joiningBoardId, authRef.current);
         }, 800);
-
-        // #region agent log
-
-        fetch('http://127.0.0.1:7493/ingest/0093f15a-2614-4c0e-9862-18929ca449cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ed15fe'},body:JSON.stringify({sessionId:'ed15fe',runId:'presence-v3',hypothesisId:'H1-H3',location:'BoardCollabSync.jsx:performJoin',message:'board join ok',data:{boardId:joiningBoardId,reason,mountGen:getBoardCollabMountGen(),peerCount:res.peers?.length??0,otherCount:(res.peers||[]).filter((p)=>p.userId&&p.userId!==authRef.current.user?.id).length},timestamp:Date.now()})}).catch(()=>{});
-
-        // #endregion
 
         collabDebugLog('board-join-ok', {
 
@@ -382,13 +398,9 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
       joinedRef.current = null;
 
+      clearGlobalJoinedBoardId();
+
       boardCollabRef.current?.setBoardRoomReady?.(joiningBoardId, false);
-
-      // #region agent log
-
-      fetch('http://127.0.0.1:7493/ingest/0093f15a-2614-4c0e-9862-18929ca449cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ed15fe'},body:JSON.stringify({sessionId:'ed15fe',runId:'presence-v3',hypothesisId:'H5',location:'BoardCollabSync.jsx:disconnect',message:'socket disconnect reset join',data:{boardId:joiningBoardId},timestamp:Date.now()})}).catch(()=>{});
-
-      // #endregion
 
     };
 
@@ -475,29 +487,19 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
       prevDragCardByUserRef.current.clear();
 
+      const shouldLeaveRoom = getGlobalJoinedBoardId() === boardAtCleanup;
 
+      clearGlobalJoinedBoardId();
 
-      // #region agent log
+      joinedRef.current = null;
 
-      fetch('http://127.0.0.1:7493/ingest/0093f15a-2614-4c0e-9862-18929ca449cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ed15fe'},body:JSON.stringify({sessionId:'ed15fe',runId:'presence-v3',hypothesisId:'H2',location:'BoardCollabSync.jsx:cleanup',message:'board cleanup',data:{boardAtCleanup,mountGen,currentMountGen:getBoardCollabMountGen(),globalJoined:getGlobalJoinedBoardId(),willLeave:getGlobalJoinedBoardId()===boardAtCleanup},timestamp:Date.now()})}).catch(()=>{});
-
-      // #endregion
-
-      if (getGlobalJoinedBoardId() === boardAtCleanup) {
+      if (shouldLeaveRoom) {
 
         leaveRoom(socket, boardAtCleanup, { mountGen }).finally(() => {
 
           if (getBoardCollabMountGen() !== mountGen) return;
 
-          if (getGlobalJoinedBoardId() === boardAtCleanup) {
-
-            clearGlobalJoinedBoardId();
-
-          }
-
         });
-
-        joinedRef.current = null;
 
         boardCollabRef.current?.setBoardRoomReady?.(boardAtCleanup, false);
 

@@ -118,10 +118,11 @@ function AppContent() {
   const [plannedDropCard, setPlannedDropCard] = useState(null);
 
   const activeBoardId = getActiveBoard()?.id;
+  /** Só mantém sala collab na vista do board; ao ir para Diário/Visão geral/etc. faz leave. */
   const keepBoardCollabSession =
-    !!activeBoardId
-    && isCollabEnabled()
-    && !activeView.startsWith('space-');
+    activeView === 'board'
+    && !!activeBoardId
+    && isCollabEnabled();
 
   useEffect(() => {
     const onPointerMove = (e) => {

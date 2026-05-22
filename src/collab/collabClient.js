@@ -1,8 +1,7 @@
 import { io } from 'socket.io-client';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@dailyways/collab-protocol';
 import { getCollabServerUrl } from './collabConfig.js';
-import { getBoardCollabMountGen } from './boardCollabSession.js';
-
+import { getBoardCollabMountGen, getGlobalJoinedBoardId } from './boardCollabSession.js';
 let socketInstance = null;
 
 export function getCollabSocket() {
@@ -144,6 +143,10 @@ export function submitOp(socket, op) {
 
 export function emitPresence(socket, payload) {
   if (socket?.connected) {
+    const boardId = payload?.roomId;
+    if (boardId && getGlobalJoinedBoardId() !== boardId) {
+      return;
+    }
     socket.emit(CLIENT_EVENTS.PRESENCE, payload);
   }
 }

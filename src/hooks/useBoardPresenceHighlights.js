@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { usePresenceStore } from '../collab/presenceStore';
 import { useCollab } from '../collab/CollabContext.jsx';
+import { isPeerOnBoardSurface } from '../collab/presenceVisibility.js';
 import { initialFromName } from '../utils/userColor';
 
 /**
@@ -29,7 +30,7 @@ export function useBoardPresenceHighlights() {
     const remoteDrags = [];
 
     for (const peer of peers || []) {
-      if (!peer?.userId || peer.userId === myId) continue;
+      if (!peer?.userId || peer.userId === myId || !isPeerOnBoardSurface(peer)) continue;
       const color = peer.color || '#7c3aed';
       const meta = {
         userId: peer.userId,

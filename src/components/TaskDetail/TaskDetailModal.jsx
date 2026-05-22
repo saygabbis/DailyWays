@@ -5,8 +5,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
 import { useCollabPresence } from '../../collab/useCollabPresence.js';
 import { announcePresence } from '../../collab/presenceBridge.js';
+import { publishBoardPresenceFull } from '../../collab/boardPresencePublish.js';
+import { isPeerInTaskModal } from '../../collab/presenceVisibility.js';
 import CollabPresenceLayer from '../../collab/CollabPresenceLayer.jsx';
-import { usePresenceStore } from '../../collab/presenceStore';
 import { useCollab } from '../../collab/CollabContext.jsx';
 import {
     X, Tag, AlertCircle, Sun, CheckSquare,
@@ -46,13 +47,8 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const { collabDispatch } = useBoardCollabDispatch(boardId);
     const { updateCursor, setSelectedCardId } = useCollabPresence(boardId, { mode: 'screen' });
     const collab = useCollab();
-    const peers = usePresenceStore((s) => s.peers);
     const modalRef = useRef(null);
-    const { user } = useAuth();
-
-    const sharedModalPeers = (peers || []).filter(
-        (p) => p.userId && p.userId !== collab?.userId && p.selectedCardId === card.id
-    );
+    const { user, profile } = useAuth();
 
     const liveCard = (() => {
         const board = state.boards.find(b => b.id === boardId);
@@ -155,11 +151,17 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         if (!boardId || !card?.id) return undefined;
         setSelectedCardId(card.id);
         announcePresence(boardId);
+        if (collab?.socket?.connected) {
+            publishBoardPresenceFull(collab.socket, boardId, { user, profile });
+        }
         return () => {
             setSelectedCardId(null);
             announcePresence(boardId);
+            if (collab?.socket?.connected) {
+                publishBoardPresenceFull(collab.socket, boardId, { user, profile });
+            }
         };
-    }, [boardId, card?.id, setSelectedCardId]);
+    }, [boardId, card?.id, setSelectedCardId, collab?.socket, collab?.connected, user, profile]);
 
     const handleModalPointerMove = (e) => {
         const el = modalRef.current;
@@ -541,13 +543,12 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                 ref={modalRef}
                 className="task-detail-modal animate-scale-in-centered"
                 onPointerMove={handleModalPointerMove}
-                onPointerLeave={() => setSelectedCardId(card.id)}
             >
-                {collab?.connected && sharedModalPeers.length > 0 && (
+                {collab?.connected && (
                     <CollabPresenceLayer
                         mode="screen"
                         elevated
-                        peerFilter={(p) => p.selectedCardId === card.id}
+                        peerFilter={(p) => isPeerInTaskModal(p, card.id)}
                     />
                 )}
                 {coverAttachment?.publicUrl && (
