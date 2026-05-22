@@ -56,6 +56,27 @@ export function screenToWorldWithContainer(clientX, clientY, containerRect, view
     };
 }
 
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 5;
+
+/** Aplica zoom mantendo o ponto do cursor fixo no mundo (origem no centro do container). */
+export function zoomViewportAtClient(pan, zoom, clientX, clientY, containerRect, zoomFactor) {
+    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * zoomFactor));
+    if (!containerRect || newZoom === zoom) {
+        return { pan, zoom: newZoom };
+    }
+    const mx = clientX - containerRect.left - containerRect.width / 2;
+    const my = clientY - containerRect.top - containerRect.height / 2;
+    const ratio = newZoom / zoom;
+    return {
+        pan: {
+            x: mx * (1 - ratio) + pan.x * ratio,
+            y: my * (1 - ratio) + pan.y * ratio,
+        },
+        zoom: newZoom,
+    };
+}
+
 export function rectIntersects(a, b) {
     return !(a.x + a.width < b.x || b.x + b.width < a.x || a.y + a.height < b.y || b.y + b.height < a.y);
 }

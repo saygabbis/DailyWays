@@ -22,6 +22,8 @@ export default function Autosave() {
                     height: node.height,
                     rotation: node.rotation,
                     scale: node.scale,
+                    skewX: node.skewX,
+                    skewY: node.skewY,
                     data: node.data,
                     style: node.style,
                     zIndex: node.zIndex,

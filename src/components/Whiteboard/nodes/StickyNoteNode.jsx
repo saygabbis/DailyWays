@@ -1,33 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import BaseNode from './BaseNode';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
-import { useCollabPatch } from '../../../collab/CollabOpsContext.jsx';
+import { useCollabPatch } from '../../../collab/whiteboard/CollabOpsContext.jsx';
+import { recordNodesMutation } from '../whiteboardHistory';
 
-export default function StickyNoteNode({ node, onNodePointerDown }) {
+export default function StickyNoteNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const text = node.data?.text ?? '';
     const color = node.style?.backgroundColor ?? '#fef08a';
-    const { editingNodeId, setEditingNodeId } = useWhiteboardStore();
+    const { editingNodeId, editTypingSeed, setEditingNodeId, setEditTypingSeed } = useWhiteboardStore();
     const { collabPatchNode } = useCollabPatch();
     const isEditing = editingNodeId === node.id;
     const [editValue, setEditValue] = useState(text);
     useEffect(() => {
-        if (isEditing) setEditValue(text);
-    }, [isEditing, text]);
+        if (!isEditing) return;
+        if (editTypingSeed) {
+            setEditValue((text || '') + editTypingSeed);
+            setEditTypingSeed(null);
+        } else {
+            setEditValue(text);
+        }
+    }, [isEditing, text, editTypingSeed, setEditTypingSeed]);
 
     const handleBlur = () => {
-        if (editValue !== text) collabPatchNode(node.id, { data: { ...node.data, text: editValue } });
+        if (editValue !== text) {
+            recordNodesMutation(useWhiteboardStore, [node.id], () => {
+                collabPatchNode(node.id, { data: { ...node.data, text: editValue } });
+            });
+        }
         setEditingNodeId(null);
+        setEditTypingSeed(null);
     };
 
     return (
-        <BaseNode node={node} onNodePointerDown={onNodePointerDown}>
+        <BaseNode node={node} onNodePointerDown={onNodePointerDown} onNodeContextMenu={onNodeContextMenu}>
             <div
                 className="whiteboard-node sticky-note"
                 style={{
                     width: node.width,
                     height: node.height,
                     backgroundColor: color,
-                    transform: `rotate(${node.rotation ?? 0}deg)`,
                 }}
             >
                 <textarea

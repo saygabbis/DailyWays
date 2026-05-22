@@ -2,19 +2,18 @@ import React from 'react';
 import BaseNode from './BaseNode';
 import { Download } from 'lucide-react';
 
-export default function ImageNode({ node, onNodePointerDown }) {
+export default function ImageNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const url = node.data?.url ?? '';
     const filename = node.data?.filename ?? '';
     const size = node.data?.size ?? '';
 
     return (
-        <BaseNode node={node} onNodePointerDown={onNodePointerDown}>
+        <BaseNode node={node} onNodePointerDown={onNodePointerDown} onNodeContextMenu={onNodeContextMenu}>
             <div
                 className="whiteboard-node image-node image-node-card"
                 style={{
                     width: node.width,
                     height: node.height,
-                    transform: `rotate(${node.rotation ?? 0}deg)`,
                     overflow: 'hidden',
                     borderRadius: 8,
                     border: '1px solid var(--border-color)',

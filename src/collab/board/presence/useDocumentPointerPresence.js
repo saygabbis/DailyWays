@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { pointerCoordsFromEvent } from './pointerViewport.js';
+import { pointerCoordsFromEvent } from '../coords/pointerViewport.js';
 
 /**
  * Atualiza presença/cursor em overlays (modal, backdrop, portais) onde pointermove no painel falha.

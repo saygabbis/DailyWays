@@ -17,7 +17,12 @@ export function fieldToPatch(field, value) {
         height: value.height,
       };
     case 'transform':
-      return { rotation: value.rotation, scale: value.scale };
+      return {
+        rotation: value.rotation,
+        scale: value.scale,
+        skewX: value.skewX,
+        skewY: value.skewY,
+      };
     case 'data':
       return { data: value };
     case 'style':
@@ -92,13 +97,18 @@ export function patchToOps(entity, id, patch) {
     return ops;
   }
 
-  if (keys.includes('rotation') || keys.includes('scale')) {
+  if (keys.includes('rotation') || keys.includes('scale') || keys.includes('skewX') || keys.includes('skewY')) {
     ops.push({
       type: 'update',
       entity,
       id,
       field: 'transform',
-      value: { rotation: patch.rotation, scale: patch.scale },
+      value: {
+        rotation: patch.rotation,
+        scale: patch.scale,
+        skewX: patch.skewX,
+        skewY: patch.skewY,
+      },
     });
     return ops;
   }

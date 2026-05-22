@@ -1,5 +1,5 @@
 import { usePresenceStore } from './presenceStore.js';
-import { collabDebugLog } from './collabDebug.js';
+import { collabDebugLog } from '../../core/collabDebug.js';
 
 let pendingPeers = null;
 let rafId = 0;

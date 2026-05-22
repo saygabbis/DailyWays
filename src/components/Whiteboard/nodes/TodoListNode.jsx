@@ -1,11 +1,12 @@
 import React from 'react';
 import BaseNode from './BaseNode';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
-import { useCollabPatch } from '../../../collab/CollabOpsContext.jsx';
+import { useCollabPatch } from '../../../collab/whiteboard/CollabOpsContext.jsx';
+import { recordNodesMutation } from '../whiteboardHistory';
 import { Check, Square } from 'lucide-react';
 import { uuidv4 } from '../../../utils/uuid';
 
-export default function TodoListNode({ node, onNodePointerDown }) {
+export default function TodoListNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const items = node.data?.items ?? [{ id: uuidv4(), text: 'Item', done: false }];
     const { collabPatchNode } = useCollabPatch();
 
@@ -13,17 +14,18 @@ export default function TodoListNode({ node, onNodePointerDown }) {
         const next = items.map((it) =>
             it.id === itemId ? { ...it, done: !it.done } : it
         );
-        collabPatchNode(node.id, { data: { ...node.data, items: next } });
+        recordNodesMutation(useWhiteboardStore, [node.id], () => {
+            collabPatchNode(node.id, { data: { ...node.data, items: next } });
+        });
     };
 
     return (
-        <BaseNode node={node} onNodePointerDown={onNodePointerDown}>
+        <BaseNode node={node} onNodePointerDown={onNodePointerDown} onNodeContextMenu={onNodeContextMenu}>
             <div
                 className="whiteboard-node todo-list-node"
                 style={{
                     width: node.width,
                     height: node.height,
-                    transform: `rotate(${node.rotation ?? 0}deg)`,
                     border: '1px solid var(--border-color)',
                     borderRadius: 8,
                     backgroundColor: 'var(--bg-elevated)',

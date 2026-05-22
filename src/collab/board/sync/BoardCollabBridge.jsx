@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
-import { useApp } from '../context/AppContext';
-import { useCollab } from './CollabContext.jsx';
+import { useApp } from '../../../context/AppContext';
+import { useCollab } from '../../core/CollabContext.jsx';
 import { SERVER_EVENTS } from '@dailyways/collab-protocol';
-import { notifyRemoteBoardAction } from './boardRemoteAnim.js';
+import { notifyRemoteBoardAction } from '../boardRemoteAnim.js';
 
 /**
  * Applies remote board reducer actions from collab server into AppContext.

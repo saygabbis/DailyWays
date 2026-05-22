@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@dailyways/collab-protocol';
 import { getCollabServerUrl } from './collabConfig.js';
-import { getBoardCollabMountGen, getGlobalJoinedBoardId } from './boardCollabSession.js';
+import { getBoardCollabMountGen, getGlobalJoinedBoardId } from '../board/sync/boardCollabSession.js';
 let socketInstance = null;
 
 export function getCollabSocket() {

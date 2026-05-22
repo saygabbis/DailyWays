@@ -9,7 +9,7 @@ import ConfirmModal from '../components/Common/ConfirmModal';
 import FloatingSaveError from '../components/Common/FloatingSaveError';
 import FloatingInvitationToast from '../components/Common/FloatingInvitationToast';
 import { logger } from '../utils/logger';
-import { isCollabEnabled } from '../collab/collabConfig.js';
+import { isCollabEnabled } from '../collab/core/collabConfig.js';
 import { persistLastBoardId } from '../utils/restoreNavigation.js';
 
 const AppContext = createContext(null);

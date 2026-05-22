@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRemoteCardAnim } from '../../hooks/useBoardRemoteAnim';
 import { useApp } from '../../context/AppContext';
-import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
+import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
 import { useContextMenu, useLongPress } from '../Common/ContextMenu';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { Calendar, CheckSquare, AlertCircle, Sun, Edit3, Trash2, Star, Tag, Copy, ArrowRight, Circle, CheckCircle2, MoreHorizontal, FileText } from 'lucide-react';

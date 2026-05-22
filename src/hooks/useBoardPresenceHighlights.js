@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import { usePresenceStore } from '../collab/presenceStore';
-import { useCollab } from '../collab/CollabContext.jsx';
-import { isPeerOnBoardSurface } from '../collab/presenceVisibility.js';
+import { usePresenceStore } from '../collab/board/presence/presenceStore';
+import { useCollab } from '../collab/core/CollabContext.jsx';
+import { isPeerOnBoardSurface } from '../collab/board/presence/presenceVisibility.js';
 import { initialFromName } from '../utils/userColor';
 
 /**

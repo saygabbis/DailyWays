@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useBoardEditorsFromCollab } from './useBoardEditorsFromCollab';
-import { resolvePresenceDisplayName } from '../collab/presencePayload.js';
+import { resolvePresenceDisplayName } from '../collab/board/presence/presencePayload.js';
 import { resolvePresenceColor } from '../utils/presenceColor';
 import { initialFromName } from '../utils/userColor';
 

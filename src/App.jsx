@@ -15,15 +15,15 @@ import TaskDetailModal from './components/TaskDetail/TaskDetailModal';
 import SettingsModal from './components/Settings/SettingsView';
 import SearchOverlay from './components/Search/SearchOverlay';
 import SpaceView from './components/Spaces/SpaceView';
-import BoardCollabBridge from './collab/BoardCollabBridge.jsx';
-import BoardCollabSync from './collab/BoardCollabSync.jsx';
-import { isCollabEnabled } from './collab/collabConfig.js';
-import { pushPresenceFields } from './collab/presenceBridge.js';
-import { publishBoardPresenceFull } from './collab/boardPresencePublish.js';
-import { useCollab } from './collab/CollabContext.jsx';
-import { setLastBoardPointer } from './collab/lastBoardPointer.js';
-import { pointerCoordsFromBoardEvent } from './collab/boardCursorCoords.js';
-import { BoardCollabProvider, useBoardCollabDispatch } from './collab/BoardCollabContext.jsx';
+import BoardCollabBridge from './collab/board/sync/BoardCollabBridge.jsx';
+import BoardCollabSync from './collab/board/sync/BoardCollabSync.jsx';
+import { isCollabEnabled } from './collab/core/collabConfig.js';
+import { pushPresenceFields } from './collab/board/presence/presenceBridge.js';
+import { publishBoardPresenceFull } from './collab/board/presence/boardPresencePublish.js';
+import { useCollab } from './collab/core/CollabContext.jsx';
+import { setLastBoardPointer } from './collab/board/presence/lastBoardPointer.js';
+import { pointerCoordsFromBoardEvent } from './collab/board/coords/boardCursorCoords.js';
+import { BoardCollabProvider, useBoardCollabDispatch } from './collab/board/ops/BoardCollabContext.jsx';
 import PasswordResetPage from './components/Auth/PasswordResetPage';
 import {
   persistNavigation,

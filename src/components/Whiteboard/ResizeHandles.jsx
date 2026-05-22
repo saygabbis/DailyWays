@@ -1,41 +1,72 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 
-const HANDLE_SIZE = 10;
-const CORNERS = [
-    { id: 'nw', cursor: 'nwse-resize', style: { left: 0, top: 0 } },
-    { id: 'ne', cursor: 'nesw-resize', style: { right: 0, top: 0 } },
-    { id: 'se', cursor: 'nwse-resize', style: { right: 0, bottom: 0 } },
-    { id: 'sw', cursor: 'nesw-resize', style: { left: 0, bottom: 0 } },
+/** Tamanho visual e área de clique em pixels de tela (compensam zoom do canvas). */
+const HANDLE_VISUAL_PX = 10;
+const HANDLE_HIT_PAD_PX = 8;
+
+const HANDLES = [
+    { id: 'nw', cursor: 'nwse-resize', left: '0%', top: '0%' },
+    { id: 'n', cursor: 'ns-resize', left: '50%', top: '0%' },
+    { id: 'ne', cursor: 'nesw-resize', left: '100%', top: '0%' },
+    { id: 'e', cursor: 'ew-resize', left: '100%', top: '50%' },
+    { id: 'se', cursor: 'nwse-resize', left: '100%', top: '100%' },
+    { id: 's', cursor: 'ns-resize', left: '50%', top: '100%' },
+    { id: 'sw', cursor: 'nesw-resize', left: '0%', top: '100%' },
+    { id: 'w', cursor: 'ew-resize', left: '0%', top: '50%' },
 ];
 
-export default function ResizeHandles({ node, onResizeStart, offset }) {
+const ROTATE_OFFSET_PX = 28;
+
+export default function ResizeHandles({ node, onResizeStart, onRotateStart, offset, zoom = 1 }) {
+    const z = Math.max(0.15, zoom || 1);
+    const visualSize = HANDLE_VISUAL_PX / z;
+    const hitSize = (HANDLE_VISUAL_PX + HANDLE_HIT_PAD_PX * 2) / z;
+
     const handlePointerDown = useCallback(
-        (e, corner) => {
+        (e, handleId) => {
             e.stopPropagation();
             e.preventDefault();
             if (e.button !== 0) return;
-            onResizeStart?.(node.id, corner, e);
+            onResizeStart?.(node.id, handleId, e);
         },
         [node.id, onResizeStart]
     );
 
+    const handleRotatePointerDown = useCallback(
+        (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            if (e.button !== 0) return;
+            onRotateStart?.(node.id, e);
+        },
+        [node.id, onRotateStart]
+    );
+
+    const boxStyle = useMemo(() => {
+        const w = node.width ?? 0;
+        const h = node.height ?? 0;
+        const baseLeft = offset ? offset.x + node.x : node.x;
+        const baseTop = offset ? offset.y + node.y : node.y;
+        const rot = node.rotation ?? 0;
+        return {
+            position: 'absolute',
+            left: baseLeft + w / 2,
+            top: baseTop + h / 2,
+            width: w,
+            height: h,
+            transform: `translate(-50%, -50%)${rot ? ` rotate(${rot}deg)` : ''}`,
+            transformOrigin: 'center center',
+            pointerEvents: 'none',
+            boxSizing: 'border-box',
+        };
+    }, [node.x, node.y, node.width, node.height, node.rotation, offset]);
+
     if (!node.width || !node.height) return null;
-    const left = offset ? offset.x + node.x : node.x;
-    const top = offset ? offset.y + node.y : node.y;
 
     return (
-        <div
-            className="whiteboard-resize-handles"
-            style={{
-                position: 'absolute',
-                left,
-                top,
-                width: node.width,
-                height: node.height,
-                pointerEvents: 'none',
-            }}
-        >
-            {CORNERS.map(({ id, cursor, style: pos }) => (
+        <div className="whiteboard-resize-handles" style={boxStyle}>
+            <div className="whiteboard-resize-handles-outline" aria-hidden />
+            {HANDLES.map(({ id, cursor, left, top }) => (
                 <div
                     key={id}
                     role="button"
@@ -43,16 +74,52 @@ export default function ResizeHandles({ node, onResizeStart, offset }) {
                     className="whiteboard-resize-handle"
                     style={{
                         position: 'absolute',
-                        width: HANDLE_SIZE,
-                        height: HANDLE_SIZE,
-                        margin: -HANDLE_SIZE / 2,
+                        left,
+                        top,
+                        width: hitSize,
+                        height: hitSize,
+                        transform: 'translate(-50%, -50%)',
                         cursor,
                         pointerEvents: 'auto',
-                        ...pos,
                     }}
                     onPointerDown={(e) => handlePointerDown(e, id)}
-                />
+                >
+                    <span
+                        className="whiteboard-resize-handle-visual"
+                        style={{ width: visualSize, height: visualSize }}
+                    />
+                </div>
             ))}
+            {onRotateStart && (
+                <>
+                    <div
+                        className="whiteboard-rotate-stem"
+                        style={{ height: ROTATE_OFFSET_PX / z }}
+                        aria-hidden
+                    />
+                    <div
+                        role="button"
+                        tabIndex={-1}
+                        className="whiteboard-rotate-handle"
+                        style={{
+                            position: 'absolute',
+                            left: '50%',
+                            top: 0,
+                            width: hitSize,
+                            height: hitSize,
+                            transform: `translate(-50%, calc(-100% - ${ROTATE_OFFSET_PX / z}px))`,
+                            pointerEvents: 'auto',
+                        }}
+                        title="Rotacionar"
+                        onPointerDown={handleRotatePointerDown}
+                    >
+                        <span
+                            className="whiteboard-rotate-handle-visual"
+                            style={{ width: visualSize, height: visualSize }}
+                        />
+                    </div>
+                </>
+            )}
         </div>
     );
 }

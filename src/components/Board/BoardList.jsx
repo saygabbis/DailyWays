@@ -3,7 +3,7 @@ import { useRemoteListAnim } from '../../hooks/useBoardRemoteAnim';
 import ReactDOM from 'react-dom';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { useApp } from '../../context/AppContext';
-import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
+import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
 import { useContextMenu } from '../Common/ContextMenu';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import BoardCard from './BoardCard';

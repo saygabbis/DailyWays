@@ -1,18 +1,18 @@
 import { useEffect, useState, useRef } from 'react';
 import { SERVER_EVENTS } from '@dailyways/collab-protocol';
-import { flushPresenceSyncNow } from './queuePresenceSync.js';
-import { useAuth } from '../context/AuthContext';
-import { supabase } from '../services/supabaseClient';
-import { useWhiteboardStore } from '../stores/whiteboardStore';
+import { flushPresenceSyncNow } from '../board/presence/queuePresenceSync.js';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../services/supabaseClient';
+import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { getCollabServerUrl, isCollabEnabled } from './collabConfig.js';
 import {
   connectCollabSocket,
   disconnectCollabSocket,
   getCollabSocket,
 } from './collabClient.js';
-import { getGlobalJoinedBoardId } from './boardCollabSession.js';
+import { getGlobalJoinedBoardId } from '../board/sync/boardCollabSession.js';
 import { CollabProvider } from './CollabContext.jsx';
-import { applyRemoteOp } from './applyOp.js';
+import { applyRemoteOp } from '../whiteboard/applyOp.js';
 export default function CollabProviderRoot({ children }) {
   const { user } = useAuth();
   const [connected, setConnected] = useState(false);

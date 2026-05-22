@@ -1,5 +1,5 @@
 import { useApp } from '../../context/AppContext';
-import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
+import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
 import { CalendarDays, AlertTriangle, Sun } from 'lucide-react';
 import { format, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

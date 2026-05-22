@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { usePresenceStore } from './presenceStore';
-import { useCollab } from './CollabContext.jsx';
-import { presenceLabelTextColor } from '../utils/presenceLabelContrast.js';
-import { getPeerCursorVariant } from './presenceInteraction.js';
-import { screenCoordsToFixedLayer } from './pointerViewport.js';
-import { taskModalCursorToViewport } from './taskModalCursorCoords.js';
-import { overlayScrollCursorToViewport } from './overlayScrollCursorCoords.js';
-import { boardContentCursorToViewport } from './boardCursorCoords.js';
+import { usePresenceStore } from '../presence/presenceStore';
+import { useCollab } from '../../core/CollabContext.jsx';
+import { presenceLabelTextColor } from '../../../utils/presenceLabelContrast.js';
+import { getPeerCursorVariant } from '../presence/presenceInteraction.js';
+import { screenCoordsToFixedLayer } from '../coords/pointerViewport.js';
+import { taskModalCursorToViewport } from '../coords/taskModalCursorCoords.js';
+import { overlayScrollCursorToViewport } from '../coords/overlayScrollCursorCoords.js';
+import { boardContentCursorToViewport } from '../coords/boardCursorCoords.js';
 import './PresenceLayer.css';
 
 const POINTER_PATH = 'M2 2 L2 17 L7 12 L10.5 21 L13 19.5 L9.5 11.5 L16 11.5 Z';

@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import CommentsPanel from './CommentsPanel';
 import DraggablePanel from './DraggablePanel';
+import { useCollabPatch } from '../../collab/whiteboard/CollabOpsContext.jsx';
+import { applyHistoryToCollab } from './whiteboardHistorySync';
 import './LeftToolbar.css';
 
 const TOOLS = [
@@ -50,6 +52,23 @@ export default function LeftToolbar({ onUploadImage, onUploadFile, registerOpenI
         canUndo,
         canRedo,
     } = useWhiteboardStore();
+    const { collabPatchNode, collabCreateNode, collabDeleteNodes } = useCollabPatch();
+
+    const handleUndo = () => {
+        const state = useWhiteboardStore.getState();
+        if (state.historyIndex < 0) return;
+        const entry = state.history[state.historyIndex];
+        applyHistoryToCollab(entry, 'undo', { collabPatchNode, collabCreateNode, collabDeleteNodes });
+        undo();
+    };
+
+    const handleRedo = () => {
+        const state = useWhiteboardStore.getState();
+        if (!state.canRedo()) return;
+        const entry = state.history[state.historyIndex + 1];
+        redo();
+        applyHistoryToCollab(entry, 'redo', { collabPatchNode, collabCreateNode, collabDeleteNodes });
+    };
 
     const handleToolClick = (toolId) => {
         if (toolId === 'comment') {
@@ -133,7 +152,7 @@ export default function LeftToolbar({ onUploadImage, onUploadFile, registerOpenI
                 <button
                     type="button"
                     className="left-toolbar-btn"
-                    onClick={undo}
+                    onClick={handleUndo}
                     disabled={!canUndo()}
                     title="Desfazer"
                 >
@@ -142,7 +161,7 @@ export default function LeftToolbar({ onUploadImage, onUploadFile, registerOpenI
                 <button
                     type="button"
                     className="left-toolbar-btn"
-                    onClick={redo}
+                    onClick={handleRedo}
                     disabled={!canRedo()}
                     title="Refazer"
                 >

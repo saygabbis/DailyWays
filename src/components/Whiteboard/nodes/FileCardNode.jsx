@@ -2,19 +2,18 @@ import React from 'react';
 import BaseNode from './BaseNode';
 import { FileText, Download } from 'lucide-react';
 
-export default function FileCardNode({ node, onNodePointerDown }) {
+export default function FileCardNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const url = node.data?.url ?? '';
     const filename = node.data?.filename ?? 'Arquivo';
     const size = node.data?.size ?? '';
 
     return (
-        <BaseNode node={node} onNodePointerDown={onNodePointerDown}>
+        <BaseNode node={node} onNodePointerDown={onNodePointerDown} onNodeContextMenu={onNodeContextMenu}>
             <div
                 className="whiteboard-node file-card-node"
                 style={{
                     width: node.width,
                     height: node.height,
-                    transform: `rotate(${node.rotation ?? 0}deg)`,
                     border: '1px solid var(--border-color)',
                     borderRadius: 8,
                     backgroundColor: 'var(--bg-elevated)',

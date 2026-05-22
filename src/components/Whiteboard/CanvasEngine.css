@@ -3,6 +3,15 @@
     width: 100%;
     height: 100%;
     position: relative;
+    min-height: 0;
+}
+
+.whiteboard-canvas-column {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
 }
 
 .whiteboard-editor-layout .whiteboard-viewport {
@@ -29,6 +38,18 @@
 
 .whiteboard-viewport.panning {
     cursor: grabbing;
+}
+
+/* Pan (espaço ou botão do meio): cursor passa pelos objetos — só move o canvas */
+.whiteboard-viewport.space-pressed .whiteboard-nodes-container > *,
+.whiteboard-viewport.space-pressed .whiteboard-resize-handles,
+.whiteboard-viewport.space-pressed .whiteboard-rotate-handle,
+.whiteboard-viewport.space-pressed .whiteboard-rotate-stem,
+.whiteboard-viewport.panning .whiteboard-nodes-container > *,
+.whiteboard-viewport.panning .whiteboard-resize-handles,
+.whiteboard-viewport.panning .whiteboard-rotate-handle,
+.whiteboard-viewport.panning .whiteboard-rotate-stem {
+    pointer-events: none !important;
 }
 
 .whiteboard-viewport.grid-hidden {
@@ -72,9 +93,7 @@
 }
 
 .whiteboard-node-wrapper.selected {
-    outline: 2px solid var(--accent, #4d96ff);
-    outline-offset: 2px;
-    border-radius: 4px;
+    outline: none;
 }
 
 @keyframes node-pop-in {
@@ -96,21 +115,81 @@
     z-index: 5;
 }
 
+.whiteboard-resize-handles-outline {
+    position: absolute;
+    inset: 0;
+    border: 2px solid var(--accent, #4d96ff);
+    border-radius: 2px;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
 .whiteboard-resize-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+.whiteboard-resize-handle-visual {
+    display: block;
     border: 2px solid var(--accent, #4d96ff);
     background: var(--bg-primary);
     border-radius: 2px;
     box-sizing: border-box;
+    flex-shrink: 0;
 }
 
-.whiteboard-resize-handle:hover {
+.whiteboard-resize-handle:hover .whiteboard-resize-handle-visual {
+    background: var(--accent, #4d96ff);
+}
+
+.whiteboard-rotate-stem {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 2px;
+    transform: translate(-50%, -100%);
+    background: var(--accent, #4d96ff);
+    pointer-events: none;
+    border-radius: 1px;
+}
+
+.whiteboard-rotate-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    border: none;
+    background: transparent;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.whiteboard-rotate-handle:active {
+    cursor: grabbing;
+}
+
+.whiteboard-rotate-handle-visual {
+    display: block;
+    border: 2px solid var(--accent, #4d96ff);
+    background: var(--bg-primary);
+    border-radius: 50%;
+    box-sizing: border-box;
+}
+
+.whiteboard-rotate-handle:hover .whiteboard-rotate-handle-visual {
     background: var(--accent, #4d96ff);
 }
 
 .whiteboard-viewport-controls {
     position: absolute;
     bottom: 12px;
-    right: 12px;
+    right: calc(12px + var(--inspector-inset, 0px));
     display: flex;
     align-items: center;
     gap: 4px;
@@ -139,6 +218,11 @@
 .whiteboard-viewport-controls button:hover {
     background: var(--bg-tertiary);
     color: var(--text-primary);
+}
+
+.whiteboard-viewport-controls button.active {
+    background: var(--bg-tertiary);
+    color: var(--accent, #4d96ff);
 }
 
 .whiteboard-viewport-controls .zoom-label {

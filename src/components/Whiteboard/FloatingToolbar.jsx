@@ -3,10 +3,12 @@ import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { useAuth } from '../../context/AuthContext';
 import { worldToScreenWithContainer } from './viewportUtils';
 import { insertNode, deleteNode as deleteNodeService } from '../../services/whiteboardService';
-import { useCollabPatch } from '../../collab/CollabOpsContext.jsx';
+import { useCollabPatch } from '../../collab/whiteboard/CollabOpsContext.jsx';
 import { Copy, Trash2, ArrowUp, ArrowDown, Type, Palette, Shapes, Maximize2 } from 'lucide-react';
 import './FloatingToolbar.css';
 import { uuidv4 } from '../../utils/uuid';
+import { duplicateSelectedNodes } from './whiteboardNodeOps';
+import { patchNodeWithHistory, recordNodesMutation } from './whiteboardHistory';
 
 const COLOR_OPTIONS = ['#fef08a', '#fecaca', '#bbf7d0', '#bfdbfe', '#e9d5ff', '#fef3c7', '#fff', '#1f2937'];
 
@@ -47,28 +49,15 @@ export default function FloatingToolbar({ viewport, containerRef }) {
     }, [selectedNodes, viewport, containerRef?.current]);
 
     const handleDuplicate = async () => {
-        if (!spaceId) return;
-        for (const node of selectedNodes) {
-            const newNode = {
-                ...node,
-                id: uuidv4(),
-                x: node.x + 20,
-                y: node.y + 20,
-                createdBy: user?.id ?? null,
-            };
-            delete newNode.createdAt;
-            delete newNode.updatedAt;
-            if (collabConnected) {
-                collabCreateNode(newNode);
-                pushHistory({ type: 'node_add', payload: { node: newNode } });
-            } else {
-                const { success } = await insertNode(spaceId, newNode, user?.id);
-                if (success) {
-                    useWhiteboardStore.getState().addNode(newNode);
-                    pushHistory({ type: 'node_add', payload: { node: newNode } });
-                }
-            }
-        }
+        await duplicateSelectedNodes({
+            spaceId,
+            userId: user?.id,
+            collabCreateNode,
+            collabConnected,
+            addNode: useWhiteboardStore.getState().addNode,
+            pushHistory,
+            store: useWhiteboardStore,
+        });
     };
 
     const handleDelete = async () => {
@@ -87,15 +76,21 @@ export default function FloatingToolbar({ viewport, containerRef }) {
 
     const bringForward = () => {
         const maxZ = Math.max(0, ...nodes.map((n) => n.zIndex ?? 0));
-        selectedNodes.forEach((n, i) => {
-            collabPatchNode(n.id, { zIndex: maxZ + 1 + i });
+        const ids = selectedNodes.map((n) => n.id);
+        recordNodesMutation(useWhiteboardStore, ids, () => {
+            selectedNodes.forEach((n, i) => {
+                collabPatchNode(n.id, { zIndex: maxZ + 1 + i });
+            });
         });
     };
 
     const sendBackward = () => {
         const minZ = Math.min(0, ...nodes.map((n) => n.zIndex ?? 0));
-        selectedNodes.forEach((n, i) => {
-            collabPatchNode(n.id, { zIndex: minZ - selectedNodes.length + i });
+        const ids = selectedNodes.map((n) => n.id);
+        recordNodesMutation(useWhiteboardStore, ids, () => {
+            selectedNodes.forEach((n, i) => {
+                collabPatchNode(n.id, { zIndex: minZ - selectedNodes.length + i });
+            });
         });
     };
 
@@ -117,8 +112,8 @@ export default function FloatingToolbar({ viewport, containerRef }) {
         if (!singleNode) return;
         const w = parseInt(resizeW, 10);
         const h = parseInt(resizeH, 10);
-        if (!Number.isNaN(w) && w > 0 && !Number.isNaN(h) && h > 0) {
-            collabPatchNode(singleNode.id, { width: w, height: h });
+        if (!Number.isNaN(w) && w >= 0 && !Number.isNaN(h) && h >= 0) {
+            patchNodeWithHistory(useWhiteboardStore, collabPatchNode, singleNode.id, { width: w, height: h });
         }
     };
     const handleEditText = () => {
@@ -126,8 +121,11 @@ export default function FloatingToolbar({ viewport, containerRef }) {
     };
 
     const handleColor = (color) => {
-        selectedNodes.forEach((n) => {
-            collabPatchNode(n.id, { style: { ...n.style, backgroundColor: color, fill: color } });
+        const ids = selectedNodes.map((n) => n.id);
+        recordNodesMutation(useWhiteboardStore, ids, () => {
+            selectedNodes.forEach((n) => {
+                collabPatchNode(n.id, { style: { ...n.style, backgroundColor: color, fill: color } });
+            });
         });
         setShowColor(false);
     };
@@ -145,6 +143,8 @@ export default function FloatingToolbar({ viewport, containerRef }) {
         { type: 'table', label: 'Tabela' },
     ];
     const handleConvert = (newType) => {
+        const ids = selectedNodes.map((n) => n.id);
+        recordNodesMutation(useWhiteboardStore, ids, () => {
         selectedNodes.forEach((n) => {
             const defaults = {
                 text: { type: 'text', data: { text: n.data?.text ?? n.data?.title ?? '' }, style: {} },
@@ -161,6 +161,7 @@ export default function FloatingToolbar({ viewport, containerRef }) {
             const d = defaults[newType];
             if (d) collabPatchNode(n.id, d);
         });
+        });
         setShowConvert(false);
     };
 
@@ -174,6 +175,7 @@ export default function FloatingToolbar({ viewport, containerRef }) {
                 transform: 'translate(-50%, -100%)',
                 zIndex: 10000,
             }}
+            onPointerDown={(e) => e.stopPropagation()}
         >
             {hasText && (
                 <button type="button" className="toolbar-btn" onClick={handleEditText} title="Editar texto">

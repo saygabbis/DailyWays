@@ -3,50 +3,64 @@ import { useAuth } from '../../context/AuthContext';
 import { useViewport } from './ViewportController';
 import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { getDefaultNodePayload, isCreationTool } from '../../stores/whiteboardStore';
-import { insertNode, insertConnector, uploadSpaceAsset } from '../../services/whiteboardService';
-import CollabSync from '../../collab/CollabSync.jsx';
-import PresenceLayer from '../../collab/PresenceLayer.jsx';
-import { useCollabPatch } from '../../collab/CollabOpsContext.jsx';
-import { useCollabPresence } from '../../collab/useCollabPresence.js';
-import { screenToWorldWithContainer, rectIntersects, findContainerAt } from './viewportUtils';
+import { insertNode, insertConnector, uploadSpaceAsset, deleteNode as deleteNodeService } from '../../services/whiteboardService';
+import CollabSync from '../../collab/whiteboard/CollabSync.jsx';
+import PresenceLayer from '../../collab/board/ui/PresenceLayer.jsx';
+import { useCollabPatch } from '../../collab/whiteboard/CollabOpsContext.jsx';
+import { useCollabPresence } from '../../collab/board/presence/useCollabPresence.js';
+import { screenToWorldWithContainer, worldToScreenWithContainer, rectIntersects, findContainerAt } from './viewportUtils';
+import { computeResizeBounds } from './resizeBounds';
+import { computeSkewResizeBounds } from './resizeSkew';
+import { worldBoxFromAnchor } from './createDragBounds';
 import NodeLayer from './NodeLayer';
 import ConnectorLayer from './ConnectorLayer';
 import SelectionManager from './SelectionManager';
 import ResizeHandles from './ResizeHandles';
+import RulersOverlay from './RulersOverlay';
+import { applyHistoryToCollab } from './whiteboardHistorySync';
+import { captureNodesSnapshot, cloneNode } from './whiteboardHistory';
+import { filterNodesByPage } from './whiteboardPages';
+import { getInspectorInsetPx } from './inspectorLayout';
+import { getNodeCenterWorld, pointerWorldAngleDeg, computeRotationFromPointer } from './rotatePointer';
+import {
+    copyNodesToClipboard,
+    setClipboardFromNodes,
+    duplicateSelectedNodes,
+    pasteFromClipboard,
+    nudgeSelectedNodes,
+    patchZIndexSelected,
+} from './whiteboardNodeOps';
+import { computeViewportToFitNodes } from './viewportFit';
+import ShortcutsHelp from './ShortcutsHelp';
+import InspectorPanel from './InspectorPanel';
 import FloatingToolbar from './FloatingToolbar';
 import LeftToolbar from './LeftToolbar';
 import DraggablePanel from './DraggablePanel';
 import WhiteboardContextMenu from './WhiteboardContextMenu';
-import { Grid3X3, ZoomIn, ZoomOut } from 'lucide-react';
+import { Grid3X3, ZoomIn, ZoomOut, Ruler, HelpCircle } from 'lucide-react';
 import { uuidv4 } from '../../utils/uuid';
 import './CanvasEngine.css';
 
-export default function CanvasEngine({ spaceId, space, onViewportChange }) {
+export default function CanvasEngine({ spaceId, space, onViewportChange, onRegisterViewportControl }) {
     const containerRef = useRef(null);
     const [selectionBox, setSelectionBox] = useState(null);
+    const [createPreview, setCreatePreview] = useState(null);
     const [isSpacePressed, setIsSpacePressed] = useState(false);
     const [resizeState, setResizeState] = useState(null);
+    const [rotateState, setRotateState] = useState(null);
+    const [floatingToolbarOpen, setFloatingToolbarOpen] = useState(false);
     const [contextMenuPosition, setContextMenuPosition] = useState(null);
+    const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
     const pendingUploadWorldPositionRef = useRef(null);
     const openImagePickerRef = useRef(null);
     const openFilePickerRef = useRef(null);
     const nodeDragRef = useRef(null);
-    const pendingCreateRef = useRef(null);
+    const createDragRef = useRef(null);
     const viewportRef = useRef(null);
+    const lastPointerClientRef = useRef(null);
     const initialPan = { x: space?.panX ?? 0, y: space?.panY ?? 0 };
     const initialZoom = space?.zoom ?? 1;
     const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
-
-    useEffect(() => {
-        const onKeyDown = (e) => { if (e.key === ' ') setIsSpacePressed(true); };
-        const onKeyUp = (e) => { if (e.key === ' ') setIsSpacePressed(false); };
-        window.addEventListener('keydown', onKeyDown);
-        window.addEventListener('keyup', onKeyUp);
-        return () => {
-            window.removeEventListener('keydown', onKeyDown);
-            window.removeEventListener('keyup', onKeyUp);
-        };
-    }, []);
 
     const { user } = useAuth();
     const {
@@ -54,6 +68,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
         collabPatchNodes,
         collabCreateNode,
         collabCreateConnector,
+        collabDeleteNodes,
         connected: collabConnected,
     } = useCollabPatch();
     const { updateCursor, updateSelection } = useCollabPresence(spaceId);
@@ -72,6 +87,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
         selectedNodeIds,
         gridVisible,
         setGridVisible,
+        rulersVisible,
+        setRulersVisible,
+        inspectorPanelOpen,
+        setInspectorPanelOpen,
+        undo,
+        redo,
+        pushHistory,
         setLastCreatedNodeId,
         lastCreatedNodeId,
     } = useWhiteboardStore();
@@ -84,16 +106,47 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
 
     const NODE_TYPES_ALLOWED = ['sticky_note', 'text', 'shape', 'frame', 'image', 'comment', 'link', 'todo_list', 'file_card', 'drawing', 'column', 'table'];
 
+    /** Ferramentas que criam elemento com clique+arraste para definir tamanho (âncora = canto inicial). */
+    const CREATION_DRAG_TOOLS = new Set([
+        'sticky_note',
+        'text',
+        'shape',
+        'frame',
+        'todo_list',
+        'column',
+        'table',
+        'comment',
+        'link',
+        'draw',
+    ]);
+    const CREATE_DRAG_THRESHOLD_PX = 4;
+    const CREATE_MIN_SIZE = 0;
+
+    const creationToolToNodeType = (tool) => {
+        if (tool === 'draw') return 'drawing';
+        if (tool === 'file') return 'file_card';
+        return tool;
+    };
+
+    const isDragCreationTool = (tool) =>
+        CREATION_DRAG_TOOLS.has(tool) && NODE_TYPES_ALLOWED.includes(creationToolToNodeType(tool));
+
     const createNodeAt = useCallback(
-        async (type, worldX, worldY, extraData = {}) => {
-            if (!spaceId || !NODE_TYPES_ALLOWED.includes(type)) return;
-            const payload = getDefaultNodePayload(type, worldX, worldY);
-            Object.assign(payload.data, extraData.data || {});
+        async (type, worldX, worldY, extraData = {}, dims) => {
+            if (!spaceId || !NODE_TYPES_ALLOWED.includes(type)) return null;
+            const defaultKey = type === 'drawing' ? 'draw' : type === 'file_card' ? 'file' : type;
+            const payload = getDefaultNodePayload(defaultKey, worldX, worldY);
+            payload.type = type;
+            const pageId = useWhiteboardStore.getState().activePageId;
+            Object.assign(payload.data, extraData.data || {}, { pageId });
             if (extraData.style) Object.assign(payload.style, extraData.style);
-            const nodes = useWhiteboardStore.getState().nodes;
+            if (dims?.width != null) payload.width = Math.max(CREATE_MIN_SIZE, dims.width);
+            if (dims?.height != null) payload.height = Math.max(CREATE_MIN_SIZE, dims.height);
+            const allNodes = useWhiteboardStore.getState().nodes;
+            const pageNodes = filterNodesByPage(allNodes, pageId);
             const centerX = worldX + (payload.width ?? 0) / 2;
             const centerY = worldY + (payload.height ?? 0) / 2;
-            const container = findContainerAt(nodes, centerX, centerY);
+            const container = findContainerAt(pageNodes, centerX, centerY);
             if (container) {
                 payload.parentId = container.id;
                 payload.x = worldX - container.x;
@@ -107,10 +160,39 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                 if (res.success) {
                     addNode(payload);
                     setLastCreatedNodeId(payload.id);
+                } else {
+                    return null;
                 }
             }
+            useWhiteboardStore.getState().pushHistory({
+                type: 'node_add',
+                payload: { node: cloneNode({ ...payload, createdBy: user?.id ?? null }) },
+            });
+            return payload.id;
         },
         [spaceId, user?.id, addNode, collabCreateNode, collabConnected, setLastCreatedNodeId]
+    );
+
+    const applyCreateDragBox = useCallback(
+        async (drag, currentWorld) => {
+            const box = worldBoxFromAnchor(drag.anchorWorld, currentWorld, CREATE_MIN_SIZE);
+            const nodeType = creationToolToNodeType(drag.tool);
+            if (!drag.nodeId) {
+                if (drag.creating) return;
+                drag.creating = true;
+                const id = await createNodeAt(nodeType, box.x, box.y, {}, { width: box.width, height: box.height });
+                drag.creating = false;
+                if (id) drag.nodeId = id;
+            } else {
+                collabPatchNode(drag.nodeId, {
+                    x: box.x,
+                    y: box.y,
+                    width: box.width,
+                    height: box.height,
+                });
+            }
+        },
+        [createNodeAt, collabPatchNode]
     );
 
     const getViewportCenterWorld = useCallback(() => {
@@ -198,7 +280,370 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
         [setStoreViewport, onViewportChange]
     );
 
-    const viewportState = useViewport(initialPan, initialZoom, persistViewport);
+    const viewportState = useViewport(initialPan, initialZoom, persistViewport, containerRef);
+
+    const getZoomFocalClient = useCallback(() => {
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return { x: 0, y: 0 };
+        const p = lastPointerClientRef.current;
+        if (p) return p;
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }, []);
+
+    const performUndo = useCallback(() => {
+        const state = useWhiteboardStore.getState();
+        if (state.historyIndex < 0) return;
+        const entry = state.history[state.historyIndex];
+        applyHistoryToCollab(entry, 'undo', {
+            collabPatchNode,
+            collabCreateNode,
+            collabDeleteNodes,
+        });
+        undo();
+    }, [undo, collabPatchNode, collabCreateNode, collabDeleteNodes]);
+
+    const performRedo = useCallback(() => {
+        const state = useWhiteboardStore.getState();
+        if (!state.canRedo()) return;
+        const entry = state.history[state.historyIndex + 1];
+        redo();
+        applyHistoryToCollab(entry, 'redo', {
+            collabPatchNode,
+            collabCreateNode,
+            collabDeleteNodes,
+        });
+    }, [redo, collabPatchNode, collabCreateNode, collabDeleteNodes]);
+
+    const nodeOpsCtx = useCallback(
+        () => ({
+            spaceId,
+            userId: user?.id,
+            collabCreateNode,
+            collabConnected,
+            addNode,
+            pushHistory,
+            store: useWhiteboardStore,
+        }),
+        [spaceId, user?.id, collabCreateNode, collabConnected, addNode, pushHistory]
+    );
+
+    const handleCopy = useCallback(() => {
+        copyNodesToClipboard(useWhiteboardStore);
+    }, []);
+
+    const handlePaste = useCallback(async () => {
+        await pasteFromClipboard(nodeOpsCtx());
+    }, [nodeOpsCtx]);
+
+    const handlePasteInPlace = useCallback(async () => {
+        await pasteFromClipboard(nodeOpsCtx(), { inPlace: true });
+    }, [nodeOpsCtx]);
+
+    const handleDuplicate = useCallback(async () => {
+        await duplicateSelectedNodes(nodeOpsCtx());
+    }, [nodeOpsCtx]);
+
+    const handleCut = useCallback(() => {
+        const state = useWhiteboardStore.getState();
+        if (!state.selectedNodeIds.length) return;
+        const selectedNodes = state.nodes.filter((n) => state.selectedNodeIds.includes(n.id));
+        setClipboardFromNodes(useWhiteboardStore, selectedNodes);
+        pushHistory({
+            type: 'node_delete',
+            payload: { nodes: selectedNodes.map((n) => JSON.parse(JSON.stringify(n))) },
+        });
+        if (!collabConnected) {
+            for (const id of state.selectedNodeIds) {
+                deleteNodeService(id);
+            }
+        }
+        collabDeleteNodes(state.selectedNodeIds);
+        setSelection([]);
+        setFloatingToolbarOpen(false);
+    }, [pushHistory, collabConnected, collabDeleteNodes, setSelection]);
+
+    const commitTextEdit = useCallback(() => {
+        const el = document.activeElement;
+        if (
+            el &&
+            (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') &&
+            el.closest?.('.whiteboard-node-wrapper')
+        ) {
+            el.blur();
+        }
+    }, []);
+
+    useEffect(() => {
+        const isExternalTextFocus = () => {
+            const el = document.activeElement;
+            if (!el) return false;
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable) {
+                return !el.closest?.('.whiteboard-node-wrapper') && !el.closest?.('.whiteboard-floating-toolbar');
+            }
+            return false;
+        };
+
+        const isEditingWhiteboardText = () => {
+            const el = document.activeElement;
+            if (!el) return false;
+            if (el.tagName !== 'TEXTAREA' && el.tagName !== 'INPUT') return false;
+            return !!el.closest?.('.whiteboard-node-wrapper');
+        };
+
+        const onKeyDown = (e) => {
+            if (e.key === ' ') {
+                setIsSpacePressed(true);
+                return;
+            }
+
+            const mod = e.ctrlKey || e.metaKey;
+            const keyLower = e.key.toLowerCase();
+
+            if (mod) {
+                if (keyLower === 'r') {
+                    e.preventDefault();
+                    setRulersVisible(!useWhiteboardStore.getState().rulersVisible);
+                    return;
+                }
+                if (!isEditingWhiteboardText() && !isExternalTextFocus()) {
+                    if (keyLower === 'z') {
+                        e.preventDefault();
+                        if (e.shiftKey) performRedo();
+                        else performUndo();
+                        return;
+                    }
+                    if (keyLower === 'y') {
+                        e.preventDefault();
+                        performRedo();
+                        return;
+                    }
+                    if (keyLower === 'x') {
+                        e.preventDefault();
+                        handleCut();
+                        return;
+                    }
+                    if (keyLower === 'c') {
+                        e.preventDefault();
+                        handleCopy();
+                        return;
+                    }
+                    if (keyLower === 'v' || e.code === 'KeyV') {
+                        e.preventDefault();
+                        if (e.shiftKey) handlePasteInPlace();
+                        else handlePaste();
+                        return;
+                    }
+                    if (keyLower === 'd' || e.code === 'KeyD') {
+                        e.preventDefault();
+                        handleDuplicate();
+                        return;
+                    }
+                    if (keyLower === 'a') {
+                        e.preventDefault();
+                        const st = useWhiteboardStore.getState();
+                        st.setSelection(st.nodes.map((n) => n.id));
+                        return;
+                    }
+                    if (keyLower === '0') {
+                        e.preventDefault();
+                        viewportState.setViewport({ x: 0, y: 0 }, 1);
+                        return;
+                    }
+                    if (keyLower === '1') {
+                        e.preventDefault();
+                        const rect = containerRef.current?.getBoundingClientRect();
+                        const st = useWhiteboardStore.getState();
+                        const target =
+                            st.selectedNodeIds.length > 0
+                                ? st.nodes.filter((n) => st.selectedNodeIds.includes(n.id))
+                                : st.nodes;
+                        const fit = computeViewportToFitNodes(target, rect);
+                        viewportState.setViewport(fit.pan, fit.zoom);
+                        return;
+                    }
+                    if (keyLower === '=' || keyLower === '+') {
+                        e.preventDefault();
+                        const { x, y } = getZoomFocalClient();
+                        viewportState.zoomAtClient(x, y, 1.2);
+                        return;
+                    }
+                    if (keyLower === '-') {
+                        e.preventDefault();
+                        const { x, y } = getZoomFocalClient();
+                        viewportState.zoomAtClient(x, y, 1 / 1.2);
+                        return;
+                    }
+                    if (e.key === ']') {
+                        e.preventDefault();
+                        patchZIndexSelected(
+                            useWhiteboardStore,
+                            collabPatchNode,
+                            e.shiftKey ? 'front' : 'forward'
+                        );
+                        return;
+                    }
+                    if (e.key === '[') {
+                        e.preventDefault();
+                        patchZIndexSelected(
+                            useWhiteboardStore,
+                            collabPatchNode,
+                            e.shiftKey ? 'back' : 'backward'
+                        );
+                        return;
+                    }
+                }
+            }
+
+            if (e.shiftKey && !mod && e.key === '1') {
+                e.preventDefault();
+                const rect = containerRef.current?.getBoundingClientRect();
+                const st = useWhiteboardStore.getState();
+                const target =
+                    st.selectedNodeIds.length > 0
+                        ? st.nodes.filter((n) => st.selectedNodeIds.includes(n.id))
+                        : st.nodes;
+                const fit = computeViewportToFitNodes(target, rect);
+                viewportState.setViewport(fit.pan, fit.zoom);
+                return;
+            }
+
+            if (e.key === 'Escape') {
+                const st = useWhiteboardStore.getState();
+                if (st.editingNodeId) {
+                    commitTextEdit();
+                    return;
+                }
+                if (st.connectorFromNodeId) {
+                    st.setConnectorFromNodeId(null);
+                    return;
+                }
+                if (st.selectedNodeIds.length || st.activeTool !== 'select') {
+                    e.preventDefault();
+                    st.setSelection([]);
+                    st.setActiveTool('select');
+                    setFloatingToolbarOpen(false);
+                    setContextMenuPosition(null);
+                }
+                return;
+            }
+
+            if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+                if (!isEditingWhiteboardText() && !isExternalTextFocus()) {
+                    e.preventDefault();
+                    setShortcutsHelpOpen((v) => !v);
+                    return;
+                }
+            }
+
+            if (
+                !mod &&
+                !e.altKey &&
+                ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(keyLower)
+            ) {
+                if (!isEditingWhiteboardText() && !isExternalTextFocus()) {
+                    const st = useWhiteboardStore.getState();
+                    if (st.selectedNodeIds.length) {
+                        e.preventDefault();
+                        const step = e.shiftKey ? 10 : 1;
+                        const dx = keyLower === 'arrowleft' ? -step : keyLower === 'arrowright' ? step : 0;
+                        const dy = keyLower === 'arrowup' ? -step : keyLower === 'arrowdown' ? step : 0;
+                        nudgeSelectedNodes(useWhiteboardStore, collabPatchNodes, dx, dy);
+                        return;
+                    }
+                }
+            }
+
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (isExternalTextFocus()) return;
+                const state = useWhiteboardStore.getState();
+                if (state.editingNodeId) return;
+                if (!state.selectedNodeIds.length) return;
+                e.preventDefault();
+                const selectedNodes = state.nodes.filter((n) => state.selectedNodeIds.includes(n.id));
+                state.pushHistory({
+                    type: 'node_delete',
+                    payload: { nodes: selectedNodes.map((n) => ({ ...n })) },
+                });
+                if (!collabConnected) {
+                    for (const id of state.selectedNodeIds) {
+                        deleteNodeService(id);
+                    }
+                }
+                collabDeleteNodes(state.selectedNodeIds);
+                state.setSelection([]);
+                setFloatingToolbarOpen(false);
+                return;
+            }
+
+            if (!mod && !e.altKey && e.key.length === 1 && !isExternalTextFocus() && !isEditingWhiteboardText()) {
+                const toolByKey = {
+                    v: 'select',
+                    t: 'text',
+                    s: 'sticky_note',
+                    r: 'shape',
+                    f: 'frame',
+                    l: 'connector',
+                    p: 'draw',
+                    m: 'comment',
+                    g: null,
+                };
+                const tool = toolByKey[keyLower];
+                if (keyLower === 'g') {
+                    e.preventDefault();
+                    const st = useWhiteboardStore.getState();
+                    setGridVisible(!st.gridVisible);
+                    return;
+                }
+                if (tool) {
+                    e.preventDefault();
+                    setActiveTool(tool);
+                    if (tool === 'connector') setConnectorFromNodeId(null);
+                    return;
+                }
+            }
+
+            if (mod || e.altKey) return;
+            if (e.key.length !== 1) return;
+            if (isExternalTextFocus()) return;
+
+            const state = useWhiteboardStore.getState();
+            if (state.editingNodeId) return;
+            if (state.selectedNodeIds.length !== 1) return;
+
+            const node = state.nodes.find((n) => n.id === state.selectedNodeIds[0]);
+            if (!node || (node.type !== 'text' && node.type !== 'sticky_note')) return;
+
+            e.preventDefault();
+            state.setEditingNodeId(node.id);
+            state.setEditTypingSeed(e.key);
+        };
+        const onKeyUp = (e) => { if (e.key === ' ') setIsSpacePressed(false); };
+        window.addEventListener('keydown', onKeyDown, true);
+        window.addEventListener('keyup', onKeyUp);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown, true);
+            window.removeEventListener('keyup', onKeyUp);
+        };
+    }, [
+        collabConnected,
+        collabDeleteNodes,
+        collabPatchNode,
+        collabPatchNodes,
+        performUndo,
+        performRedo,
+        handleCut,
+        handleCopy,
+        handlePaste,
+        handlePasteInPlace,
+        handleDuplicate,
+        setRulersVisible,
+        setGridVisible,
+        setActiveTool,
+        setConnectorFromNodeId,
+        viewportState,
+        getZoomFocalClient,
+        commitTextEdit,
+    ]);
     const viewportForChildren = {
         panX: viewportState.pan.x,
         panY: viewportState.pan.y,
@@ -213,8 +658,21 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
     useEffect(() => {
         if (!spaceId) return;
         setSpaceId(spaceId);
+        viewportState.setViewport(initialPan, initialZoom);
         setStoreViewport({ panX: initialPan.x, panY: initialPan.y, zoom: initialZoom });
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- só ao trocar de space
     }, [spaceId]);
+
+    useEffect(() => {
+        if (!onRegisterViewportControl) return undefined;
+        const resetViewport = () => {
+            const pan = { x: 0, y: 0 };
+            const zoom = 1;
+            viewportState.setViewport(pan, zoom);
+        };
+        onRegisterViewportControl({ resetViewport });
+        return () => onRegisterViewportControl(null);
+    }, [onRegisterViewportControl, viewportState.setViewport]);
 
     useEffect(() => {
         updateSelection(selectedNodeIds);
@@ -227,13 +685,19 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
         (e) => {
             if (e.button !== 0 && e.button !== 1) return;
             const isBg = isCanvasBackground(e);
-            if (e.button === 1 || (e.button === 0 && isBg && isSpacePressed)) {
+            if (e.button === 1 || (e.button === 0 && isSpacePressed)) {
                 e.preventDefault();
-                viewportState.handleMouseDown(e, isBg, isSpacePressed);
+                e.stopPropagation();
+                viewportState.handleMouseDown(e, isSpacePressed);
+                if (e.currentTarget?.setPointerCapture) {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                }
                 return;
             }
             if (e.button === 0 && isBg && !isSpacePressed) {
                 e.preventDefault();
+                commitTextEdit();
+                setFloatingToolbarOpen(false);
                 if (activeTool === 'select') {
                     setSelectionBox({
                         start: { x: e.clientX, y: e.clientY },
@@ -242,68 +706,96 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                     if (e.currentTarget && typeof e.currentTarget.setPointerCapture === 'function') {
                         e.currentTarget.setPointerCapture(e.pointerId);
                     }
-                } else if (isCreationTool(activeTool) && activeTool !== 'connector' && NODE_TYPES_ALLOWED.includes(activeTool)) {
-                    pendingCreateRef.current = { x: e.clientX, y: e.clientY };
+                } else if (isDragCreationTool(activeTool)) {
+                    const rect = containerRef.current?.getBoundingClientRect();
+                    if (rect && viewportForChildren) {
+                        const anchorWorld = screenToWorldWithContainer(
+                            e.clientX,
+                            e.clientY,
+                            rect,
+                            viewportForChildren
+                        );
+                        createDragRef.current = {
+                            tool: activeTool,
+                            anchorWorld,
+                            startScreen: { x: e.clientX, y: e.clientY },
+                            nodeId: null,
+                            creating: false,
+                        };
+                        setCreatePreview({ anchorWorld, currentWorld: anchorWorld });
+                    }
+                    if (e.currentTarget && typeof e.currentTarget.setPointerCapture === 'function') {
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                    }
+                } else if (
+                    isCreationTool(activeTool) &&
+                    activeTool !== 'connector' &&
+                    NODE_TYPES_ALLOWED.includes(creationToolToNodeType(activeTool))
+                ) {
+                    createDragRef.current = {
+                        tool: activeTool,
+                        clickOnly: true,
+                        startScreen: { x: e.clientX, y: e.clientY },
+                    };
                     if (e.currentTarget && typeof e.currentTarget.setPointerCapture === 'function') {
                         e.currentTarget.setPointerCapture(e.pointerId);
                     }
                 }
             }
         },
-        [viewportState, isSpacePressed, activeTool]
+        [viewportState, isSpacePressed, activeTool, commitTextEdit, viewportForChildren]
     );
 
     const handleResizeStart = useCallback((nodeId, corner, e) => {
         e.stopPropagation();
         if (e.currentTarget?.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
-        setResizeState({ nodeId, corner });
+        const node = useWhiteboardStore.getState().nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        setRotateState(null);
+        setResizeState({
+            nodeId,
+            corner,
+            mode: e.ctrlKey ? 'skew' : 'resize',
+            beforeNode: cloneNode(node),
+            origin: {
+                x: node.x,
+                y: node.y,
+                width: node.width ?? 0,
+                height: node.height ?? 0,
+                skewX: node.skewX ?? 0,
+                skewY: node.skewY ?? 0,
+            },
+        });
     }, []);
 
     useEffect(() => {
         if (!resizeState) return;
-        const { nodeId, corner } = resizeState;
-        const MIN = 24;
+        const { nodeId, corner: handle, origin, mode } = resizeState;
         const onMove = (e) => {
             const rect = containerRef.current?.getBoundingClientRect();
             if (!rect || !viewportRef.current) return;
             const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
-            const state = useWhiteboardStore.getState();
-            const node = state.nodes.find((n) => n.id === nodeId);
-            if (!node) return;
-            const w0 = node.width || MIN;
-            const h0 = node.height || MIN;
-            const right = node.x + w0;
-            const bottom = node.y + h0;
-            let x = node.x, y = node.y, w = w0, h = h0;
-            switch (corner) {
-                case 'se':
-                    w = Math.max(MIN, world.x - node.x);
-                    h = Math.max(MIN, world.y - node.y);
-                    break;
-                case 'sw':
-                    x = world.x;
-                    y = node.y;
-                    w = Math.max(MIN, right - world.x);
-                    h = Math.max(MIN, world.y - node.y);
-                    break;
-                case 'ne':
-                    x = node.x;
-                    y = world.y;
-                    w = Math.max(MIN, world.x - node.x);
-                    h = Math.max(MIN, bottom - world.y);
-                    break;
-                case 'nw':
-                    x = world.x;
-                    y = world.y;
-                    w = Math.max(MIN, right - world.x);
-                    h = Math.max(MIN, bottom - world.y);
-                    break;
-                default:
-                    break;
-            }
-            collabPatchNode(nodeId, { x, y, width: w, height: h });
+            const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey, min: 0 };
+            const patch =
+                mode === 'skew' || e.ctrlKey
+                    ? computeSkewResizeBounds(origin, handle, world, modifiers)
+                    : computeResizeBounds(origin, handle, world, modifiers);
+            collabPatchNode(nodeId, patch);
         };
-        const onUp = () => setResizeState(null);
+        const onUp = () => {
+            const before = resizeState.beforeNode;
+            const afterSnap = captureNodesSnapshot(useWhiteboardStore, [nodeId])[0];
+            if (before && afterSnap?.node && JSON.stringify(before) !== JSON.stringify(afterSnap.node)) {
+                useWhiteboardStore.getState().pushHistory({
+                    type: 'nodes_replace',
+                    payload: {
+                        before: [{ id: nodeId, node: before }],
+                        after: [{ id: nodeId, node: afterSnap.node }],
+                    },
+                });
+            }
+            setResizeState(null);
+        };
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);
         return () => {
@@ -312,9 +804,86 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
         };
     }, [resizeState, collabPatchNode]);
 
+    const handleRotateStart = useCallback((nodeId, e) => {
+        e.stopPropagation();
+        if (e.currentTarget?.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
+        const state = useWhiteboardStore.getState();
+        const node = state.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const rect = containerRef.current?.getBoundingClientRect();
+        const vp = viewportRef.current;
+        if (!rect || !vp) return;
+        const center = getNodeCenterWorld(node, state.nodes);
+        const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, vp);
+        setResizeState(null);
+        setRotateState({
+            nodeId,
+            beforeNode: cloneNode(node),
+            center,
+            originRotation: node.rotation ?? 0,
+            startAngle: pointerWorldAngleDeg(center.x, center.y, world.x, world.y),
+        });
+    }, []);
+
+    useEffect(() => {
+        if (!rotateState) return;
+        const { nodeId, center, originRotation, startAngle } = rotateState;
+        const onMove = (e) => {
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (!rect || !viewportRef.current) return;
+            const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
+            const currentAngle = pointerWorldAngleDeg(center.x, center.y, world.x, world.y);
+            const rotation = computeRotationFromPointer(
+                originRotation,
+                startAngle,
+                currentAngle,
+                e.shiftKey
+            );
+            collabPatchNode(nodeId, { rotation });
+        };
+        const onUp = () => {
+            const before = rotateState.beforeNode;
+            const afterSnap = captureNodesSnapshot(useWhiteboardStore, [nodeId])[0];
+            if (before && afterSnap?.node && JSON.stringify(before) !== JSON.stringify(afterSnap.node)) {
+                useWhiteboardStore.getState().pushHistory({
+                    type: 'nodes_replace',
+                    payload: {
+                        before: [{ id: nodeId, node: before }],
+                        after: [{ id: nodeId, node: afterSnap.node }],
+                    },
+                });
+            }
+            setRotateState(null);
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        return () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+        };
+    }, [rotateState, collabPatchNode]);
+
+    const handleNodeContextMenu = useCallback(
+        (e, nodeId) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setContextMenuPosition(null);
+            setSelection([nodeId]);
+            setFloatingToolbarOpen(true);
+        },
+        [setSelection]
+    );
+
     const handleNodePointerDown = useCallback(
         (e, nodeId) => {
             if (e.button !== 0) return;
+            const editingId = useWhiteboardStore.getState().editingNodeId;
+            if (editingId && editingId !== nodeId) {
+                commitTextEdit();
+            } else if (editingId === nodeId && !e.target.closest('textarea, input')) {
+                commitTextEdit();
+            }
+            setFloatingToolbarOpen(false);
             if (activeTool === 'connector') {
                 e.stopPropagation();
                 if (connectorFromNodeId) {
@@ -347,13 +916,16 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
             const rect = containerRef.current?.getBoundingClientRect();
             if (!rect) return;
             const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportForChildren);
+            const state = useWhiteboardStore.getState();
+            const dragIds = state.selectedNodeIds.includes(nodeId) ? state.selectedNodeIds : [nodeId];
             nodeDragRef.current = {
                 nodeId,
                 startWorld: world,
                 startScreen: { x: e.clientX, y: e.clientY },
+                beforeSnapshots: captureNodesSnapshot(useWhiteboardStore, dragIds),
             };
         },
-        [viewportForChildren, activeTool, connectorFromNodeId, setConnectorFromNodeId, spaceId, addConnector, collabConnected, collabCreateConnector]
+        [viewportForChildren, activeTool, connectorFromNodeId, setConnectorFromNodeId, spaceId, addConnector, collabConnected, collabCreateConnector, commitTextEdit]
     );
 
     useEffect(() => {
@@ -399,6 +971,21 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                         });
                     }
                 });
+                const after = captureNodesSnapshot(useWhiteboardStore, ids);
+                const before = ref.beforeSnapshots ?? [];
+                const changed =
+                    before.length > 0 &&
+                    before.some((b, i) => {
+                        const a = after[i];
+                        if (!a) return true;
+                        return JSON.stringify(b.node) !== JSON.stringify(a.node);
+                    });
+                if (changed) {
+                    state.pushHistory({
+                        type: 'nodes_replace',
+                        payload: { before, after },
+                    });
+                }
             }
             nodeDragRef.current = null;
         };
@@ -423,7 +1010,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
     );
 
     const handlePointerUp = useCallback(
-        (e) => {
+        async (e) => {
             if (e.currentTarget && typeof e.currentTarget.releasePointerCapture === 'function') {
                 try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
             }
@@ -431,27 +1018,89 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                 const rect = containerRef.current?.getBoundingClientRect();
                 const controlsEl = containerRef.current?.querySelector('.whiteboard-viewport-controls');
                 const controlsRect = controlsEl?.getBoundingClientRect?.();
+                const drag = createDragRef.current;
+                const dragStart = drag?.startScreen;
                 const isClickInControls =
                     controlsRect &&
-                    pendingCreateRef.current &&
-                    pendingCreateRef.current.x >= controlsRect.left &&
-                    pendingCreateRef.current.x <= controlsRect.right &&
-                    pendingCreateRef.current.y >= controlsRect.top &&
-                    pendingCreateRef.current.y <= controlsRect.bottom;
-                if (isClickInControls) pendingCreateRef.current = null;
-                if (pendingCreateRef.current && rect && viewportForChildren && !isClickInControls) {
-                    const { x: sx, y: sy } = pendingCreateRef.current;
+                    dragStart &&
+                    dragStart.x >= controlsRect.left &&
+                    dragStart.x <= controlsRect.right &&
+                    dragStart.y >= controlsRect.top &&
+                    dragStart.y <= controlsRect.bottom;
+                if (isClickInControls) {
+                    createDragRef.current = null;
+                    setCreatePreview(null);
+                } else if (drag?.anchorWorld && rect && viewportForChildren && !isClickInControls) {
+                    const insideViewport =
+                        dragStart.x >= rect.left &&
+                        dragStart.x <= rect.right &&
+                        dragStart.y >= rect.top &&
+                        dragStart.y <= rect.bottom;
+                    if (insideViewport) {
+                        const currentWorld = screenToWorldWithContainer(
+                            e.clientX,
+                            e.clientY,
+                            rect,
+                            viewportForChildren
+                        );
+                        const dist = Math.hypot(
+                            e.clientX - drag.startScreen.x,
+                            e.clientY - drag.startScreen.y
+                        );
+                        if (dist < CREATE_DRAG_THRESHOLD_PX) {
+                            const nodeType = creationToolToNodeType(drag.tool);
+                            const defaults = getDefaultNodePayload(
+                                nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType,
+                                drag.anchorWorld.x,
+                                drag.anchorWorld.y
+                            );
+                            defaults.type = nodeType;
+                            const id = await createNodeAt(
+                                nodeType,
+                                drag.anchorWorld.x,
+                                drag.anchorWorld.y,
+                                {},
+                                { width: defaults.width, height: defaults.height }
+                            );
+                            if (id) setSelection([id]);
+                        } else {
+                            if (!drag.nodeId) {
+                                await applyCreateDragBox(drag, currentWorld);
+                            }
+                            if (drag.nodeId) setSelection([drag.nodeId]);
+                        }
+                    }
+                    createDragRef.current = null;
+                    setCreatePreview(null);
+                } else if (drag?.clickOnly && rect && viewportForChildren && !isClickInControls) {
+                    const { x: sx, y: sy } = drag.startScreen;
                     const insideViewport =
                         sx >= rect.left && sx <= rect.right && sy >= rect.top && sy <= rect.bottom;
                     if (insideViewport) {
                         const w1 = screenToWorldWithContainer(sx, sy, rect, viewportForChildren);
-                        const offsets = { sticky_note: [75, 50], text: [100, 20], shape: [50, 50], frame: [150, 100], image: [100, 75], comment: [100, 40], link: [120, 40], todo_list: [110, 60], file_card: [110, 40], drawing: [100, 75], column: [100, 100], table: [140, 60] };
-                        const [ox, oy] = offsets[activeTool] || [50, 50];
-                        const finalX = w1.x - ox;
-                        const finalY = w1.y - oy;
-                        createNodeAt(activeTool, finalX, finalY);
+                        const nodeType = creationToolToNodeType(drag.tool);
+                        const defaultKey =
+                            nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType;
+                        const defaults = getDefaultNodePayload(defaultKey, w1.x, w1.y);
+                        defaults.type = nodeType;
+                        const offsets = {
+                            sticky_note: [75, 50],
+                            text: [100, 20],
+                            shape: [50, 50],
+                            frame: [150, 100],
+                            image: [100, 75],
+                            comment: [100, 40],
+                            link: [120, 40],
+                            todo_list: [110, 60],
+                            file_card: [110, 40],
+                            drawing: [100, 75],
+                            column: [100, 100],
+                            table: [140, 60],
+                        };
+                        const [ox, oy] = offsets[drag.tool] || offsets[nodeType] || [50, 50];
+                        await createNodeAt(nodeType, w1.x - ox, w1.y - oy);
                     }
-                    pendingCreateRef.current = null;
+                    createDragRef.current = null;
                 } else if (selectionBox) {
                     const w = Math.abs(selectionBox.current.x - selectionBox.start.x);
                     const h = Math.abs(selectionBox.current.y - selectionBox.start.y);
@@ -495,13 +1144,33 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
             }
             viewportState.handleMouseUp();
         },
-        [selectionBox, viewportForChildren, nodes, setSelection, activeTool, createNodeAt]
+        [selectionBox, viewportForChildren, nodes, setSelection, activeTool, createNodeAt, applyCreateDragBox]
     );
 
     const handlePointerMove = useCallback(
         (e) => {
+            lastPointerClientRef.current = { x: e.clientX, y: e.clientY };
+            const drag = createDragRef.current;
             if (selectionBox) {
                 setSelectionBox((prev) => (prev ? { ...prev, current: { x: e.clientX, y: e.clientY } } : null));
+            } else if (drag?.anchorWorld) {
+                const rect = containerRef.current?.getBoundingClientRect();
+                if (rect && viewportRef.current) {
+                    const currentWorld = screenToWorldWithContainer(
+                        e.clientX,
+                        e.clientY,
+                        rect,
+                        viewportRef.current
+                    );
+                    setCreatePreview({ anchorWorld: drag.anchorWorld, currentWorld });
+                    const dist = Math.hypot(
+                        e.clientX - drag.startScreen.x,
+                        e.clientY - drag.startScreen.y
+                    );
+                    if (dist >= CREATE_DRAG_THRESHOLD_PX) {
+                        void applyCreateDragBox(drag, currentWorld);
+                    }
+                }
             } else {
                 viewportState.handleMouseMove(e);
             }
@@ -511,7 +1180,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                 updateCursor({ x: world.x, y: world.y });
             }
         },
-        [selectionBox, viewportState, updateCursor]
+        [selectionBox, viewportState, updateCursor, applyCreateDragBox]
     );
 
     const handleContextMenu = useCallback(
@@ -636,9 +1305,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
     return (
         <>
             <CollabSync spaceId={spaceId} />
-            <div className="whiteboard-editor-layout">
+            <div
+                className="whiteboard-editor-layout"
+                style={{ '--inspector-inset': `${getInspectorInsetPx(inspectorPanelOpen)}px` }}
+            >
+                <div className="whiteboard-canvas-column">
                 <div
-                    className={`whiteboard-viewport ${viewportState.isPanning ? 'panning' : ''} ${isSpacePressed ? 'space-pressed' : ''} ${!gridVisible ? 'grid-hidden' : ''}`}
+                    className={`whiteboard-viewport ${viewportState.isPanning ? 'panning' : ''} ${isSpacePressed ? 'space-pressed' : ''} ${!gridVisible ? 'grid-hidden' : ''} ${rulersVisible ? 'rulers-visible' : ''}`}
                     ref={containerRef}
                 onWheel={viewportState.handleWheel}
                 onPointerDown={handlePointerDown}
@@ -660,12 +1333,31 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                 >
                     <ConnectorLayer />
                     <div className="whiteboard-nodes-container">
-                        <NodeLayer onNodePointerDown={handleNodePointerDown} onResizeStart={handleResizeStart} />
+                        <NodeLayer
+                            onNodePointerDown={handleNodePointerDown}
+                            onNodeContextMenu={handleNodeContextMenu}
+                            onResizeStart={handleResizeStart}
+                            onRotateStart={handleRotateStart}
+                        />
                     </div>
                 </div>
-                <SelectionManager selectionBox={selectionBox} />
+                <SelectionManager
+                    selectionBox={selectionBox}
+                    createPreview={createPreview}
+                    viewport={viewportForChildren}
+                    containerRef={containerRef}
+                />
                 <PresenceLayer viewport={viewportForChildren} />
-                <div className="whiteboard-viewport-controls" onMouseDown={(e) => e.stopPropagation()}>
+                {rulersVisible && (
+                    <RulersOverlay viewport={viewportForChildren} containerRef={containerRef} />
+                )}
+                <div
+                    className="whiteboard-viewport-controls"
+                    onPointerDown={(e) => {
+                        e.stopPropagation();
+                        setFloatingToolbarOpen(false);
+                    }}
+                >
                     <button
                         type="button"
                         title={gridVisible ? 'Ocultar grade' : 'Mostrar grade'}
@@ -675,8 +1367,19 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                     </button>
                     <button
                         type="button"
+                        title={rulersVisible ? 'Ocultar réguas (Ctrl+R)' : 'Mostrar réguas (Ctrl+R)'}
+                        className={rulersVisible ? 'active' : ''}
+                        onClick={() => setRulersVisible(!rulersVisible)}
+                    >
+                        <Ruler size={18} />
+                    </button>
+                    <button
+                        type="button"
                         title="Diminuir zoom"
-                        onClick={() => viewportState.setViewport(viewportState.pan, Math.max(0.1, viewportState.zoom / 1.2))}
+                        onClick={() => {
+                            const { x, y } = getZoomFocalClient();
+                            viewportState.zoomAtClient(x, y, 1 / 1.2);
+                        }}
                     >
                         <ZoomOut size={18} />
                     </button>
@@ -684,13 +1387,31 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                     <button
                         type="button"
                         title="Aumentar zoom"
-                        onClick={() => viewportState.setViewport(viewportState.pan, Math.min(5, viewportState.zoom * 1.2))}
+                        onClick={() => {
+                            const { x, y } = getZoomFocalClient();
+                            viewportState.zoomAtClient(x, y, 1.2);
+                        }}
                     >
                         <ZoomIn size={18} />
                     </button>
+                    <button
+                        type="button"
+                        title="Atalhos (?)"
+                        onClick={() => setShortcutsHelpOpen(true)}
+                    >
+                        <HelpCircle size={18} />
+                    </button>
                 </div>
             </div>
+                </div>
+                <InspectorPanel
+                    spaceId={spaceId}
+                    spaceTitle={space?.name || space?.title || 'Space'}
+                    open={inspectorPanelOpen}
+                    onToggle={() => setInspectorPanelOpen(!inspectorPanelOpen)}
+                />
             </div>
+            <ShortcutsHelp open={shortcutsHelpOpen} onClose={() => setShortcutsHelpOpen(false)} />
             <DraggablePanel id="whiteboard-toolbar" defaultBottom={16} hideHandle style={isMobile ? { left: 12, right: 12, transform: 'none' } : undefined}>
                 <LeftToolbar
                     onUploadImage={handleUploadImage}
@@ -707,7 +1428,9 @@ export default function CanvasEngine({ spaceId, space, onViewportChange }) {
                 onUploadImage={handleContextMenuUploadImage}
                 onUploadFile={handleContextMenuUploadFile}
             />
-            {selectedNodeIds.length > 0 && <FloatingToolbar viewport={viewportForChildren} containerRef={containerRef} />}
+            {floatingToolbarOpen && selectedNodeIds.length > 0 && (
+                <FloatingToolbar viewport={viewportForChildren} containerRef={containerRef} />
+            )}
         </>
     );
 }

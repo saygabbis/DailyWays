@@ -1,5 +1,5 @@
 import { useApp } from '../../context/AppContext';
-import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
+import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
 import {
     Calendar, Star, Sun, CheckCircle2, Circle,
     ArrowRight, CheckSquare, CalendarOff,

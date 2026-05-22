@@ -8,25 +8,25 @@ import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import { Plus, Loader2, X, GripVertical, Share2 } from 'lucide-react';
 import { fetchBoardMembers, sortBoardMembersOwnerFirst } from '../../services/boardService';
 import { useMergedBoardEditors } from '../../hooks/useMergedBoardEditors';
-import BoardCollabStatusBanner from '../../collab/BoardCollabStatusBanner.jsx';
-import CollabPresenceLayer from '../../collab/CollabPresenceLayer.jsx';
-import { pointerCoordsFromBoardEvent } from '../../collab/boardCursorCoords.js';
-import { isPeerOnBoardSurface } from '../../collab/presenceVisibility.js';
-import RemoteDragLayer from '../../collab/RemoteDragLayer.jsx';
-import PresenceOnlineList from '../../collab/PresenceOnlineList.jsx';
-import { setLastBoardPointer } from '../../collab/lastBoardPointer.js';
-import { useCollab } from '../../collab/CollabContext.jsx';
+import BoardCollabStatusBanner from '../../collab/board/ui/BoardCollabStatusBanner.jsx';
+import CollabPresenceLayer from '../../collab/board/ui/CollabPresenceLayer.jsx';
+import { pointerCoordsFromBoardEvent } from '../../collab/board/coords/boardCursorCoords.js';
+import { isPeerOnBoardSurface } from '../../collab/board/presence/presenceVisibility.js';
+import RemoteDragLayer from '../../collab/board/ui/RemoteDragLayer.jsx';
+import PresenceOnlineList from '../../collab/board/ui/PresenceOnlineList.jsx';
+import { setLastBoardPointer } from '../../collab/board/presence/lastBoardPointer.js';
+import { useCollab } from '../../collab/core/CollabContext.jsx';
 import {
     scheduleBoardPresencePublish,
     prepareBoardSurfacePresence,
     restoreBoardPresenceAfterModal,
     publishBoardPresenceFull,
-} from '../../collab/boardPresencePublish.js';
-import { publishBoardPresenceFocus } from '../../collab/boardPresenceFocus.js';
-import { announcePresence } from '../../collab/presenceBridge.js';
+} from '../../collab/board/presence/boardPresencePublish.js';
+import { publishBoardPresenceFocus } from '../../collab/board/presence/boardPresenceFocus.js';
+import { announcePresence } from '../../collab/board/presence/presenceBridge.js';
 import { useBoardPresenceHighlights } from '../../hooks/useBoardPresenceHighlights';
-import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
-import { useCollabPresence } from '../../collab/useCollabPresence.js';
+import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
+import { useCollabPresence } from '../../collab/board/presence/useCollabPresence.js';
 import { uuidv4 } from '../../utils/uuid';
 import './Board.css';
 

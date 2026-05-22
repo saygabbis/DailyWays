@@ -1,5 +1,5 @@
 import { fieldToPatch } from '@dailyways/collab-protocol';
-import { useWhiteboardStore } from '../stores/whiteboardStore';
+import { useWhiteboardStore } from '../../stores/whiteboardStore';
 
 export function applyRemoteOp(op, fromUserId, myUserId) {
   const store = useWhiteboardStore.getState();

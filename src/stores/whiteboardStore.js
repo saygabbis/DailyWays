@@ -1,7 +1,15 @@
 import { create } from 'zustand';
 import { uuidv4 } from '../utils/uuid';
+import {
+    loadSpacePages,
+    saveSpacePages,
+    createPageEntry,
+    newPageName,
+    DEFAULT_PAGE_ID,
+    filterNodesByPage,
+} from '../components/Whiteboard/whiteboardPages';
 
-const MAX_HISTORY = 100;
+const MAX_HISTORY = 600;
 
 export function createHistoryEntry(type, payload) {
     return { type, payload, timestamp: Date.now() };
@@ -36,8 +44,56 @@ export function isCreationTool(tool) {
 }
 
 const GRID_STORAGE_KEY = 'dailyways_grid_visible';
+const RULERS_STORAGE_KEY = 'dailyways_rulers_visible';
+const INSPECTOR_PANEL_KEY = 'dailyways_inspector_panel_open';
+const PROPS_PANEL_KEY = 'dailyways_props_panel_open';
+const INSPECTOR_TAB_KEY = 'dailyways_inspector_tab';
+
+function loadBool(key, defaultValue) {
+    try {
+        const v = localStorage.getItem(key);
+        if (v === null) return defaultValue;
+        return v === 'true';
+    } catch {
+        return defaultValue;
+    }
+}
+
 function loadGridVisible() {
     return true;
+}
+
+function loadRulersVisible() {
+    try {
+        return localStorage.getItem(RULERS_STORAGE_KEY) === 'true';
+    } catch {
+        return false;
+    }
+}
+
+function loadInspectorTab() {
+    try {
+        const v = localStorage.getItem(INSPECTOR_TAB_KEY);
+        return v === 'layers' ? 'layers' : 'design';
+    } catch {
+        return 'design';
+    }
+}
+
+function loadInspectorPanelOpen() {
+    try {
+        const v = localStorage.getItem(INSPECTOR_PANEL_KEY);
+        if (v !== null) return v === 'true';
+        const legacy = localStorage.getItem(PROPS_PANEL_KEY);
+        if (legacy !== null) return legacy === 'true';
+    } catch {}
+    return true;
+}
+
+function applyNodesReplace(nodes, items) {
+    if (!items?.length) return nodes;
+    const byId = new Map(items.map((i) => [i.id, i.node]));
+    return nodes.map((n) => (byId.has(n.id) ? { ...byId.get(n.id) } : n));
 }
 
 export const useWhiteboardStore = create((set, get) => ({
@@ -50,6 +106,14 @@ export const useWhiteboardStore = create((set, get) => ({
     connectorFromNodeId: null,
     viewport: { panX: 0, panY: 0, zoom: 1 },
     gridVisible: loadGridVisible(),
+    rulersVisible: loadRulersVisible(),
+    /** Nós copiados/recortados (Ctrl+C / Ctrl+X) para colar */
+    clipboardNodes: [],
+    clipboardPasteGeneration: 0,
+    inspectorPanelOpen: loadInspectorPanelOpen(),
+    inspectorTab: loadInspectorTab(),
+    spacePages: [{ id: DEFAULT_PAGE_ID, name: 'Canvas principal' }],
+    activePageId: DEFAULT_PAGE_ID,
     lastCreatedNodeId: null,
     dirtyNodeIds: [],
     history: [],
@@ -59,26 +123,82 @@ export const useWhiteboardStore = create((set, get) => ({
     /** @type {Record<string, { entity: string, snapshot: unknown }>} */
     pendingOps: {},
 
-    setSpaceId: (spaceId) => set({
-        spaceId,
-        nodes: [],
-        connectors: [],
-        comments: [],
-        selectedNodeIds: [],
-        activeTool: 'select',
-        connectorFromNodeId: null,
-        editingNodeId: null,
-        dirtyNodeIds: [],
-        history: [],
-        historyIndex: -1,
-        revision: 0,
-        pendingOps: {},
+    setSpaceId: (spaceId) => {
+        const pages = spaceId ? loadSpacePages(spaceId) : [{ id: DEFAULT_PAGE_ID, name: 'Canvas principal' }];
+        set({
+            spaceId,
+            spacePages: pages,
+            activePageId: pages[0]?.id ?? DEFAULT_PAGE_ID,
+            nodes: [],
+            connectors: [],
+            comments: [],
+            selectedNodeIds: [],
+            activeTool: 'select',
+            connectorFromNodeId: null,
+            editingNodeId: null,
+            editTypingSeed: null,
+            dirtyNodeIds: [],
+            history: [],
+            historyIndex: -1,
+            revision: 0,
+            pendingOps: {},
+        });
+    },
+
+    setActivePageId: (activePageId) =>
+        set({ activePageId: activePageId ?? DEFAULT_PAGE_ID, selectedNodeIds: [] }),
+
+    addSpacePage: (name) => set((state) => {
+        if (!state.spaceId) return state;
+        const page = createPageEntry(name || newPageName(state.spacePages));
+        const spacePages = [...state.spacePages, page];
+        saveSpacePages(state.spaceId, spacePages);
+        return { spacePages, activePageId: page.id, selectedNodeIds: [] };
     }),
+
+    renameSpacePage: (pageId, name) => set((state) => {
+        const trimmed = String(name ?? '').trim();
+        if (!trimmed || !state.spaceId) return state;
+        const spacePages = state.spacePages.map((p) =>
+            p.id === pageId ? { ...p, name: trimmed } : p
+        );
+        saveSpacePages(state.spaceId, spacePages);
+        return { spacePages };
+    }),
+
+    deleteSpacePage: (pageId) => set((state) => {
+        if (state.spacePages.length <= 1 || !state.spaceId) return state;
+        const spacePages = state.spacePages.filter((p) => p.id !== pageId);
+        const activePageId =
+            state.activePageId === pageId ? spacePages[0].id : state.activePageId;
+        saveSpacePages(state.spaceId, spacePages);
+        return { spacePages, activePageId, selectedNodeIds: [] };
+    }),
+
+    duplicateSpacePage: (pageId) => set((state) => {
+        if (!state.spaceId) return state;
+        const source = state.spacePages.find((p) => p.id === pageId);
+        if (!source) return state;
+        const page = createPageEntry(`${source.name} (cópia)`);
+        const spacePages = [...state.spacePages, page];
+        saveSpacePages(state.spaceId, spacePages);
+        return { spacePages, activePageId: page.id, selectedNodeIds: [] };
+    }),
+
+    getActivePageNodes: () => {
+        const state = get();
+        return filterNodesByPage(state.nodes, state.activePageId);
+    },
 
     setActiveTool: (activeTool) => set({ activeTool }),
     setConnectorFromNodeId: (connectorFromNodeId) => set({ connectorFromNodeId: connectorFromNodeId ?? null }),
     editingNodeId: null,
-    setEditingNodeId: (editingNodeId) => set({ editingNodeId: editingNodeId ?? null }),
+    editTypingSeed: null,
+    setEditingNodeId: (editingNodeId) => set({
+        editingNodeId: editingNodeId ?? null,
+        ...(editingNodeId == null ? { editTypingSeed: null } : {}),
+    }),
+    setEditTypingSeed: (editTypingSeed) => set({ editTypingSeed: editTypingSeed ?? null }),
 
     setNodes: (nodes) => set({ nodes: nodes ?? [] }),
     setConnectors: (connectors) => set({ connectors: connectors ?? [] }),
@@ -93,6 +213,35 @@ export const useWhiteboardStore = create((set, get) => ({
             localStorage.setItem(GRID_STORAGE_KEY, gridVisible ? 'true' : 'false');
         } catch {}
         set({ gridVisible });
+    },
+
+    setRulersVisible: (rulersVisible) => {
+        try {
+            localStorage.setItem(RULERS_STORAGE_KEY, rulersVisible ? 'true' : 'false');
+        } catch {}
+        set({ rulersVisible });
+    },
+
+    setClipboardNodes: (clipboardNodes) => set({
+        clipboardNodes: Array.isArray(clipboardNodes) ? clipboardNodes : [],
+    }),
+
+    setClipboardPasteGeneration: (clipboardPasteGeneration) =>
+        set({ clipboardPasteGeneration: Math.max(0, clipboardPasteGeneration ?? 0) }),
+
+    setInspectorPanelOpen: (inspectorPanelOpen) => {
+        try {
+            localStorage.setItem(INSPECTOR_PANEL_KEY, inspectorPanelOpen ? 'true' : 'false');
+        } catch {}
+        set({ inspectorPanelOpen });
+    },
+
+    setInspectorTab: (inspectorTab) => {
+        const tab = inspectorTab === 'layers' ? 'layers' : 'design';
+        try {
+            localStorage.setItem(INSPECTOR_TAB_KEY, tab);
+        } catch {}
+        set({ inspectorTab: tab });
     },
 
     setSelection: (selectedNodeIds) => set({
@@ -194,21 +343,53 @@ export const useWhiteboardStore = create((set, get) => ({
         if (state.historyIndex < 0) return state;
         const entry = state.history[state.historyIndex];
         const nextIndex = state.historyIndex - 1;
-        const nextNodes = state.nodes.map((n) => {
-            if (entry.type === 'node_move' && entry.payload.before && n.id === entry.payload.id)
-                return { ...n, x: entry.payload.before.x, y: entry.payload.before.y };
-            if (entry.type === 'node_resize' && entry.payload.before && n.id === entry.payload.id)
-                return { ...n, ...entry.payload.before };
-            if (entry.type === 'node_edit' && entry.payload.before && n.id === entry.payload.id)
-                return { ...n, ...entry.payload.before };
-            if (entry.type === 'node_delete' && entry.payload.node?.id === n.id)
-                return entry.payload.node;
-            return n;
-        });
-        const nodes =
-            entry.type === 'node_delete' && entry.payload.node
-                ? [...nextNodes.filter((n) => n.id !== entry.payload.node.id), entry.payload.node]
-                : nextNodes;
+        let nodes = [...state.nodes];
+
+        switch (entry.type) {
+            case 'node_move':
+                if (entry.payload.before && entry.payload.id) {
+                    nodes = nodes.map((n) =>
+                        n.id === entry.payload.id
+                            ? { ...n, x: entry.payload.before.x, y: entry.payload.before.y }
+                            : n
+                    );
+                }
+                break;
+            case 'node_resize':
+            case 'node_edit':
+                if (entry.payload.before && entry.payload.id) {
+                    nodes = nodes.map((n) =>
+                        n.id === entry.payload.id ? { ...n, ...entry.payload.before } : n
+                    );
+                }
+                break;
+            case 'node_delete': {
+                const deleted =
+                    entry.payload.nodes ?? (entry.payload.node ? [entry.payload.node] : []);
+                const existing = new Set(nodes.map((n) => n.id));
+                for (const node of deleted) {
+                    if (!existing.has(node.id)) nodes.push({ ...node });
+                }
+                break;
+            }
+            case 'node_add':
+                if (entry.payload.node?.id) {
+                    nodes = nodes.filter((n) => n.id !== entry.payload.node.id);
+                }
+                break;
+            case 'nodes_replace':
+                nodes = applyNodesReplace(nodes, entry.payload.before);
+                break;
+            case 'nodes_add_batch': {
+                const batch = entry.payload.nodes ?? [];
+                const removeIds = new Set(batch.map((n) => n.id));
+                nodes = nodes.filter((n) => !removeIds.has(n.id));
+                break;
+            }
+            default:
+                break;
+        }
+
         return { nodes, historyIndex: nextIndex };
     }),
 
@@ -216,21 +397,55 @@ export const useWhiteboardStore = create((set, get) => ({
         if (state.historyIndex >= state.history.length - 1) return state;
         const nextIndex = state.historyIndex + 1;
         const entry = state.history[nextIndex];
-        const nextNodes = state.nodes.map((n) => {
-            if (entry.type === 'node_move' && entry.payload.after && n.id === entry.payload.id)
-                return { ...n, x: entry.payload.after.x, y: entry.payload.after.y };
-            if (entry.type === 'node_resize' && entry.payload.after && n.id === entry.payload.id)
-                return { ...n, ...entry.payload.after };
-            if (entry.type === 'node_edit' && entry.payload.after && n.id === entry.payload.id)
-                return { ...n, ...entry.payload.after };
-            if (entry.type === 'node_add' && entry.payload.node?.id === n.id)
-                return entry.payload.node;
-            return n;
-        });
-        const nodes =
-            entry.type === 'node_add' && entry.payload.node
-                ? [...state.nodes.filter((n) => n.id !== entry.payload.node.id), entry.payload.node]
-                : nextNodes;
+        let nodes = [...state.nodes];
+
+        switch (entry.type) {
+            case 'node_move':
+                if (entry.payload.after && entry.payload.id) {
+                    nodes = nodes.map((n) =>
+                        n.id === entry.payload.id
+                            ? { ...n, x: entry.payload.after.x, y: entry.payload.after.y }
+                            : n
+                    );
+                }
+                break;
+            case 'node_resize':
+            case 'node_edit':
+                if (entry.payload.after && entry.payload.id) {
+                    nodes = nodes.map((n) =>
+                        n.id === entry.payload.id ? { ...n, ...entry.payload.after } : n
+                    );
+                }
+                break;
+            case 'node_delete': {
+                const deleted =
+                    entry.payload.nodes ?? (entry.payload.node ? [entry.payload.node] : []);
+                const removeIds = new Set(deleted.map((n) => n.id));
+                nodes = nodes.filter((n) => !removeIds.has(n.id));
+                break;
+            }
+            case 'node_add':
+                if (entry.payload.node?.id) {
+                    if (!nodes.some((n) => n.id === entry.payload.node.id)) {
+                        nodes.push({ ...entry.payload.node });
+                    }
+                }
+                break;
+            case 'nodes_replace':
+                nodes = applyNodesReplace(nodes, entry.payload.after);
+                break;
+            case 'nodes_add_batch': {
+                const batch = entry.payload.nodes ?? [];
+                const existing = new Set(nodes.map((n) => n.id));
+                for (const node of batch) {
+                    if (!existing.has(node.id)) nodes.push({ ...node });
+                }
+                break;
+            }
+            default:
+                break;
+        }
+
         return { nodes, historyIndex: nextIndex };
     }),
 

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Users, Mail, Shield, Trash2, ChevronDown, LogOut, Star } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { useBoardCollabContext } from '../../collab/BoardCollabContext.jsx';
+import { useBoardCollabContext } from '../../collab/board/ops/BoardCollabContext.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { fetchBoardMembers, inviteBoardMember, updateMemberRole, removeMember, isBoardOwnerClient, sortBoardMembersOwnerFirst } from '../../services/boardService';
 import './BoardDetailsModal.css';

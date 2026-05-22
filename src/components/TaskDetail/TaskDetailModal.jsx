@@ -2,18 +2,18 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
-import { useCollabPresence } from '../../collab/useCollabPresence.js';
-import { announcePresence } from '../../collab/presenceBridge.js';
-import { applyTaskModalPresence } from '../../collab/boardPresenceFocus.js';
+import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
+import { useCollabPresence } from '../../collab/board/presence/useCollabPresence.js';
+import { announcePresence } from '../../collab/board/presence/presenceBridge.js';
+import { applyTaskModalPresence } from '../../collab/board/presence/boardPresenceFocus.js';
 import {
     publishBoardPresenceFull,
     restoreBoardPresenceAfterModal,
-} from '../../collab/boardPresencePublish.js';
-import { isPeerInTaskModal } from '../../collab/presenceVisibility.js';
-import CollabPresenceLayer from '../../collab/CollabPresenceLayer.jsx';
-import { useCollab } from '../../collab/CollabContext.jsx';
-import { usePresenceStore } from '../../collab/presenceStore';
+} from '../../collab/board/presence/boardPresencePublish.js';
+import { isPeerInTaskModal } from '../../collab/board/presence/presenceVisibility.js';
+import CollabPresenceLayer from '../../collab/board/ui/CollabPresenceLayer.jsx';
+import { useCollab } from '../../collab/core/CollabContext.jsx';
+import { usePresenceStore } from '../../collab/board/presence/presenceStore';
 import {
     useTaskModalPeerPresence,
     presenceHoverClass,
@@ -22,10 +22,10 @@ import {
 import {
     buildTaskModalLiveDraft,
     applyPeerTaskModalDraft,
-} from '../../collab/taskModalLiveDraft.js';
-import { createRemoteSyncLock } from '../../collab/taskModalCollabSync.js';
-import { useDocumentPointerPresence } from '../../collab/useDocumentPointerPresence.js';
-import { pointerCoordsFromTaskModalEvent } from '../../collab/taskModalCursorCoords.js';
+} from '../../collab/task-modal/taskModalLiveDraft.js';
+import { createRemoteSyncLock } from '../../collab/task-modal/taskModalCollabSync.js';
+import { useDocumentPointerPresence } from '../../collab/board/presence/useDocumentPointerPresence.js';
+import { pointerCoordsFromTaskModalEvent } from '../../collab/board/coords/taskModalCursorCoords.js';
 
 function ph(hoverByEl, key, baseClass = '', baseStyle = {}) {
     return {

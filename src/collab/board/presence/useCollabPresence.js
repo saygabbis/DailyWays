@@ -1,19 +1,19 @@
 import { useCallback, useRef, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../../context/AuthContext';
 import {
   resolvePresenceColor,
   extractDominantColorFromImage,
   setCachedPhotoPresenceColor,
-} from '../utils/presenceColor';
-import { emitPresence } from './collabClient.js';
+} from '../../../utils/presenceColor';
+import { emitPresence } from '../../core/collabClient.js';
 import { buildBoardPresencePayload, buildCursorPresencePayload } from './presencePayload.js';
-import { useCollab } from './CollabContext.jsx';
+import { useCollab } from '../../core/CollabContext.jsx';
 import {
   getPresenceFields,
   registerPresenceSender,
   pushPresenceFields as pushFields,
 } from './presenceBridge.js';
-import { getGlobalJoinedBoardId } from './boardCollabSession.js';
+import { getGlobalJoinedBoardId } from '../sync/boardCollabSession.js';
 
 const CURSOR_EMIT_MS = 16;
 const META_EMIT_MS = 80;

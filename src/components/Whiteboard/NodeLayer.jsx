@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { intersectsViewport, CONTAINER_NODE_TYPES } from './viewportUtils';
+import { getNodePageId } from './whiteboardPages';
 import ResizeHandles from './ResizeHandles';
 import StickyNoteNode from './nodes/StickyNoteNode';
 import TextNode from './nodes/TextNode';
@@ -40,9 +41,13 @@ function getChildren(nodes, parentId) {
     return nodes.filter((n) => n.parentId === parentId).sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
 }
 
-export default function NodeLayer({ onNodePointerDown, onResizeStart }) {
-    const { nodes, viewport, selectedNodeIds } = useWhiteboardStore();
-    const roots = useMemo(() => getRoots(nodes), [nodes]);
+export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, onResizeStart, onRotateStart }) {
+    const { nodes, viewport, selectedNodeIds, activePageId } = useWhiteboardStore();
+    const pageNodes = useMemo(
+        () => nodes.filter((n) => getNodePageId(n) === activePageId),
+        [nodes, activePageId]
+    );
+    const roots = useMemo(() => getRoots(pageNodes), [pageNodes]);
     const vp = useMemo(() => {
         const z = Math.max(0.1, Number(viewport?.zoom) || 1);
         const panX = Number(viewport?.panX) || 0;
@@ -76,19 +81,26 @@ export default function NodeLayer({ onNodePointerDown, onResizeStart }) {
             }
             return intersectsViewport(r, vp);
         }).sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
-    }, [nodes, roots, vp]);
+    }, [pageNodes, roots, vp]);
 
     const selectedSet = useMemo(() => new Set(selectedNodeIds || []), [selectedNodeIds]);
 
     const renderNode = (node, isInGroup = false) => {
         const Comp = NODE_COMPONENTS[node.type] || StickyNoteNode;
-        return <Comp key={node.id} node={node} onNodePointerDown={onNodePointerDown} />;
+        return (
+            <Comp
+                key={node.id}
+                node={node}
+                onNodePointerDown={onNodePointerDown}
+                onNodeContextMenu={onNodeContextMenu}
+            />
+        );
     };
 
     return (
         <>
             {visibleRoots.map((root) => {
-                const children = getChildren(nodes, root.id);
+                const children = getChildren(pageNodes, root.id);
                 const isContainerWithChildren =
                     CONTAINER_NODE_TYPES.includes(root.type) && children.length > 0;
                 if (isContainerWithChildren) {
@@ -108,7 +120,11 @@ export default function NodeLayer({ onNodePointerDown, onResizeStart }) {
                             }}
                         >
                             <div style={{ pointerEvents: 'auto' }}>
-                                <FrameComp node={rootAtZero} onNodePointerDown={onNodePointerDown} />
+                                <FrameComp
+                                    node={rootAtZero}
+                                    onNodePointerDown={onNodePointerDown}
+                                    onNodeContextMenu={onNodeContextMenu}
+                                />
                             </div>
                             <div
                                 className="whiteboard-frame-children"
@@ -134,14 +150,22 @@ export default function NodeLayer({ onNodePointerDown, onResizeStart }) {
             })}
             {onResizeStart &&
                 visibleRoots.filter((n) => selectedSet.has(n.id) && n.width && n.height).map((node) => (
-                    <ResizeHandles key={`resize-${node.id}`} node={node} onResizeStart={onResizeStart} />
+                    <ResizeHandles
+                        key={`resize-${node.id}`}
+                        node={node}
+                        zoom={viewport?.zoom ?? 1}
+                        onResizeStart={onResizeStart}
+                        onRotateStart={onRotateStart}
+                    />
                 ))}
             {visibleRoots.flatMap((root) =>
-                getChildren(nodes, root.id).filter((c) => selectedSet.has(c.id) && c.width && c.height).map((child) => (
+                getChildren(pageNodes, root.id).filter((c) => selectedSet.has(c.id) && c.width && c.height).map((child) => (
                     <ResizeHandles
                         key={`resize-${child.id}`}
                         node={child}
+                        zoom={viewport?.zoom ?? 1}
                         onResizeStart={onResizeStart}
+                        onRotateStart={onRotateStart}
                         offset={{ x: root.x, y: root.y }}
                     />
                 ))

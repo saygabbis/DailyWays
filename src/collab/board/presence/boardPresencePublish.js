@@ -1,4 +1,4 @@
-import { emitPresence } from './collabClient.js';
+import { emitPresence } from '../../core/collabClient.js';
 import { getPresenceFields } from './presenceBridge.js';
 import { buildBoardPresencePayload } from './presencePayload.js';
 import { getLastBoardPointer, seedBoardCursorFields } from './lastBoardPointer.js';

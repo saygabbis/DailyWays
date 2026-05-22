@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Circle, CheckCircle2 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { useBoardPresenceHighlights } from '../hooks/useBoardPresenceHighlights';
-import { usePresenceStore } from './presenceStore';
-import { presenceLabelTextColor } from '../utils/presenceLabelContrast.js';
-import { boardContentCursorToViewport } from './boardCursorCoords.js';
-import { viewportFromContentPoint } from './scrollContentCoords.js';
+import { useApp } from '../../../context/AppContext';
+import { useBoardPresenceHighlights } from '../../../hooks/useBoardPresenceHighlights';
+import { usePresenceStore } from '../presence/presenceStore';
+import { presenceLabelTextColor } from '../../../utils/presenceLabelContrast.js';
+import { boardContentCursorToViewport } from '../coords/boardCursorCoords.js';
+import { viewportFromContentPoint } from '../coords/scrollContentCoords.js';
 import './PresenceLayer.css';
 
 const CARD_OFFSET_X = 14;

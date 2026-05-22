@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { usePresenceStore } from '../collab/presenceStore';
-import { useCollab } from '../collab/CollabContext.jsx';
+import { usePresenceStore } from '../collab/board/presence/presenceStore';
+import { useCollab } from '../collab/core/CollabContext.jsx';
 import { initialFromName } from '../utils/userColor';
 
 /**

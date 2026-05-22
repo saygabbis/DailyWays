@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
+import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
 import { Plus } from 'lucide-react';
 import { endOfWeek, endOfMonth, endOfYear } from 'date-fns';
 import SmartTaskItem from '../SmartViews/SmartTaskItem';

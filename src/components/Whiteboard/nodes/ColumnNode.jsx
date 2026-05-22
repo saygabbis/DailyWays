@@ -1,16 +1,15 @@
 import React from 'react';
 import BaseNode from './BaseNode';
 
-export default function ColumnNode({ node, onNodePointerDown }) {
+export default function ColumnNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const title = node.data?.title ?? 'Coluna';
     return (
-        <BaseNode node={node} onNodePointerDown={onNodePointerDown}>
+        <BaseNode node={node} onNodePointerDown={onNodePointerDown} onNodeContextMenu={onNodeContextMenu}>
             <div
                 className="whiteboard-node column-node"
                 style={{
                     width: node.width,
                     height: node.height,
-                    transform: `rotate(${node.rotation ?? 0}deg)`,
                     border: '1px solid var(--border-color)',
                     borderRadius: 8,
                     backgroundColor: 'var(--bg-elevated)',

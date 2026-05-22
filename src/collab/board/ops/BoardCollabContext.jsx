@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
-import { useApp } from '../context/AppContext';
-import { useCollab } from './CollabContext.jsx';
-import { submitOp } from './collabClient.js';
-import { isCollabEnabled } from './collabConfig.js';
-import { uuidv4 } from '../utils/uuid';
+import { useApp } from '../../../context/AppContext';
+import { useCollab } from '../../core/CollabContext.jsx';
+import { submitOp } from '../../core/collabClient.js';
+import { isCollabEnabled } from '../../core/collabConfig.js';
+import { uuidv4 } from '../../../utils/uuid';
 
 /**
  * Padrão único de mutação de board:

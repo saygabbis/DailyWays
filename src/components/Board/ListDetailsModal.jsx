@@ -1,17 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Palette, CheckCircle } from 'lucide-react';
-import { useCollabPresence } from '../../collab/useCollabPresence.js';
-import { useDocumentPointerPresence } from '../../collab/useDocumentPointerPresence.js';
+import { useCollabPresence } from '../../collab/board/presence/useCollabPresence.js';
+import { useDocumentPointerPresence } from '../../collab/board/presence/useDocumentPointerPresence.js';
 import {
     pointerCoordsFromOverlayScrollEvent,
-} from '../../collab/overlayScrollCursorCoords.js';
-import { applyTaskModalPresence } from '../../collab/boardPresenceFocus.js';
-import { announcePresence } from '../../collab/presenceBridge.js';
-import { isPeerInBoardOverlay } from '../../collab/presenceVisibility.js';
-import CollabPresenceLayer from '../../collab/CollabPresenceLayer.jsx';
-import { useCollab } from '../../collab/CollabContext.jsx';
-import { isCollabEnabled } from '../../collab/collabConfig.js';
+} from '../../collab/board/coords/overlayScrollCursorCoords.js';
+import { applyTaskModalPresence } from '../../collab/board/presence/boardPresenceFocus.js';
+import { announcePresence } from '../../collab/board/presence/presenceBridge.js';
+import { isPeerInBoardOverlay } from '../../collab/board/presence/presenceVisibility.js';
+import CollabPresenceLayer from '../../collab/board/ui/CollabPresenceLayer.jsx';
+import { useCollab } from '../../collab/core/CollabContext.jsx';
+import { isCollabEnabled } from '../../collab/core/collabConfig.js';
 import './ListDetailsModal.css';
 
 const LIST_COLOR_PRESETS = [

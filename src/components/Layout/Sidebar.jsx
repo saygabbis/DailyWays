@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
-import { useBoardCollabContext } from '../../collab/BoardCollabContext.jsx';
+import { useBoardCollabContext } from '../../collab/board/ops/BoardCollabContext.jsx';
 import { insertBoardFull, deleteBoard, removeMember, isBoardOwnerClient } from '../../services/boardService';
 
 import { usePomodoro } from '../../context/PomodoroContext';

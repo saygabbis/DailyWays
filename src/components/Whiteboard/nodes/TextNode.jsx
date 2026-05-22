@@ -1,31 +1,43 @@
 import React, { useState, useEffect } from 'react';
 import BaseNode from './BaseNode';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
-import { useCollabPatch } from '../../../collab/CollabOpsContext.jsx';
+import { useCollabPatch } from '../../../collab/whiteboard/CollabOpsContext.jsx';
+import { recordNodesMutation } from '../whiteboardHistory';
 
-export default function TextNode({ node, onNodePointerDown }) {
+export default function TextNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const text = node.data?.text ?? 'Text';
-    const { editingNodeId, setEditingNodeId } = useWhiteboardStore();
+    const { editingNodeId, editTypingSeed, setEditingNodeId, setEditTypingSeed } = useWhiteboardStore();
     const { collabPatchNode } = useCollabPatch();
     const isEditing = editingNodeId === node.id;
     const [editValue, setEditValue] = useState(text);
     useEffect(() => {
-        if (isEditing) setEditValue(text);
-    }, [isEditing, text]);
+        if (!isEditing) return;
+        if (editTypingSeed) {
+            const base = text === 'Text' ? '' : (text || '');
+            setEditValue(base + editTypingSeed);
+            setEditTypingSeed(null);
+        } else {
+            setEditValue(text);
+        }
+    }, [isEditing, text, editTypingSeed, setEditTypingSeed]);
 
     const handleBlur = () => {
-        if (editValue !== text) collabPatchNode(node.id, { data: { ...node.data, text: editValue } });
+        if (editValue !== text) {
+            recordNodesMutation(useWhiteboardStore, [node.id], () => {
+                collabPatchNode(node.id, { data: { ...node.data, text: editValue } });
+            });
+        }
         setEditingNodeId(null);
+        setEditTypingSeed(null);
     };
 
     return (
-        <BaseNode node={node} onNodePointerDown={onNodePointerDown}>
+        <BaseNode node={node} onNodePointerDown={onNodePointerDown} onNodeContextMenu={onNodeContextMenu}>
             <div
                 className="whiteboard-node text-node"
                 style={{
                     width: node.width,
                     height: node.height,
-                    transform: `rotate(${node.rotation ?? 0}deg)`,
                     fontSize: node.style?.fontSize ?? 16,
                     color: node.style?.color ?? 'var(--text-primary)',
                 }}

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { useBoardCollabContext } from '../../collab/BoardCollabContext.jsx';
-import { isCollabEnabled } from '../../collab/collabConfig.js';
+import { useBoardCollabContext } from '../../collab/board/ops/BoardCollabContext.jsx';
+import { isCollabEnabled } from '../../collab/core/collabConfig.js';
 import { Cloud, CloudOff, Loader2, Radio } from 'lucide-react';
 import './FloatingSaveButton.css';
 

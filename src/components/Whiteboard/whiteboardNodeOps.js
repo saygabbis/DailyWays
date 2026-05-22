@@ -1,0 +1,191 @@
+import { uuidv4 } from '../../utils/uuid';
+import { insertNode } from '../../services/whiteboardService';
+import { findContainerAt } from './viewportUtils';
+import { pushNodesAddBatch, recordNodesMutation } from './whiteboardHistory';
+
+const PASTE_STEP = 20;
+
+export function buildNodesById(allNodes) {
+    return new Map((allNodes ?? []).map((n) => [n.id, n]));
+}
+
+/** Converte posição do nó para coordenadas mundo (soma offsets dos pais). */
+export function nodeToWorld(node, nodesById) {
+    let x = node.x ?? 0;
+    let y = node.y ?? 0;
+    let pid = node.parentId;
+    while (pid) {
+        const parent = nodesById.get(pid);
+        if (!parent) break;
+        x += parent.x ?? 0;
+        y += parent.y ?? 0;
+        pid = parent.parentId;
+    }
+    return { x, y };
+}
+
+/** Cópia profunda com x/y em mundo e sem parentId (pronto para colar/duplicar). */
+export function normalizeNodesForClipboard(nodes, allNodes) {
+    const byId = buildNodesById(allNodes);
+    return nodes.map((n) => {
+        const { x, y } = nodeToWorld(n, byId);
+        const copy = JSON.parse(JSON.stringify(n));
+        copy.x = x;
+        copy.y = y;
+        copy.parentId = null;
+        return copy;
+    });
+}
+
+function cloneNodeForInsert(node, offsetX, offsetY, userId) {
+    const newNode = JSON.parse(JSON.stringify(node));
+    newNode.id = uuidv4();
+    newNode.x = (node.x ?? 0) + offsetX;
+    newNode.y = (node.y ?? 0) + offsetY;
+    newNode.parentId = null;
+    newNode.createdBy = userId ?? null;
+    delete newNode.createdAt;
+    delete newNode.updatedAt;
+    return newNode;
+}
+
+/** Copia nós selecionados para a área de transferência interna. */
+export function copyNodesToClipboard(store) {
+    const state = store.getState();
+    if (!state.selectedNodeIds.length) return false;
+    const selected = state.nodes.filter((n) => state.selectedNodeIds.includes(n.id));
+    const nodes = normalizeNodesForClipboard(selected, state.nodes);
+    state.setClipboardNodes(nodes);
+    state.setClipboardPasteGeneration(0);
+    return true;
+}
+
+/** Coloca nós copiados na área de transferência (uso em cut). */
+export function setClipboardFromNodes(store, nodes) {
+    const state = store.getState();
+    const normalized = normalizeNodesForClipboard(nodes, state.nodes);
+    state.setClipboardNodes(normalized);
+    state.setClipboardPasteGeneration(0);
+}
+
+/** Duplica ou cola nós; retorna ids criados. */
+export async function insertClonedNodes(nodes, offset, ctx) {
+    const { spaceId, userId, collabCreateNode, collabConnected, addNode, store, allNodes } = ctx;
+    if (!spaceId || !nodes?.length) return [];
+
+    const createdIds = [];
+    const createdNodes = [];
+    for (const node of nodes) {
+        const worldX = (node.x ?? 0) + offset.x;
+        const worldY = (node.y ?? 0) + offset.y;
+        const w = node.width ?? 0;
+        const h = node.height ?? 0;
+        const container = findContainerAt(allNodes, worldX + w / 2, worldY + h / 2);
+
+        const newNode = cloneNodeForInsert(node, offset.x, offset.y, userId);
+        if (container) {
+            newNode.parentId = container.id;
+            newNode.x = worldX - container.x;
+            newNode.y = worldY - container.y;
+        } else {
+            newNode.parentId = null;
+            newNode.x = worldX;
+            newNode.y = worldY;
+        }
+
+        if (collabConnected) {
+            collabCreateNode(newNode);
+        } else {
+            const res = await insertNode(spaceId, newNode, userId);
+            if (!res.success) continue;
+            addNode(newNode);
+        }
+        createdNodes.push({ ...newNode });
+        createdIds.push(newNode.id);
+    }
+    if (createdNodes.length && store) pushNodesAddBatch(store, createdNodes);
+    return createdIds;
+}
+
+export async function duplicateSelectedNodes(ctx) {
+    const state = ctx.store.getState();
+    const selected = state.nodes.filter((n) => state.selectedNodeIds.includes(n.id));
+    if (!selected.length) return [];
+    const normalized = normalizeNodesForClipboard(selected, state.nodes);
+    const ids = await insertClonedNodes(normalized, { x: PASTE_STEP, y: PASTE_STEP }, {
+        ...ctx,
+        allNodes: state.nodes,
+    });
+    if (ids.length) state.setSelection(ids);
+    return ids;
+}
+
+export async function pasteFromClipboard(ctx, options = {}) {
+    const state = ctx.store.getState();
+    const clipboard = state.clipboardNodes;
+    if (!clipboard?.length) return [];
+
+    const inPlace = !!options.inPlace;
+    const gen = state.clipboardPasteGeneration ?? 0;
+    const offset = inPlace
+        ? { x: 0, y: 0 }
+        : { x: PASTE_STEP * (gen + 1), y: PASTE_STEP * (gen + 1) };
+    const ids = await insertClonedNodes(clipboard, offset, {
+        ...ctx,
+        allNodes: state.nodes,
+    });
+    if (ids.length) {
+        if (!inPlace) state.setClipboardPasteGeneration(gen + 1);
+        state.setSelection(ids);
+    }
+    return ids;
+}
+
+export function nudgeSelectedNodes(store, collabPatchNodes, dx, dy) {
+    const state = store.getState();
+    if (!state.selectedNodeIds.length) return;
+    const patches = state.selectedNodeIds
+        .map((id) => {
+            const n = state.nodes.find((node) => node.id === id);
+            return n ? { id, patch: { x: (n.x ?? 0) + dx, y: (n.y ?? 0) + dy } } : null;
+        })
+        .filter(Boolean);
+    if (patches.length) {
+        recordNodesMutation(store, patches.map((p) => p.id), () => collabPatchNodes(patches));
+    }
+}
+
+export function patchZIndexSelected(store, collabPatchNode, mode) {
+    const state = store.getState();
+    const selected = state.nodes.filter((n) => state.selectedNodeIds.includes(n.id));
+    if (!selected.length) return;
+
+    const allZ = state.nodes.map((n) => n.zIndex ?? 0);
+    const maxZ = Math.max(0, ...allZ);
+    const minZ = Math.min(0, ...allZ);
+
+    const patches = selected.map((n, i) => {
+        let z = n.zIndex ?? 0;
+        switch (mode) {
+            case 'forward':
+                z = maxZ + 1 + i;
+                break;
+            case 'backward':
+                z = minZ - selected.length + i;
+                break;
+            case 'front':
+                z = maxZ + 1 + i;
+                break;
+            case 'back':
+                z = minZ - selected.length + i;
+                break;
+            default:
+                break;
+        }
+        return { id: n.id, patch: { zIndex: z } };
+    });
+
+    recordNodesMutation(store, patches.map((p) => p.id), () => {
+        patches.forEach(({ id, patch }) => collabPatchNode(id, patch));
+    });
+}

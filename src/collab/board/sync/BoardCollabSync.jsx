@@ -2,33 +2,33 @@ import { useEffect, useRef, useCallback } from 'react';
 
 import { SERVER_EVENTS } from '@dailyways/collab-protocol';
 
-import { useApp } from '../context/AppContext';
+import { useApp } from '../../../context/AppContext';
 
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../../context/AuthContext';
 
-import { usePresenceStore } from './presenceStore';
+import { usePresenceStore } from '../presence/presenceStore';
 
-import { flushPresenceSyncNow } from './queuePresenceSync.js';
+import { flushPresenceSyncNow } from '../presence/queuePresenceSync.js';
 
-import { useCollab } from './CollabContext.jsx';
+import { useCollab } from '../../core/CollabContext.jsx';
 
-import { useBoardCollabContext } from './BoardCollabContext.jsx';
+import { useBoardCollabContext } from '../ops/BoardCollabContext.jsx';
 
-import { joinBoardRoom, leaveRoom } from './collabClient.js';
+import { joinBoardRoom, leaveRoom } from '../../core/collabClient.js';
 
-import { resetPresenceFields, announcePresence } from './presenceBridge.js';
+import { resetPresenceFields, announcePresence } from '../presence/presenceBridge.js';
 
 import {
   publishBoardPresenceFull,
   scheduleBoardPresencePublish,
   prepareBoardSurfacePresence,
-} from './boardPresencePublish.js';
+} from '../presence/boardPresencePublish.js';
 
-import { isCollabEnabled } from './collabConfig.js';
+import { isCollabEnabled } from '../../core/collabConfig.js';
 
-import { collabDebugLog } from './collabDebug.js';
+import { collabDebugLog } from '../../core/collabDebug.js';
 
-import { pulseRemoteCard, pulseRemoteList } from './boardRemoteAnim.js';
+import { pulseRemoteCard, pulseRemoteList } from '../boardRemoteAnim.js';
 
 import {
 

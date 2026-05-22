@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { SERVER_EVENTS } from '@dailyways/collab-protocol';
-import { useWhiteboardStore } from '../stores/whiteboardStore';
-import { usePresenceStore } from './presenceStore';
-import { queuePresenceSync, flushPresenceSyncNow } from './queuePresenceSync.js';
-import { useCollab } from './CollabContext.jsx';
-import { joinSpaceRoom, leaveRoom } from './collabClient.js';
-import { isCollabEnabled } from './collabConfig.js';
-import { fetchNodes, fetchConnectors, fetchComments } from '../services/whiteboardService';
+import { useWhiteboardStore } from '../../stores/whiteboardStore';
+import { usePresenceStore } from '../board/presence/presenceStore';
+import { queuePresenceSync, flushPresenceSyncNow } from '../board/presence/queuePresenceSync.js';
+import { useCollab } from '../core/CollabContext.jsx';
+import { joinSpaceRoom, leaveRoom } from '../core/collabClient.js';
+import { isCollabEnabled } from '../core/collabConfig.js';
+import { fetchNodes, fetchConnectors, fetchComments } from '../../services/whiteboardService';
 
 export default function CollabSync({ spaceId }) {
   const collab = useCollab();

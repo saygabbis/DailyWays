@@ -3,7 +3,7 @@ import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { useAuth } from '../../context/AuthContext';
 import { uploadSpaceAsset } from '../../services/whiteboardService';
 import { insertNode } from '../../services/whiteboardService';
-import { useCollabPatch } from '../../collab/CollabOpsContext.jsx';
+import { useCollabPatch } from '../../collab/whiteboard/CollabOpsContext.jsx';
 import { ImagePlus } from 'lucide-react';
 import { uuidv4 } from '../../utils/uuid';
 

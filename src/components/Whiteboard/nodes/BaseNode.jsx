@@ -1,14 +1,16 @@
 import React, { useRef, useCallback } from 'react';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { getNodeTransformStyle } from '../nodeTransform';
 
-export default function BaseNode({ node, children, onNodePointerDown }) {
+export default function BaseNode({ node, children, onNodePointerDown, onNodeContextMenu }) {
     const ref = useRef(null);
-    const { selectedNodeIds, setSelection, lastCreatedNodeId } = useWhiteboardStore();
+    const { selectedNodeIds, setSelection, setEditingNodeId, lastCreatedNodeId } = useWhiteboardStore();
     const isSelected = selectedNodeIds.includes(node.id);
     const isJustCreated = lastCreatedNodeId === node.id;
 
     const handlePointerDown = useCallback(
         (e) => {
+            if (e.button === 1) return;
             e.stopPropagation();
             if (e.button !== 0) return;
             if (e.shiftKey) {
@@ -23,6 +25,23 @@ export default function BaseNode({ node, children, onNodePointerDown }) {
         [node.id, isSelected, selectedNodeIds, setSelection, onNodePointerDown]
     );
 
+    const handleContextMenu = useCallback(
+        (e) => {
+            onNodeContextMenu?.(e, node.id);
+        },
+        [node.id, onNodeContextMenu]
+    );
+
+    const handleDoubleClick = useCallback(
+        (e) => {
+            e.stopPropagation();
+            if (node.type === 'text' || node.type === 'sticky_note') {
+                setEditingNodeId(node.id);
+            }
+        },
+        [node.id, node.type, setEditingNodeId]
+    );
+
     return (
         <div
             ref={ref}
@@ -35,8 +54,15 @@ export default function BaseNode({ node, children, onNodePointerDown }) {
                 height: node.height,
             }}
             onPointerDown={handlePointerDown}
+            onContextMenu={handleContextMenu}
+            onDoubleClick={handleDoubleClick}
         >
-            {children}
+            <div
+                className="whiteboard-node-inner"
+                style={{ width: '100%', height: '100%', ...getNodeTransformStyle(node) }}
+            >
+                {children}
+            </div>
         </div>
     );
 }

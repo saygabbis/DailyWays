@@ -1,5 +1,5 @@
-import { initialFromName } from '../utils/userColor';
-import { resolvePresenceColor } from '../utils/presenceColor';
+import { initialFromName } from '../../../utils/userColor';
+import { resolvePresenceColor } from '../../../utils/presenceColor';
 import { getPresenceFields } from './presenceBridge.js';
 
 export function resolvePresenceDisplayName({ user, profile }) {

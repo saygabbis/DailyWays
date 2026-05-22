@@ -1,15 +1,20 @@
 import React, { useRef, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useWhiteboardStore } from '../../stores/whiteboardStore';
+import { getInspectorInsetPx } from '../Whiteboard/inspectorLayout';
 import { Focus } from 'lucide-react';
 import CanvasEngine from '../Whiteboard/CanvasEngine';
-import { CollabOpsProvider } from '../../collab/CollabOpsContext.jsx';
-import PresenceOnlineList from '../../collab/PresenceOnlineList.jsx';
+import { CollabOpsProvider } from '../../collab/whiteboard/CollabOpsContext.jsx';
+import PresenceOnlineList from '../../collab/board/ui/PresenceOnlineList.jsx';
 import './SpaceView.css';
 
 export default function SpaceView({ spaceId }) {
     const { state, dispatch, suppressRealtime } = useApp();
+    const inspectorPanelOpen = useWhiteboardStore((s) => s.inspectorPanelOpen);
+    const inspectorInset = getInspectorInsetPx(inspectorPanelOpen);
     const space = state.spaces.find(s => s.id === spaceId);
     const saveTimer = useRef(null);
+    const viewportControlRef = useRef(null);
 
     const onViewportChange = useCallback((newPan, newZoom) => {
         if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -29,10 +34,7 @@ export default function SpaceView({ spaceId }) {
     }, [spaceId, dispatch, suppressRealtime]);
 
     const handleReset = useCallback(async () => {
-        dispatch({
-            type: 'UPDATE_SPACE',
-            payload: { id: spaceId, updates: { panX: 0, panY: 0, zoom: 1 } }
-        });
+        viewportControlRef.current?.resetViewport?.();
         if (suppressRealtime) suppressRealtime(2000);
         try {
             const { updateSpace } = await import('../../services/workspaceService');
@@ -40,17 +42,32 @@ export default function SpaceView({ spaceId }) {
         } catch (error) {
             console.error('Failed to reset space coords', error);
         }
-    }, [spaceId, dispatch, suppressRealtime]);
+    }, [spaceId, suppressRealtime]);
 
     if (!space) return <div className="space-view-empty">Space não encontrado</div>;
 
     return (
-        <div className="space-view-container" style={{ position: 'relative', width: '100%', height: '100%' }}>
+        <div
+            className="space-view-container"
+            style={{
+                position: 'relative',
+                width: '100%',
+                height: '100%',
+                '--inspector-inset': `${inspectorInset}px`,
+            }}
+        >
             <CollabOpsProvider>
                 <div className="space-presence-bar">
                     <PresenceOnlineList />
                 </div>
-                <CanvasEngine spaceId={spaceId} space={space} onViewportChange={onViewportChange} />
+                <CanvasEngine
+                    spaceId={spaceId}
+                    space={space}
+                    onViewportChange={onViewportChange}
+                    onRegisterViewportControl={(api) => {
+                        viewportControlRef.current = api;
+                    }}
+                />
             </CollabOpsProvider>
             <button className="space-reset-btn btn-floating" onClick={handleReset} title="Centralizar">
                 <Focus size={18} />

@@ -1,18 +1,17 @@
 import React from 'react';
 import BaseNode from './BaseNode';
 
-export default function TableNode({ node, onNodePointerDown }) {
+export default function TableNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const rows = node.data?.rows ?? [];
     const cols = node.data?.cols ?? [];
 
     return (
-        <BaseNode node={node} onNodePointerDown={onNodePointerDown}>
+        <BaseNode node={node} onNodePointerDown={onNodePointerDown} onNodeContextMenu={onNodeContextMenu}>
             <div
                 className="whiteboard-node table-node"
                 style={{
                     width: node.width,
                     height: node.height,
-                    transform: `rotate(${node.rotation ?? 0}deg)`,
                     border: '1px solid var(--border-color)',
                     borderRadius: 8,
                     backgroundColor: 'var(--bg-elevated)',

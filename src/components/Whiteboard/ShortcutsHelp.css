@@ -1,0 +1,101 @@
+.whiteboard-shortcuts-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.whiteboard-shortcuts-panel {
+    width: min(720px, 100%);
+    max-height: min(85vh, 640px);
+    overflow: auto;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    padding: 20px 24px;
+}
+
+.whiteboard-shortcuts-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.whiteboard-shortcuts-header h2 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.whiteboard-shortcuts-close {
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+}
+
+.whiteboard-shortcuts-close:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.whiteboard-shortcuts-hint {
+    margin: 0 0 16px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.whiteboard-shortcuts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.whiteboard-shortcuts-section h3 {
+    margin: 0 0 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-tertiary);
+}
+
+.whiteboard-shortcuts-section ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.whiteboard-shortcuts-section li {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.whiteboard-shortcuts-section kbd {
+    flex-shrink: 0;
+    min-width: 72px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-family: inherit;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+}
+
+.whiteboard-shortcuts-section span {
+    color: var(--text-primary);
+}

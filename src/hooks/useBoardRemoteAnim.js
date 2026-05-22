@@ -4,7 +4,7 @@ import {
   isRemoteListAnimating,
   subscribeRemoteCardAnim,
   subscribeRemoteListAnim,
-} from '../collab/boardRemoteAnim';
+} from '../collab/board/boardRemoteAnim';
 
 export function useRemoteCardAnim(cardId) {
   return useSyncExternalStore(

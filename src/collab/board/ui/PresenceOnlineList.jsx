@@ -1,7 +1,7 @@
 import React from 'react';
-import { usePresenceStore } from './presenceStore';
-import { useCollab } from './CollabContext.jsx';
-import { initialFromName } from '../utils/userColor';
+import { usePresenceStore } from '../presence/presenceStore';
+import { useCollab } from '../../core/CollabContext.jsx';
+import { initialFromName } from '../../../utils/userColor';
 import './PresenceLayer.css';
 
 function displayName(peer) {
