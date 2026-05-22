@@ -39,6 +39,22 @@
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
 }
 
+.collab-presence-cursor--pointer .collab-presence-pointer {
+  transform: scale(1.05);
+  transform-origin: 2px 2px;
+}
+
+/* Hover remoto em botões/campos (board + modal) */
+.presence-remote-hover-target {
+  outline: 2px solid color-mix(in srgb, var(--presence-color) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.collab-presence-cursor--grabbing .collab-presence-pointer {
+  transform: scale(1.08) rotate(-8deg);
+  transform-origin: 4px 4px;
+}
+
 .collab-presence-label {
   font-size: 12px;
   font-weight: 600;
@@ -98,7 +114,8 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: 9990;
+  z-index: 140;
+  pointer-events: none;
 }
 
 .collab-remote-drag-ghost {
@@ -108,39 +125,172 @@
   will-change: transform;
   z-index: 1;
   contain: layout style;
+  pointer-events: none;
 }
 
-.collab-remote-drag-ghost-inner {
-  transform: translate(-12px, -8px) rotate(2deg);
-  animation-duration: 0.55s;
-  min-width: 140px;
-  max-width: 220px;
-  padding: 10px 12px;
+.collab-remote-drag-ghost-card {
+  width: 272px;
+  max-width: min(272px, 88vw);
+  padding: var(--space-md, 12px);
   border-radius: var(--radius-md, 8px);
   background: var(--bg-card, #1a1429);
-  border: 2px solid var(--presence-color, #7c3aed);
+  border: 1.5px solid color-mix(in srgb, var(--presence-color) 70%, var(--border-color, #333));
   box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--presence-color) 40%, transparent),
-    0 12px 28px rgba(0, 0, 0, 0.35);
-  opacity: 0.92;
+    0 0 0 2px color-mix(in srgb, var(--presence-color) 35%, transparent),
+    0 14px 36px rgba(0, 0, 0, 0.38);
+  opacity: 0.96;
+  position: relative;
+}
+
+.collab-remote-drag-ghost-card--active {
+  animation: collab-remote-drag-float 0.55s ease-in-out infinite alternate;
+  transform: rotate(2deg);
+}
+
+@keyframes collab-remote-drag-float {
+  0% {
+    transform: rotate(2deg) translateY(0);
+  }
+  100% {
+    transform: rotate(2.5deg) translateY(-4px);
+  }
+}
+
+.collab-remote-drag-ghost-badge {
+  position: absolute;
+  top: -10px;
+  right: 8px;
+  z-index: 2;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 3px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.collab-remote-drag-ghost-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.collab-remote-drag-ghost-check {
+  flex-shrink: 0;
+  color: var(--text-tertiary, #888);
+  display: flex;
+  margin-top: 1px;
+}
+
+.collab-remote-drag-ghost-check--done {
+  color: var(--accent-primary, #2ec4b6);
 }
 
 .collab-remote-drag-ghost-title {
-  display: block;
-  font-size: 13px;
+  flex: 1;
+  font-size: 14px;
   font-weight: 600;
+  line-height: 1.35;
   color: var(--text-primary, #fff);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-word;
 }
 
-.collab-remote-drag-ghost-label {
-  display: inline-block;
-  margin-top: 6px;
-  font-size: 10px;
+.collab-remote-drag-ghost-title--done {
+  text-decoration: line-through;
+  opacity: 0.72;
+}
+
+.collab-remote-drag-ghost-list {
+  width: 320px;
+  max-width: min(320px, 92vw);
+  padding: var(--space-md, 12px);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--bg-secondary, #1e1a24);
+  border: 1.5px solid color-mix(in srgb, var(--presence-color) 70%, var(--border-color, #333));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--presence-color) 35%, transparent),
+    0 16px 40px rgba(0, 0, 0, 0.42);
+  opacity: 0.96;
+  position: relative;
+}
+
+.collab-remote-drag-ghost-list--active {
+  animation: collab-remote-drag-float 0.55s ease-in-out infinite alternate;
+  transform: rotate(1deg);
+}
+
+.collab-remote-drag-ghost-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.collab-remote-drag-ghost-list-title {
+  margin: 0;
+  font-size: 15px;
   font-weight: 700;
-  color: #fff;
-  padding: 2px 6px;
-  border-radius: 4px;
+  color: var(--text-primary, #fff);
+  line-height: 1.3;
+}
+
+.collab-remote-drag-ghost-list-count {
+  flex-shrink: 0;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--presence-color) 25%, var(--bg-card, #2a2430));
+  color: var(--text-secondary, #ccc);
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.collab-remote-drag-ghost-list-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.collab-remote-drag-ghost-list-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-card, #1a1429);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.collab-remote-drag-ghost-list-card-check {
+  flex-shrink: 0;
+  color: var(--text-tertiary, #888);
+  display: flex;
+  margin-top: 1px;
+}
+
+.collab-remote-drag-ghost-list-card--done .collab-remote-drag-ghost-list-card-check {
+  color: var(--accent-primary, #2ec4b6);
+}
+
+.collab-remote-drag-ghost-list-card-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text-primary, #fff);
+  word-break: break-word;
+}
+
+.collab-remote-drag-ghost-list-card--done .collab-remote-drag-ghost-list-card-title {
+  text-decoration: line-through;
+  opacity: 0.72;
 }

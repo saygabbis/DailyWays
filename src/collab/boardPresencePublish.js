@@ -8,6 +8,7 @@ export function prepareBoardSurfacePresence(boardId) {
   if (!boardId) return;
   const f = getPresenceFields(boardId);
   f.selectedCardId = null;
+  f.onBoardSurface = true;
   f.hoverCardId = null;
   f.hoverListId = null;
   f.draggingCardId = null;
@@ -17,9 +18,24 @@ export function prepareBoardSurfacePresence(boardId) {
 function applySeededCursor(boardId, seeded) {
   if (!seeded) return false;
   const f = getPresenceFields(boardId);
-  f.cursor = { x: seeded.x, y: seeded.y, mode: 'screen' };
+  f.cursor = { x: seeded.x, y: seeded.y, space: 'board' };
   f.cursorScreen = seeded.cursorScreen || null;
   return true;
+}
+
+/** Ao sair do modal da task: volta cursor visível no board para os outros. */
+export function restoreBoardPresenceAfterModal(boardId) {
+  if (!boardId) return;
+  const f = getPresenceFields(boardId);
+  f.selectedCardId = null;
+  f.onBoardSurface = true;
+  f.hoverModalEl = null;
+  f.liveDraft = null;
+  f.hoverCardId = null;
+  f.hoverListId = null;
+  f.cursorModal = null;
+  const seeded = getLastBoardPointer(boardId) || defaultBoardPointer(boardId);
+  applySeededCursor(boardId, seeded);
 }
 
 /** Apply last-known or default cursor, then emit presence once (join / reconnect). */

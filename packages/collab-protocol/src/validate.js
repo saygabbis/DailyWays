@@ -84,5 +84,46 @@ export function validatePresence(payload) {
       return 'Invalid cursorScreen';
     }
   }
+  if (payload.cursorModal != null) {
+    if (
+      typeof payload.cursorModal.x !== 'number'
+      || typeof payload.cursorModal.y !== 'number'
+    ) {
+      return 'Invalid cursorModal';
+    }
+    const region = payload.cursorModal.region;
+    if (region !== 'body' && region !== 'sidebar' && region !== 'main') {
+      return 'Invalid cursorModal region';
+    }
+  }
+  if (payload.onBoardSurface != null && typeof payload.onBoardSurface !== 'boolean') {
+    return 'Invalid onBoardSurface';
+  }
+  if (payload.hoverModalEl != null) {
+    if (typeof payload.hoverModalEl !== 'string' || payload.hoverModalEl.length > 64) {
+      return 'Invalid hoverModalEl';
+    }
+  }
+  if (payload.liveDraft != null) {
+    if (typeof payload.liveDraft !== 'object') return 'Invalid liveDraft';
+    const stringKeys = ['title', 'description', 'priority', 'startDate', 'dueDate', 'recurrenceRule', 'cardColor', 'commentBody'];
+    for (const key of stringKeys) {
+      if (payload.liveDraft[key] != null && typeof payload.liveDraft[key] !== 'string') {
+        return 'Invalid liveDraft field';
+      }
+      if (typeof payload.liveDraft[key] === 'string' && payload.liveDraft[key].length > 8000) {
+        return 'liveDraft too large';
+      }
+    }
+    if (payload.liveDraft.labels != null && !Array.isArray(payload.liveDraft.labels)) {
+      return 'Invalid liveDraft labels';
+    }
+    if (payload.liveDraft.isAllDay != null && typeof payload.liveDraft.isAllDay !== 'boolean') {
+      return 'Invalid liveDraft isAllDay';
+    }
+    if (payload.liveDraft.myDay != null && typeof payload.liveDraft.myDay !== 'boolean') {
+      return 'Invalid liveDraft myDay';
+    }
+  }
   return null;
 }

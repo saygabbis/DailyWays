@@ -16,6 +16,7 @@ export default function BoardCard({
     listColor,
     isDragging,
     isRemoteDragging,
+    remoteDragPeer = null,
     onClick,
     editingEditors = [],
     hoverPeers = [],
@@ -53,7 +54,10 @@ export default function BoardCard({
     const effectiveColor = card.color === '__glass__' ? (listColor || null) : card.color || null;
     const primaryEditor = editingEditors?.[0] || null;
     const hoverPeer = hoverPeers?.[0] || null;
-    const presenceColor = primaryEditor?.color || hoverPeer?.color || 'var(--accent-primary)';
+    const presenceColor = primaryEditor?.color
+        || remoteDragPeer?.color
+        || hoverPeer?.color
+        || 'var(--accent-primary)';
     const isBeingEdited = Array.isArray(editingEditors) && editingEditors.length > 0;
     const isRemoteHover = !isBeingEdited && Boolean(hoverPeer);
     const fetchedCoverUrl = useCardCoverImage(card.id, card.coverAttachmentId);
@@ -178,7 +182,7 @@ export default function BoardCard({
             {...cardLongPressTouch}
             style={{
               ...(effectiveColor ? { '--card-accent': effectiveColor } : {}),
-              ...((isBeingEdited || isRemoteHover) ? { '--presence-color': presenceColor } : {}),
+              ...((isBeingEdited || isRemoteHover || isRemoteDragging) ? { '--presence-color': presenceColor } : {}),
             }}
             data-colored={effectiveColor ? 'true' : undefined}
         >

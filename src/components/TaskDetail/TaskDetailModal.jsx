@@ -1,14 +1,39 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
 import { useCollabPresence } from '../../collab/useCollabPresence.js';
 import { announcePresence } from '../../collab/presenceBridge.js';
-import { publishBoardPresenceFull } from '../../collab/boardPresencePublish.js';
+import { applyTaskModalPresence } from '../../collab/boardPresenceFocus.js';
+import {
+    publishBoardPresenceFull,
+    restoreBoardPresenceAfterModal,
+} from '../../collab/boardPresencePublish.js';
 import { isPeerInTaskModal } from '../../collab/presenceVisibility.js';
 import CollabPresenceLayer from '../../collab/CollabPresenceLayer.jsx';
 import { useCollab } from '../../collab/CollabContext.jsx';
+import { usePresenceStore } from '../../collab/presenceStore';
+import {
+    useTaskModalPeerPresence,
+    presenceHoverClass,
+    presenceHoverStyle,
+} from '../../hooks/useTaskModalPeerPresence.js';
+import {
+    buildTaskModalLiveDraft,
+    applyPeerTaskModalDraft,
+} from '../../collab/taskModalLiveDraft.js';
+import { createRemoteSyncLock } from '../../collab/taskModalCollabSync.js';
+import { useDocumentPointerPresence } from '../../collab/useDocumentPointerPresence.js';
+import { pointerCoordsFromTaskModalEvent } from '../../collab/taskModalCursorCoords.js';
+
+function ph(hoverByEl, key, baseClass = '', baseStyle = {}) {
+    return {
+        'data-presence-hover': key,
+        className: presenceHoverClass(hoverByEl, key, baseClass),
+        style: presenceHoverStyle(hoverByEl, key, baseStyle),
+    };
+}
 import {
     X, Tag, AlertCircle, Sun, CheckSquare,
     Plus, Trash2, Edit3, Repeat, Clock, ImagePlus,
@@ -45,10 +70,24 @@ const RECURRENCE_OPTIONS = [
 export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const { dispatch, LABEL_COLORS, state, showConfirm } = useApp();
     const { collabDispatch } = useBoardCollabDispatch(boardId);
-    const { updateCursor, setSelectedCardId } = useCollabPresence(boardId, { mode: 'screen' });
+    const {
+        updateCursor,
+        setSelectedCardId,
+        setHoverModalEl,
+        setLiveDraft,
+    } = useCollabPresence(boardId, { mode: 'screen' });
     const collab = useCollab();
     const modalRef = useRef(null);
+    const [modalScrollRepaint, setModalScrollRepaint] = useState(0);
     const { user, profile } = useAuth();
+    const myId = collab?.userId;
+    const peers = usePresenceStore((s) => s.peers);
+    const { hoverByEl } = useTaskModalPeerPresence(card.id);
+    const [titleFocused, setTitleFocused] = useState(false);
+    const [descFocused, setDescFocused] = useState(false);
+    const [commentFocused, setCommentFocused] = useState(false);
+    const remoteSync = useRef(createRemoteSyncLock()).current;
+    const lastSyncedCardAtRef = useRef(null);
 
     const liveCard = (() => {
         const board = state.boards.find(b => b.id === boardId);
@@ -122,57 +161,234 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         }
     }, [editingSubtaskId]);
 
-    useEffect(() => {
-        const timeout = setTimeout(() => {
-            collabDispatch({
-                type: 'UPDATE_CARD',
-                payload: {
-                    boardId, listId, cardId: card.id,
-                    updates: {
-                        title,
-                        description,
-                        priority,
-                        startDate: startDate || null,
-                        dueDate: dueDate || null,
-                        recurrenceRule: recurrenceRule === 'none' ? null : recurrenceRule,
-                        isAllDay,
-                        myDay,
-                        labels,
-                        color: cardColor || null,
-                        updatedAt: new Date().toISOString(),
-                    }
+    const liveDraftPayload = useMemo(
+        () => buildTaskModalLiveDraft({ title, description, commentBody }),
+        [title, description, commentBody],
+    );
+
+    const cardUpdatesSnapshot = useMemo(() => ({
+        title,
+        description,
+        priority,
+        startDate: startDate || null,
+        dueDate: dueDate || null,
+        recurrenceRule: recurrenceRule === 'none' ? null : recurrenceRule,
+        isAllDay,
+        myDay,
+        labels,
+        color: cardColor || null,
+    }), [
+        title,
+        description,
+        priority,
+        startDate,
+        dueDate,
+        recurrenceRule,
+        isAllDay,
+        myDay,
+        labels,
+        cardColor,
+    ]);
+
+    const cardSnapshotMatchesLive = useCallback((snap) => {
+        const norm = (v) => (v === undefined || v === '' ? null : v);
+        return norm(liveCard.title) === norm(snap.title)
+            && norm(liveCard.description) === norm(snap.description)
+            && (liveCard.priority || 'none') === (snap.priority || 'none')
+            && norm(liveCard.startDate) === norm(snap.startDate)
+            && norm(liveCard.dueDate) === norm(snap.dueDate)
+            && norm(liveCard.recurrenceRule) === norm(snap.recurrenceRule)
+            && !!liveCard.isAllDay === !!snap.isAllDay
+            && !!liveCard.myDay === !!snap.myDay
+            && JSON.stringify(liveCard.labels || []) === JSON.stringify(snap.labels || [])
+            && norm(liveCard.color) === norm(snap.color);
+    }, [liveCard]);
+
+    const persistCardSnapshot = useCallback((override = null) => {
+        if (remoteSync.isLocked()) return;
+        const updates = override ? { ...cardUpdatesSnapshot, ...override } : cardUpdatesSnapshot;
+        if (cardSnapshotMatchesLive(updates)) return;
+        collabDispatch({
+            type: 'UPDATE_CARD',
+            payload: {
+                boardId,
+                listId,
+                cardId: card.id,
+                updates: {
+                    ...updates,
+                    updatedAt: new Date().toISOString(),
                 },
-            });
-        }, 300);
+            },
+        });
+    }, [collabDispatch, boardId, listId, card.id, cardUpdatesSnapshot, cardSnapshotMatchesLive, remoteSync]);
+
+    const persistTimerRef = useRef(null);
+    const queuePersist = useCallback((override = null) => {
+        if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+        const snapOverride = override;
+        persistTimerRef.current = setTimeout(() => {
+            persistTimerRef.current = null;
+            persistCardSnapshot(snapOverride);
+        }, 320);
+    }, [persistCardSnapshot]);
+
+    const flushPersist = useCallback((override = null) => {
+        if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+        persistCardSnapshot(override);
+    }, [persistCardSnapshot]);
+
+    useEffect(() => {
+        if (!collab?.connected) return undefined;
+        const timeout = setTimeout(() => {
+            setLiveDraft(liveDraftPayload);
+        }, 40);
         return () => clearTimeout(timeout);
-    }, [title, description, priority, startDate, dueDate, recurrenceRule, isAllDay, myDay, labels, cardColor, boardId, listId, card.id, collabDispatch]);
+    }, [liveDraftPayload, collab?.connected, setLiveDraft]);
+
+    useEffect(() => {
+        if (remoteSync.isLocked()) return undefined;
+        queuePersist();
+        return () => {
+            if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+        };
+    }, [cardUpdatesSnapshot, queuePersist, remoteSync]);
+
+    useEffect(() => () => {
+        if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    }, []);
+
+    useEffect(() => {
+        remoteSync.run(() => {
+            for (const peer of peers || []) {
+                if (!peer?.userId || peer.userId === myId || peer.selectedCardId !== card.id || !peer.liveDraft) {
+                    continue;
+                }
+                applyPeerTaskModalDraft(peer.liveDraft, {
+                    title: titleFocused,
+                    description: descFocused,
+                    comment: commentFocused,
+                }, {
+                    setTitle,
+                    setDescription,
+                    setCommentBody,
+                });
+            }
+        });
+    }, [peers, card.id, myId, titleFocused, descFocused, commentFocused, remoteSync]);
+
+    useEffect(() => {
+        const stamp = liveCard.updatedAt;
+        if (!stamp || stamp === lastSyncedCardAtRef.current) return;
+        lastSyncedCardAtRef.current = stamp;
+
+        remoteSync.run(() => {
+            if (!titleFocused) setTitle(liveCard.title);
+            if (!descFocused) setDescription(liveCard.description || '');
+            setPriority(liveCard.priority || 'none');
+            setStartDate(liveCard.startDate || null);
+            setDueDate(liveCard.dueDate || null);
+            setRecurrenceRule(liveCard.recurrenceRule || 'none');
+            setIsAllDay(liveCard.isAllDay ?? true);
+            setMyDay(liveCard.myDay);
+            setLabels(liveCard.labels || []);
+            setCardColor(liveCard.color ?? null);
+        });
+    }, [
+        liveCard.updatedAt,
+        liveCard.title,
+        liveCard.description,
+        liveCard.priority,
+        liveCard.startDate,
+        liveCard.dueDate,
+        liveCard.recurrenceRule,
+        liveCard.isAllDay,
+        liveCard.myDay,
+        liveCard.labels,
+        liveCard.color,
+        titleFocused,
+        descFocused,
+        remoteSync,
+    ]);
+
+    useEffect(() => {
+        lastSyncedCardAtRef.current = liveCard.updatedAt ?? null;
+    }, [card.id]);
 
     useEffect(() => {
         if (!boardId || !card?.id) return undefined;
+        applyTaskModalPresence(boardId);
         setSelectedCardId(card.id);
         announcePresence(boardId);
         if (collab?.socket?.connected) {
             publishBoardPresenceFull(collab.socket, boardId, { user, profile });
         }
         return () => {
+            restoreBoardPresenceAfterModal(boardId);
             setSelectedCardId(null);
+            setHoverModalEl(null);
+            setLiveDraft(null);
             announcePresence(boardId);
             if (collab?.socket?.connected) {
                 publishBoardPresenceFull(collab.socket, boardId, { user, profile });
+                requestAnimationFrame(() => {
+                    if (!collab?.socket?.connected) return;
+                    restoreBoardPresenceAfterModal(boardId);
+                    announcePresence(boardId);
+                    publishBoardPresenceFull(collab.socket, boardId, { user, profile });
+                });
             }
         };
-    }, [boardId, card?.id, setSelectedCardId, collab?.socket, collab?.connected, user, profile]);
+    }, [boardId, card?.id, setSelectedCardId, setHoverModalEl, setLiveDraft, collab?.socket, collab?.connected, user, profile]);
 
-    const handleModalPointerMove = (e) => {
-        const el = modalRef.current;
-        if (!el) return;
-        const rect = el.getBoundingClientRect();
-        updateCursor({
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top,
-            selectedCardId: card.id,
-            cursorScreen: { x: e.clientX, y: e.clientY },
-        });
+    const resolveModalHoverEl = useCallback((clientX, clientY) => {
+        const root = modalRef.current;
+        if (!root) return null;
+        const stack = document.elementsFromPoint(clientX, clientY);
+        for (const node of stack) {
+            const hit = node.closest?.('[data-presence-hover]');
+            if (hit && root.contains(hit)) {
+                return hit.dataset.presenceHover || null;
+            }
+        }
+        return null;
+    }, []);
+
+    const getModalPointerCoords = useCallback(
+        (e) => pointerCoordsFromTaskModalEvent(e, modalRef.current),
+        [],
+    );
+
+    const handleModalPointerMove = useCallback((e) => {
+        setHoverModalEl(resolveModalHoverEl(e.clientX, e.clientY));
+    }, [resolveModalHoverEl, setHoverModalEl]);
+
+    useEffect(() => {
+        const root = modalRef.current;
+        if (!root) return undefined;
+        const bump = () => setModalScrollRepaint((n) => n + 1);
+        const scrollers = root.querySelectorAll('.task-detail-body, .task-detail-sidebar');
+        scrollers.forEach((el) => el.addEventListener('scroll', bump, { passive: true }));
+        const ro = new ResizeObserver(bump);
+        ro.observe(root);
+        window.addEventListener('resize', bump, { passive: true });
+        return () => {
+            scrollers.forEach((el) => el.removeEventListener('scroll', bump));
+            ro.disconnect();
+            window.removeEventListener('resize', bump);
+        };
+    }, [card?.id]);
+
+    useDocumentPointerPresence({
+        enabled: Boolean(boardId && card?.id && collab?.connected),
+        updateCursor,
+        selectedCardId: card?.id,
+        getCoords: getModalPointerCoords,
+        onPointerMove: handleModalPointerMove,
+    });
+
+    const handleModalPointerLeave = () => {
+        setHoverModalEl(null);
     };
 
     useEffect(() => {
@@ -542,12 +758,15 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
             <div
                 ref={modalRef}
                 className="task-detail-modal animate-scale-in-centered"
-                onPointerMove={handleModalPointerMove}
+                onPointerLeave={handleModalPointerLeave}
             >
                 {collab?.connected && (
                     <CollabPresenceLayer
                         mode="screen"
                         elevated
+                        modalRootRef={modalRef}
+                        scrollRepaint={modalScrollRepaint}
+                        layoutRepaint={modalScrollRepaint}
                         peerFilter={(p) => isPeerInTaskModal(p, card.id)}
                     />
                 )}
@@ -559,7 +778,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
 
                 <div className="task-detail-header">
                     <h2>Detalhes da Tarefa</h2>
-                    <button className="btn-icon" onClick={onClose} title="Fechar">
+                    <button type="button" {...ph(hoverByEl, 'close', 'btn-icon')} onClick={onClose} title="Fechar">
                         <X size={20} />
                     </button>
                 </div>
@@ -568,31 +787,36 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                     <div className="task-detail-body">
                         <input
                             type="text"
-                            className="task-detail-title"
+                            {...ph(hoverByEl, 'title', 'task-detail-title')}
                             value={title}
                             onChange={e => setTitle(e.target.value)}
+                            onFocus={() => setTitleFocused(true)}
+                            onBlur={() => setTitleFocused(false)}
                             placeholder="Título da tarefa..."
                         />
 
                         <textarea
-                            className="task-detail-desc"
+                            {...ph(hoverByEl, 'description', 'task-detail-desc')}
                             value={description}
                             onChange={e => setDescription(e.target.value)}
+                            onFocus={() => setDescFocused(true)}
+                            onBlur={() => setDescFocused(false)}
                             placeholder="Adicionar descrição..."
                             rows={4}
                         />
 
                         <div className="task-detail-quick-actions">
                             <button
-                                className={`task-detail-quick-btn ${myDay ? 'active' : ''}`}
+                                type="button"
+                                {...ph(hoverByEl, 'quick-meu-dia', `task-detail-quick-btn ${myDay ? 'active' : ''}`)}
                                 onClick={() => setMyDay(!myDay)}
                             >
                                 <Sun size={16} />
                                 <span>{myDay ? 'Meu Dia ✓' : 'Meu Dia'}</span>
                             </button>
                             <button
-                                className="task-detail-quick-btn"
                                 type="button"
+                                {...ph(hoverByEl, 'quick-arquivo', 'task-detail-quick-btn')}
                                 onClick={() => fileInputRef.current?.click()}
                                 disabled={uploading}
                             >
@@ -600,8 +824,8 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                 <span>{uploading ? 'Enviando...' : 'Adicionar arquivo'}</span>
                             </button>
                             <button
-                                className={`task-detail-quick-btn ${showLinkForm ? 'active' : ''}`}
                                 type="button"
+                                {...ph(hoverByEl, 'quick-link', `task-detail-quick-btn ${showLinkForm ? 'active' : ''}`)}
                                 onClick={() => setShowLinkForm(prev => !prev)}
                             >
                                 <LinkIcon size={16} />
@@ -627,10 +851,17 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                         <button
                                             key={key}
                                             type="button"
-                                            className={`task-detail-color-chip ${isActive ? 'active' : ''} ${!c ? 'none' : ''} ${isGlass ? 'glass' : ''}`}
-                                            style={!isGlass && c ? { background: c } : {}}
+                                            {...ph(
+                                                hoverByEl,
+                                                `color-${key}`,
+                                                `task-detail-color-chip ${isActive ? 'active' : ''} ${!c ? 'none' : ''} ${isGlass ? 'glass' : ''}`,
+                                                !isGlass && c ? { background: c } : {},
+                                            )}
                                             title={isGlass ? 'Vidro (usa a cor da lista)' : (c ?? 'Sem cor')}
-                                            onClick={() => setCardColor(c)}
+                                            onClick={() => {
+                                                setCardColor(c);
+                                                flushPersist({ color: c || null });
+                                            }}
                                         >
                                             {isGlass && <span className="task-detail-color-glass-dot" />}
                                         </button>
@@ -646,6 +877,8 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                 onChange={setStartDate}
                                 isAllDay={isAllDay}
                                 onToggleAllDay={() => setIsAllDay((prev) => !prev)}
+                                hoverByEl={hoverByEl}
+                                presenceKey="inicio"
                             />
 
                             <TaskDateTimeField
@@ -654,12 +887,18 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                 onChange={setDueDate}
                                 isAllDay={isAllDay}
                                 onToggleAllDay={() => setIsAllDay((prev) => !prev)}
+                                hoverByEl={hoverByEl}
+                                presenceKey="fim"
                             />
 
                             <div className="task-detail-field task-detail-field-full">
                                 <label><Repeat size={15} /> Repetir</label>
                                 <div className="task-detail-menu-wrap" ref={recurrenceMenuRef}>
-                                    <button type="button" className="task-detail-menu-trigger" onClick={() => setShowRecurrenceMenu((prev) => !prev)}>
+                                    <button
+                                        type="button"
+                                        {...ph(hoverByEl, 'recurrence-trigger', 'task-detail-menu-trigger')}
+                                        onClick={() => setShowRecurrenceMenu((prev) => !prev)}
+                                    >
                                         <span>{recurrenceLabel}</span>
                                         <ChevronDown size={14} />
                                     </button>
@@ -669,7 +908,11 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                                 <button
                                                     key={option.value}
                                                     type="button"
-                                                    className={`task-detail-menu-option ${recurrenceRule === option.value ? 'active' : ''}`}
+                                                    {...ph(
+                                                        hoverByEl,
+                                                        `recurrence-${option.value}`,
+                                                        `task-detail-menu-option ${recurrenceRule === option.value ? 'active' : ''}`,
+                                                    )}
                                                     onClick={() => {
                                                         setRecurrenceRule(option.value);
                                                         setShowRecurrenceMenu(false);
@@ -689,8 +932,13 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                     {priorities.map(p => (
                                         <button
                                             key={p.value}
-                                            className={`task-detail-priority-btn ${priority === p.value ? 'active' : ''}`}
-                                            style={{ '--priority-color': p.color }}
+                                            type="button"
+                                            {...ph(
+                                                hoverByEl,
+                                                `priority-${p.value}`,
+                                                `task-detail-priority-btn ${priority === p.value ? 'active' : ''}`,
+                                                { '--priority-color': p.color },
+                                            )}
                                             onClick={() => setPriority(p.value)}
                                         >
                                             {p.label}
@@ -706,8 +954,13 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                 {LABEL_COLORS.map(l => (
                                     <button
                                         key={l.id}
-                                        className={`task-detail-label-btn ${labels.includes(l.id) ? 'selected' : ''}`}
-                                        style={{ '--label-color': l.color }}
+                                        type="button"
+                                        {...ph(
+                                            hoverByEl,
+                                            `label-${l.id}`,
+                                            `task-detail-label-btn ${labels.includes(l.id) ? 'selected' : ''}`,
+                                            { '--label-color': l.color },
+                                        )}
                                         onClick={() => toggleLabel(l.id)}
                                         title={l.name}
                                     >
@@ -716,7 +969,8 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                     </button>
                                 ))}
                                 <button
-                                    className="task-detail-label-btn add-btn"
+                                    type="button"
+                                    {...ph(hoverByEl, 'label-add', 'task-detail-label-btn add-btn')}
                                     onClick={() => setShowAddLabel(!showAddLabel)}
                                     title="Criar nova etiqueta"
                                 >
@@ -878,7 +1132,8 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                 {subtasks.map(st => (
                                     <div key={st.id} className={`task-detail-subtask ${st.done ? 'done' : ''}`}>
                                         <button
-                                            className={`task-detail-checkbox ${st.done ? 'checked' : ''}`}
+                                            type="button"
+                                            {...ph(hoverByEl, `subtask-check-${st.id}`, `task-detail-checkbox ${st.done ? 'checked' : ''}`)}
                                             onClick={() => handleToggleSubtask(st.id)}
                                         />
                                         {editingSubtaskId === st.id ? (
@@ -916,6 +1171,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                 <input
                                     ref={subtaskInputRef}
                                     type="text"
+                                    {...ph(hoverByEl, 'subtask-add', '')}
                                     placeholder="Adicionar subtarefa..."
                                     value={newSubtask}
                                     onChange={e => setNewSubtask(e.target.value)}
@@ -928,7 +1184,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                         <div className="task-detail-section task-detail-cover-panel" ref={coverPanelRef}>
                             <div className="task-detail-section-header">
                                 <h3><ImagePlus size={16} /> Capa</h3>
-                                <button type="button" className="btn-icon" onClick={() => setShowCoverPanel((prev) => !prev)}>
+                                <button type="button" {...ph(hoverByEl, 'cover-toggle', 'btn-icon')} onClick={() => setShowCoverPanel((prev) => !prev)}>
                                     <ChevronDown size={16} className={showCoverPanel ? 'rotated' : ''} />
                                 </button>
                             </div>
@@ -941,7 +1197,11 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                                     <button
                                                         key={attachment.id}
                                                         type="button"
-                                                        className={`task-detail-cover-thumb ${liveCard.coverAttachmentId === attachment.id ? 'active' : ''}`}
+                                                        {...ph(
+                                                            hoverByEl,
+                                                            `cover-${attachment.id}`,
+                                                            `task-detail-cover-thumb ${liveCard.coverAttachmentId === attachment.id ? 'active' : ''}`,
+                                                        )}
                                                         onClick={() => handleSetCover(attachment)}
                                                     >
                                                         <img src={attachment.publicUrl} alt={attachment.fileName || 'Imagem'} />
@@ -950,9 +1210,9 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                             </div>
                                             <div className="task-detail-cover-actions-row">
                                                 {liveCard.coverAttachmentId && (
-                                                    <button type="button" className="btn btn-secondary btn-sm" onClick={handleClearCover}>Remover capa</button>
+                                                    <button type="button" {...ph(hoverByEl, 'cover-remove', 'btn btn-secondary btn-sm')} onClick={handleClearCover}>Remover capa</button>
                                                 )}
-                                                <button type="button" className="btn-icon" title="Sem capa" onClick={handleClearCover}>
+                                                <button type="button" {...ph(hoverByEl, 'cover-clear', 'btn-icon')} title="Sem capa" onClick={handleClearCover}>
                                                     <Ban size={16} />
                                                 </button>
                                             </div>
@@ -968,7 +1228,14 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                             <div className="task-detail-section-header">
                                 <h3><UserPlus size={16} /> Responsáveis</h3>
                             </div>
-                            <select className="task-detail-select" onChange={handleAssignUser} disabled={savingAssignee} defaultValue="">
+                            <select
+                                className={presenceHoverClass(hoverByEl, 'assignees-select', 'task-detail-select')}
+                                style={presenceHoverStyle(hoverByEl, 'assignees-select')}
+                                data-presence-hover="assignees-select"
+                                onChange={handleAssignUser}
+                                disabled={savingAssignee}
+                                defaultValue=""
+                            >
                                 <option value="">Adicionar responsável</option>
                                 {boardCandidates
                                     .filter((candidate) => !assignees.some((item) => item.userId === candidate.userId))
@@ -988,7 +1255,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                             <strong>{assignee.name}</strong>
                                             <span>{assignee.role || 'membro'}</span>
                                         </div>
-                                        <button type="button" className="btn-icon btn-xs" onClick={() => handleRemoveAssignee(assignee.userId)}>
+                                        <button type="button" {...ph(hoverByEl, `assignee-remove-${assignee.userId}`, 'btn-icon btn-xs')} onClick={() => handleRemoveAssignee(assignee.userId)}>
                                             <Trash2 size={12} />
                                         </button>
                                     </div>
@@ -1008,12 +1275,20 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                         <Plus size={18} />
                                     </button>
                                     <textarea
+                                        {...ph(hoverByEl, 'comment-composer', '')}
                                         value={commentBody}
                                         onChange={(e) => setCommentBody(e.target.value)}
+                                        onFocus={() => setCommentFocused(true)}
+                                        onBlur={() => setCommentFocused(false)}
                                         placeholder="Digite uma mensagem"
                                         rows={1}
                                     />
-                                    <button className="task-detail-send-btn" type="submit" disabled={savingComment || !commentBody.trim()} title="Enviar comentário">
+                                    <button
+                                        {...ph(hoverByEl, 'comment-send', 'task-detail-send-btn')}
+                                        type="submit"
+                                        disabled={savingComment || !commentBody.trim()}
+                                        title="Enviar comentário"
+                                    >
                                         <Send size={16} />
                                     </button>
                                 </div>
@@ -1062,7 +1337,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                 </div>
 
                 <div className="task-detail-footer">
-                    <button className="btn btn-danger btn-sm" onClick={handleDelete}>
+                    <button type="button" {...ph(hoverByEl, 'delete', 'btn btn-danger btn-sm')} onClick={handleDelete}>
                         <Trash2 size={14} /> Deletar
                     </button>
                     <div className="task-detail-footer-info">

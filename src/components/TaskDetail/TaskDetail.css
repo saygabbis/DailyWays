@@ -1,5 +1,14 @@
 /* ===== Task Detail Modal ===== */
 
+.task-detail-modal .presence-remote-hover-target,
+.task-detail-modal .task-detail-select.presence-remote-hover-target,
+.task-detail-modal .task-detail-priority-btn.presence-remote-hover-target,
+.task-detail-modal .task-detail-menu-trigger.presence-remote-hover-target,
+.task-detail-modal .task-datetime-toggle.presence-remote-hover-target {
+    outline: 2px solid color-mix(in srgb, var(--presence-color) 70%, transparent);
+    outline-offset: 2px;
+}
+
 .task-detail-modal {
     position: fixed;
     top: 50%;

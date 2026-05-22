@@ -8,11 +8,15 @@ function roomFields(roomId) {
       cursor: null,
       selectedNodeIds: undefined,
       selectedCardId: null,
+      onBoardSurface: true,
       draggingCardId: null,
       draggingListId: null,
       hoverCardId: null,
       hoverListId: null,
+      hoverModalEl: null,
+      liveDraft: null,
       cursorScreen: null,
+      cursorModal: null,
     });
   }
   return fieldsByRoom.get(roomId);
@@ -49,11 +53,15 @@ export function resetPresenceFields(roomId) {
   const f = roomFields(roomId);
   f.cursor = null;
   f.cursorScreen = null;
+  f.cursorModal = null;
   f.selectedCardId = null;
+  f.onBoardSurface = true;
   f.draggingCardId = null;
   f.draggingListId = null;
   f.hoverCardId = null;
   f.hoverListId = null;
+  f.hoverModalEl = null;
+  f.liveDraft = null;
 }
 
 /** Fan-out presence emit to all hooks registered for this room (e.g. after join). */

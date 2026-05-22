@@ -1,116 +1,197 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { Circle, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useBoardPresenceHighlights } from '../hooks/useBoardPresenceHighlights';
 import { usePresenceStore } from './presenceStore';
 import { presenceLabelTextColor } from '../utils/presenceLabelContrast.js';
+import { boardContentCursorToViewport } from './boardCursorCoords.js';
+import { viewportFromContentPoint } from './scrollContentCoords.js';
 import './PresenceLayer.css';
 
-/**
- * Ghost cards that follow remote peers while they drag (Figma-style).
- */
-export default function RemoteDragLayer({ boardId }) {
-  const { state } = useApp();
-  const { remoteDrags } = useBoardPresenceHighlights();
-  const cursorFrame = usePresenceStore((s) => s.cursorFrame);
-  const layerRef = useRef(null);
-  const nodeRefs = useRef(new Map());
+const CARD_OFFSET_X = 14;
+const CARD_OFFSET_Y = 20;
+const LIST_OFFSET_X = 18;
+const LIST_OFFSET_Y = 24;
 
-  const cardsById = useMemo(() => {
+function resolveDragScreenPosition(drag, peers, scrollerEl, offsetX, offsetY) {
+  const peer = peers.find((p) => p.userId === drag.userId);
+  if (peer && scrollerEl) {
+    const fromBoard = boardContentCursorToViewport(peer, scrollerEl);
+    if (fromBoard) {
+      return { x: fromBoard.x + offsetX, y: fromBoard.y + offsetY };
+    }
+    return null;
+  }
+  if (typeof drag.x === 'number' && typeof drag.y === 'number' && scrollerEl) {
+    const pos = viewportFromContentPoint(scrollerEl, drag.x, drag.y);
+    if (pos) return { x: pos.x + offsetX, y: pos.y + offsetY };
+  }
+  return null;
+}
+
+function PeerBadge({ drag, color }) {
+  return (
+    <span
+      className="collab-remote-drag-ghost-badge"
+      style={{
+        background: color,
+        color: presenceLabelTextColor(color),
+      }}
+      title={drag.name || undefined}
+    >
+      {drag.name || drag.avatarInitial || 'Usuário'}
+    </span>
+  );
+}
+
+function CardGhost({ card, drag, color, pos }) {
+  const isCompleted = Boolean(card.completed);
+  return (
+    <div
+      className="collab-remote-drag-ghost"
+      style={{
+        transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`,
+        '--presence-color': color,
+      }}
+    >
+      <div className="collab-remote-drag-ghost-card collab-remote-drag-ghost-card--active">
+        <PeerBadge drag={drag} color={color} />
+        <div className="collab-remote-drag-ghost-card-header">
+          <span
+            className={`collab-remote-drag-ghost-check${isCompleted ? ' collab-remote-drag-ghost-check--done' : ''}`}
+            aria-hidden
+          >
+            {isCompleted ? <CheckCircle2 size={16} strokeWidth={2} /> : <Circle size={16} strokeWidth={2} />}
+          </span>
+          <span className={`collab-remote-drag-ghost-title${isCompleted ? ' collab-remote-drag-ghost-title--done' : ''}`}>
+            {card.title || 'Tarefa'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ListGhost({ list, drag, color, pos }) {
+  const previewCards = (list.cards || []).slice(0, 3);
+  return (
+    <div
+      className="collab-remote-drag-ghost"
+      style={{
+        transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`,
+        '--presence-color': color,
+      }}
+    >
+      <div className="collab-remote-drag-ghost-list collab-remote-drag-ghost-list--active">
+        <PeerBadge drag={drag} color={color} />
+        <div className="collab-remote-drag-ghost-list-header">
+          <h4 className="collab-remote-drag-ghost-list-title">{list.title || 'Lista'}</h4>
+          <span className="collab-remote-drag-ghost-list-count">{list.cards?.length ?? 0}</span>
+        </div>
+        {previewCards.length > 0 && (
+          <div className="collab-remote-drag-ghost-list-cards">
+            {previewCards.map((card) => {
+              const done = Boolean(card.completed);
+              return (
+                <div
+                  key={card.id}
+                  className={`collab-remote-drag-ghost-list-card${done ? ' collab-remote-drag-ghost-list-card--done' : ''}`}
+                >
+                  <span className="collab-remote-drag-ghost-list-card-check" aria-hidden>
+                    {done ? <CheckCircle2 size={12} strokeWidth={2} /> : <Circle size={12} strokeWidth={2} />}
+                  </span>
+                  <span className="collab-remote-drag-ghost-list-card-title">{card.title || 'Tarefa'}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Ghost cards/lists that follow remote peers while they drag.
+ */
+export default function RemoteDragLayer({ boardId, boardScrollerRef = null, layoutRepaint = 0 }) {
+  const { state } = useApp();
+  const { remoteDrags, remoteListDrags } = useBoardPresenceHighlights();
+  const cursorFrame = usePresenceStore((s) => s.cursorFrame);
+  const peers = usePresenceStore((s) => s.peers);
+
+  const boardData = useMemo(() => {
     const board = state.boards.find((b) => b.id === boardId);
-    if (!board) return {};
-    const map = {};
+    if (!board) return { cardsById: {}, listsById: {} };
+    const cardsById = {};
+    const listsById = {};
     for (const list of board.lists) {
+      listsById[list.id] = list;
       for (const card of list.cards) {
-        map[card.id] = card;
+        cardsById[card.id] = card;
       }
     }
-    return map;
+    return { cardsById, listsById };
   }, [state.boards, boardId]);
 
-  const dragKey = useMemo(
-    () => remoteDrags.map((d) => `${d.userId}:${d.cardId}`).join('|'),
-    [remoteDrags],
-  );
-
-  useEffect(() => {
-    const layer = layerRef.current;
-    if (!layer) return;
-
-    const active = new Set(remoteDrags.map((d) => `${d.userId}-${d.cardId}`));
-    for (const key of [...nodeRefs.current.keys()]) {
-      if (!active.has(key)) {
-        nodeRefs.current.get(key)?.remove();
-        nodeRefs.current.delete(key);
-      }
-    }
+  const { cardGhosts, listGhosts } = useMemo(() => {
+    void cursorFrame;
+    void layoutRepaint;
+    const scrollerEl = boardScrollerRef?.current ?? null;
+    const cards = [];
+    const lists = [];
 
     for (const drag of remoteDrags) {
-      const key = `${drag.userId}-${drag.cardId}`;
-      if (nodeRefs.current.has(key)) continue;
-      const card = cardsById[drag.cardId];
+      const card = boardData.cardsById[drag.cardId];
       if (!card) continue;
-
-      const color = drag.color || '#7c3aed';
-      const el = document.createElement('div');
-      el.className = 'collab-remote-drag-ghost';
-      el.dataset.dragKey = key;
-
-      const inner = document.createElement('div');
-      inner.className = 'collab-remote-drag-ghost-inner animate-slide-up-jelly';
-
-      const title = document.createElement('span');
-      title.className = 'collab-remote-drag-ghost-title';
-      title.textContent = card.title;
-
-      const label = document.createElement('span');
-      label.className = 'collab-remote-drag-ghost-label';
-      label.style.background = color;
-      label.style.color = presenceLabelTextColor(color);
-      label.textContent = drag.name || drag.avatarInitial || 'Usuário';
-
-      inner.appendChild(title);
-      inner.appendChild(label);
-      el.appendChild(inner);
-      el.style.setProperty('--presence-color', color);
-      layer.appendChild(el);
-      nodeRefs.current.set(key, el);
+      const pos = resolveDragScreenPosition(drag, peers, scrollerEl, CARD_OFFSET_X, CARD_OFFSET_Y);
+      if (!pos) continue;
+      cards.push({
+        key: `card-${drag.userId}-${drag.cardId}`,
+        card,
+        drag,
+        color: drag.color || '#7c3aed',
+        pos,
+      });
     }
-  }, [dragKey, remoteDrags, cardsById]);
 
-  useEffect(() => {
-    const cursors = usePresenceStore.getState().remoteCursors;
-    for (const drag of remoteDrags) {
-      const key = `${drag.userId}-${drag.cardId}`;
-      const el = nodeRefs.current.get(key);
-      if (!el) continue;
-      const label = el.querySelector('.collab-remote-drag-ghost-label');
-      if (label) {
-        const color = drag.color || '#7c3aed';
-        label.textContent = drag.name || drag.avatarInitial || 'Usuário';
-        label.style.background = color;
-        label.style.color = presenceLabelTextColor(color);
-        el.style.setProperty('--presence-color', color);
-      }
-      const remote = cursors[drag.userId];
-      const peer = usePresenceStore.getState().peers.find((p) => p.userId === drag.userId);
-      const cs = remote?.cursorScreen ?? peer?.cursorScreen;
-      const cur = remote ?? peer?.cursor;
-      const x = typeof cs?.x === 'number' ? cs.x : (typeof cur?.x === 'number' ? cur.x : drag.x);
-      const y = typeof cs?.y === 'number' ? cs.y : (typeof cur?.y === 'number' ? cur.y : drag.y);
-      if (x == null || y == null) {
-        el.style.display = 'none';
-        continue;
-      }
-      el.style.display = '';
-      el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    for (const drag of remoteListDrags) {
+      const list = boardData.listsById[drag.listId];
+      if (!list) continue;
+      const pos = resolveDragScreenPosition(drag, peers, scrollerEl, LIST_OFFSET_X, LIST_OFFSET_Y);
+      if (!pos) continue;
+      lists.push({
+        key: `list-${drag.userId}-${drag.listId}`,
+        list,
+        drag,
+        color: drag.color || '#7c3aed',
+        pos,
+      });
     }
-  }, [cursorFrame, remoteDrags]);
 
-  if (!remoteDrags.length) return null;
+    return { cardGhosts: cards, listGhosts: lists };
+  }, [
+    remoteDrags,
+    remoteListDrags,
+    boardData,
+    peers,
+    cursorFrame,
+    layoutRepaint,
+    boardScrollerRef,
+  ]);
+
+  if (!cardGhosts.length && !listGhosts.length) return null;
 
   const layer = (
-    <div ref={layerRef} className="collab-remote-drag-layer collab-remote-drag-layer--viewport" aria-hidden />
+    <div className="collab-remote-drag-layer collab-remote-drag-layer--viewport" aria-hidden>
+      {listGhosts.map(({ key, list, drag, color, pos }) => (
+        <ListGhost key={key} list={list} drag={drag} color={color} pos={pos} />
+      ))}
+      {cardGhosts.map(({ key, card, drag, color, pos }) => (
+        <CardGhost key={key} card={card} drag={drag} color={color} pos={pos} />
+      ))}
+    </div>
   );
 
   if (typeof document !== 'undefined') {

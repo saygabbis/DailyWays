@@ -3,24 +3,57 @@ import { createPortal } from 'react-dom';
 import { usePresenceStore } from './presenceStore';
 import { useCollab } from './CollabContext.jsx';
 import { presenceLabelTextColor } from '../utils/presenceLabelContrast.js';
+import { getPeerCursorVariant } from './presenceInteraction.js';
+import { screenCoordsToFixedLayer } from './pointerViewport.js';
+import { taskModalCursorToViewport } from './taskModalCursorCoords.js';
+import { overlayScrollCursorToViewport } from './overlayScrollCursorCoords.js';
+import { boardContentCursorToViewport } from './boardCursorCoords.js';
 import './PresenceLayer.css';
+
+const POINTER_PATH = 'M2 2 L2 17 L7 12 L10.5 21 L13 19.5 L9.5 11.5 L16 11.5 Z';
+const HAND_POINTER_PATH = 'M7 3 C7 3 5 5 5 8 L5 11 L3 11 C3 11 2 12 2 14 C2 16 4 17 4 17 L4 20 C4 22 6 23 8 23 L11 23 L11 20 L14 20 L14 17 L17 17 L17 14 L20 14 L20 11 L17 11 L17 8 C17 6 15 4 13 4 L11 4 L11 3 Z';
+const GRAB_PATH = 'M8 4 C6 4 5 6 5 8 L5 12 L3 12 C2 12 1 13 1 15 C1 17 3 18 5 18 L5 21 C5 23 7 24 9 24 L12 24 L12 21 L15 21 L15 18 L18 18 L18 15 L21 15 L21 12 L18 12 L18 9 L15 9 L15 6 C15 4 13 4 11 4 L9 4 Z';
 
 function toWorldScreen(cursor, panX, panY, zoom) {
   if (!cursor) return null;
   return { x: cursor.x * zoom + panX, y: cursor.y * zoom + panY };
 }
 
-/** Posição em coordenadas de viewport (evita clip por overflow do board-scroller / modal). */
-function resolveViewportPosition(peer, remoteCursors, mode, panX, panY, zoom) {
+function isPeerOnBoardContent(peer) {
+  return peer?.onBoardSurface !== false && !peer?.selectedCardId && !peer?.cursorModal;
+}
+
+/** Posição em viewport: conteúdo (board/modal) primeiro; clientX/Y só para backdrop. */
+function resolveViewportPosition(
+  peer,
+  remoteCursors,
+  mode,
+  panX,
+  panY,
+  zoom,
+  modalRoot,
+  overlayScrollSelector,
+  boardScroller,
+) {
   const remote = remoteCursors[peer.userId];
   const cur = remote ?? peer.cursor;
   if (mode === 'screen') {
+    const cm = peer.cursorModal;
+    if (cm && modalRoot) {
+      const fromModal = cm.region === 'main'
+        ? overlayScrollCursorToViewport(cm, modalRoot, overlayScrollSelector)
+        : taskModalCursorToViewport(cm, modalRoot);
+      if (fromModal) return fromModal;
+      return null;
+    }
+    if (boardScroller && isPeerOnBoardContent(peer)) {
+      const fromBoard = boardContentCursorToViewport(peer, boardScroller);
+      if (fromBoard) return fromBoard;
+      return null;
+    }
     const cs = remote?.cursorScreen ?? peer.cursorScreen;
     if (cs && typeof cs.x === 'number' && typeof cs.y === 'number') {
-      return { x: cs.x, y: cs.y };
-    }
-    if (cur && typeof cur.x === 'number' && typeof cur.y === 'number') {
-      return { x: cur.x, y: cur.y };
+      return screenCoordsToFixedLayer({ x: cs.x, y: cs.y });
     }
     return null;
   }
@@ -35,6 +68,16 @@ export default function CollabPresenceLayer({
   viewport,
   elevated = false,
   peerFilter,
+  /** Ref ou getter do root do overlay (modal) para coords com scroll. */
+  modalRootRef = null,
+  /** Seletor do painel scrollável em overlay genérico (lista). */
+  overlayScrollSelector = null,
+  /** Incrementa ao rolar overlay local — repinta cursores remotos. */
+  scrollRepaint = 0,
+  /** Ref do `.board-scroller` — coords de conteúdo + scroll. */
+  boardScrollerRef = null,
+  /** Scroll/resize do board (sidebar, janela, etc.). */
+  layoutRepaint = 0,
 }) {
   const peers = usePresenceStore((s) => s.peers);
   const cursorFrame = usePresenceStore((s) => s.cursorFrame);
@@ -55,6 +98,21 @@ export default function CollabPresenceLayer({
     return out;
   }, [peers, myId, peerFilter, collab?.connected]);
 
+  const applyCursorVariantToNode = (el, peer) => {
+    const variant = getPeerCursorVariant(peer);
+    el.dataset.cursorVariant = variant;
+    el.classList.toggle('collab-presence-cursor--pointer', variant === 'pointer');
+    el.classList.toggle('collab-presence-cursor--grabbing', variant === 'grabbing');
+    const label = el.querySelector('.collab-presence-label');
+    if (label) {
+      label.style.display = variant === 'grabbing' ? 'none' : '';
+    }
+    const path = el.querySelector('.collab-presence-pointer path');
+    if (!path) return;
+    const d = variant === 'grabbing' ? GRAB_PATH : (variant === 'pointer' ? HAND_POINTER_PATH : POINTER_PATH);
+    path.setAttribute('d', d);
+  };
+
   const applyPeerMetaToNode = (el, peer) => {
     const color = peer.color || '#7c3aed';
     const displayName = peer.name || peer.avatarInitial || 'Usuário';
@@ -67,6 +125,7 @@ export default function CollabPresenceLayer({
     }
     const path = el.querySelector('.collab-presence-pointer path');
     if (path) path.setAttribute('fill', color);
+    applyCursorVariantToNode(el, peer);
   };
 
   const isNodeInLayer = (el, layer) => {
@@ -87,7 +146,7 @@ export default function CollabPresenceLayer({
     svg.setAttribute('viewBox', '0 0 20 24');
     svg.setAttribute('aria-hidden', 'true');
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', 'M2 2 L2 17 L7 12 L10.5 21 L13 19.5 L9.5 11.5 L16 11.5 Z');
+    path.setAttribute('d', POINTER_PATH);
     path.setAttribute('fill', color);
     path.setAttribute('stroke', '#fff');
     path.setAttribute('stroke-width', '1.5');
@@ -139,24 +198,51 @@ export default function CollabPresenceLayer({
       } else {
         applyPeerMetaToNode(el, peer);
       }
+      applyCursorVariantToNode(el, peer);
     }
   }, [visibleMeta]);
 
   useEffect(() => {
     const remoteCursors = usePresenceStore.getState().remoteCursors;
     const { panX: px = 0, panY: py = 0, zoom: z = 1 } = viewportRef.current || {};
+    const modalRoot = modalRootRef?.current ?? null;
+    const boardScroller = boardScrollerRef?.current ?? null;
     for (const peer of visibleMeta) {
       const el = nodeRefs.current.get(peer.userId);
       if (!el) continue;
-      const screen = resolveViewportPosition(peer, remoteCursors, mode, px, py, z);
+      const screen = resolveViewportPosition(
+        peer,
+        remoteCursors,
+        mode,
+        px,
+        py,
+        z,
+        modalRoot,
+        overlayScrollSelector,
+        boardScroller,
+      );
       if (!screen) {
         el.style.display = 'none';
         continue;
       }
       el.style.display = '';
       el.style.transform = `translate3d(${screen.x}px, ${screen.y}px, 0)`;
+      applyCursorVariantToNode(el, peer);
     }
-  }, [cursorFrame, visibleMeta, peers, mode, panX, panY, zoom]);
+  }, [
+    cursorFrame,
+    visibleMeta,
+    peers,
+    mode,
+    panX,
+    panY,
+    zoom,
+    scrollRepaint,
+    layoutRepaint,
+    modalRootRef,
+    overlayScrollSelector,
+    boardScrollerRef,
+  ]);
 
   if (!collab?.connected || !visibleMeta.length) return null;
 

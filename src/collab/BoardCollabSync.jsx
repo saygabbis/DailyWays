@@ -28,7 +28,7 @@ import { isCollabEnabled } from './collabConfig.js';
 
 import { collabDebugLog } from './collabDebug.js';
 
-import { pulseRemoteCard } from './boardRemoteAnim.js';
+import { pulseRemoteCard, pulseRemoteList } from './boardRemoteAnim.js';
 
 import {
 
@@ -69,6 +69,7 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
   const boardCollabRef = useRef(boardCollab);
 
   const prevDragCardByUserRef = useRef(new Map());
+  const prevDragListByUserRef = useRef(new Map());
 
   const authRef = useRef({ user, profile });
 
@@ -228,11 +229,28 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
         );
 
+        const prevList = prevDragListByUserRef.current.get(peer.userId);
+        const listDragId = peer.draggingListId && !peer.draggingCardId
+          ? peer.draggingListId
+          : null;
+
+        if (prevList && !listDragId) {
+          pulseRemoteList(prevList);
+        }
+
+        prevDragListByUserRef.current.set(peer.userId, listDragId);
+
       }
 
       for (const uid of [...prevDragCardByUserRef.current.keys()]) {
 
         if (!remoteIds.has(uid)) prevDragCardByUserRef.current.delete(uid);
+
+      }
+
+      for (const uid of [...prevDragListByUserRef.current.keys()]) {
+
+        if (!remoteIds.has(uid)) prevDragListByUserRef.current.delete(uid);
 
       }
 
@@ -486,6 +504,7 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
       resetPresenceFields(boardAtCleanup);
 
       prevDragCardByUserRef.current.clear();
+      prevDragListByUserRef.current.clear();
 
       const shouldLeaveRoom = getGlobalJoinedBoardId() === boardAtCleanup;
 

@@ -22,6 +22,7 @@ import { pushPresenceFields } from './collab/presenceBridge.js';
 import { publishBoardPresenceFull } from './collab/boardPresencePublish.js';
 import { useCollab } from './collab/CollabContext.jsx';
 import { setLastBoardPointer } from './collab/lastBoardPointer.js';
+import { pointerCoordsFromBoardEvent } from './collab/boardCursorCoords.js';
 import { BoardCollabProvider, useBoardCollabDispatch } from './collab/BoardCollabContext.jsx';
 import PasswordResetPage from './components/Auth/PasswordResetPage';
 import {
@@ -42,7 +43,18 @@ import './App.css';
 
 function AppContent() {
   const { user, profile } = useAuth();
-  const { getActiveBoard, confirmConfig, dispatch, getAllCards, state, updateBoardsOrder, suppressRealtime, updateWorkspaceOrder, boardsLoadError } = useApp();
+  const {
+    getActiveBoard,
+    confirmConfig,
+    dispatch,
+    getAllCards,
+    state,
+    updateBoardsOrder,
+    suppressRealtime,
+    updateWorkspaceOrder,
+    boardsLoadError,
+    profileMenuOpen,
+  } = useApp();
   const { collabDispatch, updateBoardMeta } = useBoardCollabDispatch();
   const collab = useCollab();
   const { initPreferences } = useTheme();
@@ -128,24 +140,17 @@ function AppContent() {
     const onPointerMove = (e) => {
       if (!document.body.classList.contains('dnd-dragging') || !activeBoardId) return;
       const scroller = document.querySelector('.board-scroller');
+      if (!scroller) return;
+      const coords = pointerCoordsFromBoardEvent(e, scroller);
       const partial = {
-        cursorScreen: { x: e.clientX, y: e.clientY },
+        ...coords,
+        onBoardSurface: true,
       };
-      if (scroller) {
-        const rect = scroller.getBoundingClientRect();
-        partial.cursor = {
-          x: e.clientX - rect.left + scroller.scrollLeft,
-          y: e.clientY - rect.top + scroller.scrollTop,
-          mode: 'screen',
-        };
-      }
-      if (partial.cursor) {
-        setLastBoardPointer(activeBoardId, {
-          x: partial.cursor.x,
-          y: partial.cursor.y,
-          cursorScreen: partial.cursorScreen,
-        });
-      }
+      setLastBoardPointer(activeBoardId, {
+        x: coords.x,
+        y: coords.y,
+        cursorScreen: coords.cursorScreen,
+      });
       pushPresenceFields(activeBoardId, partial);
     };
     document.addEventListener('pointermove', onPointerMove, { passive: true });
@@ -158,7 +163,11 @@ function AppContent() {
     document.body.classList.add('dnd-dragging');
     const boardId = getActiveBoard()?.id;
     if (boardId && start.type === 'list') {
-      pushPresenceFields(boardId, { draggingListId: start.draggableId, draggingCardId: null });
+      pushPresenceFields(boardId, {
+        draggingListId: start.draggableId,
+        draggingCardId: null,
+        onBoardSurface: true,
+      });
     } else if (
       boardId
       && start.type !== 'list'
@@ -169,6 +178,7 @@ function AppContent() {
       pushPresenceFields(boardId, {
         draggingCardId: start.draggableId,
         draggingListId: start.source.droppableId,
+        onBoardSurface: true,
       });
     }
     if (boardId && collab?.socket?.connected) {
@@ -481,6 +491,12 @@ function AppContent() {
                 onCardClick={handleCardClick}
                 focusedCardId={
                   selectedCard?.boardId === activeBoard.id ? selectedCard.card.id : null
+                }
+                boardAwayOverlay={
+                  showSettings
+                  || showSearch
+                  || profileMenuOpen
+                  || !!plannedDropCard
                 }
               />
             )}

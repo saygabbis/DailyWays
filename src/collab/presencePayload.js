@@ -34,10 +34,13 @@ function presenceFieldsForEmit(boardId) {
   const f = getPresenceFields(boardId);
   const out = {
     selectedCardId: f.selectedCardId ?? null,
+    onBoardSurface: f.onBoardSurface !== false,
     draggingCardId: f.draggingCardId ?? null,
     draggingListId: f.draggingListId ?? null,
     hoverCardId: f.hoverCardId ?? null,
     hoverListId: f.hoverListId ?? null,
+    hoverModalEl: f.hoverModalEl ?? null,
+    liveDraft: f.liveDraft ?? null,
   };
   if (f.selectedNodeIds != null) out.selectedNodeIds = f.selectedNodeIds;
   if (f.cursor && typeof f.cursor.x === 'number' && typeof f.cursor.y === 'number') {
@@ -45,6 +48,9 @@ function presenceFieldsForEmit(boardId) {
   }
   if (f.cursorScreen && typeof f.cursorScreen.x === 'number') {
     out.cursorScreen = f.cursorScreen;
+  }
+  if (f.cursorModal && typeof f.cursorModal.x === 'number' && typeof f.cursorModal.y === 'number') {
+    out.cursorModal = f.cursorModal;
   }
   return out;
 }

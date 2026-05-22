@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { defineConfig } from 'vite'
+import { createLogger, defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import strip from '@rollup/plugin-strip'
 
@@ -22,7 +22,24 @@ function getCollabPort() {
 const collabPort = getCollabPort()
 const collabTarget = `http://127.0.0.1:${collabPort}`
 
+/** Evita spam no terminal quando o collab reinicia ou abas antigas fecham o WS. */
+const devLogger = createLogger('info', { allowClearScreen: true })
+const logError = devLogger.error.bind(devLogger)
+devLogger.error = (msg, options) => {
+  const text = typeof msg === 'string' ? msg : String(msg ?? '')
+  if (
+    text.includes('ECONNRESET')
+    || text.includes('EPIPE')
+    || text.includes('ws proxy error')
+    || text.includes('ws proxy socket error')
+  ) {
+    return
+  }
+  logError(msg, options)
+}
+
 export default defineConfig({
+  customLogger: devLogger,
   envDir: __dirname,
   plugins: [
     react(),
@@ -47,6 +64,21 @@ export default defineConfig({
       '/socket.io': {
         target: collabTarget,
         ws: true,
+        configure: (proxy) => {
+          const ignore = (err) => err?.code === 'ECONNRESET' || err?.code === 'EPIPE';
+          proxy.on('error', (err, _req, res) => {
+            if (ignore(err)) return;
+            if (res && typeof res.writeHead === 'function' && !res.headersSent) {
+              res.writeHead(502);
+              res.end();
+            }
+          });
+          proxy.on('proxyReqWs', (_proxyReq, _req, socket) => {
+            socket?.on?.('error', (err) => {
+              if (ignore(err)) return;
+            });
+          });
+        },
       },
     },
   },

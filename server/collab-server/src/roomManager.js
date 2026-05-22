@@ -167,18 +167,56 @@ export class RoomManager {
       socketId: sid,
       updatedAt: Date.now(),
     };
-    const hasCursor = payload?.cursor
+    const inTaskModal = Boolean(
+      payload?.selectedCardId
+      || prev?.selectedCardId,
+    );
+    const isDraggingOnBoard = Boolean(
+      payload?.draggingCardId
+      || prev?.draggingCardId
+      || payload?.draggingListId
+      || prev?.draggingListId,
+    );
+    const payloadHasCursor = payload?.cursor
       && typeof payload.cursor.x === 'number'
       && typeof payload.cursor.y === 'number';
-    if (!hasCursor) {
-      if (prev.cursor) merged.cursor = prev.cursor;
-      else delete merged.cursor;
-    }
-    const hasCursorScreen = payload?.cursorScreen
+    const payloadHasCursorScreen = payload?.cursorScreen
       && typeof payload.cursorScreen.x === 'number';
-    if (!hasCursorScreen) {
-      if (prev.cursorScreen) merged.cursorScreen = prev.cursorScreen;
-      else delete merged.cursorScreen;
+    if (payload?.onBoardSurface === false && !inTaskModal && !isDraggingOnBoard) {
+      if (!payloadHasCursor) delete merged.cursor;
+      if (!payloadHasCursorScreen) delete merged.cursorScreen;
+    } else {
+      const hasCursor = payload?.cursor
+        && typeof payload.cursor.x === 'number'
+        && typeof payload.cursor.y === 'number';
+      if (!hasCursor) {
+        if (prev.cursor) merged.cursor = prev.cursor;
+        else delete merged.cursor;
+      }
+    }
+    {
+      const hasCursorScreen = payload?.cursorScreen
+        && typeof payload.cursorScreen.x === 'number';
+      if (!hasCursorScreen) {
+        if (prev.cursorScreen) merged.cursorScreen = prev.cursorScreen;
+        else if (payload?.onBoardSurface === false && (inTaskModal || isDraggingOnBoard)) {
+          /* mantém cursorScreen no modal / durante arraste */
+        } else {
+          delete merged.cursorScreen;
+        }
+      }
+    }
+    {
+      const hasCursorModal = payload?.cursorModal
+        && typeof payload.cursorModal.x === 'number';
+      if (!hasCursorModal) {
+        if (prev.cursorModal) merged.cursorModal = prev.cursorModal;
+        else if (inTaskModal || payload?.onBoardSurface === false) {
+          /* mantém cursorModal no modal / overlay com scroll */
+        } else {
+          delete merged.cursorModal;
+        }
+      }
     }
     room.presence.set(userId, merged);
     return this.getPresenceList(room);

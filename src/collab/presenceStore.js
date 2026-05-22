@@ -5,7 +5,13 @@ function normalizePeers(peers) {
     ...p,
     cursor: p.cursor ? { ...p.cursor } : p.cursor,
     cursorScreen: p.cursorScreen ? { ...p.cursorScreen } : p.cursorScreen,
+    cursorModal: p.cursorModal ? { ...p.cursorModal } : p.cursorModal,
   }));
+}
+
+function modalCursorKey(cm) {
+  if (!cm || typeof cm.x !== 'number' || typeof cm.y !== 'number') return '';
+  return `${cm.region || ''}:${cm.x},${cm.y}`;
 }
 
 function cursorKey(c) {
@@ -19,7 +25,8 @@ function metaSignature(peers) {
     .map((p) => (
       `${p.userId}:${p.name || ''}:${p.color || ''}:${p.draggingCardId || ''}:`
       + `${p.draggingListId || ''}:${p.hoverCardId || ''}:${p.hoverListId || ''}:`
-      + `${p.selectedCardId || ''}`
+      + `${p.selectedCardId || ''}:${p.onBoardSurface === false ? 0 : 1}:`
+      + `${p.hoverModalEl || ''}:${JSON.stringify(p.liveDraft ?? null)}`
     ))
     .sort()
     .join('|');
@@ -28,7 +35,7 @@ function metaSignature(peers) {
 function cursorSignature(peers) {
   if (!peers?.length) return '';
   return peers
-    .map((p) => `${p.userId}:${cursorKey(p.cursor)}`)
+    .map((p) => `${p.userId}:${cursorKey(p.cursor)}:${cursorKey(p.cursorScreen)}:${modalCursorKey(p.cursorModal)}`)
     .sort()
     .join('|');
 }
@@ -54,6 +61,11 @@ function mergePeersPreservingCursor(prevPeers, incoming) {
     if (!hasCursorScreenCoords(p.cursorScreen) && hasCursorScreenCoords(prev.cursorScreen)) {
       merged.cursorScreen = { ...prev.cursorScreen };
     }
+    if (!p.cursorModal && prev.cursorModal) {
+      merged.cursorModal = { ...prev.cursorModal };
+    } else if (p.cursorModal) {
+      merged.cursorModal = { ...p.cursorModal };
+    }
     return merged;
   });
   return next;
@@ -62,12 +74,15 @@ function mergePeersPreservingCursor(prevPeers, incoming) {
 function extractRemoteCursors(peers) {
   const out = {};
   for (const p of peers) {
-    if (!p?.userId || !hasCursorCoords(p.cursor)) continue;
+    if (!p?.userId) continue;
+    const hasBoard = hasCursorCoords(p.cursor);
+    const hasScreen = hasCursorScreenCoords(p.cursorScreen);
+    if (!hasBoard && !hasScreen) continue;
     out[p.userId] = {
-      x: p.cursor.x,
-      y: p.cursor.y,
-      mode: p.cursor.mode,
-      cursorScreen: p.cursorScreen ? { ...p.cursorScreen } : null,
+      x: hasBoard ? p.cursor.x : p.cursorScreen.x,
+      y: hasBoard ? p.cursor.y : p.cursorScreen.y,
+      mode: p.cursor?.mode,
+      cursorScreen: hasScreen ? { ...p.cursorScreen } : null,
     };
   }
   return out;

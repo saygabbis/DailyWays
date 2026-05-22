@@ -23,9 +23,11 @@ export default function BoardList({
     hoverByCardId,
     hoverByListId,
     onCardHover,
+    onCardHoverEnd,
     onListHover,
     onPresenceHoverEnd,
     remoteDraggingCardIds,
+    remoteDragByCardId = {},
 }) {
     const { state, showConfirm } = useApp();
     const { collabDispatch } = useBoardCollabDispatch(boardId);
@@ -237,11 +239,12 @@ export default function BoardList({
                                                     listColor={list.color}
                                                     isDragging={snapshot.isDragging}
                                                     isRemoteDragging={remoteDraggingCardIds?.has(card.id)}
+                                                    remoteDragPeer={remoteDragByCardId?.[card.id]}
                                                     onClick={() => onCardClick(card, boardId, list.id)}
                                                     editingEditors={editingByCardId?.[card.id] || []}
                                                     hoverPeers={hoverByCardId?.[card.id] || []}
                                                     onHoverStart={() => onCardHover?.(card.id)}
-                                                    onHoverEnd={() => onPresenceHoverEnd?.()}
+                                                    onHoverEnd={() => onCardHoverEnd?.(list.id)}
                                                 />
                                             </div>
                                         );

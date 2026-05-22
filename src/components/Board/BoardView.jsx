@@ -10,12 +10,19 @@ import { fetchBoardMembers, sortBoardMembersOwnerFirst } from '../../services/bo
 import { useMergedBoardEditors } from '../../hooks/useMergedBoardEditors';
 import BoardCollabStatusBanner from '../../collab/BoardCollabStatusBanner.jsx';
 import CollabPresenceLayer from '../../collab/CollabPresenceLayer.jsx';
+import { pointerCoordsFromBoardEvent } from '../../collab/boardCursorCoords.js';
 import { isPeerOnBoardSurface } from '../../collab/presenceVisibility.js';
 import RemoteDragLayer from '../../collab/RemoteDragLayer.jsx';
 import PresenceOnlineList from '../../collab/PresenceOnlineList.jsx';
 import { setLastBoardPointer } from '../../collab/lastBoardPointer.js';
 import { useCollab } from '../../collab/CollabContext.jsx';
-import { scheduleBoardPresencePublish, prepareBoardSurfacePresence } from '../../collab/boardPresencePublish.js';
+import {
+    scheduleBoardPresencePublish,
+    prepareBoardSurfacePresence,
+    restoreBoardPresenceAfterModal,
+    publishBoardPresenceFull,
+} from '../../collab/boardPresencePublish.js';
+import { publishBoardPresenceFocus } from '../../collab/boardPresenceFocus.js';
 import { announcePresence } from '../../collab/presenceBridge.js';
 import { useBoardPresenceHighlights } from '../../hooks/useBoardPresenceHighlights';
 import { useBoardCollabDispatch } from '../../collab/BoardCollabContext.jsx';
@@ -75,7 +82,7 @@ function rectsIntersect(a, b) {
     return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
 }
 
-function BoardView({ onCardClick, focusedCardId = null }, ref) {
+function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false }, ref) {
     const { state, getActiveBoard, dispatch, isSavingBoard, showBoardToolbar, profileMenuOpen } = useApp();
     const { user, profile } = useAuth();
     const collab = useCollab();
@@ -96,6 +103,22 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
     const dragStartRef = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
     const toolbarRef = useRef(null);
     const containerRef = useRef(null);
+    const [pointerInBoard, setPointerInBoard] = useState(true);
+    const [isDndDragging, setIsDndDragging] = useState(
+        () => typeof document !== 'undefined' && document.body.classList.contains('dnd-dragging'),
+    );
+    const [holdBoardSurface, setHoldBoardSurface] = useState(false);
+    const prevFocusedCardIdRef = useRef(focusedCardId);
+
+    useEffect(() => {
+        if (typeof document === 'undefined') return undefined;
+        const sync = () => {
+            setIsDndDragging(document.body.classList.contains('dnd-dragging'));
+        };
+        const mo = new MutationObserver(sync);
+        mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        return () => mo.disconnect();
+    }, []);
 
     // Reset position when shown
     useEffect(() => {
@@ -121,6 +144,50 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
         clearHoverTarget,
     } = useCollabPresence(board?.id, { mode: 'screen' });
 
+    const onBoardSurface = Boolean(
+        board?.id
+        && !boardAwayOverlay
+        && !listDetails
+        && !showShareModal
+        && (pointerInBoard || isDndDragging || holdBoardSurface),
+    );
+
+    useEffect(() => {
+        if (!board?.id) return undefined;
+        const hadModal = prevFocusedCardIdRef.current;
+        const closedModal = hadModal && !focusedCardId;
+        prevFocusedCardIdRef.current = focusedCardId;
+        if (!closedModal) return undefined;
+        setHoldBoardSurface(true);
+        restoreBoardPresenceAfterModal(board.id);
+        announcePresence(board.id);
+        if (collab?.socket?.connected) {
+            publishBoardPresenceFull(collab.socket, board.id, { user, profile });
+        }
+        const t = setTimeout(() => setHoldBoardSurface(false), 600);
+        return () => clearTimeout(t);
+    }, [focusedCardId, board?.id, collab?.socket, collab?.connected, user, profile]);
+
+    useEffect(() => {
+        if (!board?.id) return undefined;
+        publishBoardPresenceFocus(board.id, onBoardSurface);
+        return undefined;
+    }, [board?.id, onBoardSurface]);
+
+    useEffect(() => {
+        if (!board?.id) return undefined;
+        const onPointerMove = (e) => {
+            const el = scrollerRef.current;
+            if (!el) return;
+            const r = el.getBoundingClientRect();
+            const inside = e.clientX >= r.left && e.clientX <= r.right
+                && e.clientY >= r.top && e.clientY <= r.bottom;
+            setPointerInBoard((prev) => (prev === inside ? prev : inside));
+        };
+        document.addEventListener('pointermove', onPointerMove, { passive: true });
+        return () => document.removeEventListener('pointermove', onPointerMove);
+    }, [board?.id]);
+
     useEffect(() => {
         if (!board?.id || !collab?.socket?.connected) return undefined;
         prepareBoardSurfacePresence(board.id);
@@ -132,11 +199,25 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
         return () => cancelAnimationFrame(raf);
     }, [board?.id, collab?.socket, collab?.connected, user?.id, profile]);
 
-    const { hoverByCardId, hoverByListId, remoteDrags } = useBoardPresenceHighlights();
+    const { hoverByCardId, hoverByListId, remoteDrags, remoteListDrags } = useBoardPresenceHighlights();
     const remoteDraggingCardIds = useMemo(
         () => new Set(remoteDrags.map((d) => d.cardId)),
         [remoteDrags],
     );
+    const remoteDraggingListIds = useMemo(
+        () => new Set(remoteListDrags.map((d) => d.listId)),
+        [remoteListDrags],
+    );
+    const remoteDragByCardId = useMemo(() => {
+        const map = {};
+        for (const d of remoteDrags) map[d.cardId] = d;
+        return map;
+    }, [remoteDrags]);
+    const remoteDragByListId = useMemo(() => {
+        const map = {};
+        for (const d of remoteListDrags) map[d.listId] = d;
+        return map;
+    }, [remoteListDrags]);
 
     // Board partilhado: mostrar toolbar por defeito (o utilizador pode fechar; persistimos por board)
     useEffect(() => {
@@ -181,6 +262,7 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
 
     // ── Panning Logic ──
     const scrollerRef = useRef(null);
+    const [layoutRepaint, setLayoutRepaint] = useState(0);
     const [isPanning, setIsPanning] = useState(false);
     const panningData = useRef({
         isDown: false,
@@ -188,6 +270,21 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
         scrollLeft: 0,
         moved: false
     });
+
+    useEffect(() => {
+        const el = scrollerRef.current;
+        if (!el || !board?.id) return undefined;
+        const bump = () => setLayoutRepaint((n) => n + 1);
+        el.addEventListener('scroll', bump, { passive: true });
+        const ro = new ResizeObserver(bump);
+        ro.observe(el);
+        window.addEventListener('resize', bump, { passive: true });
+        return () => {
+            el.removeEventListener('scroll', bump);
+            ro.disconnect();
+            window.removeEventListener('resize', bump);
+        };
+    }, [board?.id]);
 
     // Pan horizontal só com mouse — no touch o scroll nativo do .board-scroller não conflita com o DnD
     const handlePanPointerDown = (e) => {
@@ -462,30 +559,37 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
     }
 
     const handleBoardPointerMove = useCallback((e) => {
+        if (!onBoardSurface) return;
         const el = scrollerRef.current;
         if (!el) return;
-        const rect = el.getBoundingClientRect();
-        const x = e.clientX - rect.left + el.scrollLeft;
-        const y = e.clientY - rect.top + el.scrollTop;
-        const cursorScreen = { x: e.clientX, y: e.clientY };
+        const coords = pointerCoordsFromBoardEvent(e, el);
         if (board?.id) {
-            setLastBoardPointer(board.id, { x, y, cursorScreen });
+            setLastBoardPointer(board.id, {
+                x: coords.x,
+                y: coords.y,
+                cursorScreen: coords.cursorScreen,
+            });
         }
         updateBoardCursor({
-            x,
-            y,
-            cursorScreen,
+            ...coords,
             selectedCardId: null,
         });
-    }, [updateBoardCursor, board?.id]);
+    }, [updateBoardCursor, board?.id, onBoardSurface]);
 
     const handleCardHover = useCallback((cardId) => {
+        if (!onBoardSurface) return;
         setHoverTarget({ cardId, listId: null });
-    }, [setHoverTarget]);
+    }, [setHoverTarget, onBoardSurface]);
+
+    const handleCardHoverEnd = useCallback((listId) => {
+        if (!onBoardSurface) return;
+        setHoverTarget({ listId: listId ?? null, cardId: null });
+    }, [setHoverTarget, onBoardSurface]);
 
     const handleListHover = useCallback((listId) => {
+        if (!onBoardSurface) return;
         setHoverTarget({ listId, cardId: null });
-    }, [setHoverTarget]);
+    }, [setHoverTarget, onBoardSurface]);
 
     const handlePresenceHoverEnd = useCallback(() => {
         clearHoverTarget();
@@ -652,15 +756,25 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
 
                                     return (
                                         <>
-                                            {board.lists.map((list, index) => (
+                                            {board.lists.map((list, index) => {
+                                                const isRemoteListDragging = remoteDraggingListIds.has(list.id);
+                                                const remoteListDragPeer = remoteDragByListId[list.id];
+                                                return (
                                                 <Draggable key={list.id} draggableId={list.id} index={index}>
                                                     {(provided, snapshot) => (
                                                         <div
                                                             ref={provided.innerRef}
                                                             {...provided.draggableProps}
-                                                            className={`board-list-wrapper ${snapshot.isDragging ? 'list-dragging' : ''}`}
+                                                            className={[
+                                                                'board-list-wrapper',
+                                                                snapshot.isDragging ? 'list-dragging' : '',
+                                                                isRemoteListDragging ? 'board-list-remote-drag-source' : '',
+                                                            ].filter(Boolean).join(' ')}
                                                             style={{
                                                                 ...provided.draggableProps.style,
+                                                                ...(isRemoteListDragging && remoteListDragPeer?.color
+                                                                    ? { '--presence-color': remoteListDragPeer.color }
+                                                                    : {}),
                                                             }}
                                                         >
                                                             <BoardList
@@ -671,7 +785,9 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
                                                                 hoverByCardId={hoverByCardId}
                                                                 hoverByListId={hoverByListId}
                                                                 remoteDraggingCardIds={remoteDraggingCardIds}
+                                                                remoteDragByCardId={remoteDragByCardId}
                                                                 onCardHover={handleCardHover}
+                                                                onCardHoverEnd={handleCardHoverEnd}
                                                                 onListHover={handleListHover}
                                                                 onPresenceHoverEnd={handlePresenceHoverEnd}
                                                                 index={index}
@@ -683,7 +799,8 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
                                                         </div>
                                                     )}
                                                 </Draggable>
-                                            ))}
+                                                );
+                                            })}
                                             {provided.placeholder}
 
                                             {/* Add List Placeholder */}
@@ -719,8 +836,13 @@ function BoardView({ onCardClick, focusedCardId = null }, ref) {
                             </div>
                         )}
                     </Droppable>
-                    <CollabPresenceLayer mode="screen" peerFilter={isPeerOnBoardSurface} />
-                    <RemoteDragLayer boardId={board.id} />
+                    <CollabPresenceLayer
+                        mode="screen"
+                        peerFilter={isPeerOnBoardSurface}
+                        boardScrollerRef={scrollerRef}
+                        layoutRepaint={layoutRepaint}
+                    />
+                    <RemoteDragLayer boardId={board.id} boardScrollerRef={scrollerRef} layoutRepaint={layoutRepaint} />
                 </>
             </div>
 

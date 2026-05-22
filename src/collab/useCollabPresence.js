@@ -140,8 +140,11 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
       return;
     }
     if (mode === 'screen') {
-      fields.cursor = { x: coords.x, y: coords.y, mode: 'screen' };
+      fields.cursor = coords.cursor ?? { x: coords.x, y: coords.y, mode: 'screen' };
       fields.cursorScreen = coords.cursorScreen ?? { x: coords.x, y: coords.y };
+      if ('cursorModal' in coords) {
+        fields.cursorModal = coords.cursorModal;
+      }
       if ('selectedCardId' in coords) {
         fields.selectedCardId = coords.selectedCardId;
       }
@@ -182,6 +185,14 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
     mergeFields({ selectedCardId: cardId ?? null });
   }, [mergeFields]);
 
+  const setHoverModalEl = useCallback((el) => {
+    mergeFields({ hoverModalEl: el ?? null });
+  }, [mergeFields]);
+
+  const setLiveDraft = useCallback((draft) => {
+    mergeFields({ liveDraft: draft ?? null });
+  }, [mergeFields]);
+
   return {
     updateCursor,
     updateSelection,
@@ -190,6 +201,8 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
     setDragTarget,
     clearDragTarget,
     setSelectedCardId,
+    setHoverModalEl,
+    setLiveDraft,
     connected: collab?.connected ?? false,
     presenceColor,
   };
