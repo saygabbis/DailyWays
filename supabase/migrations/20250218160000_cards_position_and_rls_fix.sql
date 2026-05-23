@@ -63,15 +63,18 @@ DROP POLICY IF EXISTS "Users can do all on own boards" ON public.boards;
 DROP POLICY IF EXISTS "Members can select and update shared boards" ON public.boards;
 DROP POLICY IF EXISTS "Members can update shared boards" ON public.boards;
 
+DROP POLICY IF EXISTS "Owner full access" ON public.boards;
 CREATE POLICY "Owner full access"
   ON public.boards FOR ALL
   USING (owner_id = auth.uid())
   WITH CHECK (owner_id = auth.uid());
 
+DROP POLICY IF EXISTS "Member read access" ON public.boards;
 CREATE POLICY "Member read access"
   ON public.boards FOR SELECT
   USING (public.is_board_member(id));
 
+DROP POLICY IF EXISTS "Member update access" ON public.boards;
 CREATE POLICY "Member update access"
   ON public.boards FOR UPDATE
   USING (public.is_board_member(id));
@@ -81,10 +84,12 @@ CREATE POLICY "Member update access"
 DROP POLICY IF EXISTS "Board members can be read by board owner or members" ON public.board_members;
 DROP POLICY IF EXISTS "Board owner can insert/update/delete members" ON public.board_members;
 
+DROP POLICY IF EXISTS "Members see own memberships" ON public.board_members;
 CREATE POLICY "Members see own memberships"
   ON public.board_members FOR SELECT
   USING (user_id = auth.uid() OR public.owns_board(board_id));
 
+DROP POLICY IF EXISTS "Owner manages members" ON public.board_members;
 CREATE POLICY "Owner manages members"
   ON public.board_members FOR ALL
   USING (public.owns_board(board_id))
@@ -93,6 +98,8 @@ CREATE POLICY "Owner manages members"
 -- ── 5. Recriar policies de lists (com WITH CHECK) ─────────────────────────
 
 DROP POLICY IF EXISTS "Lists follow board access" ON public.lists;
+DROP POLICY IF EXISTS "Lists select follow board access" ON public.lists;
+DROP POLICY IF EXISTS "Lists write owner or editors" ON public.lists;
 
 CREATE POLICY "Lists follow board access"
   ON public.lists FOR ALL
@@ -102,6 +109,8 @@ CREATE POLICY "Lists follow board access"
 -- ── 6. Recriar policies de cards (com WITH CHECK) ─────────────────────────
 
 DROP POLICY IF EXISTS "Cards follow list/board access" ON public.cards;
+DROP POLICY IF EXISTS "Cards select follow board access" ON public.cards;
+DROP POLICY IF EXISTS "Cards write owner or editors" ON public.cards;
 
 CREATE POLICY "Cards follow list/board access"
   ON public.cards FOR ALL
@@ -121,6 +130,8 @@ CREATE POLICY "Cards follow list/board access"
 -- ── 7. Recriar policies de subtasks (com WITH CHECK) ──────────────────────
 
 DROP POLICY IF EXISTS "Subtasks follow card access" ON public.subtasks;
+DROP POLICY IF EXISTS "Subtasks select follow board access" ON public.subtasks;
+DROP POLICY IF EXISTS "Subtasks write owner or editors" ON public.subtasks;
 
 CREATE POLICY "Subtasks follow card access"
   ON public.subtasks FOR ALL

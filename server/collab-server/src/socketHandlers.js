@@ -71,10 +71,39 @@ export function registerSocketHandlers(io) {
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
+      // #region agent log
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const { fileURLToPath } = await import('url');
+        const logPath = path.resolve(
+          fileURLToPath(import.meta.url),
+          '../../../debug-64ad20.log',
+        );
+        fs.appendFileSync(
+          logPath,
+          `${JSON.stringify({
+            sessionId: '64ad20',
+            timestamp: Date.now(),
+            hypothesisId: 'H2',
+            location: 'socketHandlers.js:middleware',
+            message: 'handshake auth',
+            data: {
+              hasToken: Boolean(token),
+              tokenLen: token?.length ?? 0,
+              origin: socket.handshake.headers?.origin ?? null,
+            },
+          })}\n`,
+        );
+      } catch {
+        /* ignore */
+      }
+      // #endregion
       const user = await verifyToken(token);
       if (!user) return next(new Error('Unauthorized'));
       socket.data.userId = user.id;
       socket.data.userEmail = user.email;
+      socket.data.accessToken = token;
       next();
     } catch (err) {
       next(new Error('Auth failed'));
@@ -101,7 +130,11 @@ export function registerSocketHandlers(io) {
         let access;
 
         if (boardId) {
-          access = await canAccessBoard(socket.data.userId, boardId);
+          access = await canAccessBoard(
+            socket.data.userId,
+            boardId,
+            socket.data.accessToken,
+          );
           if (!access?.access) {
             ack?.({ ok: false, error: 'Access denied' });
             return;
@@ -110,7 +143,11 @@ export function registerSocketHandlers(io) {
           socket.data.boardId = boardId;
           socket.data.spaceId = null;
         } else {
-          access = await canAccessSpace(socket.data.userId, spaceId);
+          access = await canAccessSpace(
+            socket.data.userId,
+            spaceId,
+            socket.data.accessToken,
+          );
           if (!access?.access) {
             ack?.({ ok: false, error: 'Access denied' });
             return;
@@ -129,8 +166,40 @@ export function registerSocketHandlers(io) {
           roomManager.removePresence(prevRoomId, socket.data.userId, socket.id);
         }
 
-        const room = await roomManager.getOrLoad(roomId);
+        let room = await roomManager.getOrLoad(roomId, {
+          accessToken: socket.data.accessToken,
+        });
         if (boardId && !room.board) {
+          roomManager.evictRoom(roomId);
+          room = await roomManager.getOrLoad(roomId, {
+            accessToken: socket.data.accessToken,
+          });
+        }
+        if (boardId && !room.board) {
+          // #region agent log
+          try {
+            const fs = await import('fs');
+            const path = await import('path');
+            const { fileURLToPath } = await import('url');
+            const logPath = path.resolve(
+              fileURLToPath(import.meta.url),
+              '../../../debug-64ad20.log',
+            );
+            fs.appendFileSync(
+              logPath,
+              `${JSON.stringify({
+                sessionId: '64ad20',
+                timestamp: Date.now(),
+                hypothesisId: 'H6',
+                location: 'socketHandlers.js:JOIN',
+                message: 'board not found after reload',
+                data: { boardIdPrefix: boardId?.slice(0, 8) },
+              })}\n`,
+            );
+          } catch {
+            /* ignore */
+          }
+          // #endregion
           ack?.({ ok: false, error: 'Board not found' });
           return;
         }
@@ -239,7 +308,11 @@ export function registerSocketHandlers(io) {
       let roomId = socket.data.roomId;
       if (!roomId && payload?.roomId) {
         const reqBoardId = payload.roomId;
-        const access = await canAccessBoard(socket.data.userId, reqBoardId);
+        const access = await canAccessBoard(
+          socket.data.userId,
+          reqBoardId,
+          socket.data.accessToken,
+        );
         if (access?.access) {
           const targetRoom = roomIdForBoard(reqBoardId);
           const prev = socket.data.roomId;
@@ -247,7 +320,9 @@ export function registerSocketHandlers(io) {
             socket.leave(prev);
             roomManager.removePresence(prev, socket.data.userId, socket.id);
           }
-          const presenceRoom = await roomManager.getOrLoad(targetRoom);
+          const presenceRoom = await roomManager.getOrLoad(targetRoom, {
+            accessToken: socket.data.accessToken,
+          });
           if (!presenceRoom.board) return;
           socket.data.roomId = targetRoom;
           socket.data.canWrite = access.canWrite;

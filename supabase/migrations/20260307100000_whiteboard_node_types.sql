@@ -11,8 +11,9 @@ BEGIN
     END IF;
 END $$;
 
+ALTER TABLE public.space_nodes DROP CONSTRAINT IF EXISTS space_nodes_type_check;
 ALTER TABLE public.space_nodes
-    ADD CONSTRAINT space_nodes_type_check CHECK (type IN (
+  ADD CONSTRAINT space_nodes_type_check CHECK (type IN (
         'sticky_note', 'text', 'shape', 'frame', 'connector', 'image', 'comment',
         'link', 'todo_list', 'file_card', 'drawing', 'column', 'table'
     ));

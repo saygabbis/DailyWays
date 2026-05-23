@@ -1,4 +1,4 @@
-import { supabaseAdmin } from './supabase.js';
+import { getDbClient } from './supabase.js';
 
 function mapBoard(row, lists, cardsByList, subtasksByCard) {
   return {
@@ -48,22 +48,53 @@ function mapBoard(row, lists, cardsByList, subtasksByCard) {
   };
 }
 
-export async function loadBoardFromDb(boardId) {
-  if (!supabaseAdmin || !boardId) {
+export async function loadBoardFromDb(boardId, accessToken) {
+  const db = getDbClient(accessToken);
+  if (!db || !boardId) {
     return { board: null, revision: 0 };
   }
 
-  const { data: boardRow, error: boardErr } = await supabaseAdmin
+  const { data: boardRow, error: boardErr } = await db
     .from('boards')
     .select('id, title, color, emoji, position, group_id, owner_id, created_at')
     .eq('id', boardId)
     .maybeSingle();
 
+  // #region agent log
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+    const logPath = path.resolve(
+      fileURLToPath(import.meta.url),
+      '../../../debug-64ad20.log',
+    );
+    fs.appendFileSync(
+      logPath,
+      `${JSON.stringify({
+        sessionId: '64ad20',
+        timestamp: Date.now(),
+        hypothesisId: 'H6',
+        location: 'loadBoard.js:loadBoardFromDb',
+        message: 'board query',
+        data: {
+          boardIdPrefix: boardId?.slice(0, 8),
+          hasRow: Boolean(boardRow),
+          errCode: boardErr?.code ?? null,
+          errMsg: boardErr?.message?.slice(0, 80) ?? null,
+        },
+      })}\n`,
+    );
+  } catch {
+    /* ignore */
+  }
+  // #endregion
+
   if (boardErr || !boardRow) {
     return { board: null, revision: 0 };
   }
 
-  const { data: listsData } = await supabaseAdmin
+  const { data: listsData } = await db
     .from('lists')
     .select('id, board_id, title, color, position, is_completion_list')
     .eq('board_id', boardId)
@@ -72,7 +103,7 @@ export async function loadBoardFromDb(boardId) {
   const listIds = (listsData || []).map((l) => l.id);
   let cardsData = [];
   if (listIds.length) {
-    const { data: cards } = await supabaseAdmin
+    const { data: cards } = await db
       .from('cards')
       .select('id, list_id, title, description, priority, due_date, start_date, is_all_day, recurrence_rule, my_day, labels, color, cover_attachment_id, created_at, updated_at, completed, position')
       .in('list_id', listIds)
@@ -83,7 +114,7 @@ export async function loadBoardFromDb(boardId) {
   const cardIds = cardsData.map((c) => c.id);
   let subtasksData = [];
   if (cardIds.length) {
-    const { data: st } = await supabaseAdmin
+    const { data: st } = await db
       .from('subtasks')
       .select('id, card_id, title, done, position, link_url, link_label, created_at, updated_at')
       .in('card_id', cardIds);

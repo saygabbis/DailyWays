@@ -30,7 +30,6 @@ const LIST_COLOR_PRESETS = [
 export default function ListDetailsModal({ list, boardId, onSave, onClose }) {
     const collab = useCollab();
     const modalRef = useRef(null);
-    const [scrollRepaint, setScrollRepaint] = useState(0);
     const { updateCursor } = useCollabPresence(boardId, { mode: 'screen' });
     const [title, setTitle] = useState(list?.title ?? '');
     const [color, setColor] = useState(list?.color ?? null);
@@ -47,22 +46,6 @@ export default function ListDetailsModal({ list, boardId, onSave, onClose }) {
         (e) => pointerCoordsFromOverlayScrollEvent(e, modalRef.current, '.list-details-body'),
         [],
     );
-
-    useEffect(() => {
-        const root = modalRef.current;
-        if (!root) return undefined;
-        const bump = () => setScrollRepaint((n) => n + 1);
-        const scrollEl = root.querySelector('.list-details-body');
-        if (scrollEl) scrollEl.addEventListener('scroll', bump, { passive: true });
-        const ro = new ResizeObserver(bump);
-        ro.observe(root);
-        window.addEventListener('resize', bump, { passive: true });
-        return () => {
-            if (scrollEl) scrollEl.removeEventListener('scroll', bump);
-            ro.disconnect();
-            window.removeEventListener('resize', bump);
-        };
-    }, [list?.id]);
 
     useDocumentPointerPresence({
         enabled: Boolean(boardId && collab?.connected && isCollabEnabled()),
@@ -100,8 +83,6 @@ export default function ListDetailsModal({ list, boardId, onSave, onClose }) {
                     elevated
                     modalRootRef={modalRef}
                     overlayScrollSelector=".list-details-body"
-                    scrollRepaint={scrollRepaint}
-                    layoutRepaint={scrollRepaint}
                     peerFilter={isPeerInBoardOverlay}
                 />
             )}

@@ -9,6 +9,7 @@ import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import BoardCard from './BoardCard';
 import ListDetailsModal from './ListDetailsModal';
 import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy, Settings2, CheckCircle } from 'lucide-react';
+import { uuidv4 } from '../../utils/uuid';
 
 export default function BoardList({
     list,
@@ -60,7 +61,12 @@ export default function BoardList({
         if (!newCardTitle.trim()) return;
         collabDispatch({
             type: 'ADD_CARD',
-            payload: { boardId, listId: list.id, title: newCardTitle },
+            payload: {
+                boardId,
+                listId: list.id,
+                title: newCardTitle,
+                cardData: { id: uuidv4() },
+            },
         });
         setNewCardTitle('');
         setAddingCard(false);

@@ -6,15 +6,19 @@ import { isCollabEnabled } from '../../core/collabConfig.js';
 import { uuidv4 } from '../../../utils/uuid';
 import { useToast } from '../../../context/ToastContext.jsx';
 import { toastCollabError } from '../../core/collabToast.js';
+import {
+  isImmediateBoardAction,
+  shouldDebounceBoardAction,
+} from './boardActionPriority.js';
 
 /**
  * Padrão único de mutação de board:
  * 1. dispatch local (UI imediata)
  * 2. WebSocket (sala collab ativa + conectado)
- * 3. Supabase sempre (persistBoard — imediato fora da sala, debounce na sala)
+ * 3. Supabase backup em ações imediatas (completed, move, add…)
  */
 
-const DEBOUNCE_ACTIONS = new Set(['UPDATE_CARD', 'UPDATE_SUBTASK']);
+const TEXT_DEBOUNCE_MS = 180;
 const OP_RETRY_ATTEMPTS = 2;
 const OP_RETRY_DELAY_MS = 300;
 
@@ -27,7 +31,9 @@ export function BoardCollabProvider({ children }) {
   const collab = useCollab();
   const { addToast } = useToast();
   const [activeBoardId, setActiveBoardId] = useState(null);
+  const [roomReadyMap, setRoomReadyMap] = useState({});
   const debounceTimers = useRef(new Map());
+  const debouncedActionsRef = useRef(new Map());
   const roomReadyRef = useRef({});
   const pendingOpsRef = useRef({});
 
@@ -51,6 +57,11 @@ export function BoardCollabProvider({ children }) {
     return Boolean(collab?.connected && roomReadyRef.current[boardId]);
   }, [collab?.connected]);
 
+  const isBoardRoomReady = useCallback((boardId) => {
+    if (!isCollabEnabled() || !boardId) return true;
+    return Boolean(roomReadyMap[boardId]);
+  }, [roomReadyMap]);
+
   const submitActionToServer = useCallback(async (boardId, action) => {
     const socket = collab?.socket;
     if (!socket?.connected || !boardId || !action?.type) return false;
@@ -69,6 +80,9 @@ export function BoardCollabProvider({ children }) {
         try {
           if (!socket?.connected) throw new Error('Socket not connected');
           await submitOp(socket, opPayload);
+          if (isImmediateBoardAction(action)) {
+            persistBoard(boardId, { force: true, ensureSave: true });
+          }
           return true;
         } catch (err) {
           if (attempt < OP_RETRY_ATTEMPTS) {
@@ -98,6 +112,7 @@ export function BoardCollabProvider({ children }) {
       clearTimeout(timer);
     }
     debounceTimers.current.clear();
+    debouncedActionsRef.current.clear();
     pendingOpsRef.current = {};
   }, []);
 
@@ -119,16 +134,15 @@ export function BoardCollabProvider({ children }) {
 
   const setBoardRoomReady = useCallback((boardId, ready) => {
     if (!boardId) return;
+    setRoomReadyMap((prev) => ({ ...prev, [boardId]: !!ready }));
     if (ready) {
       roomReadyRef.current[boardId] = true;
       flushPendingOps(boardId);
     } else {
       delete roomReadyRef.current[boardId];
-      delete pendingOpsRef.current[boardId];
-      setCollabPending(boardId, false);
       setCollabSaving(boardId, false);
     }
-  }, [flushPendingOps, setCollabPending, setCollabSaving]);
+  }, [flushPendingOps, setCollabSaving]);
 
   const sendBoardOp = useCallback((boardId, action) => {
     if (!boardId || !action?.type) return;
@@ -145,21 +159,46 @@ export function BoardCollabProvider({ children }) {
     submitActionToServer(boardId, action);
   }, [collab?.socket, submitActionToServer, syncPendingFlag]);
 
+  useEffect(() => {
+    const flushDebounced = () => {
+      for (const [key, action] of debouncedActionsRef.current.entries()) {
+        const boardId = key.split(':')[0];
+        const timer = debounceTimers.current.get(key);
+        if (timer) clearTimeout(timer);
+        debounceTimers.current.delete(key);
+        if (boardId && action) sendBoardOp(boardId, action);
+      }
+      debouncedActionsRef.current.clear();
+    };
+    const onHide = () => {
+      if (document.visibilityState !== 'hidden') return;
+      flushDebounced();
+    };
+    window.addEventListener('pagehide', flushDebounced);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.removeEventListener('pagehide', flushDebounced);
+      document.removeEventListener('visibilitychange', onHide);
+    };
+  }, [sendBoardOp]);
+
   const emitBoardAction = useCallback((boardId, action) => {
     if (!boardId || !action?.type) return;
 
     const send = () => sendBoardOp(boardId, action);
 
-    if (DEBOUNCE_ACTIONS.has(action.type)) {
+    if (shouldDebounceBoardAction(action)) {
       const key = `${boardId}:${action.type}:${action.payload?.cardId || ''}:${action.payload?.listId || ''}`;
       setCollabPending(boardId, true);
+      debouncedActionsRef.current.set(key, action);
       if (debounceTimers.current.has(key)) clearTimeout(debounceTimers.current.get(key));
       debounceTimers.current.set(
         key,
         setTimeout(() => {
           debounceTimers.current.delete(key);
+          debouncedActionsRef.current.delete(key);
           send();
-        }, 400),
+        }, TEXT_DEBOUNCE_MS),
       );
       return;
     }
@@ -189,9 +228,11 @@ export function BoardCollabProvider({ children }) {
       }
     }
 
-    if (!live) {
+    if (live && isImmediateBoardAction(action)) {
       persistBoard(boardId, { force: true, ensureSave: true });
-    } else {
+    } else if (!live && !joiningActiveBoard) {
+      persistBoard(boardId, { force: true, ensureSave: true });
+    } else if (live && shouldDebounceBoardAction(action)) {
       persistBoard(boardId, { force: false });
     }
   }, [
@@ -224,6 +265,7 @@ export function BoardCollabProvider({ children }) {
     activeBoardId,
     setActiveBoardId,
     setBoardRoomReady,
+    isBoardRoomReady,
   }), [
     collabDispatch,
     collabDispatchForBoard,
@@ -231,6 +273,7 @@ export function BoardCollabProvider({ children }) {
     activeBoardId,
     setActiveBoardId,
     setBoardRoomReady,
+    isBoardRoomReady,
   ]);
 
   return (
@@ -280,6 +323,7 @@ export function useBoardCollabDispatch(boardId) {
       updateBoardMeta: () => {},
       connected: false,
       collabEnabled: false,
+      isBoardRoomReady: () => true,
     };
   }
 
@@ -290,5 +334,6 @@ export function useBoardCollabDispatch(boardId) {
     connected: ctx.connected,
     collabEnabled: ctx.collabEnabled,
     activeBoardId: ctx.activeBoardId,
+    isBoardRoomReady: ctx.isBoardRoomReady,
   };
 }

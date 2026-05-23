@@ -24,11 +24,13 @@ ON CONFLICT (id) DO NOTHING;
 
 -- 3. RLS para o bucket avatars
 --    Qualquer person autenticada pode ver (bucket é público, mas RLS ainda se aplica ao SELECT)
+DROP POLICY IF EXISTS "Avatar public read" ON storage.objects;
 CREATE POLICY "Avatar public read"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'avatars');
 
 --    O usuário só pode fazer upload/update dentro da sua própria pasta (userId/*)
+DROP POLICY IF EXISTS "Avatar owner upload" ON storage.objects;
 CREATE POLICY "Avatar owner upload"
   ON storage.objects FOR INSERT
   WITH CHECK (
@@ -36,6 +38,7 @@ CREATE POLICY "Avatar owner upload"
     AND auth.uid()::text = (storage.foldername(name))[1]
   );
 
+DROP POLICY IF EXISTS "Avatar owner update" ON storage.objects;
 CREATE POLICY "Avatar owner update"
   ON storage.objects FOR UPDATE
   USING (
@@ -43,6 +46,7 @@ CREATE POLICY "Avatar owner update"
     AND auth.uid()::text = (storage.foldername(name))[1]
   );
 
+DROP POLICY IF EXISTS "Avatar owner delete" ON storage.objects;
 CREATE POLICY "Avatar owner delete"
   ON storage.objects FOR DELETE
   USING (

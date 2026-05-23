@@ -902,10 +902,10 @@ export function AppProvider({ children }) {
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
             delete saveTimeoutRef.current[boardId];
             delete saveInProgressRef.current[boardId];
-        }, 400);
+        }, options.force ? 0 : 180);
 
         saveTimeoutRef.current = timeouts;
-    }, [userId, suppressRealtime, getFreshUserId]);
+    }, [userId, suppressRealtime, getFreshUserId, shouldPersistBoard]);
 
     // Salva todos os boards com debounce pendente imediatamente (usado pelo botão flutuante)
     const saveAllPending = useCallback(async () => {
@@ -1069,7 +1069,14 @@ export function AppProvider({ children }) {
                     isCollabEnabled() &&
                     collabActiveBoardIdRef.current &&
                     collabConnectedRef.current &&
-                    ['lists', 'cards', 'subtasks'].includes(table)
+                    [
+                        'lists',
+                        'cards',
+                        'subtasks',
+                        'boards',
+                        'board_members',
+                        'board_invitations',
+                    ].includes(table)
                 ) {
                     return;
                 }
@@ -1094,6 +1101,25 @@ export function AppProvider({ children }) {
 
                     if (cancelled || error) {
                         return;
+                    }
+                    const activeId = collabActiveBoardIdRef.current;
+                    const collabLive =
+                        isCollabEnabled()
+                        && activeId
+                        && collabConnectedRef.current;
+                    if (collabLive) {
+                        const localActive = stateRef.current.boards.find(
+                            (b) => b.id === activeId,
+                        );
+                        if (localActive) {
+                            dispatch({
+                                type: 'SET_BOARDS',
+                                payload: data.map((b) => (
+                                    b.id === activeId ? localActive : b
+                                )),
+                            });
+                            return;
+                        }
                     }
                     dispatch({ type: 'SET_BOARDS', payload: data });
                     // Sem localStorage — servidor é a fonte de verdade
