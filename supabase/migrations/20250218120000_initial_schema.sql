@@ -11,14 +11,17 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
 CREATE POLICY "Users can read own profile"
   ON public.profiles FOR SELECT
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile"
   ON public.profiles FOR UPDATE
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 CREATE POLICY "Users can insert own profile"
   ON public.profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
@@ -62,11 +65,13 @@ CREATE TABLE IF NOT EXISTS public.board_members (
 
 ALTER TABLE public.board_members ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can do all on own boards" ON public.boards;
 CREATE POLICY "Users can do all on own boards"
   ON public.boards FOR ALL
   USING (auth.uid() = owner_id)
   WITH CHECK (auth.uid() = owner_id);
 
+DROP POLICY IF EXISTS "Members can select and update shared boards" ON public.boards;
 CREATE POLICY "Members can select and update shared boards"
   ON public.boards FOR SELECT
   USING (
@@ -76,6 +81,7 @@ CREATE POLICY "Members can select and update shared boards"
     )
   );
 
+DROP POLICY IF EXISTS "Members can update shared boards" ON public.boards;
 CREATE POLICY "Members can update shared boards"
   ON public.boards FOR UPDATE
   USING (
@@ -85,6 +91,7 @@ CREATE POLICY "Members can update shared boards"
     )
   );
 
+DROP POLICY IF EXISTS "Board members can be read by board owner or members" ON public.board_members;
 CREATE POLICY "Board members can be read by board owner or members"
   ON public.board_members FOR SELECT
   USING (
@@ -92,6 +99,7 @@ CREATE POLICY "Board members can be read by board owner or members"
     OR user_id = auth.uid()
   );
 
+DROP POLICY IF EXISTS "Board owner can insert/update/delete members" ON public.board_members;
 CREATE POLICY "Board owner can insert/update/delete members"
   ON public.board_members FOR ALL
   USING (
@@ -108,6 +116,7 @@ CREATE TABLE IF NOT EXISTS public.lists (
 
 ALTER TABLE public.lists ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Lists follow board access" ON public.lists;
 CREATE POLICY "Lists follow board access"
   ON public.lists FOR ALL
   USING (
@@ -132,6 +141,7 @@ CREATE TABLE IF NOT EXISTS public.cards (
 
 ALTER TABLE public.cards ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Cards follow list/board access" ON public.cards;
 CREATE POLICY "Cards follow list/board access"
   ON public.cards FOR ALL
   USING (
@@ -152,6 +162,7 @@ CREATE TABLE IF NOT EXISTS public.subtasks (
 
 ALTER TABLE public.subtasks ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Subtasks follow card access" ON public.subtasks;
 CREATE POLICY "Subtasks follow card access"
   ON public.subtasks FOR ALL
   USING (
