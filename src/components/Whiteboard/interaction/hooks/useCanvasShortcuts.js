@@ -296,7 +296,7 @@ export function useCanvasShortcuts({
             if (state.selectedNodeIds.length !== 1) return;
 
             const node = state.nodes.find((n) => n.id === state.selectedNodeIds[0]);
-            if (!node || (node.type !== 'text' && node.type !== 'sticky_note')) return;
+            if (!node || (node.type !== 'text' && node.type !== 'sticky_note' && node.type !== 'link')) return;
 
             e.preventDefault();
             state.setEditingNodeId(node.id);

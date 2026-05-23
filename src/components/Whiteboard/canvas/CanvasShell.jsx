@@ -43,7 +43,8 @@ import { computeViewportToFitNodes } from '../interaction/viewport/viewportFit';
 import ShortcutsHelp from '../panels/ShortcutsHelp';
 import SnapGuidesOverlay from './overlays/SnapGuidesOverlay';
 import InspectorPanel from '../panels/InspectorPanel';
-import { computeSnapForDrag } from '../interaction/snap/whiteboardSnap';
+import { computeSnapForDrag, computeSnapForResize } from '../interaction/snap/whiteboardSnap';
+import { nodeToWorld, worldTopLeftToNodePatch, buildNodesById } from '../core/ops/whiteboardNodeOps';
 import { resolveDragNodeIds } from '../core/selection/whiteboardSelectionUtils';
 import { getNodeCreateOffset } from '../core/whiteboardCreateOffsets';
 import {
@@ -65,8 +66,9 @@ import { recordNodesMutation } from '../core/history/whiteboardHistory';
 import LeftToolbar from '../panels/LeftToolbar';
 import DraggablePanel from '../panels/DraggablePanel';
 import WhiteboardContextMenu from '../panels/WhiteboardContextMenu';
-import { Grid3X3, ZoomIn, ZoomOut, Ruler, HelpCircle, Focus } from 'lucide-react';
+import { Grid3X3, ZoomIn, ZoomOut, Ruler, Magnet, HelpCircle, Focus } from 'lucide-react';
 import { uuidv4 } from '../../../utils/uuid';
+import { applyPostCreateActions } from '../core/creation/postCreateActions';
 import './CanvasShell.css';
 
 export default function CanvasEngine({ spaceId, space, onViewportChange, onRegisterViewportControl }) {
@@ -84,6 +86,8 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     const openFilePickerRef = useRef(null);
     const nodeDragRef = useRef(null);
     const createDragRef = useRef(null);
+    /** Ctrl/Cmd mantido ao soltar o ponteiro → conserva a ferramenta de criação ativa. */
+    const keepCreationToolRef = useRef(false);
     const viewportRef = useRef(null);
     const lastPointerClientRef = useRef(null);
     const initialPan = { x: space?.panX ?? 0, y: space?.panY ?? 0 };
@@ -117,6 +121,8 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         setGridVisible,
         rulersVisible,
         setRulersVisible,
+        snapEnabled,
+        setSnapEnabled,
         inspectorPanelOpen,
         setInspectorPanelOpen,
         pushHistory,
@@ -171,12 +177,18 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             const box = worldBoxFromAnchor(drag.anchorWorld, currentWorld, CREATE_MIN_SIZE);
             const nodeType = creationToolToNodeType(drag.tool);
             if (!drag.nodeId) {
-                if (drag.creating) return;
-                drag.creating = true;
-                const id = await createNodeAt(nodeType, box.x, box.y, {}, { width: box.width, height: box.height });
-                drag.creating = false;
-                if (id) drag.nodeId = id;
-            } else {
+                if (!drag._initPromise) {
+                    drag._initPromise = createNodeAt(nodeType, box.x, box.y, {}, {
+                        width: box.width,
+                        height: box.height,
+                    }).then((id) => {
+                        if (id) drag.nodeId = id;
+                        return id;
+                    });
+                }
+                await drag._initPromise;
+            }
+            if (drag.nodeId) {
                 collabPatchNode(drag.nodeId, {
                     x: box.x,
                     y: box.y,
@@ -540,15 +552,28 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey, min: 0 };
                 const newBox = computeResizeBounds(origin, handle, world, modifiers);
                 const state = useWhiteboardStore.getState();
+                const { box: snappedBox, guides } = computeSnapForResize({
+                    box: newBox,
+                    handle,
+                    nodes: state.nodes,
+                    movingIds: nodeIds,
+                    zoom: viewportRef.current?.zoom ?? 1,
+                    pageId: state.activePageId,
+                    fromCenter: modifiers.altKey,
+                    originForAspect: modifiers.shiftKey ? origin : null,
+                    enabled: state.snapEnabled,
+                });
+                setSnapGuides(guides);
                 const patches = computeMultiResizePatches(
                     beforeSnapshots,
                     state.nodes,
                     origin,
-                    newBox
+                    snappedBox
                 );
                 if (patches.length) collabPatchNodes(patches);
             };
             const onUp = () => {
+                setSnapGuides([]);
                 const before = resizeState.beforeSnapshots ?? [];
                 const after = captureNodesSnapshot(useWhiteboardStore, nodeIds);
                 const changed =
@@ -581,13 +606,52 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             if (!rect || !viewportRef.current) return;
             const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
             const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey, min: 0 };
-            const patch =
-                mode === 'skew' || e.ctrlKey
-                    ? computeSkewResizeBounds(origin, handle, world, modifiers)
-                    : computeResizeBounds(origin, handle, world, modifiers);
-            collabPatchNode(nodeId, patch);
+            if (mode === 'skew' || e.ctrlKey) {
+                setSnapGuides([]);
+                const patch = computeSkewResizeBounds(origin, handle, world, modifiers);
+                collabPatchNode(nodeId, patch);
+                return;
+            }
+            const patch = computeResizeBounds(origin, handle, world, modifiers);
+            const state = useWhiteboardStore.getState();
+            const node = state.nodes.find((n) => n.id === nodeId);
+            if (!node) return;
+            const byId = buildNodesById(state.nodes);
+            const simulated = { ...node, ...patch };
+            const worldPos = nodeToWorld(simulated, byId);
+            const worldTop = nodeToWorld({ ...node, x: origin.x, y: origin.y }, byId);
+            const worldOrigin = {
+                x: worldTop.x,
+                y: worldTop.y,
+                width: origin.width ?? 0,
+                height: origin.height ?? 0,
+            };
+            const worldBox = {
+                x: worldPos.x,
+                y: worldPos.y,
+                width: patch.width ?? 0,
+                height: patch.height ?? 0,
+            };
+            const { box: snappedBox, guides } = computeSnapForResize({
+                box: worldBox,
+                handle,
+                nodes: state.nodes,
+                movingIds: [nodeId],
+                zoom: viewportRef.current?.zoom ?? 1,
+                pageId: state.activePageId,
+                fromCenter: modifiers.altKey,
+                originForAspect: modifiers.shiftKey ? worldOrigin : null,
+                enabled: state.snapEnabled,
+            });
+            setSnapGuides(guides);
+            const finalPatch = worldTopLeftToNodePatch(node, snappedBox.x, snappedBox.y, state.nodes, {
+                width: snappedBox.width,
+                height: snappedBox.height,
+            });
+            collabPatchNode(nodeId, finalPatch);
         };
         const onUp = () => {
+            setSnapGuides([]);
             const before = resizeState.beforeNode;
             const afterSnap = captureNodesSnapshot(useWhiteboardStore, [nodeId])[0];
             if (before && afterSnap?.node && JSON.stringify(before) !== JSON.stringify(afterSnap.node)) {
@@ -752,6 +816,9 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         const showColorPicker = st.nodes.some(
             (n) => prunedIds.includes(n.id) && COLORABLE_TYPES.has(n.type)
         );
+        const showDownloadImage = st.nodes.some(
+            (n) => prunedIds.includes(n.id) && n.type === 'image' && n.data?.url
+        );
         setContextMenuPosition({
             left: clientX,
             top: clientY,
@@ -759,7 +826,26 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             canGroup,
             canUngroup,
             showColorPicker,
+            showDownloadImage,
         });
+    }, []);
+
+    const handleDownloadSelectedImages = useCallback(() => {
+        const st = useWhiteboardStore.getState();
+        const ids = resolveDragNodeIds(st.selectedNodeIds, st.nodes);
+        const images = st.nodes.filter(
+            (n) => ids.includes(n.id) && n.type === 'image' && n.data?.url
+        );
+        for (const node of images) {
+            const a = document.createElement('a');
+            a.href = node.data.url;
+            a.download = node.data.filename || 'imagem';
+            a.rel = 'noopener noreferrer';
+            a.target = '_blank';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }
     }, []);
 
     const handleDeleteSelection = useCallback(() => {
@@ -800,12 +886,16 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     );
 
     const handleNodeContextMenu = useCallback(
-        (e) => {
+        (e, nodeId) => {
             e.preventDefault();
             e.stopPropagation();
+            const st = useWhiteboardStore.getState();
+            if (!st.selectedNodeIds.includes(nodeId)) {
+                setSelection([nodeId]);
+            }
             openSelectionContextMenu(e.clientX, e.clientY);
         },
-        [openSelectionContextMenu]
+        [openSelectionContextMenu, setSelection]
     );
 
     const handleNodePointerDown = useCallback(
@@ -884,6 +974,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 totalDy,
                 zoom: vp?.zoom ?? 1,
                 pageId: state.activePageId,
+                enabled: state.snapEnabled,
             });
             setSnapGuides(snap.guides);
             const patches = ids.map((id) => {
@@ -951,16 +1042,71 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         };
     }, [collabPatchNode, collabPatchNodes]);
 
-    const handleDoubleClick = useCallback(
-        async (e) => {
-            if (!isCanvasBackground(e) || !spaceId) return;
-            e.preventDefault();
-            const rect = containerRef.current?.getBoundingClientRect();
-            if (!rect) return;
-            const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportForChildren);
-            await createNodeAt('sticky_note', world.x - 75, world.y - 50);
+    const finalizeCreateDrag = useCallback(
+        async (drag, e, rect) => {
+            if (!drag?.anchorWorld || drag.finalized || !rect || !viewportForChildren) return;
+            const dragStart = drag.startScreen;
+            const insideViewport =
+                dragStart.x >= rect.left &&
+                dragStart.x <= rect.right &&
+                dragStart.y >= rect.top &&
+                dragStart.y <= rect.bottom;
+            if (!insideViewport) {
+                drag.finalized = true;
+                createDragRef.current = null;
+                setCreatePreview(null);
+                return;
+            }
+
+            const currentWorld = screenToWorldWithContainer(
+                e.clientX,
+                e.clientY,
+                rect,
+                viewportForChildren
+            );
+            const dist = Math.hypot(
+                e.clientX - drag.startScreen.x,
+                e.clientY - drag.startScreen.y
+            );
+            const nodeType = creationToolToNodeType(drag.tool);
+
+            if (dist < CREATE_DRAG_THRESHOLD_PX) {
+                const defaults = getDefaultNodePayload(
+                    nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType,
+                    drag.anchorWorld.x,
+                    drag.anchorWorld.y
+                );
+                defaults.type = nodeType;
+                const id = await createNodeAt(
+                    nodeType,
+                    drag.anchorWorld.x,
+                    drag.anchorWorld.y,
+                    {},
+                    { width: defaults.width, height: defaults.height }
+                );
+                if (id) {
+                    applyPostCreateActions({
+                        nodeId: id,
+                        nodeType,
+                        keepCreationTool: keepCreationToolRef.current,
+                    });
+                }
+            } else {
+                await applyCreateDragBox(drag, currentWorld);
+                if (drag.nodeId) {
+                    applyPostCreateActions({
+                        nodeId: drag.nodeId,
+                        nodeType,
+                        keepCreationTool: keepCreationToolRef.current,
+                    });
+                }
+            }
+
+            drag.finalized = true;
+            createDragRef.current = null;
+            setCreatePreview(null);
         },
-        [spaceId, viewportForChildren, createNodeAt]
+        [viewportForChildren, createNodeAt, applyCreateDragBox]
     );
 
     const handlePointerUp = useCallback(
@@ -969,6 +1115,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
             }
             if (e.button === 0) {
+                keepCreationToolRef.current = e.ctrlKey || e.metaKey;
                 const rect = containerRef.current?.getBoundingClientRect();
                 const controlsEl = containerRef.current?.querySelector('.whiteboard-viewport-controls');
                 const controlsRect = controlsEl?.getBoundingClientRect?.();
@@ -985,62 +1132,39 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     createDragRef.current = null;
                     setCreatePreview(null);
                 } else if (drag?.anchorWorld && rect && viewportForChildren && !isClickInControls) {
-                    const insideViewport =
-                        dragStart.x >= rect.left &&
-                        dragStart.x <= rect.right &&
-                        dragStart.y >= rect.top &&
-                        dragStart.y <= rect.bottom;
-                    if (insideViewport) {
-                        const currentWorld = screenToWorldWithContainer(
-                            e.clientX,
-                            e.clientY,
-                            rect,
-                            viewportForChildren
-                        );
-                        const dist = Math.hypot(
-                            e.clientX - drag.startScreen.x,
-                            e.clientY - drag.startScreen.y
-                        );
-                        if (dist < CREATE_DRAG_THRESHOLD_PX) {
+                    const stillDragging =
+                        e.type === 'pointerleave' && (e.buttons & 1);
+                    if (!stillDragging) {
+                        await finalizeCreateDrag(drag, e, rect);
+                    }
+                } else if (drag?.clickOnly && !drag?.finalized && rect && viewportForChildren && !isClickInControls) {
+                    const stillDraggingClick =
+                        e.type === 'pointerleave' && (e.buttons & 1);
+                    if (!stillDraggingClick) {
+                        const { x: sx, y: sy } = drag.startScreen;
+                        const insideViewport =
+                            sx >= rect.left && sx <= rect.right && sy >= rect.top && sy <= rect.bottom;
+                        const clickDist = Math.hypot(e.clientX - sx, e.clientY - sy);
+                        if (insideViewport && clickDist < CREATE_DRAG_THRESHOLD_PX) {
+                            const w1 = screenToWorldWithContainer(sx, sy, rect, viewportForChildren);
                             const nodeType = creationToolToNodeType(drag.tool);
-                            const defaults = getDefaultNodePayload(
-                                nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType,
-                                drag.anchorWorld.x,
-                                drag.anchorWorld.y
-                            );
+                            const defaultKey =
+                                nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType;
+                            const defaults = getDefaultNodePayload(defaultKey, w1.x, w1.y);
                             defaults.type = nodeType;
-                            const id = await createNodeAt(
-                                nodeType,
-                                drag.anchorWorld.x,
-                                drag.anchorWorld.y,
-                                {},
-                                { width: defaults.width, height: defaults.height }
-                            );
-                            if (id) setSelection([id]);
-                        } else {
-                            if (!drag.nodeId) {
-                                await applyCreateDragBox(drag, currentWorld);
+                            const [ox, oy] = getNodeCreateOffset(drag.tool || nodeType);
+                            const id = await createNodeAt(nodeType, w1.x - ox, w1.y - oy);
+                            if (id) {
+                                applyPostCreateActions({
+                                    nodeId: id,
+                                    nodeType,
+                                    keepCreationTool: keepCreationToolRef.current,
+                                });
                             }
-                            if (drag.nodeId) setSelection([drag.nodeId]);
                         }
+                        drag.finalized = true;
+                        createDragRef.current = null;
                     }
-                    createDragRef.current = null;
-                    setCreatePreview(null);
-                } else if (drag?.clickOnly && rect && viewportForChildren && !isClickInControls) {
-                    const { x: sx, y: sy } = drag.startScreen;
-                    const insideViewport =
-                        sx >= rect.left && sx <= rect.right && sy >= rect.top && sy <= rect.bottom;
-                    if (insideViewport) {
-                        const w1 = screenToWorldWithContainer(sx, sy, rect, viewportForChildren);
-                        const nodeType = creationToolToNodeType(drag.tool);
-                        const defaultKey =
-                            nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType;
-                        const defaults = getDefaultNodePayload(defaultKey, w1.x, w1.y);
-                        defaults.type = nodeType;
-                        const [ox, oy] = getNodeCreateOffset(drag.tool || nodeType);
-                        await createNodeAt(nodeType, w1.x - ox, w1.y - oy);
-                    }
-                    createDragRef.current = null;
                 } else if (selectionBox) {
                     const w = Math.abs(selectionBox.current.x - selectionBox.start.x);
                     const h = Math.abs(selectionBox.current.y - selectionBox.start.y);
@@ -1085,12 +1209,15 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             }
             viewportState.handleMouseUp();
         },
-        [selectionBox, viewportForChildren, nodes, setSelection, activeTool, createNodeAt, applyCreateDragBox]
+        [selectionBox, viewportForChildren, nodes, setSelection, activeTool, createNodeAt, finalizeCreateDrag]
     );
 
     const handlePointerMove = useCallback(
         (e) => {
             lastPointerClientRef.current = { x: e.clientX, y: e.clientY };
+            if (createDragRef.current) {
+                keepCreationToolRef.current = e.ctrlKey || e.metaKey;
+            }
             const drag = createDragRef.current;
             if (selectionBox) {
                 setSelectionBox((prev) => (prev ? { ...prev, current: { x: e.clientX, y: e.clientY } } : null));
@@ -1149,8 +1276,15 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     );
 
     const handleContextMenuCreate = useCallback(
-        (type, worldX, worldY) => {
-            createNodeAt(type, worldX, worldY);
+        async (type, worldX, worldY) => {
+            const id = await createNodeAt(type, worldX, worldY);
+            if (id) {
+                applyPostCreateActions({
+                    nodeId: id,
+                    nodeType: type,
+                    keepCreationTool: false,
+                });
+            }
             setContextMenuPosition(null);
         },
         [createNodeAt]
@@ -1192,7 +1326,14 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             const toolType = e.dataTransfer.getData('application/x-whiteboard-tool');
             if (toolType && NODE_TYPES_ALLOWED.includes(toolType)) {
                 const [ox, oy] = getNodeCreateOffset(toolType);
-                createNodeAt(toolType, world.x - ox, world.y - oy);
+                const id = await createNodeAt(toolType, world.x - ox, world.y - oy);
+                if (id) {
+                    applyPostCreateActions({
+                        nodeId: id,
+                        nodeType: toolType,
+                        keepCreationTool: e.ctrlKey || e.metaKey,
+                    });
+                }
                 return;
             }
             const files = e.dataTransfer.files;
@@ -1269,7 +1410,9 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerLeave={handlePointerUp}
-                onDoubleClick={handleDoubleClick}
+                onDragStart={(e) => {
+                    if (e.target?.closest?.('.whiteboard-node-wrapper')) e.preventDefault();
+                }}
                 onContextMenu={handleContextMenu}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
@@ -1340,6 +1483,18 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     </button>
                     <button
                         type="button"
+                        title={snapEnabled ? 'Desativar imã (alinhamento)' : 'Ativar imã (alinhamento)'}
+                        className={snapEnabled ? 'active' : ''}
+                        onClick={() => {
+                            const next = !snapEnabled;
+                            setSnapEnabled(next);
+                            if (!next) setSnapGuides([]);
+                        }}
+                    >
+                        <Magnet size={18} />
+                    </button>
+                    <button
+                        type="button"
                         title="Diminuir zoom"
                         onClick={() => {
                             const { x, y } = getZoomFocalClient();
@@ -1403,7 +1558,9 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 onDuplicate={handleDuplicate}
                 onDelete={handleDeleteSelection}
                 onColorChange={handleSelectionColor}
+                onDownloadImage={handleDownloadSelectedImages}
                 showColorPicker={contextMenuPosition?.showColorPicker}
+                showDownloadImage={contextMenuPosition?.showDownloadImage}
             />
         </>
     );

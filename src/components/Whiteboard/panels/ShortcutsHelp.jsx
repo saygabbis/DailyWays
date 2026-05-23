@@ -34,7 +34,8 @@ const SECTIONS = [
     {
         title: 'Alinhamento',
         items: [
-            ['Arrastar', 'Imãs magnéticos (bordas e centros)'],
+            ['Arrastar / redimensionar', 'Imã — alinha a outros elementos'],
+            ['Barra do canvas', 'Ícone imã — ativar/desativar alinhamento'],
             ['G', 'Mostrar/ocultar grade'],
         ],
     },
@@ -71,6 +72,8 @@ const SECTIONS = [
             ['P', 'Desenho'],
             ['M', 'Comentário'],
             ['?', 'Esta ajuda'],
+            ['Após criar elemento', 'Volta ao cursor (exceto com Ctrl)'],
+            ['Ctrl + criar', 'Mantém a ferramenta ativa para criar vários'],
         ],
     },
 ];

@@ -42,6 +42,28 @@
   max-height: 100%;
 }
 
+/* Space / whiteboard: altura fixa ao viewport; scroll só no painel lateral */
+.app-main:has(.space-view-container) {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+.app-content:has(.space-view-container) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-content .space-view-container {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+}
+
 .boards-load-error-banner {
   display: flex;
   flex-wrap: wrap;
@@ -137,6 +159,18 @@
     flex: 1;
     min-height: 0;
     height: 100%;
+    max-height: 100%;
+  }
+
+  .app-main.has-mobile-nav .app-content:has(.space-view-container) {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .app-main.has-mobile-nav .app-content .space-view-container {
+    flex: 1;
+    min-height: 0;
     max-height: 100%;
   }
 }

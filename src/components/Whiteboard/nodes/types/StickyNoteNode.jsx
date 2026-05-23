@@ -4,11 +4,14 @@ import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
 import { useCollabPatch } from '../../../../collab/whiteboard/CollabOpsContext.jsx';
 import { recordNodesMutation } from '../../core/history/whiteboardHistory';
 import { contrastingTextColor } from '../../../../utils/contrastingTextColor';
+import { getTextStyleFromNode, textStyleToCss } from '../../shared/textStyle';
 
 export default function StickyNoteNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const text = node.data?.text ?? '';
     const color = node.style?.backgroundColor ?? '#fef08a';
-    const textColor = node.style?.color ?? contrastingTextColor(color);
+    const textStyle = getTextStyleFromNode(node);
+    const textColor = textStyle.color ?? contrastingTextColor(color);
+    const typographyCss = textStyleToCss({ ...textStyle, color: textColor });
     const { editingNodeId, editTypingSeed, setEditingNodeId, setEditTypingSeed } = useWhiteboardStore();
     const { collabPatchNode } = useCollabPatch();
     const isEditing = editingNodeId === node.id;
@@ -57,7 +60,7 @@ export default function StickyNoteNode({ node, onNodePointerDown, onNodeContextM
                         border: 'none',
                         background: 'transparent',
                         padding: 8,
-                        color: textColor,
+                        ...typographyCss,
                     }}
                 />
             </div>

@@ -14,10 +14,18 @@ import {
     AlignStartVertical,
     AlignCenterVertical,
     AlignEndVertical,
+    AlignJustify,
     Focus,
     Layers,
     SlidersHorizontal,
 } from 'lucide-react';
+import {
+    FONT_FAMILY_OPTIONS,
+    FONT_WEIGHT_OPTIONS,
+    TEXT_ALIGN_OPTIONS,
+    TEXT_STYLE_NODE_TYPES,
+    getTextStyleFromNode,
+} from '../shared/textStyle';
 import '../styles/InspectorPanel.css';
 
 const TYPE_LABELS = {
@@ -54,6 +62,127 @@ function NumField({ label, value, onChange, onCommit, min }) {
                 min={min}
             />
         </label>
+    );
+}
+
+const TEXT_ALIGN_ICONS = {
+    left: AlignLeft,
+    center: AlignCenter,
+    right: AlignRight,
+    justify: AlignJustify,
+};
+
+function TextDesignSection({ node }) {
+    const { collabPatchNode } = useCollabPatch();
+    const style = getTextStyleFromNode(node);
+
+    const patchStyle = (partial) => {
+        patchNodeWithHistory(useWhiteboardStore, collabPatchNode, node.id, {
+            style: { ...(node.style || {}), ...partial },
+        });
+    };
+
+    return (
+        <div className="space-inspector-section">
+            <div className="space-inspector-section-title">Tipografia</div>
+            <label className="space-inspector-field space-inspector-field--full">
+                <span>Fonte</span>
+                <select
+                    value={style.fontFamily}
+                    onChange={(e) => patchStyle({ fontFamily: e.target.value })}
+                >
+                    {FONT_FAMILY_OPTIONS.map((opt) => (
+                        <option key={opt.value || 'default'} value={opt.value}>
+                            {opt.label}
+                        </option>
+                    ))}
+                </select>
+            </label>
+            <div className="space-inspector-grid">
+                <label className="space-inspector-field">
+                    <span>Cor</span>
+                    <input
+                        type="color"
+                        className="space-inspector-color-input"
+                        value={style.color?.startsWith('#') ? style.color : '#111827'}
+                        onChange={(e) => patchStyle({ color: e.target.value })}
+                    />
+                </label>
+                <label className="space-inspector-field">
+                    <span>Tamanho (px)</span>
+                    <input
+                        type="number"
+                        min={8}
+                        max={200}
+                        value={style.fontSize}
+                        onChange={(e) => {
+                            const v = parseFloat(e.target.value);
+                            if (!Number.isNaN(v)) patchStyle({ fontSize: v });
+                        }}
+                    />
+                </label>
+                <label className="space-inspector-field">
+                    <span>Espaçamento vertical</span>
+                    <input
+                        type="number"
+                        min={0.8}
+                        max={4}
+                        step={0.05}
+                        value={style.lineHeight}
+                        onChange={(e) => {
+                            const v = parseFloat(e.target.value);
+                            if (!Number.isNaN(v)) patchStyle({ lineHeight: v });
+                        }}
+                    />
+                </label>
+                <label className="space-inspector-field">
+                    <span>Espaçamento horizontal (px)</span>
+                    <input
+                        type="number"
+                        min={-2}
+                        max={32}
+                        step={0.5}
+                        value={style.letterSpacing}
+                        onChange={(e) => {
+                            const v = parseFloat(e.target.value);
+                            if (!Number.isNaN(v)) patchStyle({ letterSpacing: v });
+                        }}
+                    />
+                </label>
+                <label className="space-inspector-field">
+                    <span>Espessura</span>
+                    <select
+                        value={String(style.fontWeight)}
+                        onChange={(e) => patchStyle({ fontWeight: Number(e.target.value) })}
+                    >
+                        {FONT_WEIGHT_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+            </div>
+            <div className="space-inspector-section-title space-inspector-section-title--sub">
+                Alinhamento de texto
+            </div>
+            <div className="space-inspector-align-row space-inspector-text-align-row">
+                {TEXT_ALIGN_OPTIONS.map((opt) => {
+                    const Icon = TEXT_ALIGN_ICONS[opt.value];
+                    return (
+                        <button
+                            key={opt.value}
+                            type="button"
+                            title={opt.label}
+                            className={style.textAlign === opt.value ? 'active' : ''}
+                            onClick={() => patchStyle({ textAlign: opt.value })}
+                        >
+                            <Icon size={16} />
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
     );
 }
 
@@ -170,6 +299,10 @@ function DesignTab({ selectedNodes, single, nodes }) {
                     </button>
                 </div>
             </div>
+
+            {single && TEXT_STYLE_NODE_TYPES.has(single.type) && (
+                <TextDesignSection node={single} />
+            )}
 
             {single && (
                 <>

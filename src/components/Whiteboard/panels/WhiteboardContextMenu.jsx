@@ -12,6 +12,7 @@ import {
     Trash2,
     BringToFront,
     SendToBack,
+    Download,
 } from 'lucide-react';
 import { getNodeCreateOffset } from '../core/whiteboardCreateOffsets';
 import '../styles/WhiteboardContextMenu.css';
@@ -38,7 +39,9 @@ export default function WhiteboardContextMenu({
     onDuplicate,
     onDelete,
     onColorChange,
+    onDownloadImage,
     showColorPicker,
+    showDownloadImage,
 }) {
     useEffect(() => {
         const onGlobalClick = (e) => {
@@ -99,6 +102,19 @@ export default function WhiteboardContextMenu({
                     </button>
                 )}
                 {(canGroup || canUngroup) && <div className="whiteboard-context-menu-sep" />}
+                {showDownloadImage && (
+                    <button
+                        type="button"
+                        className="whiteboard-context-menu-item"
+                        onClick={() => {
+                            onDownloadImage?.();
+                            onClose?.();
+                        }}
+                    >
+                        <Download size={16} />
+                        <span>Baixar imagem</span>
+                    </button>
+                )}
                 <button
                     type="button"
                     className="whiteboard-context-menu-item"

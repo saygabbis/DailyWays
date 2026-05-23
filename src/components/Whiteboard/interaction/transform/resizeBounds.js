@@ -171,3 +171,80 @@ export function computeResizeBounds(origin, handle, world, modifiers = {}) {
 
     return { x, y, width: w, height: h };
 }
+
+/**
+ * Reaplica proporção fixa após snap (Shift) — mesma âncora que computeResizeBounds.
+ * @param {{ x, y, width, height }} box — caixa já com snap (mesmo espaço de coordenadas que origin)
+ * @param {{ x, y, width, height }} origin — caixa no início do resize
+ */
+export function enforceResizeAspectRatio(box, origin, handle, altKey = false) {
+    const w0 = Math.max(origin.width || 0, 0);
+    const h0 = Math.max(origin.height || 0, 0);
+    if (w0 <= 0 || h0 <= 0) return box;
+
+    const aspect = w0 / h0;
+    if (!Number.isFinite(aspect) || aspect <= 0) return box;
+
+    const min = 0;
+    let { x, y, width: w, height: h } = box;
+    const right = origin.x + w0;
+    const bottom = origin.y + h0;
+    const cx = origin.x + w0 / 2;
+    const cy = origin.y + h0 / 2;
+    const isEdge = handle === 'n' || handle === 's' || handle === 'e' || handle === 'w';
+
+    if (isEdge) {
+        if (handle === 'e' || handle === 'w') {
+            h = Math.max(min, w / aspect);
+            if (altKey) {
+                x = cx - w / 2;
+                y = cy - h / 2;
+            } else {
+                y = bottom - h;
+            }
+        } else {
+            w = Math.max(min, h * aspect);
+            if (altKey) {
+                x = cx - w / 2;
+                y = cy - h / 2;
+            } else {
+                x = right - w;
+            }
+        }
+    } else {
+        const dw = Math.abs(w - w0);
+        const dh = Math.abs(h - h0);
+        if (dw >= dh) {
+            h = Math.max(min, w / aspect);
+        } else {
+            w = Math.max(min, h * aspect);
+        }
+        if (altKey) {
+            x = cx - w / 2;
+            y = cy - h / 2;
+        } else {
+            switch (handle) {
+                case 'se':
+                    x = origin.x;
+                    y = origin.y;
+                    break;
+                case 'sw':
+                    x = right - w;
+                    y = origin.y;
+                    break;
+                case 'ne':
+                    x = origin.x;
+                    y = bottom - h;
+                    break;
+                case 'nw':
+                    x = right - w;
+                    y = bottom - h;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    return { x, y, width: Math.max(min, w), height: Math.max(min, h) };
+}

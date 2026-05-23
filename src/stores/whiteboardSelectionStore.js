@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 const GRID_STORAGE_KEY = 'dailyways_grid_visible';
 const RULERS_STORAGE_KEY = 'dailyways_rulers_visible';
+const SNAP_STORAGE_KEY = 'dailyways_snap_enabled';
 const INSPECTOR_PANEL_KEY = 'dailyways_inspector_panel_open';
 const PROPS_PANEL_KEY = 'dailyways_props_panel_open';
 const INSPECTOR_TAB_KEY = 'dailyways_inspector_tab';
@@ -16,6 +17,14 @@ function loadRulersVisible() {
     } catch {
         return false;
     }
+}
+
+function loadSnapEnabled() {
+    try {
+        const v = localStorage.getItem(SNAP_STORAGE_KEY);
+        if (v !== null) return v === 'true';
+    } catch {}
+    return true;
 }
 
 function loadInspectorTab() {
@@ -49,6 +58,7 @@ export const useWhiteboardSelectionStore = create((set, get) => ({
     inspectorTab: loadInspectorTab(),
     gridVisible: loadGridVisible(),
     rulersVisible: loadRulersVisible(),
+    snapEnabled: loadSnapEnabled(),
     viewport: { panX: 0, panY: 0, zoom: 1 },
     lastCreatedNodeId: null,
 
@@ -86,6 +96,13 @@ export const useWhiteboardSelectionStore = create((set, get) => ({
             localStorage.setItem(RULERS_STORAGE_KEY, rulersVisible ? 'true' : 'false');
         } catch {}
         set({ rulersVisible });
+    },
+
+    setSnapEnabled: (snapEnabled) => {
+        try {
+            localStorage.setItem(SNAP_STORAGE_KEY, snapEnabled ? 'true' : 'false');
+        } catch {}
+        set({ snapEnabled });
     },
 
     setClipboardNodes: (clipboardNodes) => set({

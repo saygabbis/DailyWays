@@ -37,7 +37,7 @@ export default function BaseNode({ node, children, onNodePointerDown, onNodeCont
     const handleDoubleClick = useCallback(
         (e) => {
             e.stopPropagation();
-            if (node.type === 'text' || node.type === 'sticky_note') {
+            if (node.type === 'text' || node.type === 'sticky_note' || node.type === 'link') {
                 setEditingNodeId(node.id);
             }
         },
@@ -47,6 +47,7 @@ export default function BaseNode({ node, children, onNodePointerDown, onNodeCont
     return (
         <div
             ref={ref}
+            data-node-id={node.id}
             className={`whiteboard-node-wrapper ${isSelected ? 'selected' : ''} ${isRemoteSelected ? 'whiteboard-node--remote-selected' : ''}`}
             style={{
                 position: 'absolute',
@@ -61,6 +62,7 @@ export default function BaseNode({ node, children, onNodePointerDown, onNodeCont
             onPointerDown={handlePointerDown}
             onContextMenu={handleContextMenu}
             onDoubleClick={handleDoubleClick}
+            onDragStart={(e) => e.preventDefault()}
         >
             <div
                 className="whiteboard-node-inner"

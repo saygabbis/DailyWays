@@ -44,7 +44,7 @@ export default function CommentNode({ node, onNodePointerDown, onNodeContextMenu
                         onChange={(e) => setEditValue(e.target.value)}
                         onBlur={handleBlur}
                         autoFocus
-                        style={{ width: '100%', height: '100%', resize: 'none', border: '1px solid #facc15', padding: 4, fontSize: 12 }}
+                        style={{ width: '100%', height: '100%', resize: 'none', padding: 0, fontSize: 12 }}
                     />
                 ) : (
                     message

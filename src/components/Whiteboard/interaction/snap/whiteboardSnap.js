@@ -1,4 +1,5 @@
 import { buildNodesById, nodeToWorld } from '../../core/ops/whiteboardNodeOps';
+import { enforceResizeAspectRatio } from '../transform/resizeBounds';
 import { getSelectionWorldBounds } from '../../core/align/whiteboardAlign';
 import { getNodePageId } from '../../core/pages/whiteboardPages';
 import { isDescendantOf } from '../../core/layers/layerTreeUtils';
@@ -69,7 +70,12 @@ export function computeSnapForDrag({
     totalDy,
     zoom = 1,
     pageId,
+    enabled = true,
 }) {
+    if (!enabled) {
+        return { dx: totalDx, dy: totalDy, guides: [] };
+    }
+
     const prunedIds = new Set(movingIds);
     const movingNodes = (initialSnapshots ?? [])
         .map((s) => s.node)
@@ -134,4 +140,114 @@ export function computeSnapForDrag({
         dy: totalDy + ySnap.delta,
         guides,
     };
+}
+
+function getResizeMovingEdges(handle, box, fromCenter) {
+    const { x, y, width: w, height: h } = box;
+    const edgesX = [];
+    const edgesY = [];
+    if (fromCenter) {
+        edgesX.push({ axis: 'x', value: x + w / 2, role: 'center' });
+        edgesY.push({ axis: 'y', value: y + h / 2, role: 'center' });
+        return { edgesX, edgesY };
+    }
+    const leftHandles = new Set(['nw', 'sw', 'w']);
+    const rightHandles = new Set(['ne', 'se', 'e']);
+    const topHandles = new Set(['nw', 'ne', 'n']);
+    const bottomHandles = new Set(['sw', 'se', 's']);
+    if (leftHandles.has(handle)) edgesX.push({ axis: 'x', value: x, role: 'left' });
+    if (rightHandles.has(handle)) edgesX.push({ axis: 'x', value: x + w, role: 'right' });
+    if (topHandles.has(handle)) edgesY.push({ axis: 'y', value: y, role: 'top' });
+    if (bottomHandles.has(handle)) edgesY.push({ axis: 'y', value: y + h, role: 'bottom' });
+    return { edgesX, edgesY };
+}
+
+function applyResizeSnapDelta(box, handle, xSnap, ySnap, fromCenter, min = 0) {
+    let { x, y, width: w, height: h } = box;
+    const right = x + w;
+    const bottom = y + h;
+
+    if (xSnap.delta !== 0) {
+        if (fromCenter) {
+            x += xSnap.delta;
+        } else if (['nw', 'sw', 'w'].includes(handle)) {
+            x += xSnap.delta;
+            w = Math.max(min, right - x);
+        } else {
+            w = Math.max(min, w + xSnap.delta);
+        }
+    }
+
+    if (ySnap.delta !== 0) {
+        if (fromCenter) {
+            y += ySnap.delta;
+        } else if (['nw', 'ne', 'n'].includes(handle)) {
+            y += ySnap.delta;
+            h = Math.max(min, bottom - y);
+        } else {
+            h = Math.max(min, h + ySnap.delta);
+        }
+    }
+
+    return { x, y, width: Math.max(min, w), height: Math.max(min, h) };
+}
+
+/**
+ * Imãs ao redimensionar (bordas que se movem com o handle).
+ * @param {{ x, y, width, height }} box — caixa em coordenadas mundo
+ * @returns {{ box: typeof box, guides: Array<{ axis: 'x'|'y', pos: number }> }}
+ */
+export function computeSnapForResize({
+    box,
+    handle,
+    nodes,
+    movingIds,
+    zoom = 1,
+    pageId,
+    fromCenter = false,
+    min = 0,
+    /** Caixa inicial do resize (mesmo espaço que `box`); com Shift reaplica proporção após snap */
+    originForAspect = null,
+    enabled = true,
+}) {
+    const prunedIds = new Set(movingIds);
+    if (!enabled || !box || !handle || prunedIds.size === 0) {
+        return { box, guides: [] };
+    }
+
+    const byId = buildNodesById(nodes);
+    const threshold = 8 / Math.max(zoom, 0.15);
+
+    const excludeIds = new Set(prunedIds);
+    for (const id of prunedIds) {
+        for (const n of nodes) {
+            if (isDescendantOf(id, n.id, nodes)) excludeIds.add(n.id);
+        }
+    }
+
+    const others = nodes.filter(
+        (n) =>
+            getNodePageId(n) === pageId &&
+            !excludeIds.has(n.id) &&
+            (n.width ?? 0) > 0 &&
+            (n.height ?? 0) > 0
+    );
+
+    const targets = collectSnapTargets(others, byId, excludeIds);
+    const { edgesX, edgesY } = getResizeMovingEdges(handle, box, fromCenter);
+
+    const xSnap = snapScalar(edgesX, targets, threshold);
+    const ySnap = snapScalar(edgesY, targets, threshold);
+
+    const guides = [];
+    if (xSnap.guide) guides.push(xSnap.guide);
+    if (ySnap.guide) guides.push(ySnap.guide);
+
+    let snapped = applyResizeSnapDelta(box, handle, xSnap, ySnap, fromCenter, min);
+
+    if (originForAspect) {
+        snapped = enforceResizeAspectRatio(snapped, originForAspect, handle, fromCenter);
+    }
+
+    return { box: snapped, guides };
 }
