@@ -12,6 +12,7 @@ import {
   boardContentCursorToViewport,
 } from '../coords/boardCursorCoords.js';
 import { getBoardPresenceLayerAnchor } from '../coords/scrollContentCoords.js';
+import { createRemoteCursorSmoother } from '../presence/remoteCursorSmoother.js';
 import './PresenceLayer.css';
 
 const POINTER_PATH = 'M2 2 L2 17 L7 12 L10.5 21 L13 19.5 L9.5 11.5 L16 11.5 Z';
@@ -65,6 +66,36 @@ function resolveViewportPosition(
   return toWorldScreen(cur, panX, panY, zoom);
 }
 
+function resolvePeerCursorTarget(
+  peer,
+  {
+    remoteCursors,
+    mode,
+    panX,
+    panY,
+    zoom,
+    modalRoot,
+    overlayScrollSelector,
+    boardScroller,
+    useBoardContentCoords,
+  },
+) {
+  if (useBoardContentCoords && boardScroller && isPeerOnBoardContent(peer)) {
+    return boardContentCursorPosition(peer, boardScroller);
+  }
+  return resolveViewportPosition(
+    peer,
+    remoteCursors,
+    mode,
+    panX,
+    panY,
+    zoom,
+    modalRoot,
+    overlayScrollSelector,
+    boardScroller,
+  );
+}
+
 /**
  * Remote cursors: meta from peers (rare updates), positions from remoteCursors (per frame, isolated).
  */
@@ -86,12 +117,17 @@ export default function CollabPresenceLayer({
 }) {
   const useBoardContentCoords = Boolean(boardScrollerRef);
   const peers = usePresenceStore((s) => s.peers);
-  const cursorFrame = usePresenceStore((s) => s.cursorFrame);
   const collab = useCollab();
   const myId = collab?.userId;
   const layerRef = useRef(null);
   const nodeRefs = useRef(new Map());
   const viewportRef = useRef(viewport);
+  const smootherRef = useRef(null);
+  const visibleMetaRef = useRef([]);
+
+  if (!smootherRef.current) {
+    smootherRef.current = createRemoteCursorSmoother();
+  }
 
   viewportRef.current = viewport;
   const { panX = 0, panY = 0, zoom = 1 } = viewport || {};
@@ -103,6 +139,8 @@ export default function CollabPresenceLayer({
       .filter((p) => (peerFilter ? peerFilter(p) : true));
     return out;
   }, [peers, myId, peerFilter, collab?.connected]);
+
+  visibleMetaRef.current = visibleMeta;
 
   const applyCursorVariantToNode = (el, peer) => {
     const variant = getPeerCursorVariant(peer);
@@ -169,6 +207,7 @@ export default function CollabPresenceLayer({
   };
 
   useEffect(() => () => {
+    smootherRef.current?.clear();
     for (const el of nodeRefs.current.values()) {
       el.remove();
     }
@@ -203,6 +242,7 @@ export default function CollabPresenceLayer({
     const metaIds = new Set(visibleMeta.map((p) => p.userId));
     for (const id of [...nodeRefs.current.keys()]) {
       if (!metaIds.has(id)) {
+        smootherRef.current?.remove(id);
         nodeRefs.current.get(id)?.remove();
         nodeRefs.current.delete(id);
       }
@@ -230,46 +270,82 @@ export default function CollabPresenceLayer({
   }, [visibleMeta]);
 
   useEffect(() => {
-    const remoteCursors = usePresenceStore.getState().remoteCursors;
-    const { panX: px = 0, panY: py = 0, zoom: z = 1 } = viewportRef.current || {};
-    const modalRoot = modalRootRef?.current ?? null;
-    const boardScroller = boardScrollerRef?.current ?? null;
-    for (const peer of visibleMeta) {
-      const el = nodeRefs.current.get(peer.userId);
-      if (!el) continue;
-      let pos = null;
-      if (useBoardContentCoords && boardScroller && isPeerOnBoardContent(peer)) {
-        pos = boardContentCursorPosition(peer, boardScroller);
-      } else {
-        pos = resolveViewportPosition(
-          peer,
-          remoteCursors,
-          mode,
-          px,
-          py,
-          z,
-          modalRoot,
-          overlayScrollSelector,
-          boardScroller,
-        );
+    if (!collab?.connected || !visibleMeta.length) return undefined;
+
+    let rafId = 0;
+    const smoother = smootherRef.current;
+
+    const frame = () => {
+      rafId = 0;
+      const meta = visibleMetaRef.current;
+      if (!meta.length) return;
+
+      const { remoteCursors, peers: storePeers } = usePresenceStore.getState();
+      const { panX: px = 0, panY: py = 0, zoom: z = 1 } = viewportRef.current || {};
+      const modalRoot = modalRootRef?.current ?? null;
+      const boardScroller = boardScrollerRef?.current ?? null;
+      const peerById = new Map((storePeers || []).map((p) => [p.userId, p]));
+      const ctx = {
+        remoteCursors,
+        mode,
+        panX: px,
+        panY: py,
+        zoom: z,
+        modalRoot,
+        overlayScrollSelector,
+        boardScroller,
+        useBoardContentCoords,
+      };
+
+      for (const peer of meta) {
+        const el = nodeRefs.current.get(peer.userId);
+        if (!el) continue;
+
+        const fullPeer = peerById.get(peer.userId) || peer;
+        const targetPos = resolvePeerCursorTarget(fullPeer, ctx);
+        if (!targetPos) {
+          smoother.remove(peer.userId);
+          el.style.display = 'none';
+          continue;
+        }
+
+        smoother.updateTarget(peer.userId, targetPos);
       }
-      if (!pos) {
-        el.style.display = 'none';
-        continue;
+
+      smoother.tick();
+
+      for (const peer of meta) {
+        const el = nodeRefs.current.get(peer.userId);
+        if (!el) continue;
+
+        const fullPeer = peerById.get(peer.userId) || peer;
+        const pos = smoother.getPosition(peer.userId);
+        if (!pos) {
+          el.style.display = 'none';
+          continue;
+        }
+
+        el.style.display = '';
+        el.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
+        applyCursorVariantToNode(el, fullPeer);
       }
-      el.style.display = '';
-      el.style.transform = `translate3d(${Math.round(pos.x * 10) / 10}px, ${Math.round(pos.y * 10) / 10}px, 0)`;
-      applyCursorVariantToNode(el, peer);
-    }
+
+      rafId = requestAnimationFrame(frame);
+    };
+
+    rafId = requestAnimationFrame(frame);
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, [
-    cursorFrame,
-    visibleMeta,
-    peers,
+    collab?.connected,
+    visibleMeta.length,
     mode,
     panX,
     panY,
     zoom,
     scrollRepaint,
+    layoutRepaint,
     useBoardContentCoords,
     modalRootRef,
     overlayScrollSelector,
