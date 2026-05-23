@@ -3,10 +3,12 @@ import BaseNode from './BaseNode';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 import { useCollabPatch } from '../../../collab/whiteboard/CollabOpsContext.jsx';
 import { recordNodesMutation } from '../whiteboardHistory';
+import { contrastingTextColor } from '../../../utils/contrastingTextColor';
 
 export default function StickyNoteNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const text = node.data?.text ?? '';
     const color = node.style?.backgroundColor ?? '#fef08a';
+    const textColor = node.style?.color ?? contrastingTextColor(color);
     const { editingNodeId, editTypingSeed, setEditingNodeId, setEditTypingSeed } = useWhiteboardStore();
     const { collabPatchNode } = useCollabPatch();
     const isEditing = editingNodeId === node.id;
@@ -48,7 +50,15 @@ export default function StickyNoteNode({ node, onNodePointerDown, onNodeContextM
                     onChange={isEditing ? (e) => setEditValue(e.target.value) : undefined}
                     onBlur={isEditing ? handleBlur : undefined}
                     autoFocus={isEditing}
-                    style={{ width: '100%', height: '100%', resize: 'none', border: 'none', background: 'transparent', padding: 8 }}
+                    style={{
+                        width: '100%',
+                        height: '100%',
+                        resize: 'none',
+                        border: 'none',
+                        background: 'transparent',
+                        padding: 8,
+                        color: textColor,
+                    }}
                 />
             </div>
         </BaseNode>

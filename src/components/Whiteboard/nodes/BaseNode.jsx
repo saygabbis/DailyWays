@@ -1,28 +1,26 @@
 import React, { useRef, useCallback } from 'react';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 import { getNodeTransformStyle } from '../nodeTransform';
+import { resolveNodeClickSelection } from '../whiteboardGroupOps';
 
 export default function BaseNode({ node, children, onNodePointerDown, onNodeContextMenu }) {
     const ref = useRef(null);
-    const { selectedNodeIds, setSelection, setEditingNodeId, lastCreatedNodeId } = useWhiteboardStore();
+    const { nodes, selectedNodeIds, setSelection, setEditingNodeId } = useWhiteboardStore();
     const isSelected = selectedNodeIds.includes(node.id);
-    const isJustCreated = lastCreatedNodeId === node.id;
 
     const handlePointerDown = useCallback(
         (e) => {
             if (e.button === 1) return;
             e.stopPropagation();
             if (e.button !== 0) return;
-            if (e.shiftKey) {
-                setSelection(
-                    isSelected ? selectedNodeIds.filter((id) => id !== node.id) : [...selectedNodeIds, node.id]
-                );
-            } else {
-                setSelection(isSelected ? selectedNodeIds : [node.id]);
-            }
+            const next = resolveNodeClickSelection(node.id, nodes, selectedNodeIds, {
+                shiftKey: e.shiftKey,
+                ctrlKey: e.ctrlKey || e.metaKey,
+            });
+            setSelection(next);
             onNodePointerDown?.(e, node.id);
         },
-        [node.id, isSelected, selectedNodeIds, setSelection, onNodePointerDown]
+        [node.id, nodes, selectedNodeIds, setSelection, onNodePointerDown]
     );
 
     const handleContextMenu = useCallback(
@@ -45,7 +43,7 @@ export default function BaseNode({ node, children, onNodePointerDown, onNodeCont
     return (
         <div
             ref={ref}
-            className={`whiteboard-node-wrapper ${isSelected ? 'selected' : ''} ${isJustCreated ? 'node-just-created' : ''}`}
+            className={`whiteboard-node-wrapper ${isSelected ? 'selected' : ''}`}
             style={{
                 position: 'absolute',
                 left: node.x,

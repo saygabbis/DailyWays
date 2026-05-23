@@ -4,19 +4,20 @@
     display: flex;
     flex-direction: column;
     padding: 0;
-    /* Padding moved to scroller */
     height: calc(100vh - var(--header-height));
     height: calc(100dvh - var(--header-height));
     min-height: 0;
     position: relative;
-    /* Remove overflow: hidden to help DND nested scroll detection */
+    overflow: hidden;
 }
 
 .board-scroller {
     flex: 1;
-    overflow: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
     padding: var(--space-xl);
     height: 100%;
+    min-height: 0;
     position: relative;
 }
 
@@ -26,21 +27,21 @@
 }
 
 /* Custom scrollbar for horizontal board scroll */
-.board-view::-webkit-scrollbar {
+.board-scroller::-webkit-scrollbar {
     height: 8px;
 }
 
-.board-view::-webkit-scrollbar-track {
+.board-scroller::-webkit-scrollbar-track {
     background: var(--bg-tertiary);
     border-radius: 4px;
 }
 
-.board-view::-webkit-scrollbar-thumb {
+.board-scroller::-webkit-scrollbar-thumb {
     background: var(--border-color-strong);
     border-radius: 4px;
 }
 
-.board-view::-webkit-scrollbar-thumb:hover {
+.board-scroller::-webkit-scrollbar-thumb:hover {
     background: var(--accent-primary);
 }
 
@@ -294,15 +295,18 @@
     gap: var(--space-lg);
     align-items: flex-start;
     height: 100%;
+    min-height: 0;
     padding-bottom: var(--space-lg);
-    /* Ensure lists never wrap and extend horizontally */
     min-width: min-content;
 }
 
 /* ── List ── */
 .board-list {
-    flex-shrink: 0;
-    width: 320px;
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    min-height: 0;
+    overflow: hidden;
     background: var(--bg-secondary);
     border-radius: var(--radius-lg);
     border: 1.5px solid var(--border-color);
@@ -310,20 +314,24 @@
     flex-direction: column;
     box-shadow: var(--shadow-sm);
     transition: background-color var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
-    max-height: 100%;
 }
 
 .board-list-inner {
     display: flex;
     flex-direction: column;
+    height: auto;
     max-height: 100%;
+    min-height: 0;
+    overflow: hidden;
 }
 
 /* Wrapper for DND to avoid layout shifts */
 .board-list-wrapper {
     flex-shrink: 0;
     width: 320px;
-    height: 100%;
+    height: auto;
+    max-height: 100%;
+    min-height: 0;
 }
 
 .list-dragging {
@@ -407,6 +415,7 @@
     padding: var(--space-md) var(--space-lg);
     border-bottom: 1px solid var(--border-color);
     position: relative;
+    flex-shrink: 0;
 }
 
 .board-list-title {
@@ -481,14 +490,16 @@
 
 /* ── Cards Container ── */
 .board-list-cards {
-    flex: 1;
-    overflow-y: visible;
-    /* Changed from auto to visible to avoid DND nesting bug */
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     padding: var(--space-sm);
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);
-    min-height: 60px;
     transition: background var(--transition-fast);
 }
 
@@ -868,6 +879,7 @@
 .board-list-footer {
     padding: var(--space-sm);
     border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
 }
 
 .board-add-card-btn {
@@ -908,6 +920,7 @@
 .board-add-list {
     flex-shrink: 0;
     width: 320px;
+    align-self: flex-start;
     animation: slideUpJelly 0.55s var(--ease-out-soft) both;
     /* animation-delay: definido dinamicamente via inline style no BoardView.jsx */
 }
@@ -1024,7 +1037,8 @@
         min-width: 0;
         max-width: 272px;
         scroll-snap-align: center;
-        max-height: calc(100dvh - var(--header-height) - var(--mobile-bottom-nav-height) - 88px);
+        max-height: 100%;
+        min-height: 0;
     }
 
     .board-add-list {
@@ -1119,7 +1133,8 @@
         /* Mantém peek também em telas estreitas */
         width: clamp(210px, 70vw, 260px);
         max-width: 260px;
-        max-height: calc(100dvh - var(--header-height) - var(--mobile-bottom-nav-height) - 80px);
+        max-height: 100%;
+        min-height: 0;
     }
 
     .board-add-list {

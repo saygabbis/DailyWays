@@ -376,6 +376,19 @@
     color: var(--accent-primary);
 }
 
+.space-layer-row.partially-selected {
+    background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+    color: var(--text-primary);
+}
+
+.space-layer-row.is-node-group {
+    font-weight: 600;
+}
+
+.space-layer-icon.is-node-group-icon {
+    color: var(--accent-primary);
+}
+
 .space-layer-row.dragging {
     opacity: 0.45;
 }

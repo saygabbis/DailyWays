@@ -2,6 +2,9 @@ import { uuidv4 } from '../../utils/uuid';
 import { insertNode } from '../../services/whiteboardService';
 import { findContainerAt } from './viewportUtils';
 import { pushNodesAddBatch, recordNodesMutation } from './whiteboardHistory';
+import { resolveDragNodeIds } from './whiteboardSelectionUtils';
+import { assignFreshGroupIdToClones } from './whiteboardGroupOps';
+import { filterNodesByPage } from './whiteboardPages';
 
 const PASTE_STEP = 20;
 
@@ -22,6 +25,20 @@ export function nodeToWorld(node, nodesById) {
         pid = parent.parentId;
     }
     return { x, y };
+}
+
+/** Converte canto superior-esquerdo em mundo para patch local (respeita parentId). */
+export function worldTopLeftToNodePatch(node, worldX, worldY, allNodes, extraPatch = {}) {
+    const byId = buildNodesById(allNodes);
+    if (!node.parentId) {
+        return { x: worldX, y: worldY, ...extraPatch };
+    }
+    const parent = byId.get(node.parentId);
+    if (!parent) {
+        return { x: worldX, y: worldY, parentId: null, ...extraPatch };
+    }
+    const pw = nodeToWorld(parent, byId);
+    return { x: worldX - pw.x, y: worldY - pw.y, ...extraPatch };
 }
 
 /** Cópia profunda com x/y em mundo e sem parentId (pronto para colar/duplicar). */
@@ -92,7 +109,12 @@ export async function insertClonedNodes(nodes, offset, ctx) {
             newNode.x = worldX;
             newNode.y = worldY;
         }
+        createdNodes.push(newNode);
+    }
 
+    assignFreshGroupIdToClones(createdNodes);
+
+    for (const newNode of createdNodes) {
         if (collabConnected) {
             collabCreateNode(newNode);
         } else {
@@ -100,7 +122,6 @@ export async function insertClonedNodes(nodes, offset, ctx) {
             if (!res.success) continue;
             addNode(newNode);
         }
-        createdNodes.push({ ...newNode });
         createdIds.push(newNode.id);
     }
     if (createdNodes.length && store) pushNodesAddBatch(store, createdNodes);
@@ -144,7 +165,8 @@ export async function pasteFromClipboard(ctx, options = {}) {
 export function nudgeSelectedNodes(store, collabPatchNodes, dx, dy) {
     const state = store.getState();
     if (!state.selectedNodeIds.length) return;
-    const patches = state.selectedNodeIds
+    const ids = resolveDragNodeIds(state.selectedNodeIds, state.nodes);
+    const patches = ids
         .map((id) => {
             const n = state.nodes.find((node) => node.id === id);
             return n ? { id, patch: { x: (n.x ?? 0) + dx, y: (n.y ?? 0) + dy } } : null;
@@ -155,37 +177,63 @@ export function nudgeSelectedNodes(store, collabPatchNodes, dx, dy) {
     }
 }
 
-export function patchZIndexSelected(store, collabPatchNode, mode) {
+function reorderPageNodesByZ(pageNodes, selectedIds, mode) {
+    const selectedSet = new Set(selectedIds);
+    const ordered = [...pageNodes].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+    const selected = ordered.filter((n) => selectedSet.has(n.id));
+    if (!selected.length) return ordered;
+
+    const rest = ordered.filter((n) => !selectedSet.has(n.id));
+    const indices = ordered.map((n, i) => (selectedSet.has(n.id) ? i : -1)).filter((i) => i >= 0);
+    const minI = Math.min(...indices);
+    const maxI = Math.max(...indices);
+
+    switch (mode) {
+        case 'front':
+            return [...rest, ...selected];
+        case 'back':
+            return [...selected, ...rest];
+        case 'forward':
+            if (maxI >= ordered.length - 1) return ordered;
+            return [
+                ...ordered.slice(0, minI),
+                ordered[maxI + 1],
+                ...ordered.slice(minI, maxI + 1),
+                ...ordered.slice(maxI + 2),
+            ];
+        case 'backward':
+            if (minI <= 0) return ordered;
+            return [
+                ...ordered.slice(0, minI - 1),
+                ...ordered.slice(minI, maxI + 1),
+                ordered[minI - 1],
+                ...ordered.slice(maxI + 1),
+            ];
+        default:
+            return ordered;
+    }
+}
+
+/** @param {'forward'|'backward'|'front'|'back'} mode — front/back = extremo; forward/backward = um nível */
+export function patchZIndexSelected(store, collabPatchNodes, mode) {
     const state = store.getState();
-    const selected = state.nodes.filter((n) => state.selectedNodeIds.includes(n.id));
-    if (!selected.length) return;
+    const prunedIds = resolveDragNodeIds(state.selectedNodeIds, state.nodes);
+    if (!prunedIds.length) return;
 
-    const allZ = state.nodes.map((n) => n.zIndex ?? 0);
-    const maxZ = Math.max(0, ...allZ);
-    const minZ = Math.min(0, ...allZ);
+    const pageId = state.activePageId;
+    const pageNodes = filterNodesByPage(state.nodes, pageId);
+    const newOrdered = reorderPageNodesByZ(pageNodes, prunedIds, mode);
 
-    const patches = selected.map((n, i) => {
-        let z = n.zIndex ?? 0;
-        switch (mode) {
-            case 'forward':
-                z = maxZ + 1 + i;
-                break;
-            case 'backward':
-                z = minZ - selected.length + i;
-                break;
-            case 'front':
-                z = maxZ + 1 + i;
-                break;
-            case 'back':
-                z = minZ - selected.length + i;
-                break;
-            default:
-                break;
-        }
-        return { id: n.id, patch: { zIndex: z } };
-    });
+    const patches = newOrdered
+        .map((n, i) => {
+            if ((n.zIndex ?? 0) === i) return null;
+            return { id: n.id, patch: { zIndex: i } };
+        })
+        .filter(Boolean);
+
+    if (!patches.length) return;
 
     recordNodesMutation(store, patches.map((p) => p.id), () => {
-        patches.forEach(({ id, patch }) => collabPatchNode(id, patch));
+        collabPatchNodes(patches);
     });
 }

@@ -2,7 +2,20 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { useCollabPatch } from '../../collab/whiteboard/CollabOpsContext.jsx';
 import { useAuth } from '../../context/AuthContext';
-import { buildLayerTree, layerDisplayName, renamePatchForNode, canNestInside } from './layerTreeUtils';
+import { layerDisplayName, renamePatchForNode } from './layerTreeUtils';
+import {
+    buildLayerTreeWithGroups,
+    resolveLayerClickSelection,
+    renameNodeGroup,
+    ungroupByGroupId,
+    nestGroupInParent,
+    assignNodeToLogicalGroup,
+    canNestLayerTarget,
+    isVirtualGroupRow,
+    parseVirtualGroupId,
+    getGroupMemberIds,
+    getGroupDisplayName,
+} from './whiteboardGroupOps';
 import { CONTAINER_NODE_TYPES } from './viewportUtils';
 import { patchNodeWithHistory } from './whiteboardHistory';
 import {
@@ -35,6 +48,7 @@ import {
     PencilLine,
     FileStack,
     FolderOpen,
+    Group,
     Ungroup,
     ChevronRight,
     ChevronDown,
@@ -54,11 +68,13 @@ const TYPE_ICONS = {
     file_card: FileText,
     drawing: PencilLine,
     draw: PencilLine,
+    group: Group,
 };
 
 function LayerRow({
     node,
     depth,
+    allNodes,
     selectedSet,
     onSelect,
     childNodes,
@@ -78,11 +94,19 @@ function LayerRow({
     onDelete,
     onUngroup,
 }) {
-    const Icon = TYPE_ICONS[node.type] || Square;
-    const isSelected = selectedSet.has(node.id);
+    const isVirtualGroup = !!node._isVirtualGroup;
+    const Icon = isVirtualGroup ? Group : TYPE_ICONS[node.type] || Square;
+    const memberIds = isVirtualGroup
+        ? getGroupMemberIds(allNodes, parseVirtualGroupId(node.id))
+        : [node.id];
+    const isSelected = isVirtualGroup
+        ? memberIds.length > 0 && memberIds.every((id) => selectedSet.has(id))
+        : selectedSet.has(node.id);
+    const isPartiallySelected =
+        isVirtualGroup && !isSelected && memberIds.some((id) => selectedSet.has(id));
     const [open, setOpen] = useState(true);
     const hasKids = childNodes?.length > 0;
-    const isContainer = CONTAINER_NODE_TYPES.includes(node.type);
+    const isContainer = isVirtualGroup || CONTAINER_NODE_TYPES.includes(node.type);
     const isRenaming = renamingId === node.id;
     const isDragOver = dropHint?.targetId === node.id;
     const dropMode = isDragOver ? dropHint.mode : null;
@@ -93,13 +117,15 @@ function LayerRow({
                 className={[
                     'space-layer-row',
                     isSelected ? 'selected' : '',
+                    isPartiallySelected ? 'partially-selected' : '',
+                    isVirtualGroup ? 'is-node-group' : '',
                     dragId === node.id ? 'dragging' : '',
                     isDragOver && dropMode === 'inside' ? 'drop-inside' : '',
                     isDragOver && dropMode === 'before' ? 'drop-before' : '',
                     isDragOver && dropMode === 'after' ? 'drop-after' : '',
                 ].filter(Boolean).join(' ')}
                 style={{ paddingLeft: 4 + depth * 14 }}
-                draggable={!isRenaming}
+                draggable={!isRenaming && !isVirtualGroup}
                 onDragStart={(e) => onDragStart(e, node.id)}
                 onDragOver={(e) => onDragOver(e, node.id, isContainer)}
                 onDragEnd={onDragEnd}
@@ -107,7 +133,7 @@ function LayerRow({
                 onClick={(e) => {
                     if (isRenaming) return;
                     e.stopPropagation();
-                    onSelect(node.id, e.shiftKey);
+                    onSelect(node.id, e.shiftKey, e.ctrlKey || e.metaKey);
                 }}
             >
                 <span className="space-layer-grip" title="Arrastar">
@@ -127,7 +153,7 @@ function LayerRow({
                 ) : (
                     <span className="space-layer-expand-spacer" />
                 )}
-                <span className={`space-layer-icon ${isContainer ? 'is-container' : ''}`}>
+                <span className={`space-layer-icon ${isContainer ? 'is-container' : ''} ${isVirtualGroup ? 'is-node-group-icon' : ''}`}>
                     <Icon size={15} strokeWidth={1.75} />
                 </span>
                 {isRenaming ? (
@@ -152,13 +178,13 @@ function LayerRow({
                     </span>
                 )}
                 <div className="space-layer-actions">
-                    {node.parentId && (
+                    {(node.parentId || isVirtualGroup) && (
                         <button
                             type="button"
-                            title="Sair do grupo"
+                            title={isVirtualGroup ? 'Desagrupar' : 'Sair do grupo'}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onUngroup(node.id);
+                                onUngroup(node.id, isVirtualGroup);
                             }}
                         >
                             <Ungroup size={14} />
@@ -204,6 +230,7 @@ function LayerRow({
                             key={child.id}
                             node={child}
                             depth={depth + 1}
+                            allNodes={allNodes}
                             selectedSet={selectedSet}
                             onSelect={onSelect}
                             childNodes={child._children}
@@ -258,7 +285,7 @@ export default function LayersTab({ spaceId, spaceTitle }) {
     const selectedSet = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
     const activePage = spacePages.find((p) => p.id === activePageId) ?? spacePages[0];
 
-    const tree = useMemo(() => buildLayerTree(nodes, activePageId), [nodes, activePageId]);
+    const tree = useMemo(() => buildLayerTreeWithGroups(nodes, activePageId), [nodes, activePageId]);
 
     const layerCtx = useCallback(
         () => ({
@@ -272,18 +299,22 @@ export default function LayersTab({ spaceId, spaceTitle }) {
         [spaceId, user?.id, collabCreateNode, collabConnected, addNode]
     );
 
-    const handleSelect = (id, shiftKey) => {
-        if (shiftKey) {
-            const next = selectedSet.has(id)
-                ? selectedNodeIds.filter((x) => x !== id)
-                : [...selectedNodeIds, id];
-            setSelection(next);
-        } else {
-            setSelection([id]);
-        }
+    const handleSelect = (id, shiftKey, ctrlKey) => {
+        setSelection(
+            resolveLayerClickSelection(id, nodes, selectedNodeIds, {
+                shiftKey,
+                ctrlKey: ctrlKey || false,
+            })
+        );
     };
 
     const handleStartRename = (id) => {
+        if (isVirtualGroupRow(id)) {
+            const gid = parseVirtualGroupId(id);
+            setRenamingId(id);
+            setRenameValue(getGroupDisplayName(nodes, gid));
+            return;
+        }
         const node = nodes.find((n) => n.id === id);
         if (!node) return;
         setRenamingId(id);
@@ -292,9 +323,20 @@ export default function LayersTab({ spaceId, spaceTitle }) {
 
     const handleRenameCommit = () => {
         if (!renamingId) return;
+        if (isVirtualGroupRow(renamingId)) {
+            const gid = parseVirtualGroupId(renamingId);
+            renameNodeGroup(useWhiteboardStore, collabPatchNodes, gid, renameValue);
+            setRenamingId(null);
+            setRenameValue('');
+            return;
+        }
         const node = nodes.find((n) => n.id === renamingId);
         const patch = node ? renamePatchForNode(node, renameValue) : null;
-        if (patch) patchNodeWithHistory(useWhiteboardStore, collabPatchNode, renamingId, patch);
+        if (patch?._renameGroupId) {
+            renameNodeGroup(useWhiteboardStore, collabPatchNodes, patch._renameGroupId, patch._groupName);
+        } else if (patch) {
+            patchNodeWithHistory(useWhiteboardStore, collabPatchNode, renamingId, patch);
+        }
         setRenamingId(null);
         setRenameValue('');
     };
@@ -321,7 +363,7 @@ export default function LayersTab({ spaceId, spaceTitle }) {
         const h = rect.height;
         let mode = 'after';
         if (isContainer && y > h * 0.28 && y < h * 0.72) {
-            mode = canNestInside(dragId, targetId, nodes) ? 'inside' : 'after';
+            mode = canNestLayerTarget(dragId, targetId, nodes) ? 'inside' : 'after';
         } else if (y < h * 0.35) {
             mode = 'before';
         } else {
@@ -344,7 +386,23 @@ export default function LayersTab({ spaceId, spaceTitle }) {
         if (!dragged || !hint || hint.targetId !== targetId) return;
 
         if (hint.mode === 'inside') {
-            nestNodeInContainer(useWhiteboardStore, collabPatchNode, dragged, targetId);
+            if (isVirtualGroupRow(dragged) && isVirtualGroupRow(targetId)) {
+                nestGroupInParent(
+                    useWhiteboardStore,
+                    collabPatchNodes,
+                    parseVirtualGroupId(dragged),
+                    parseVirtualGroupId(targetId)
+                );
+            } else if (isVirtualGroupRow(targetId) && !isVirtualGroupRow(dragged)) {
+                assignNodeToLogicalGroup(
+                    useWhiteboardStore,
+                    collabPatchNodes,
+                    dragged,
+                    parseVirtualGroupId(targetId)
+                );
+            } else if (!isVirtualGroupRow(dragged)) {
+                nestNodeInContainer(useWhiteboardStore, collabPatchNode, dragged, targetId);
+            }
         } else {
             reorderLayerSibling(useWhiteboardStore, collabPatchNodes, dragged, targetId, hint.mode);
         }
@@ -506,6 +564,7 @@ export default function LayersTab({ spaceId, spaceTitle }) {
                                 key={node.id}
                                 node={node}
                                 depth={0}
+                                allNodes={nodes}
                                 selectedSet={selectedSet}
                                 onSelect={handleSelect}
                                 childNodes={node._children}
@@ -524,8 +583,26 @@ export default function LayersTab({ spaceId, spaceTitle }) {
                                 onDuplicate={(id) =>
                                     duplicateLayerSubtree(useWhiteboardStore, { collabCreateNode }, id, layerCtx())
                                 }
-                                onDelete={(id) => deleteLayerSubtree(useWhiteboardStore, collabDeleteNodes, [id])}
-                                onUngroup={(id) => unnestNodeToRoot(useWhiteboardStore, collabPatchNode, id)}
+                                onDelete={(id) => {
+                                    if (isVirtualGroupRow(id)) {
+                                        const gid = parseVirtualGroupId(id);
+                                        deleteLayerSubtree(
+                                            useWhiteboardStore,
+                                            collabDeleteNodes,
+                                            getGroupMemberIds(nodes, gid)
+                                        );
+                                    } else {
+                                        deleteLayerSubtree(useWhiteboardStore, collabDeleteNodes, [id]);
+                                    }
+                                }}
+                                onUngroup={(id, isGroupRow) => {
+                                    if (isGroupRow) {
+                                        const gid = parseVirtualGroupId(id);
+                                        ungroupByGroupId(useWhiteboardStore, collabPatchNodes, gid);
+                                    } else {
+                                        unnestNodeToRoot(useWhiteboardStore, collabPatchNode, id);
+                                    }
+                                }}
                             />
                         ))
                     )}

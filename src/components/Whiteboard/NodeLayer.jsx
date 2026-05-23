@@ -3,6 +3,7 @@ import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { intersectsViewport, CONTAINER_NODE_TYPES } from './viewportUtils';
 import { getNodePageId } from './whiteboardPages';
 import ResizeHandles from './ResizeHandles';
+import { getTransformTargetIds } from './selectionTransform';
 import StickyNoteNode from './nodes/StickyNoteNode';
 import TextNode from './nodes/TextNode';
 import ShapeNode from './nodes/ShapeNode';
@@ -83,9 +84,14 @@ export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, onResi
         }).sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
     }, [pageNodes, roots, vp]);
 
-    const selectedSet = useMemo(() => new Set(selectedNodeIds || []), [selectedNodeIds]);
+    const transformIds = useMemo(
+        () => getTransformTargetIds(selectedNodeIds, nodes),
+        [selectedNodeIds, nodes]
+    );
+    const useUnifiedTransform = transformIds.length > 1;
+    const transformIdSet = useMemo(() => new Set(transformIds), [transformIds]);
 
-    const renderNode = (node, isInGroup = false) => {
+    const renderNode = (node) => {
         const Comp = NODE_COMPONENTS[node.type] || StickyNoteNode;
         return (
             <Comp
@@ -139,7 +145,7 @@ export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, onResi
                             >
                                 {children.map((child) => (
                                     <div key={child.id} style={{ position: 'absolute', left: child.x, top: child.y, pointerEvents: 'auto' }}>
-                                        {renderNode(child, true)}
+                                        {renderNode(child)}
                                     </div>
                                 ))}
                             </div>
@@ -149,27 +155,34 @@ export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, onResi
                 return renderNode(root);
             })}
             {onResizeStart &&
-                visibleRoots.filter((n) => selectedSet.has(n.id) && n.width && n.height).map((node) => (
-                    <ResizeHandles
-                        key={`resize-${node.id}`}
-                        node={node}
-                        zoom={viewport?.zoom ?? 1}
-                        onResizeStart={onResizeStart}
-                        onRotateStart={onRotateStart}
-                    />
-                ))}
-            {visibleRoots.flatMap((root) =>
-                getChildren(pageNodes, root.id).filter((c) => selectedSet.has(c.id) && c.width && c.height).map((child) => (
-                    <ResizeHandles
-                        key={`resize-${child.id}`}
-                        node={child}
-                        zoom={viewport?.zoom ?? 1}
-                        onResizeStart={onResizeStart}
-                        onRotateStart={onRotateStart}
-                        offset={{ x: root.x, y: root.y }}
-                    />
-                ))
-            )}
+                !useUnifiedTransform &&
+                visibleRoots
+                    .filter((n) => transformIdSet.has(n.id) && n.width && n.height)
+                    .map((node) => (
+                        <ResizeHandles
+                            key={`resize-${node.id}`}
+                            node={node}
+                            zoom={viewport?.zoom ?? 1}
+                            onResizeStart={onResizeStart}
+                            onRotateStart={onRotateStart}
+                        />
+                    ))}
+            {onResizeStart &&
+                !useUnifiedTransform &&
+                visibleRoots.flatMap((root) =>
+                    getChildren(pageNodes, root.id)
+                        .filter((c) => transformIdSet.has(c.id) && c.width && c.height)
+                        .map((child) => (
+                            <ResizeHandles
+                                key={`resize-${child.id}`}
+                                node={child}
+                                zoom={viewport?.zoom ?? 1}
+                                onResizeStart={onResizeStart}
+                                onRotateStart={onRotateStart}
+                                offset={{ x: root.x, y: root.y }}
+                            />
+                        ))
+                )}
         </>
     );
 }

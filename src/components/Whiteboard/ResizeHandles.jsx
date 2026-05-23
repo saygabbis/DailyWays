@@ -17,7 +17,7 @@ const HANDLES = [
 
 const ROTATE_OFFSET_PX = 28;
 
-export default function ResizeHandles({ node, onResizeStart, onRotateStart, offset, zoom = 1 }) {
+export default function ResizeHandles({ node, onResizeStart, onRotateStart, offset, zoom = 1, unified = false }) {
     const z = Math.max(0.15, zoom || 1);
     const visualSize = HANDLE_VISUAL_PX / z;
     const hitSize = (HANDLE_VISUAL_PX + HANDLE_HIT_PAD_PX * 2) / z;
@@ -43,8 +43,8 @@ export default function ResizeHandles({ node, onResizeStart, onRotateStart, offs
     );
 
     const boxStyle = useMemo(() => {
-        const w = node.width ?? 0;
-        const h = node.height ?? 0;
+        const w = Math.max(node.width ?? 0, 1);
+        const h = Math.max(node.height ?? 0, 1);
         const baseLeft = offset ? offset.x + node.x : node.x;
         const baseTop = offset ? offset.y + node.y : node.y;
         const rot = node.rotation ?? 0;
@@ -61,10 +61,13 @@ export default function ResizeHandles({ node, onResizeStart, onRotateStart, offs
         };
     }, [node.x, node.y, node.width, node.height, node.rotation, offset]);
 
-    if (!node.width || !node.height) return null;
+    if ((node.width ?? 0) <= 0 && (node.height ?? 0) <= 0) return null;
 
     return (
-        <div className="whiteboard-resize-handles" style={boxStyle}>
+        <div
+            className={`whiteboard-resize-handles${unified ? ' whiteboard-resize-handles--unified' : ''}`}
+            style={boxStyle}
+        >
             <div className="whiteboard-resize-handles-outline" aria-hidden />
             {HANDLES.map(({ id, cursor, left, top }) => (
                 <div

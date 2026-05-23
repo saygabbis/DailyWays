@@ -39,3 +39,32 @@
     margin: 4px 0;
     background: var(--border-color);
 }
+
+.whiteboard-context-menu-item--danger {
+    color: var(--danger, #dc2626);
+}
+
+.whiteboard-context-menu-item--danger:hover {
+    background: color-mix(in srgb, var(--danger, #dc2626) 12%, transparent);
+}
+
+.whiteboard-context-menu-colors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 12px;
+}
+
+.whiteboard-context-menu-swatch {
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0;
+}
+
+.whiteboard-context-menu-swatch:hover {
+    outline: 2px solid var(--accent, #4d96ff);
+    outline-offset: 1px;
+}

@@ -57,37 +57,3 @@
     color: var(--text-secondary);
     font-size: var(--font-size-lg);
 }
-
-/* Acima dos controles de zoom do whiteboard (bottom/right 12px, ~40px de altura) */
-.space-reset-btn {
-    position: absolute;
-    bottom: calc(12px + 44px + 10px);
-    right: calc(12px + var(--inspector-inset, 0px));
-    z-index: 11;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-    padding: 12px;
-    border-radius: var(--radius-full);
-    cursor: pointer;
-    box-shadow: var(--shadow-md);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all var(--transition-fast);
-}
-
-@media (max-width: 768px) {
-    .space-reset-btn {
-        bottom: calc(12px + 44px + 10px + env(safe-area-inset-bottom, 0px));
-        right: calc(12px + var(--inspector-inset, 0px));
-        padding: 10px;
-    }
-}
-
-.space-reset-btn:hover {
-    color: var(--text-primary);
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-lg);
-    border-color: var(--text-tertiary);
-}

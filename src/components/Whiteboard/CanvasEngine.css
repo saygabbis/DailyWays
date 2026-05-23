@@ -42,10 +42,12 @@
 
 /* Pan (espaço ou botão do meio): cursor passa pelos objetos — só move o canvas */
 .whiteboard-viewport.space-pressed .whiteboard-nodes-container > *,
+.whiteboard-viewport.space-pressed .whiteboard-transform-overlay,
 .whiteboard-viewport.space-pressed .whiteboard-resize-handles,
 .whiteboard-viewport.space-pressed .whiteboard-rotate-handle,
 .whiteboard-viewport.space-pressed .whiteboard-rotate-stem,
 .whiteboard-viewport.panning .whiteboard-nodes-container > *,
+.whiteboard-viewport.panning .whiteboard-transform-overlay,
 .whiteboard-viewport.panning .whiteboard-resize-handles,
 .whiteboard-viewport.panning .whiteboard-rotate-handle,
 .whiteboard-viewport.panning .whiteboard-rotate-stem {
@@ -84,7 +86,28 @@
     pointer-events: none;
 }
 
-.whiteboard-nodes-container > * {
+.whiteboard-nodes-container > .whiteboard-node-wrapper,
+.whiteboard-nodes-container > .whiteboard-frame-group {
+    pointer-events: auto;
+}
+
+.whiteboard-transform-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    overflow: visible;
+    z-index: 100000;
+    pointer-events: none;
+}
+
+.whiteboard-transform-overlay .whiteboard-resize-handles {
+    pointer-events: none;
+}
+
+.whiteboard-transform-overlay .whiteboard-resize-handle,
+.whiteboard-transform-overlay .whiteboard-rotate-handle {
     pointer-events: auto;
 }
 
@@ -94,21 +117,6 @@
 
 .whiteboard-node-wrapper.selected {
     outline: none;
-}
-
-@keyframes node-pop-in {
-    0% {
-        transform: scale(0.92);
-        opacity: 0.6;
-    }
-    100% {
-        transform: scale(1);
-        opacity: 1;
-    }
-}
-
-.whiteboard-node-wrapper.node-just-created {
-    animation: node-pop-in 0.2s ease-out forwards;
 }
 
 .whiteboard-resize-handles {
@@ -122,6 +130,11 @@
     border-radius: 2px;
     pointer-events: none;
     box-sizing: border-box;
+}
+
+.whiteboard-resize-handles--unified .whiteboard-resize-handles-outline {
+    border-width: 2px;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #4d96ff) 25%, transparent);
 }
 
 .whiteboard-resize-handle {
@@ -188,7 +201,7 @@
 
 .whiteboard-viewport-controls {
     position: absolute;
-    bottom: 12px;
+    bottom: calc(12px + 44px + 10px);
     right: calc(12px + var(--inspector-inset, 0px));
     display: flex;
     align-items: center;
@@ -197,9 +210,23 @@
     min-height: 32px;
     background: var(--bg-elevated);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: var(--radius-full);
     box-shadow: var(--shadow-md);
-    z-index: 10;
+    z-index: 11;
+}
+
+@media (max-width: 768px) {
+    .whiteboard-viewport-controls {
+        bottom: calc(12px + 44px + 10px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+.whiteboard-viewport-controls-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border-color);
+    margin: 0 2px;
+    flex-shrink: 0;
 }
 
 .whiteboard-viewport-controls button {

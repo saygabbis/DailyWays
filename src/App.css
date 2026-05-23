@@ -110,4 +110,17 @@
     min-height: 0;
     overflow: visible;
   }
+
+  /* Board: scroll por coluna + horizontal no scroller, não na página */
+  .app-main.has-mobile-nav .app-content:has(.board-view) {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .app-main.has-mobile-nav .app-content .board-view {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+  }
 }

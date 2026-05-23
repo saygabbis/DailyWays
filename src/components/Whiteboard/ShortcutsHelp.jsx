@@ -21,10 +21,21 @@ const SECTIONS = [
     {
         title: 'Camadas',
         items: [
+            ['Ctrl+G', 'Agrupar (movem juntos)'],
+            ['Ctrl+Shift+G', 'Desagrupar'],
+            ['Shift+clique', 'Adicionar grupo à seleção'],
+            ['Ctrl+clique', 'Selecionar só um item do grupo'],
             ['Ctrl+]', 'Avançar camada'],
             ['Ctrl+[', 'Recuar camada'],
             ['Ctrl+Shift+]', 'Trazer para frente'],
             ['Ctrl+Shift+[', 'Enviar para trás'],
+        ],
+    },
+    {
+        title: 'Alinhamento',
+        items: [
+            ['Arrastar', 'Imãs magnéticos (bordas e centros)'],
+            ['G', 'Mostrar/ocultar grade'],
         ],
     },
     {

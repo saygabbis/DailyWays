@@ -13,6 +13,7 @@ import { computeResizeBounds } from './resizeBounds';
 import { computeSkewResizeBounds } from './resizeSkew';
 import { worldBoxFromAnchor } from './createDragBounds';
 import NodeLayer from './NodeLayer';
+import SelectionTransformOverlay from './SelectionTransformOverlay';
 import ConnectorLayer from './ConnectorLayer';
 import SelectionManager from './SelectionManager';
 import ResizeHandles from './ResizeHandles';
@@ -32,12 +33,31 @@ import {
 } from './whiteboardNodeOps';
 import { computeViewportToFitNodes } from './viewportFit';
 import ShortcutsHelp from './ShortcutsHelp';
+import SnapGuidesOverlay from './SnapGuidesOverlay';
 import InspectorPanel from './InspectorPanel';
-import FloatingToolbar from './FloatingToolbar';
+import { computeSnapForDrag } from './whiteboardSnap';
+import { resolveDragNodeIds } from './whiteboardSelectionUtils';
+import { getNodeCreateOffset } from './whiteboardCreateOffsets';
+import {
+    groupSelectedNodes,
+    ungroupSelectedNodes,
+    getSelectionContextFlags,
+} from './whiteboardGroupOps';
+import {
+    SELECTION_TRANSFORM_ID,
+    getTransformTargetIds,
+    getUnifiedSelectionBox,
+    computeMultiResizePatches,
+    computeMultiRotatePatches,
+    getSelectionTransformCenter,
+} from './selectionTransform';
+import { getSelectionWorldBounds } from './whiteboardAlign';
+import { contrastingTextColor } from '../../utils/contrastingTextColor';
+import { recordNodesMutation } from './whiteboardHistory';
 import LeftToolbar from './LeftToolbar';
 import DraggablePanel from './DraggablePanel';
 import WhiteboardContextMenu from './WhiteboardContextMenu';
-import { Grid3X3, ZoomIn, ZoomOut, Ruler, HelpCircle } from 'lucide-react';
+import { Grid3X3, ZoomIn, ZoomOut, Ruler, HelpCircle, Focus } from 'lucide-react';
 import { uuidv4 } from '../../utils/uuid';
 import './CanvasEngine.css';
 
@@ -48,13 +68,14 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     const [isSpacePressed, setIsSpacePressed] = useState(false);
     const [resizeState, setResizeState] = useState(null);
     const [rotateState, setRotateState] = useState(null);
-    const [floatingToolbarOpen, setFloatingToolbarOpen] = useState(false);
     const [contextMenuPosition, setContextMenuPosition] = useState(null);
     const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
+    const [snapGuides, setSnapGuides] = useState([]);
     const pendingUploadWorldPositionRef = useRef(null);
     const openImagePickerRef = useRef(null);
     const openFilePickerRef = useRef(null);
     const nodeDragRef = useRef(null);
+    const resizeActiveRef = useRef(false);
     const createDragRef = useRef(null);
     const viewportRef = useRef(null);
     const lastPointerClientRef = useRef(null);
@@ -94,15 +115,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         undo,
         redo,
         pushHistory,
-        setLastCreatedNodeId,
-        lastCreatedNodeId,
     } = useWhiteboardStore();
-
-    useEffect(() => {
-        if (!lastCreatedNodeId) return;
-        const t = setTimeout(() => setLastCreatedNodeId(null), 350);
-        return () => clearTimeout(t);
-    }, [lastCreatedNodeId, setLastCreatedNodeId]);
 
     const NODE_TYPES_ALLOWED = ['sticky_note', 'text', 'shape', 'frame', 'image', 'comment', 'link', 'todo_list', 'file_card', 'drawing', 'column', 'table'];
 
@@ -154,12 +167,10 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             }
             if (collabConnected) {
                 collabCreateNode({ ...payload, createdBy: user?.id ?? null });
-                setLastCreatedNodeId(payload.id);
             } else {
                 const res = await insertNode(spaceId, payload, user?.id);
                 if (res.success) {
                     addNode(payload);
-                    setLastCreatedNodeId(payload.id);
                 } else {
                     return null;
                 }
@@ -170,7 +181,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             });
             return payload.id;
         },
-        [spaceId, user?.id, addNode, collabCreateNode, collabConnected, setLastCreatedNodeId]
+        [spaceId, user?.id, addNode, collabCreateNode, collabConnected]
     );
 
     const applyCreateDragBox = useCallback(
@@ -294,12 +305,12 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         const state = useWhiteboardStore.getState();
         if (state.historyIndex < 0) return;
         const entry = state.history[state.historyIndex];
+        undo();
         applyHistoryToCollab(entry, 'undo', {
             collabPatchNode,
             collabCreateNode,
             collabDeleteNodes,
         });
-        undo();
     }, [undo, collabPatchNode, collabCreateNode, collabDeleteNodes]);
 
     const performRedo = useCallback(() => {
@@ -359,7 +370,6 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         }
         collabDeleteNodes(state.selectedNodeIds);
         setSelection([]);
-        setFloatingToolbarOpen(false);
     }, [pushHistory, collabConnected, collabDeleteNodes, setSelection]);
 
     const commitTextEdit = useCallback(() => {
@@ -374,13 +384,22 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     }, []);
 
     useEffect(() => {
-        const isExternalTextFocus = () => {
+        const isEditableTarget = () => {
             const el = document.activeElement;
             if (!el) return false;
-            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable) {
-                return !el.closest?.('.whiteboard-node-wrapper') && !el.closest?.('.whiteboard-floating-toolbar');
+            const tag = el.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable) {
+                return true;
             }
             return false;
+        };
+
+        const isSpaceUiTextFocus = () => {
+            const el = document.activeElement;
+            if (!el || !isEditableTarget()) return false;
+            if (el.closest?.('.whiteboard-node-wrapper')) return false;
+            if (el.closest?.('.whiteboard-floating-toolbar')) return false;
+            return true;
         };
 
         const isEditingWhiteboardText = () => {
@@ -390,8 +409,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             return !!el.closest?.('.whiteboard-node-wrapper');
         };
 
+        const shouldHandleCanvasShortcut = () =>
+            !isEditingWhiteboardText() && !isSpaceUiTextFocus();
+
         const onKeyDown = (e) => {
             if (e.key === ' ') {
+                if (!shouldHandleCanvasShortcut()) return;
+                e.preventDefault();
                 setIsSpacePressed(true);
                 return;
             }
@@ -401,11 +425,21 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
 
             if (mod) {
                 if (keyLower === 'r') {
+                    if (!shouldHandleCanvasShortcut()) return;
                     e.preventDefault();
                     setRulersVisible(!useWhiteboardStore.getState().rulersVisible);
                     return;
                 }
-                if (!isEditingWhiteboardText() && !isExternalTextFocus()) {
+                if (shouldHandleCanvasShortcut()) {
+                    if (keyLower === 'g') {
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            ungroupSelectedNodes(useWhiteboardStore, collabPatchNodes, collabDeleteNodes);
+                        } else {
+                            groupSelectedNodes(useWhiteboardStore, collabPatchNodes);
+                        }
+                        return;
+                    }
                     if (keyLower === 'z') {
                         e.preventDefault();
                         if (e.shiftKey) performRedo();
@@ -477,7 +511,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         e.preventDefault();
                         patchZIndexSelected(
                             useWhiteboardStore,
-                            collabPatchNode,
+                            collabPatchNodes,
                             e.shiftKey ? 'front' : 'forward'
                         );
                         return;
@@ -486,7 +520,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         e.preventDefault();
                         patchZIndexSelected(
                             useWhiteboardStore,
-                            collabPatchNode,
+                            collabPatchNodes,
                             e.shiftKey ? 'back' : 'backward'
                         );
                         return;
@@ -495,6 +529,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             }
 
             if (e.shiftKey && !mod && e.key === '1') {
+                if (!shouldHandleCanvasShortcut()) return;
                 e.preventDefault();
                 const rect = containerRef.current?.getBoundingClientRect();
                 const st = useWhiteboardStore.getState();
@@ -521,14 +556,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     e.preventDefault();
                     st.setSelection([]);
                     st.setActiveTool('select');
-                    setFloatingToolbarOpen(false);
                     setContextMenuPosition(null);
                 }
                 return;
             }
 
             if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
-                if (!isEditingWhiteboardText() && !isExternalTextFocus()) {
+                if (shouldHandleCanvasShortcut()) {
                     e.preventDefault();
                     setShortcutsHelpOpen((v) => !v);
                     return;
@@ -540,7 +574,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 !e.altKey &&
                 ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(keyLower)
             ) {
-                if (!isEditingWhiteboardText() && !isExternalTextFocus()) {
+                if (shouldHandleCanvasShortcut()) {
                     const st = useWhiteboardStore.getState();
                     if (st.selectedNodeIds.length) {
                         e.preventDefault();
@@ -554,7 +588,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             }
 
             if (e.key === 'Delete' || e.key === 'Backspace') {
-                if (isExternalTextFocus()) return;
+                if (isSpaceUiTextFocus()) return;
                 const state = useWhiteboardStore.getState();
                 if (state.editingNodeId) return;
                 if (!state.selectedNodeIds.length) return;
@@ -571,11 +605,10 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 }
                 collabDeleteNodes(state.selectedNodeIds);
                 state.setSelection([]);
-                setFloatingToolbarOpen(false);
                 return;
             }
 
-            if (!mod && !e.altKey && e.key.length === 1 && !isExternalTextFocus() && !isEditingWhiteboardText()) {
+            if (!mod && !e.altKey && e.key.length === 1 && shouldHandleCanvasShortcut()) {
                 const toolByKey = {
                     v: 'select',
                     t: 'text',
@@ -604,7 +637,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
 
             if (mod || e.altKey) return;
             if (e.key.length !== 1) return;
-            if (isExternalTextFocus()) return;
+            if (isSpaceUiTextFocus()) return;
 
             const state = useWhiteboardStore.getState();
             if (state.editingNodeId) return;
@@ -617,7 +650,11 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             state.setEditingNodeId(node.id);
             state.setEditTypingSeed(e.key);
         };
-        const onKeyUp = (e) => { if (e.key === ' ') setIsSpacePressed(false); };
+        const onKeyUp = (e) => {
+            if (e.key === ' ') {
+                setIsSpacePressed(false);
+            }
+        };
         window.addEventListener('keydown', onKeyDown, true);
         window.addEventListener('keyup', onKeyUp);
         return () => {
@@ -629,6 +666,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         collabDeleteNodes,
         collabPatchNode,
         collabPatchNodes,
+        collabCreateNode,
         performUndo,
         performRedo,
         handleCut,
@@ -636,6 +674,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         handlePaste,
         handlePasteInPlace,
         handleDuplicate,
+        nodeOpsCtx,
         setRulersVisible,
         setGridVisible,
         setActiveTool,
@@ -679,7 +718,12 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     }, [selectedNodeIds, updateSelection]);
 
     const isCanvasBackground = (e) =>
-        !e.target?.closest?.('.whiteboard-node-wrapper') && !e.target?.closest?.('.whiteboard-viewport-controls');
+        !e.target?.closest?.('.whiteboard-node-wrapper') &&
+        !e.target?.closest?.('.whiteboard-transform-overlay') &&
+        !e.target?.closest?.('.whiteboard-resize-handles') &&
+        !e.target?.closest?.('.whiteboard-resize-handle') &&
+        !e.target?.closest?.('.whiteboard-rotate-handle') &&
+        !e.target?.closest?.('.whiteboard-viewport-controls');
 
     const handlePointerDown = useCallback(
         (e) => {
@@ -696,8 +740,8 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             }
             if (e.button === 0 && isBg && !isSpacePressed) {
                 e.preventDefault();
+                containerRef.current?.focus?.({ preventScroll: true });
                 commitTextEdit();
-                setFloatingToolbarOpen(false);
                 if (activeTool === 'select') {
                     setSelectionBox({
                         start: { x: e.clientX, y: e.clientY },
@@ -748,10 +792,43 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
 
     const handleResizeStart = useCallback((nodeId, corner, e) => {
         e.stopPropagation();
+        e.preventDefault();
+        nodeDragRef.current = null;
+        resizeActiveRef.current = true;
         if (e.currentTarget?.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
-        const node = useWhiteboardStore.getState().nodes.find((n) => n.id === nodeId);
-        if (!node) return;
+        const state = useWhiteboardStore.getState();
         setRotateState(null);
+
+        if (nodeId === SELECTION_TRANSFORM_ID) {
+            const transformIds = getTransformTargetIds(state.selectedNodeIds, state.nodes);
+            if (transformIds.length < 2) {
+                resizeActiveRef.current = false;
+                return;
+            }
+            const beforeSnapshots = captureNodesSnapshot(useWhiteboardStore, transformIds);
+            if (!beforeSnapshots.length) {
+                resizeActiveRef.current = false;
+                return;
+            }
+            const box = getUnifiedSelectionBox(state.nodes, transformIds);
+            if (!box) return;
+            setResizeState({
+                mode: 'selection',
+                nodeIds: transformIds,
+                corner,
+                beforeSnapshots,
+                origin: {
+                    x: box.minX,
+                    y: box.minY,
+                    width: box.width,
+                    height: box.height,
+                },
+            });
+            return;
+        }
+
+        const node = state.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
         setResizeState({
             nodeId,
             corner,
@@ -770,6 +847,51 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
 
     useEffect(() => {
         if (!resizeState) return;
+
+        if (resizeState.mode === 'selection') {
+            const { corner: handle, origin, beforeSnapshots, nodeIds } = resizeState;
+            const onMove = (e) => {
+                const rect = containerRef.current?.getBoundingClientRect();
+                if (!rect || !viewportRef.current) return;
+                const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
+                const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey, min: 0 };
+                const newBox = computeResizeBounds(origin, handle, world, modifiers);
+                const state = useWhiteboardStore.getState();
+                const patches = computeMultiResizePatches(
+                    beforeSnapshots,
+                    state.nodes,
+                    origin,
+                    newBox
+                );
+                if (patches.length) collabPatchNodes(patches);
+            };
+            const onUp = () => {
+                const before = resizeState.beforeSnapshots ?? [];
+                const after = captureNodesSnapshot(useWhiteboardStore, nodeIds);
+                const changed =
+                    before.length > 0 &&
+                    before.some((b, i) => {
+                        const a = after[i];
+                        if (!a) return true;
+                        return JSON.stringify(b.node) !== JSON.stringify(a.node);
+                    });
+                if (changed) {
+                    useWhiteboardStore.getState().pushHistory({
+                        type: 'nodes_replace',
+                        payload: { before, after },
+                    });
+                }
+                resizeActiveRef.current = false;
+                setResizeState(null);
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+            return () => {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+            };
+        }
+
         const { nodeId, corner: handle, origin, mode } = resizeState;
         const onMove = (e) => {
             const rect = containerRef.current?.getBoundingClientRect();
@@ -794,6 +916,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     },
                 });
             }
+            resizeActiveRef.current = false;
             setResizeState(null);
         };
         window.addEventListener('pointermove', onMove);
@@ -802,20 +925,45 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
         };
-    }, [resizeState, collabPatchNode]);
+    }, [resizeState, collabPatchNode, collabPatchNodes]);
 
     const handleRotateStart = useCallback((nodeId, e) => {
         e.stopPropagation();
+        e.preventDefault();
+        nodeDragRef.current = null;
+        resizeActiveRef.current = true;
         if (e.currentTarget?.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
         const state = useWhiteboardStore.getState();
-        const node = state.nodes.find((n) => n.id === nodeId);
-        if (!node) return;
         const rect = containerRef.current?.getBoundingClientRect();
         const vp = viewportRef.current;
-        if (!rect || !vp) return;
-        const center = getNodeCenterWorld(node, state.nodes);
+        if (!rect || !vp) {
+            resizeActiveRef.current = false;
+            return;
+        }
         const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, vp);
         setResizeState(null);
+
+        if (nodeId === SELECTION_TRANSFORM_ID) {
+            const transformIds = getTransformTargetIds(state.selectedNodeIds, state.nodes);
+            if (transformIds.length < 2) {
+                resizeActiveRef.current = false;
+                return;
+            }
+            const beforeSnapshots = captureNodesSnapshot(useWhiteboardStore, transformIds);
+            const center = getSelectionTransformCenter(state.nodes, transformIds);
+            setRotateState({
+                mode: 'selection',
+                nodeIds: transformIds,
+                beforeSnapshots,
+                center,
+                startAngle: pointerWorldAngleDeg(center.x, center.y, world.x, world.y),
+            });
+            return;
+        }
+
+        const node = state.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const center = getNodeCenterWorld(node, state.nodes);
         setRotateState({
             nodeId,
             beforeNode: cloneNode(node),
@@ -827,6 +975,54 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
 
     useEffect(() => {
         if (!rotateState) return;
+
+        if (rotateState.mode === 'selection') {
+            const { center, startAngle, beforeSnapshots, nodeIds } = rotateState;
+            const onMove = (e) => {
+                const rect = containerRef.current?.getBoundingClientRect();
+                if (!rect || !viewportRef.current) return;
+                const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
+                const currentAngle = pointerWorldAngleDeg(center.x, center.y, world.x, world.y);
+                let delta = currentAngle - startAngle;
+                if (e.shiftKey) {
+                    delta = Math.round(delta / 15) * 15;
+                }
+                const state = useWhiteboardStore.getState();
+                const patches = computeMultiRotatePatches(
+                    beforeSnapshots,
+                    state.nodes,
+                    center,
+                    delta
+                );
+                if (patches.length) collabPatchNodes(patches);
+            };
+            const onUp = () => {
+                const before = rotateState.beforeSnapshots ?? [];
+                const after = captureNodesSnapshot(useWhiteboardStore, nodeIds);
+                const changed =
+                    before.length > 0 &&
+                    before.some((b, i) => {
+                        const a = after[i];
+                        if (!a) return true;
+                        return JSON.stringify(b.node) !== JSON.stringify(a.node);
+                    });
+                if (changed) {
+                    useWhiteboardStore.getState().pushHistory({
+                        type: 'nodes_replace',
+                        payload: { before, after },
+                    });
+                }
+                resizeActiveRef.current = false;
+                setRotateState(null);
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+            return () => {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+            };
+        }
+
         const { nodeId, center, originRotation, startAngle } = rotateState;
         const onMove = (e) => {
             const rect = containerRef.current?.getBoundingClientRect();
@@ -853,6 +1049,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     },
                 });
             }
+            resizeActiveRef.current = false;
             setRotateState(null);
         };
         window.addEventListener('pointermove', onMove);
@@ -861,29 +1058,84 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
         };
-    }, [rotateState, collabPatchNode]);
+    }, [rotateState, collabPatchNode, collabPatchNodes]);
+
+    const COLORABLE_TYPES = new Set(['sticky_note', 'text', 'shape', 'frame', 'comment']);
+
+    const openSelectionContextMenu = useCallback((clientX, clientY) => {
+        const st = useWhiteboardStore.getState();
+        const prunedIds = resolveDragNodeIds(st.selectedNodeIds, st.nodes);
+        const { canGroup, canUngroup } = getSelectionContextFlags(st.nodes, st.selectedNodeIds);
+        const showColorPicker = st.nodes.some(
+            (n) => prunedIds.includes(n.id) && COLORABLE_TYPES.has(n.type)
+        );
+        setContextMenuPosition({
+            left: clientX,
+            top: clientY,
+            mode: 'selection',
+            canGroup,
+            canUngroup,
+            showColorPicker,
+        });
+    }, []);
+
+    const handleDeleteSelection = useCallback(() => {
+        const state = useWhiteboardStore.getState();
+        const ids = resolveDragNodeIds(state.selectedNodeIds, state.nodes);
+        if (!ids.length) return;
+        const selectedNodes = state.nodes.filter((n) => ids.includes(n.id));
+        pushHistory({
+            type: 'node_delete',
+            payload: { nodes: selectedNodes.map((n) => JSON.parse(JSON.stringify(n))) },
+        });
+        if (!collabConnected) {
+            for (const id of ids) {
+                deleteNodeService(id);
+            }
+        }
+        collabDeleteNodes(ids);
+        setSelection([]);
+    }, [pushHistory, collabConnected, collabDeleteNodes, setSelection]);
+
+    const handleSelectionColor = useCallback(
+        (color) => {
+            const state = useWhiteboardStore.getState();
+            const ids = resolveDragNodeIds(state.selectedNodeIds, state.nodes);
+            const selected = state.nodes.filter((n) => ids.includes(n.id));
+            if (!selected.length) return;
+            recordNodesMutation(useWhiteboardStore, ids, () => {
+                selected.forEach((n) => {
+                    const style = { ...n.style, backgroundColor: color, fill: color };
+                    if (n.type === 'sticky_note') {
+                        style.color = contrastingTextColor(color);
+                    }
+                    collabPatchNode(n.id, { style });
+                });
+            });
+        },
+        [collabPatchNode]
+    );
 
     const handleNodeContextMenu = useCallback(
-        (e, nodeId) => {
+        (e) => {
             e.preventDefault();
             e.stopPropagation();
-            setContextMenuPosition(null);
-            setSelection([nodeId]);
-            setFloatingToolbarOpen(true);
+            openSelectionContextMenu(e.clientX, e.clientY);
         },
-        [setSelection]
+        [openSelectionContextMenu]
     );
 
     const handleNodePointerDown = useCallback(
         (e, nodeId) => {
             if (e.button !== 0) return;
+            if (e.target?.closest?.('.whiteboard-resize-handle, .whiteboard-rotate-handle')) return;
+            if (resizeActiveRef.current) return;
             const editingId = useWhiteboardStore.getState().editingNodeId;
             if (editingId && editingId !== nodeId) {
                 commitTextEdit();
             } else if (editingId === nodeId && !e.target.closest('textarea, input')) {
                 commitTextEdit();
             }
-            setFloatingToolbarOpen(false);
             if (activeTool === 'connector') {
                 e.stopPropagation();
                 if (connectorFromNodeId) {
@@ -918,11 +1170,12 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportForChildren);
             const state = useWhiteboardStore.getState();
             const dragIds = state.selectedNodeIds.includes(nodeId) ? state.selectedNodeIds : [nodeId];
+            const prunedDragIds = resolveDragNodeIds(dragIds, state.nodes);
             nodeDragRef.current = {
                 nodeId,
-                startWorld: world,
-                startScreen: { x: e.clientX, y: e.clientY },
-                beforeSnapshots: captureNodesSnapshot(useWhiteboardStore, dragIds),
+                pointerStartWorld: world,
+                dragIds: prunedDragIds,
+                beforeSnapshots: captureNodesSnapshot(useWhiteboardStore, prunedDragIds),
             };
         },
         [viewportForChildren, activeTool, connectorFromNodeId, setConnectorFromNodeId, spaceId, addConnector, collabConnected, collabCreateConnector, commitTextEdit]
@@ -930,27 +1183,45 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
 
     useEffect(() => {
         const onMove = (e) => {
+            if (resizeActiveRef.current) return;
             const ref = nodeDragRef.current;
             if (!ref || !containerRef.current) return;
             const rect = containerRef.current.getBoundingClientRect();
             const vp = viewportRef.current;
             const curWorld = screenToWorldWithContainer(e.clientX, e.clientY, rect, vp);
-            const dx = curWorld.x - ref.startWorld.x;
-            const dy = curWorld.y - ref.startWorld.y;
-            ref.startWorld = curWorld;
+            const totalDx = curWorld.x - ref.pointerStartWorld.x;
+            const totalDy = curWorld.y - ref.pointerStartWorld.y;
             const state = useWhiteboardStore.getState();
-            const ids = state.selectedNodeIds.includes(ref.nodeId) ? state.selectedNodeIds : [ref.nodeId];
+            const ids = ref.dragIds ?? [ref.nodeId];
+            const snap = computeSnapForDrag({
+                nodes: state.nodes,
+                movingIds: ids,
+                initialSnapshots: ref.beforeSnapshots,
+                totalDx,
+                totalDy,
+                zoom: vp?.zoom ?? 1,
+                pageId: state.activePageId,
+            });
+            setSnapGuides(snap.guides);
             const patches = ids.map((id) => {
-                const n = state.nodes.find((node) => node.id === id);
-                return n ? { id, patch: { x: n.x + dx, y: n.y + dy } } : null;
+                const initial = ref.beforeSnapshots?.find((b) => b.id === id)?.node;
+                if (!initial) return null;
+                return {
+                    id,
+                    patch: {
+                        x: (initial.x ?? 0) + snap.dx,
+                        y: (initial.y ?? 0) + snap.dy,
+                    },
+                };
             }).filter(Boolean);
             if (patches.length) collabPatchNodes(patches);
         };
         const onUp = () => {
+            setSnapGuides([]);
             const ref = nodeDragRef.current;
             if (ref) {
                 const state = useWhiteboardStore.getState();
-                const ids = state.selectedNodeIds.includes(ref.nodeId) ? state.selectedNodeIds : [ref.nodeId];
+                const ids = ref.dragIds ?? [ref.nodeId];
                 ids.forEach((id) => {
                     const node = state.nodes.find((n) => n.id === id);
                     if (!node?.parentId) return;
@@ -1083,21 +1354,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                             nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType;
                         const defaults = getDefaultNodePayload(defaultKey, w1.x, w1.y);
                         defaults.type = nodeType;
-                        const offsets = {
-                            sticky_note: [75, 50],
-                            text: [100, 20],
-                            shape: [50, 50],
-                            frame: [150, 100],
-                            image: [100, 75],
-                            comment: [100, 40],
-                            link: [120, 40],
-                            todo_list: [110, 60],
-                            file_card: [110, 40],
-                            drawing: [100, 75],
-                            column: [100, 100],
-                            table: [140, 60],
-                        };
-                        const [ox, oy] = offsets[drag.tool] || offsets[nodeType] || [50, 50];
+                        const [ox, oy] = getNodeCreateOffset(drag.tool || nodeType);
                         await createNodeAt(nodeType, w1.x - ox, w1.y - oy);
                     }
                     createDragRef.current = null;
@@ -1127,16 +1384,17 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                                 width: Math.abs(w2.x - w1.x),
                                 height: Math.abs(w2.y - w1.y),
                             };
-                            const ids = nodes
-                                .filter(
-                                    (n) =>
-                                        rectIntersects(
-                                            box,
-                                            { x: n.x, y: n.y, width: n.width || 0, height: n.height || 0 }
-                                        )
+                            const hitIds = nodes
+                                .filter((n) =>
+                                    rectIntersects(box, {
+                                        x: n.x,
+                                        y: n.y,
+                                        width: n.width || 0,
+                                        height: n.height || 0,
+                                    })
                                 )
                                 .map((n) => n.id);
-                            setSelection(ids);
+                            setSelection(resolveDragNodeIds(hitIds, nodes));
                         }
                     }
                     setSelectionBox(null);
@@ -1188,12 +1446,23 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             const el = e.target;
             if (el?.closest?.('.whiteboard-node-wrapper') || el?.closest?.('.whiteboard-viewport-controls')) return;
             e.preventDefault();
+            const st = useWhiteboardStore.getState();
+            if (st.selectedNodeIds.length > 0 && activeTool === 'select') {
+                openSelectionContextMenu(e.clientX, e.clientY);
+                return;
+            }
             const rect = containerRef.current?.getBoundingClientRect();
             if (!rect || !viewportForChildren) return;
             const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportForChildren);
-            setContextMenuPosition({ left: e.clientX, top: e.clientY, worldX: world.x, worldY: world.y });
+            setContextMenuPosition({
+                left: e.clientX,
+                top: e.clientY,
+                worldX: world.x,
+                worldY: world.y,
+                mode: 'create',
+            });
         },
-        [viewportForChildren]
+        [viewportForChildren, activeTool, openSelectionContextMenu]
     );
 
     const handleContextMenuCreate = useCallback(
@@ -1239,8 +1508,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportForChildren);
             const toolType = e.dataTransfer.getData('application/x-whiteboard-tool');
             if (toolType && NODE_TYPES_ALLOWED.includes(toolType)) {
-                const offsets = { sticky_note: [75, 50], text: [100, 20], shape: [50, 50], frame: [150, 100], image: [100, 75], comment: [100, 40] };
-                const [ox, oy] = offsets[toolType] || [50, 50];
+                const [ox, oy] = getNodeCreateOffset(toolType);
                 createNodeAt(toolType, world.x - ox, world.y - oy);
                 return;
             }
@@ -1313,6 +1581,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 <div
                     className={`whiteboard-viewport ${viewportState.isPanning ? 'panning' : ''} ${isSpacePressed ? 'space-pressed' : ''} ${!gridVisible ? 'grid-hidden' : ''} ${rulersVisible ? 'rulers-visible' : ''}`}
                     ref={containerRef}
+                    tabIndex={-1}
                 onWheel={viewportState.handleWheel}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
@@ -1332,6 +1601,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     style={viewportState.transformStyle}
                 >
                     <ConnectorLayer />
+                    <SnapGuidesOverlay guides={snapGuides} />
                     <div className="whiteboard-nodes-container">
                         <NodeLayer
                             onNodePointerDown={handleNodePointerDown}
@@ -1340,6 +1610,11 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                             onRotateStart={handleRotateStart}
                         />
                     </div>
+                    <SelectionTransformOverlay
+                        viewport={viewportForChildren}
+                        onResizeStart={handleResizeStart}
+                        onRotateStart={handleRotateStart}
+                    />
                 </div>
                 <SelectionManager
                     selectionBox={selectionBox}
@@ -1355,12 +1630,20 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     className="whiteboard-viewport-controls"
                     onPointerDown={(e) => {
                         e.stopPropagation();
-                        setFloatingToolbarOpen(false);
                     }}
                 >
                     <button
                         type="button"
+                        title="Centralizar vista"
+                        onClick={() => viewportState.setViewport({ x: 0, y: 0 }, 1)}
+                    >
+                        <Focus size={18} />
+                    </button>
+                    <span className="whiteboard-viewport-controls-divider" aria-hidden />
+                    <button
+                        type="button"
                         title={gridVisible ? 'Ocultar grade' : 'Mostrar grade'}
+                        className={gridVisible ? 'active' : ''}
                         onClick={() => setGridVisible(!gridVisible)}
                     >
                         <Grid3X3 size={18} />
@@ -1427,10 +1710,19 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 onCreateNode={handleContextMenuCreate}
                 onUploadImage={handleContextMenuUploadImage}
                 onUploadFile={handleContextMenuUploadFile}
+                onGroup={() => groupSelectedNodes(useWhiteboardStore, collabPatchNodes)}
+                onUngroup={() =>
+                    ungroupSelectedNodes(useWhiteboardStore, collabPatchNodes, collabDeleteNodes)
+                }
+                onBringToFront={() =>
+                    patchZIndexSelected(useWhiteboardStore, collabPatchNodes, 'front')
+                }
+                onSendToBack={() => patchZIndexSelected(useWhiteboardStore, collabPatchNodes, 'back')}
+                onDuplicate={handleDuplicate}
+                onDelete={handleDeleteSelection}
+                onColorChange={handleSelectionColor}
+                showColorPicker={contextMenuPosition?.showColorPicker}
             />
-            {floatingToolbarOpen && selectedNodeIds.length > 0 && (
-                <FloatingToolbar viewport={viewportForChildren} containerRef={containerRef} />
-            )}
         </>
     );
 }

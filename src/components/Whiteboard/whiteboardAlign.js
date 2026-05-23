@@ -1,5 +1,6 @@
-import { nodeToWorld, buildNodesById } from './whiteboardNodeOps';
+import { nodeToWorld, buildNodesById, worldTopLeftToNodePatch } from './whiteboardNodeOps';
 import { recordNodesMutation } from './whiteboardHistory';
+import { resolveDragNodeIds } from './whiteboardSelectionUtils';
 
 export function getSelectionWorldBounds(selectedNodes, allNodes) {
     const byId = buildNodesById(allNodes);
@@ -34,25 +35,13 @@ export function getSelectionWorldBounds(selectedNodes, allNodes) {
     };
 }
 
-function worldToNodePatch(node, worldX, worldY, allNodes) {
-    const byId = buildNodesById(allNodes);
-    if (!node.parentId) {
-        return { x: worldX, y: worldY };
-    }
-    const parent = byId.get(node.parentId);
-    if (!parent) {
-        return { x: worldX, y: worldY, parentId: null };
-    }
-    const pw = nodeToWorld(parent, byId);
-    return { x: worldX - pw.x, y: worldY - pw.y };
-}
-
 /**
  * @param {'left'|'centerH'|'right'|'top'|'centerV'|'bottom'|'centerCanvas'} mode
  */
 export function alignSelectedNodes(store, collabPatchNodes, mode) {
     const state = store.getState();
-    const selected = state.nodes.filter((n) => state.selectedNodeIds.includes(n.id));
+    const prunedIds = resolveDragNodeIds(state.selectedNodeIds, state.nodes);
+    const selected = state.nodes.filter((n) => prunedIds.includes(n.id));
     if (!selected.length) return;
 
     const bbox = getSelectionWorldBounds(selected, state.nodes);
@@ -66,7 +55,7 @@ export function alignSelectedNodes(store, collabPatchNodes, mode) {
             const world = nodeToWorld(n, byId);
             patches.push({
                 id: n.id,
-                patch: worldToNodePatch(n, world.x + dx, world.y + dy, state.nodes),
+                patch: worldTopLeftToNodePatch(n, world.x + dx, world.y + dy, state.nodes),
             });
         }
         recordNodesMutation(store, patches.map((p) => p.id), () => collabPatchNodes(patches));
@@ -105,7 +94,7 @@ export function alignSelectedNodes(store, collabPatchNodes, mode) {
 
         patches.push({
             id: n.id,
-            patch: worldToNodePatch(n, wx, wy, state.nodes),
+            patch: worldTopLeftToNodePatch(n, wx, wy, state.nodes),
         });
     }
 

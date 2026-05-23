@@ -21,7 +21,13 @@ export function getDefaultNodePayload(type, x, y) {
     const id = uuidv4();
     const base = { id, x, y, rotation: 0, scale: 1, parentId: null, zIndex: 0 };
     const defaults = {
-        sticky_note: { type: 'sticky_note', width: 150, height: 100, data: { text: '' }, style: { backgroundColor: '#fef08a' } },
+        sticky_note: {
+            type: 'sticky_note',
+            width: 150,
+            height: 100,
+            data: { text: '' },
+            style: { backgroundColor: '#fef08a', color: '#111827' },
+        },
         text: { type: 'text', width: 200, height: 40, data: { text: 'Text' }, style: {} },
         shape: { type: 'shape', width: 100, height: 100, data: { shape: 'rectangle' }, style: { fill: 'var(--bg-elevated)', stroke: 'var(--border-color)' } },
         frame: { type: 'frame', width: 300, height: 200, data: { title: 'Frame' }, style: {} },

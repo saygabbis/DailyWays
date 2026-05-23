@@ -42,6 +42,14 @@ export function isDescendantOf(ancestorId, nodeId, nodes) {
     return false;
 }
 
+/** Remove ids cujo ancestral também está na lista (evita duplo arraste/transform). */
+export function pruneHierarchyIds(ids, nodes) {
+    const list = ids ?? [];
+    return list.filter(
+        (id) => !list.some((otherId) => otherId !== id && isDescendantOf(otherId, id, nodes))
+    );
+}
+
 export function canNestInside(dragId, targetId, nodes) {
     if (!dragId || !targetId || dragId === targetId) return false;
     if (isDescendantOf(dragId, targetId, nodes)) return false;
@@ -50,6 +58,9 @@ export function canNestInside(dragId, targetId, nodes) {
 }
 
 export function layerDisplayName(node) {
+    if (node._isVirtualGroup || node.type === 'group') {
+        return String(node.data?.nodeGroupName || 'Grupo').slice(0, 48);
+    }
     if (node.data?.layerName) return String(node.data.layerName).slice(0, 48);
     if (node.type === 'text' || node.type === 'sticky_note') {
         const t = node.data?.text ?? '';
@@ -77,6 +88,9 @@ export function layerDisplayName(node) {
 export function renamePatchForNode(node, name) {
     const trimmed = String(name ?? '').trim();
     if (!trimmed) return null;
+    if (node._isVirtualGroup || node.type === 'group') {
+        return { _renameGroupId: node._nodeGroupId, _groupName: trimmed };
+    }
     if (node.type === 'frame') {
         return { data: { ...node.data, title: trimmed, layerName: trimmed } };
     }

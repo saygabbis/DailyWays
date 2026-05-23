@@ -2,7 +2,6 @@ import React, { useRef, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { getInspectorInsetPx } from '../Whiteboard/inspectorLayout';
-import { Focus } from 'lucide-react';
 import CanvasEngine from '../Whiteboard/CanvasEngine';
 import { CollabOpsProvider } from '../../collab/whiteboard/CollabOpsContext.jsx';
 import PresenceOnlineList from '../../collab/board/ui/PresenceOnlineList.jsx';
@@ -14,7 +13,6 @@ export default function SpaceView({ spaceId }) {
     const inspectorInset = getInspectorInsetPx(inspectorPanelOpen);
     const space = state.spaces.find(s => s.id === spaceId);
     const saveTimer = useRef(null);
-    const viewportControlRef = useRef(null);
 
     const onViewportChange = useCallback((newPan, newZoom) => {
         if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -32,17 +30,6 @@ export default function SpaceView({ spaceId }) {
             }
         }, 1000);
     }, [spaceId, dispatch, suppressRealtime]);
-
-    const handleReset = useCallback(async () => {
-        viewportControlRef.current?.resetViewport?.();
-        if (suppressRealtime) suppressRealtime(2000);
-        try {
-            const { updateSpace } = await import('../../services/workspaceService');
-            await updateSpace(spaceId, { panX: 0, panY: 0, zoom: 1 });
-        } catch (error) {
-            console.error('Failed to reset space coords', error);
-        }
-    }, [spaceId, suppressRealtime]);
 
     if (!space) return <div className="space-view-empty">Space não encontrado</div>;
 
@@ -64,14 +51,8 @@ export default function SpaceView({ spaceId }) {
                     spaceId={spaceId}
                     space={space}
                     onViewportChange={onViewportChange}
-                    onRegisterViewportControl={(api) => {
-                        viewportControlRef.current = api;
-                    }}
                 />
             </CollabOpsProvider>
-            <button className="space-reset-btn btn-floating" onClick={handleReset} title="Centralizar">
-                <Focus size={18} />
-            </button>
         </div>
     );
 }
