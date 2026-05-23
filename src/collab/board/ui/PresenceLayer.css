@@ -19,6 +19,15 @@
   z-index: 150;
 }
 
+/* Board: cursores no espaço de conteúdo — rolam com o scroller, sem “deslizar” no scroll local */
+.collab-presence-layer--board-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 150;
+  pointer-events: none;
+}
+
 .collab-presence-layer--elevated {
   z-index: calc(var(--z-modal) + 5);
 }
@@ -31,7 +40,8 @@
   display: flex;
   flex-direction: row;
   align-items: flex-start;
-  will-change: transform;
+  /* Ponta do ponteiro (M2 2 no SVG 20×24) — translate posiciona a ponta, não o canto do flex */
+  transform-origin: 2px 2px;
   contain: layout style;
 }
 
@@ -105,6 +115,15 @@
 }
 
 .collab-remote-drag-layer {
+  pointer-events: none;
+  overflow: visible;
+}
+
+.collab-remote-drag-layer--content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 160;
   pointer-events: none;
   overflow: visible;
 }

@@ -45,12 +45,18 @@ export function applyBoardAction(board, action) {
       };
 
     case 'MOVE_LIST': {
-      const { boardId, sourceIndex, destIndex } = action.payload || {};
+      const { boardId, sourceIndex, destIndex, listId: movingListId } = action.payload || {};
       if (board.id !== boardId) return board;
       const newLists = [...board.lists];
-      const [moved] = newLists.splice(sourceIndex, 1);
+      // Bug#1 fix: usa ID se disponível para localizar o item, evitando posição errada em ops concorrentes
+      const resolvedSrcIdx = movingListId
+        ? newLists.findIndex((l) => l.id === movingListId)
+        : sourceIndex;
+      if (resolvedSrcIdx < 0 || resolvedSrcIdx >= newLists.length) return board;
+      const [moved] = newLists.splice(resolvedSrcIdx, 1);
       if (!moved) return board;
-      newLists.splice(destIndex, 0, moved);
+      const clampedDest = Math.min(destIndex, newLists.length);
+      newLists.splice(clampedDest, 0, moved);
       return { ...board, lists: newLists };
     }
 
@@ -113,15 +119,21 @@ export function applyBoardAction(board, action) {
     }
 
     case 'MOVE_CARD': {
-      const { boardId, sourceListId, destListId, sourceIndex, destIndex } = action.payload || {};
+      const { boardId, sourceListId, destListId, sourceIndex, destIndex, cardId: movingCardId } = action.payload || {};
       if (board.id !== boardId) return board;
       const newLists = board.lists.map((l) => ({ ...l, cards: [...l.cards] }));
       const sourceList = newLists.find((l) => l.id === sourceListId);
       const destList = newLists.find((l) => l.id === destListId);
       if (!sourceList || !destList) return board;
-      const [movedCard] = sourceList.cards.splice(sourceIndex, 1);
+      // Bug#1 fix: usa ID se disponível para localizar o card, evitando posição errada em ops concorrentes
+      const resolvedSrcIdx = movingCardId
+        ? sourceList.cards.findIndex((c) => c.id === movingCardId)
+        : sourceIndex;
+      if (resolvedSrcIdx < 0) return board;
+      const [movedCard] = sourceList.cards.splice(resolvedSrcIdx, 1);
       if (!movedCard) return board;
-      destList.cards.splice(destIndex, 0, movedCard);
+      const clampedDest = Math.min(destIndex, destList.cards.length);
+      destList.cards.splice(clampedDest, 0, movedCard);
       return { ...board, lists: newLists };
     }
 

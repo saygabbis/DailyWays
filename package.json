@@ -15,6 +15,7 @@
     "start:vps": "node scripts/start-vps.mjs",
     "build": "vite build",
     "lint": "eslint .",
+    "test": "npm run test -w @dailyways/collab-protocol && npm run test -w @dailyways/collab-server",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -450,6 +450,8 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
     const onPageShow = () => scheduleJoinWhenConnected('pageshow', { force: true });
 
+    const onCollabSocketReconnected = () => scheduleJoinWhenConnected('token-refresh', { force: true });
+
 
 
     socket.on('disconnect', onSocketDisconnect);
@@ -461,6 +463,8 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
     document.addEventListener('visibilitychange', onVisibility);
 
     window.addEventListener('pageshow', onPageShow);
+
+    window.addEventListener('collab-socket-reconnected', onCollabSocketReconnected);
 
 
 
@@ -496,6 +500,8 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
       document.removeEventListener('visibilitychange', onVisibility);
 
       window.removeEventListener('pageshow', onPageShow);
+
+      window.removeEventListener('collab-socket-reconnected', onCollabSocketReconnected);
 
 
 

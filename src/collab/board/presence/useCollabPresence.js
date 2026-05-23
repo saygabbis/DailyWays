@@ -14,6 +14,7 @@ import {
   pushPresenceFields as pushFields,
 } from './presenceBridge.js';
 import { getGlobalJoinedBoardId } from '../sync/boardCollabSession.js';
+import { boardScreenPointFromContent } from '../coords/scrollContentCoords.js';
 
 const CURSOR_EMIT_MS = 16;
 const META_EMIT_MS = 80;
@@ -53,7 +54,9 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
 
   const canEmitPresence = useCallback(() => {
     if (!roomId || !collab?.socket?.connected) return false;
-    return getGlobalJoinedBoardId() === roomId;
+    const joined = getGlobalJoinedBoardId();
+    if (joined && joined !== roomId) return false;
+    return true;
   }, [roomId, collab?.socket, collab?.connected]);
 
   const flushPresence = useCallback(() => {
@@ -66,7 +69,7 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
     const socket = collab?.socket;
     if (!canEmitPresence()) return;
     const payload = buildCursorPresencePayload(roomId, authRef.current);
-    if (payload.cursor) emitPresence(socket, payload);
+    if (payload.cursor?.space === 'board') emitPresence(socket, payload);
   }, [collab?.socket, roomId, canEmitPresence]);
 
   const scheduleMetaSend = useCallback(() => {
@@ -140,10 +143,28 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
       return;
     }
     if (mode === 'screen') {
-      fields.cursor = coords.cursor ?? { x: coords.x, y: coords.y, mode: 'screen' };
-      fields.cursorScreen = coords.cursorScreen ?? { x: coords.x, y: coords.y };
-      if ('cursorModal' in coords) {
-        fields.cursorModal = coords.cursorModal;
+      if (coords.cursor?.space === 'board') {
+        fields.cursor = coords.cursor;
+        fields.cursorModal = null;
+        const scroller = typeof document !== 'undefined' ? document.querySelector('.board-scroller') : null;
+        const screen = scroller
+          ? boardScreenPointFromContent(scroller, coords.cursor.x, coords.cursor.y)
+          : null;
+        fields.cursorScreen = screen || coords.cursorScreen || null;
+      } else if (coords.selectedCardId != null || coords.cursorModal != null || 'cursorModal' in coords) {
+        if (coords.cursorModal != null) {
+          fields.cursorModal = coords.cursorModal;
+        } else {
+          fields.cursorModal = null;
+        }
+        if (coords.cursorScreen) fields.cursorScreen = coords.cursorScreen;
+      } else if (typeof coords.x === 'number' && typeof coords.y === 'number') {
+        fields.cursor = { x: coords.x, y: coords.y, space: 'board' };
+        if ('cursorModal' in coords) fields.cursorModal = coords.cursorModal;
+        const scroller = typeof document !== 'undefined' ? document.querySelector('.board-scroller') : null;
+        fields.cursorScreen = scroller
+          ? boardScreenPointFromContent(scroller, coords.x, coords.y)
+          : (coords.cursorScreen || null);
       }
       if ('selectedCardId' in coords) {
         fields.selectedCardId = coords.selectedCardId;

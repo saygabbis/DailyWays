@@ -1,5 +1,6 @@
 import { getPresenceFields } from './presenceBridge.js';
 import { announcePresence } from './presenceBridge.js';
+import { setLastBoardPointer } from './lastBoardPointer.js';
 
 /** Marca se o utilizador está focado na superfície do board (sem overlay / fora da área). */
 export function applyBoardPresenceFocus(boardId, focused) {
@@ -22,9 +23,16 @@ export function publishBoardPresenceFocus(boardId, focused) {
   announcePresence(boardId);
 }
 
-/** Modal da task: fora da superfície do board mas mantém cursor para co-presença. */
+/** Modal da task: fora da superfície do board mas mantém cursor do board para restaurar ao sair. */
 export function applyTaskModalPresence(boardId) {
   if (!boardId) return;
   const f = getPresenceFields(boardId);
+  if (f.cursor?.space === 'board' && typeof f.cursor.x === 'number' && typeof f.cursor.y === 'number') {
+    setLastBoardPointer(boardId, {
+      x: f.cursor.x,
+      y: f.cursor.y,
+      cursorScreen: f.cursorScreen || null,
+    });
+  }
   f.onBoardSurface = false;
 }

@@ -21,6 +21,7 @@ import {
     prepareBoardSurfacePresence,
     restoreBoardPresenceAfterModal,
     publishBoardPresenceFull,
+    scheduleBoardCursorResyncAfterModal,
 } from '../../collab/board/presence/boardPresencePublish.js';
 import { publishBoardPresenceFocus } from '../../collab/board/presence/boardPresenceFocus.js';
 import { announcePresence } from '../../collab/board/presence/presenceBridge.js';
@@ -161,11 +162,21 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         setHoldBoardSurface(true);
         restoreBoardPresenceAfterModal(board.id);
         announcePresence(board.id);
+        let cancelResync = () => {};
         if (collab?.socket?.connected) {
-            publishBoardPresenceFull(collab.socket, board.id, { user, profile });
+            const auth = { user, profile };
+            publishBoardPresenceFull(collab.socket, board.id, auth);
+            cancelResync = scheduleBoardCursorResyncAfterModal(board.id, () => {
+                if (!collab?.socket?.connected) return;
+                publishBoardPresenceFull(collab.socket, board.id, auth);
+                announcePresence(board.id);
+            });
         }
         const t = setTimeout(() => setHoldBoardSurface(false), 600);
-        return () => clearTimeout(t);
+        return () => {
+            clearTimeout(t);
+            cancelResync();
+        };
     }, [focusedCardId, board?.id, collab?.socket, collab?.connected, user, profile]);
 
     useEffect(() => {

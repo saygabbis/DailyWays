@@ -43,23 +43,38 @@ function commentToRow(comment, spaceId) {
   };
 }
 
+function throwIfDbError(result, context) {
+  if (result?.error) {
+    throw new Error(`[flushRoom] ${context}: ${result.error.message}`);
+  }
+}
+
 export async function flushRoom(room, spaceId) {
   if (!supabaseAdmin) return;
 
   const { dirty, deleted, nodes, connectors, comments } = room;
 
   for (const id of deleted.nodes) {
-    await supabaseAdmin.from('space_nodes').delete().eq('id', id);
+    throwIfDbError(
+      await supabaseAdmin.from('space_nodes').delete().eq('id', id),
+      `delete node ${id}`,
+    );
   }
   deleted.nodes.clear();
 
   for (const id of deleted.connectors) {
-    await supabaseAdmin.from('space_connectors').delete().eq('id', id);
+    throwIfDbError(
+      await supabaseAdmin.from('space_connectors').delete().eq('id', id),
+      `delete connector ${id}`,
+    );
   }
   deleted.connectors.clear();
 
   for (const id of deleted.comments) {
-    await supabaseAdmin.from('space_comments').delete().eq('id', id);
+    throwIfDbError(
+      await supabaseAdmin.from('space_comments').delete().eq('id', id),
+      `delete comment ${id}`,
+    );
   }
   deleted.comments.clear();
 
@@ -67,14 +82,25 @@ export async function flushRoom(room, spaceId) {
     const node = nodes.find((n) => n.id === id);
     if (!node) continue;
     const row = nodeToRow(node, spaceId);
-    const { data: existing } = await supabaseAdmin.from('space_nodes').select('id').eq('id', id).maybeSingle();
+    const { data: existing, error: selectErr } = await supabaseAdmin
+      .from('space_nodes')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+    throwIfDbError(selectErr, `select node ${id}`);
     if (existing) {
       const { x, y, width, height, rotation, scale, data_json, style_json, parent_id, z_index } = row;
-      await supabaseAdmin.from('space_nodes').update({
-        x, y, width, height, rotation, scale, data_json, style_json, parent_id, z_index,
-      }).eq('id', id);
+      throwIfDbError(
+        await supabaseAdmin.from('space_nodes').update({
+          x, y, width, height, rotation, scale, data_json, style_json, parent_id, z_index,
+        }).eq('id', id),
+        `update node ${id}`,
+      );
     } else {
-      await supabaseAdmin.from('space_nodes').insert(row);
+      throwIfDbError(
+        await supabaseAdmin.from('space_nodes').insert(row),
+        `insert node ${id}`,
+      );
     }
   }
   dirty.nodes.clear();
@@ -83,14 +109,25 @@ export async function flushRoom(room, spaceId) {
     const conn = connectors.find((c) => c.id === id);
     if (!conn) continue;
     const row = connectorToRow(conn, spaceId);
-    const { data: existing } = await supabaseAdmin.from('space_connectors').select('id').eq('id', id).maybeSingle();
+    const { data: existing, error: selectErr } = await supabaseAdmin
+      .from('space_connectors')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+    throwIfDbError(selectErr, `select connector ${id}`);
     if (existing) {
-      await supabaseAdmin.from('space_connectors').update({
-        control_points: row.control_points,
-        style_json: row.style_json,
-      }).eq('id', id);
+      throwIfDbError(
+        await supabaseAdmin.from('space_connectors').update({
+          control_points: row.control_points,
+          style_json: row.style_json,
+        }).eq('id', id),
+        `update connector ${id}`,
+      );
     } else {
-      await supabaseAdmin.from('space_connectors').insert(row);
+      throwIfDbError(
+        await supabaseAdmin.from('space_connectors').insert(row),
+        `insert connector ${id}`,
+      );
     }
   }
   dirty.connectors.clear();
@@ -99,16 +136,27 @@ export async function flushRoom(room, spaceId) {
     const comment = comments.find((c) => c.id === id);
     if (!comment) continue;
     const row = commentToRow(comment, spaceId);
-    const { data: existing } = await supabaseAdmin.from('space_comments').select('id').eq('id', id).maybeSingle();
+    const { data: existing, error: selectErr } = await supabaseAdmin
+      .from('space_comments')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+    throwIfDbError(selectErr, `select comment ${id}`);
     if (existing) {
-      await supabaseAdmin.from('space_comments').update({
-        message: row.message,
-        node_id: row.node_id,
-        x: row.x,
-        y: row.y,
-      }).eq('id', id);
+      throwIfDbError(
+        await supabaseAdmin.from('space_comments').update({
+          message: row.message,
+          node_id: row.node_id,
+          x: row.x,
+          y: row.y,
+        }).eq('id', id),
+        `update comment ${id}`,
+      );
     } else {
-      await supabaseAdmin.from('space_comments').insert(row);
+      throwIfDbError(
+        await supabaseAdmin.from('space_comments').insert(row),
+        `insert comment ${id}`,
+      );
     }
   }
   dirty.comments.clear();

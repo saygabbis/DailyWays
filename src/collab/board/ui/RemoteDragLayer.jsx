@@ -1,12 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Circle, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../../../context/AppContext';
 import { useBoardPresenceHighlights } from '../../../hooks/useBoardPresenceHighlights';
 import { usePresenceStore } from '../presence/presenceStore';
 import { presenceLabelTextColor } from '../../../utils/presenceLabelContrast.js';
-import { boardContentCursorToViewport } from '../coords/boardCursorCoords.js';
-import { viewportFromContentPoint } from '../coords/scrollContentCoords.js';
+import { boardContentCursorPosition } from '../coords/boardCursorCoords.js';
+import { getBoardPresenceLayerAnchor } from '../coords/scrollContentCoords.js';
 import './PresenceLayer.css';
 
 const CARD_OFFSET_X = 14;
@@ -14,20 +14,12 @@ const CARD_OFFSET_Y = 20;
 const LIST_OFFSET_X = 18;
 const LIST_OFFSET_Y = 24;
 
-function resolveDragScreenPosition(drag, peers, scrollerEl, offsetX, offsetY) {
+function resolveDragContentPosition(drag, peers, scrollerEl, offsetX, offsetY) {
   const peer = peers.find((p) => p.userId === drag.userId);
-  if (peer && scrollerEl) {
-    const fromBoard = boardContentCursorToViewport(peer, scrollerEl);
-    if (fromBoard) {
-      return { x: fromBoard.x + offsetX, y: fromBoard.y + offsetY };
-    }
-    return null;
-  }
-  if (typeof drag.x === 'number' && typeof drag.y === 'number' && scrollerEl) {
-    const pos = viewportFromContentPoint(scrollerEl, drag.x, drag.y);
-    if (pos) return { x: pos.x + offsetX, y: pos.y + offsetY };
-  }
-  return null;
+  if (!peer || !scrollerEl) return null;
+  const pos = boardContentCursorPosition(peer, scrollerEl);
+  if (!pos) return null;
+  return { x: pos.x + offsetX, y: pos.y + offsetY };
 }
 
 function PeerBadge({ drag, color }) {
@@ -113,9 +105,10 @@ function ListGhost({ list, drag, color, pos }) {
 }
 
 /**
- * Ghost cards/lists that follow remote peers while they drag.
+ * Ghost cards/lists que seguem peers remotos durante arraste (espaço de conteúdo do board).
  */
 export default function RemoteDragLayer({ boardId, boardScrollerRef = null, layoutRepaint = 0 }) {
+  const layerRef = useRef(null);
   const { state } = useApp();
   const { remoteDrags, remoteListDrags } = useBoardPresenceHighlights();
   const cursorFrame = usePresenceStore((s) => s.cursorFrame);
@@ -135,17 +128,38 @@ export default function RemoteDragLayer({ boardId, boardScrollerRef = null, layo
     return { cardsById, listsById };
   }, [state.boards, boardId]);
 
+  const scrollerEl = boardScrollerRef?.current ?? null;
+
+  useEffect(() => {
+    const layer = layerRef.current;
+    const scroller = boardScrollerRef?.current;
+    if (!layer || !scroller) return undefined;
+    const syncAnchor = () => {
+      const anchor = getBoardPresenceLayerAnchor(scroller);
+      layer.style.left = `${anchor.offsetLeft}px`;
+      layer.style.top = `${anchor.offsetTop}px`;
+      if (anchor.width != null) layer.style.width = `${anchor.width}px`;
+      if (anchor.height != null) layer.style.height = `${anchor.height}px`;
+    };
+    syncAnchor();
+    const lists = scroller.querySelector('.board-lists');
+    const ro = lists && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(syncAnchor)
+      : null;
+    ro?.observe(lists);
+    return () => ro?.disconnect();
+  }, [boardScrollerRef, layoutRepaint]);
+
   const { cardGhosts, listGhosts } = useMemo(() => {
     void cursorFrame;
     void layoutRepaint;
-    const scrollerEl = boardScrollerRef?.current ?? null;
     const cards = [];
     const lists = [];
 
     for (const drag of remoteDrags) {
       const card = boardData.cardsById[drag.cardId];
       if (!card) continue;
-      const pos = resolveDragScreenPosition(drag, peers, scrollerEl, CARD_OFFSET_X, CARD_OFFSET_Y);
+      const pos = resolveDragContentPosition(drag, peers, scrollerEl, CARD_OFFSET_X, CARD_OFFSET_Y);
       if (!pos) continue;
       cards.push({
         key: `card-${drag.userId}-${drag.cardId}`,
@@ -159,7 +173,7 @@ export default function RemoteDragLayer({ boardId, boardScrollerRef = null, layo
     for (const drag of remoteListDrags) {
       const list = boardData.listsById[drag.listId];
       if (!list) continue;
-      const pos = resolveDragScreenPosition(drag, peers, scrollerEl, LIST_OFFSET_X, LIST_OFFSET_Y);
+      const pos = resolveDragContentPosition(drag, peers, scrollerEl, LIST_OFFSET_X, LIST_OFFSET_Y);
       if (!pos) continue;
       lists.push({
         key: `list-${drag.userId}-${drag.listId}`,
@@ -178,13 +192,13 @@ export default function RemoteDragLayer({ boardId, boardScrollerRef = null, layo
     peers,
     cursorFrame,
     layoutRepaint,
-    boardScrollerRef,
+    scrollerEl,
   ]);
 
   if (!cardGhosts.length && !listGhosts.length) return null;
 
   const layer = (
-    <div className="collab-remote-drag-layer collab-remote-drag-layer--viewport" aria-hidden>
+    <div ref={layerRef} className="collab-remote-drag-layer collab-remote-drag-layer--content" aria-hidden>
       {listGhosts.map(({ key, list, drag, color, pos }) => (
         <ListGhost key={key} list={list} drag={drag} color={color} pos={pos} />
       ))}
@@ -194,6 +208,9 @@ export default function RemoteDragLayer({ boardId, boardScrollerRef = null, layo
     </div>
   );
 
+  if (scrollerEl) {
+    return createPortal(layer, scrollerEl);
+  }
   if (typeof document !== 'undefined') {
     return createPortal(layer, document.body);
   }

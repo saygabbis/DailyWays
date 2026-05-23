@@ -9,9 +9,12 @@ import { applyOpToRoom } from './applyOp.js';
 import { applyBoardOpToRoom } from './applyBoardOp.js';
 import { flushRoom } from './persistence.js';
 import { flushBoard } from './flushBoard.js';
+import { createOpIdTracker } from './opIdTracker.js';
 
 const FLUSH_MS = Number(process.env.COLLAB_FLUSH_MS || 3000);
-const IDLE_EVICT_MS = Number(process.env.COLLAB_IDLE_EVICT_MS || 120000);
+// Aumentado de 2min para 10min — boards idle recarregavam do banco ao reentrar rapidamente
+const IDLE_EVICT_MS = Number(process.env.COLLAB_IDLE_EVICT_MS || 600000);
+const MAX_FLUSH_ERRORS = 5;
 
 function createSpaceRoom() {
   return {
@@ -34,6 +37,7 @@ function createSpaceRoom() {
     presenceSockets: new Map(),
     clientCount: 0,
     flushTimer: null,
+    flushErrorCount: 0,
     lastActivity: Date.now(),
   };
 }
@@ -48,8 +52,21 @@ function createBoardRoom() {
     presenceSockets: new Map(),
     clientCount: 0,
     flushTimer: null,
+    flushErrorCount: 0,
     lastActivity: Date.now(),
   };
+}
+
+function recordFlushError(room, roomId, err) {
+  room.flushErrorCount = (room.flushErrorCount || 0) + 1;
+  if (room.flushErrorCount >= MAX_FLUSH_ERRORS) {
+    console.error(
+      `[collab-server] CRÍTICO: flush falhou ${room.flushErrorCount}x consecutivas para room ${roomId}. Dados podem estar perdidos.`,
+      err,
+    );
+  } else {
+    console.error('[collab-server] flush error', roomId, err);
+  }
 }
 
 function trackPresenceSocket(room, userId, socketId) {
@@ -127,19 +144,21 @@ export class RoomManager {
         } else if (room.kind === 'board') {
           await flushBoard(room);
         }
+        room.flushErrorCount = 0;
       } catch (err) {
-        console.error('[collab-server] flush error', roomId, err);
+        recordFlushError(room, roomId, err);
       }
     }, FLUSH_MS);
   }
 
   async applyOp(roomId, op) {
     const room = await this.getOrLoad(roomId);
-    const seen = room.seenOpIds || (room.seenOpIds = new Set());
+    // Bug#4 fix: usa FIFO em vez de Set simples para nunca apagar deduplicação recente
+    if (!room.seenOpIds) room.seenOpIds = createOpIdTracker(5000);
+    const seen = room.seenOpIds;
     if (seen.has(op.opId)) {
       return { ok: true, duplicate: true, revision: room.revision };
     }
-    if (seen.size > 5000) seen.clear();
     seen.add(op.opId);
 
     const result =
@@ -167,10 +186,10 @@ export class RoomManager {
       socketId: sid,
       updatedAt: Date.now(),
     };
-    const inTaskModal = Boolean(
-      payload?.selectedCardId
-      || prev?.selectedCardId,
-    );
+    if (merged.cursor?.space === 'board') {
+      delete merged.cursorScreen;
+    }
+    const inTaskModal = Boolean(merged.selectedCardId);
     const isDraggingOnBoard = Boolean(
       payload?.draggingCardId
       || prev?.draggingCardId
@@ -209,16 +228,35 @@ export class RoomManager {
     {
       const hasCursorModal = payload?.cursorModal
         && typeof payload.cursorModal.x === 'number';
-      if (!hasCursorModal) {
-        if (prev.cursorModal) merged.cursorModal = prev.cursorModal;
-        else if (inTaskModal || payload?.onBoardSurface === false) {
-          /* mantém cursorModal no modal / overlay com scroll */
-        } else {
-          delete merged.cursorModal;
-        }
+      if (payload?.cursorModal === null) {
+        delete merged.cursorModal;
+      } else if (hasCursorModal) {
+        merged.cursorModal = payload.cursorModal;
+      } else if (inTaskModal && prev.cursorModal) {
+        merged.cursorModal = prev.cursorModal;
+      } else {
+        delete merged.cursorModal;
       }
     }
     room.presence.set(userId, merged);
+    return this.getPresenceList(room);
+  }
+
+  /** Remove só o socket do tracking; mantém presença para grace period no disconnect. */
+  untrackSocket(roomId, userId, socketId) {
+    const room = this.rooms.get(roomId);
+    if (!room || !socketId) return;
+    untrackPresenceSocket(room, userId, socketId);
+  }
+
+  /** Apaga presença após grace period se não houver outro socket ativo. */
+  finalizePresenceAfterGrace(roomId, userId) {
+    const room = this.rooms.get(roomId);
+    if (!room) return [];
+    const sockets = room.presenceSockets?.get(userId);
+    if (sockets?.size > 0) return this.getPresenceList(room);
+    room.presence.delete(userId);
+    room.presenceSockets?.delete(userId);
     return this.getPresenceList(room);
   }
 
@@ -274,7 +312,7 @@ export class RoomManager {
           await flushBoard(room);
         }
       } catch (err) {
-        console.error('[collab-server] flush on leave', err);
+        recordFlushError(room, roomId, err);
       }
       setTimeout(() => {
         const r = this.rooms.get(roomId);

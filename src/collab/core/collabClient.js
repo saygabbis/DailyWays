@@ -142,13 +142,12 @@ export function submitOp(socket, op) {
 }
 
 export function emitPresence(socket, payload) {
-  if (socket?.connected) {
-    const boardId = payload?.roomId;
-    if (boardId && getGlobalJoinedBoardId() !== boardId) {
-      return;
-    }
-    socket.emit(CLIENT_EVENTS.PRESENCE, payload);
-  }
+  if (!socket?.connected) return;
+  const boardId = payload?.roomId;
+  const joined = getGlobalJoinedBoardId();
+  // Só bloqueia se já estamos em outra sala; null !== boardId bloqueava todo envio (assimétrico).
+  if (boardId && joined && joined !== boardId) return;
+  socket.emit(CLIENT_EVENTS.PRESENCE, payload);
 }
 
 export { CLIENT_EVENTS, SERVER_EVENTS };

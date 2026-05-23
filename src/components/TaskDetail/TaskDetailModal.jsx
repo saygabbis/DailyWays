@@ -9,6 +9,7 @@ import { applyTaskModalPresence } from '../../collab/board/presence/boardPresenc
 import {
     publishBoardPresenceFull,
     restoreBoardPresenceAfterModal,
+    scheduleBoardCursorResyncAfterModal,
 } from '../../collab/board/presence/boardPresencePublish.js';
 import { isPeerInTaskModal } from '../../collab/board/presence/presenceVisibility.js';
 import CollabPresenceLayer from '../../collab/board/ui/CollabPresenceLayer.jsx';
@@ -330,12 +331,12 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
             setLiveDraft(null);
             announcePresence(boardId);
             if (collab?.socket?.connected) {
-                publishBoardPresenceFull(collab.socket, boardId, { user, profile });
-                requestAnimationFrame(() => {
+                const auth = { user, profile };
+                publishBoardPresenceFull(collab.socket, boardId, auth);
+                scheduleBoardCursorResyncAfterModal(boardId, () => {
                     if (!collab?.socket?.connected) return;
-                    restoreBoardPresenceAfterModal(boardId);
+                    publishBoardPresenceFull(collab.socket, boardId, auth);
                     announcePresence(boardId);
-                    publishBoardPresenceFull(collab.socket, boardId, { user, profile });
                 });
             }
         };

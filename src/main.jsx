@@ -14,19 +14,19 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider>
       <AuthProvider>
-        <CollabProviderRoot>
         <ToastProvider>
-          <AppProvider>
-            <ContextMenuProvider>
-              <PomodoroProvider>
-                <RadioProvider>
-                  <App />
-                </RadioProvider>
-              </PomodoroProvider>
-            </ContextMenuProvider>
-          </AppProvider>
+          <CollabProviderRoot>
+            <AppProvider>
+              <ContextMenuProvider>
+                <PomodoroProvider>
+                  <RadioProvider>
+                    <App />
+                  </RadioProvider>
+                </PomodoroProvider>
+              </ContextMenuProvider>
+            </AppProvider>
+          </CollabProviderRoot>
         </ToastProvider>
-        </CollabProviderRoot>
       </AuthProvider>
     </ThemeProvider>
   </StrictMode>,

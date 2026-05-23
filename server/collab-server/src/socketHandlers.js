@@ -12,6 +12,9 @@ import { roomManager } from './roomManager.js';
 import { enrichPresenceFromProfile } from './presenceProfile.js';
 
 const MAX_OPS_PER_SEC = 120;
+const MAX_POSITION_OPS_PER_SEC = 300;
+const POSITION_FIELDS = new Set(['x', 'y']);
+const PRESENCE_LEAVE_GRACE_MS = 150;
 
 function boardIdMatchesRoom(reqBoardId, roomId) {
   if (!reqBoardId || !roomId) return true;
@@ -40,14 +43,27 @@ function userHasAnotherSocketInRoom(io, roomId, userId, exceptSocketId) {
   return false;
 }
 
+async function rollbackPartialJoin(socket, roomId, joinedRoom) {
+  if (!roomId) return;
+  if (joinedRoom) {
+    socket.leave(roomId);
+    await roomManager.clientLeft(roomId);
+  }
+  socket.data.roomId = null;
+  socket.data.canWrite = false;
+}
+
 function finalizeLeavePresence(io, roomId, userId, socketId) {
   const room = roomManager.rooms.get(roomId);
   if (!room) return [];
-  roomManager.removePresence(roomId, userId, socketId);
-  if (!userHasAnotherSocketInRoom(io, roomId, userId, socketId)) {
-    room.presence.delete(userId);
-    room.presenceSockets?.delete(userId);
-  }
+  roomManager.untrackSocket(roomId, userId, socketId);
+  setTimeout(() => {
+    if (userHasAnotherSocketInRoom(io, roomId, userId, socketId)) return;
+    const peers = roomManager.finalizePresenceAfterGrace(roomId, userId);
+    if (roomManager.rooms.has(roomId)) {
+      io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, presenceSyncPayload(roomId, peers));
+    }
+  }, PRESENCE_LEAVE_GRACE_MS);
   return roomManager.getPresenceList(room);
 }
 
@@ -69,6 +85,7 @@ export function registerSocketHandlers(io) {
     socket.data.roomId = null;
     socket.data.canWrite = false;
     socket.data.opCount = 0;
+    socket.data.positionOpCount = 0;
     socket.data.opWindowStart = Date.now();
 
     socket.on(CLIENT_EVENTS.JOIN, async (payload, ack) => {
@@ -112,6 +129,12 @@ export function registerSocketHandlers(io) {
           roomManager.removePresence(prevRoomId, socket.data.userId, socket.id);
         }
 
+        const room = await roomManager.getOrLoad(roomId);
+        if (boardId && !room.board) {
+          ack?.({ ok: false, error: 'Board not found' });
+          return;
+        }
+
         socket.data.roomId = roomId;
         socket.data.canWrite = access.canWrite;
         socket.join(roomId);
@@ -119,11 +142,6 @@ export function registerSocketHandlers(io) {
           roomManager.clientJoined(roomId);
         }
 
-        const room = await roomManager.getOrLoad(roomId);
-        if (boardId && !room.board) {
-          ack?.({ ok: false, error: 'Board not found' });
-          return;
-        }
         const state = roomManager.getRoomState(room);
         const stub = await enrichPresenceFromProfile(
           socket.data.userId,
@@ -139,6 +157,7 @@ export function registerSocketHandlers(io) {
         socket.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, syncPayload);
       } catch (err) {
         console.error('[collab-server] join error', err);
+        await rollbackPartialJoin(socket, socket.data.roomId, true);
         ack?.({ ok: false, error: err.message });
       }
     });
@@ -154,7 +173,6 @@ export function registerSocketHandlers(io) {
         return;
       }
       const peers = finalizeLeavePresence(io, roomId, socket.data.userId, socket.id);
-      io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, presenceSyncPayload(roomId, peers));
       socket.leave(roomId);
       await roomManager.clientLeft(roomId);
       socket.data.roomId = null;
@@ -176,12 +194,23 @@ export function registerSocketHandlers(io) {
       if (now - socket.data.opWindowStart > 1000) {
         socket.data.opWindowStart = now;
         socket.data.opCount = 0;
+        socket.data.positionOpCount = 0;
       }
-      socket.data.opCount += 1;
-      if (socket.data.opCount > MAX_OPS_PER_SEC) {
-        socket.emit(SERVER_EVENTS.REJECTED, { opId: op?.opId, reason: 'Rate limit' });
-        ack?.({ ok: false, error: 'Rate limit' });
-        return;
+      const isPositionOp = op?.entity === 'node' && POSITION_FIELDS.has(op?.field);
+      if (isPositionOp) {
+        socket.data.positionOpCount += 1;
+        if (socket.data.positionOpCount > MAX_POSITION_OPS_PER_SEC) {
+          socket.emit(SERVER_EVENTS.REJECTED, { opId: op?.opId, reason: 'Rate limit' });
+          ack?.({ ok: false, error: 'Rate limit' });
+          return;
+        }
+      } else {
+        socket.data.opCount += 1;
+        if (socket.data.opCount > MAX_OPS_PER_SEC) {
+          socket.emit(SERVER_EVENTS.REJECTED, { opId: op?.opId, reason: 'Rate limit' });
+          ack?.({ ok: false, error: 'Rate limit' });
+          return;
+        }
       }
       const err = validateOp(op);
       if (err) {
@@ -218,12 +247,15 @@ export function registerSocketHandlers(io) {
             socket.leave(prev);
             roomManager.removePresence(prev, socket.data.userId, socket.id);
           }
-          await roomManager.getOrLoad(targetRoom);
+          const presenceRoom = await roomManager.getOrLoad(targetRoom);
+          if (!presenceRoom.board) return;
           socket.data.roomId = targetRoom;
           socket.data.canWrite = access.canWrite;
           socket.join(targetRoom);
           roomManager.clientJoined(targetRoom);
           roomId = targetRoom;
+          const state = roomManager.getRoomState(presenceRoom);
+          socket.emit(SERVER_EVENTS.STATE, { ...state, peers: roomManager.getPresenceList(presenceRoom) });
         }
       }
       if (!roomId) {
@@ -249,8 +281,7 @@ export function registerSocketHandlers(io) {
       const roomId = socket.data.roomId;
       if (!roomId) return;
       socket.data.roomId = null;
-      const peers = finalizeLeavePresence(io, roomId, socket.data.userId, socket.id);
-      io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, presenceSyncPayload(roomId, peers));
+      finalizeLeavePresence(io, roomId, socket.data.userId, socket.id);
       await roomManager.clientLeft(roomId);
     });
   });

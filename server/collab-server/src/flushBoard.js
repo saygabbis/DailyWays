@@ -54,7 +54,7 @@ export async function flushBoard(room) {
 
   if (error) {
     console.error('[collab-server] flushBoard RPC error', error);
-    return;
+    throw error;
   }
   room.dirty = false;
 }

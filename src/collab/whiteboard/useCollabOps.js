@@ -4,6 +4,8 @@ import { uuidv4 } from '../../utils/uuid';
 import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { useCollab } from '../core/CollabContext.jsx';
 import { submitOp } from '../core/collabClient.js';
+import { useToast } from '../../context/ToastContext.jsx';
+import { toastCollabError } from '../core/collabToast.js';
 
 const THROTTLE_MS = 40;
 const DEBOUNCE_MS = 400;
@@ -26,6 +28,7 @@ function snapshotEntity(entity, id, state) {
 
 export function useCollabOps() {
   const collab = useCollab();
+  const { addToast } = useToast();
   const throttleTimers = useRef(new Map());
   const debounceTimers = useRef(new Map());
   const pendingThrottleOps = useRef(new Map());
@@ -56,8 +59,12 @@ export function useCollabOps() {
     } catch (err) {
       console.warn('[collab] op failed', err.message);
       useWhiteboardStore.getState().rollbackPendingOp(opId);
+      const msg = err.message?.includes('Rate limit')
+        ? 'Muitas alterações ao mesmo tempo. Aguarde um instante.'
+        : 'Alteração no quadro não foi salva. Tente novamente.';
+      toastCollabError(addToast, msg);
     }
-  }, [collab?.socket]);
+  }, [collab?.socket, addToast]);
 
   const scheduleOp = useCallback((op) => {
     const field = op.field;

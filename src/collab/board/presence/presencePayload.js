@@ -43,14 +43,15 @@ function presenceFieldsForEmit(boardId) {
     liveDraft: f.liveDraft ?? null,
   };
   if (f.selectedNodeIds != null) out.selectedNodeIds = f.selectedNodeIds;
-  if (f.cursor && typeof f.cursor.x === 'number' && typeof f.cursor.y === 'number') {
+  if (f.cursor?.space === 'board' && typeof f.cursor.x === 'number' && typeof f.cursor.y === 'number') {
     out.cursor = f.cursor;
-  }
-  if (f.cursorScreen && typeof f.cursorScreen.x === 'number') {
-    out.cursorScreen = f.cursorScreen;
   }
   if (f.cursorModal && typeof f.cursorModal.x === 'number' && typeof f.cursorModal.y === 'number') {
     out.cursorModal = f.cursorModal;
+  } else if (!f.selectedCardId) {
+    out.cursorModal = null;
+  } else if (f.selectedCardId && f.cursorScreen && typeof f.cursorScreen.x === 'number') {
+    out.cursorScreen = f.cursorScreen;
   }
   return out;
 }

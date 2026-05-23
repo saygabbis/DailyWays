@@ -58,13 +58,17 @@ function mergePeersPreservingCursor(prevPeers, incoming) {
     if (!hasCursorCoords(p.cursor) && hasCursorCoords(prev.cursor)) {
       merged.cursor = { ...prev.cursor };
     }
-    if (!hasCursorScreenCoords(p.cursorScreen) && hasCursorScreenCoords(prev.cursorScreen)) {
+    if (p.cursor?.space === 'board') {
+      merged.cursorScreen = null;
+    } else if (!hasCursorScreenCoords(p.cursorScreen) && hasCursorScreenCoords(prev.cursorScreen)) {
       merged.cursorScreen = { ...prev.cursorScreen };
     }
-    if (!p.cursorModal && prev.cursorModal) {
-      merged.cursorModal = { ...prev.cursorModal };
-    } else if (p.cursorModal) {
+    if (p.cursorModal && typeof p.cursorModal.x === 'number') {
       merged.cursorModal = { ...p.cursorModal };
+    } else if (p.selectedCardId) {
+      if (prev.cursorModal) merged.cursorModal = { ...prev.cursorModal };
+    } else {
+      merged.cursorModal = null;
     }
     return merged;
   });
@@ -75,14 +79,13 @@ function extractRemoteCursors(peers) {
   const out = {};
   for (const p of peers) {
     if (!p?.userId) continue;
-    const hasBoard = hasCursorCoords(p.cursor);
-    const hasScreen = hasCursorScreenCoords(p.cursorScreen);
-    if (!hasBoard && !hasScreen) continue;
+    const c = p.cursor;
+    if (c?.space !== 'board' || typeof c.x !== 'number' || typeof c.y !== 'number') continue;
     out[p.userId] = {
-      x: hasBoard ? p.cursor.x : p.cursorScreen.x,
-      y: hasBoard ? p.cursor.y : p.cursorScreen.y,
-      mode: p.cursor?.mode,
-      cursorScreen: hasScreen ? { ...p.cursorScreen } : null,
+      x: c.x,
+      y: c.y,
+      mode: c.mode,
+      cursorScreen: null,
     };
   }
   return out;

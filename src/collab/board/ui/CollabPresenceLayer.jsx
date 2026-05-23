@@ -7,7 +7,11 @@ import { getPeerCursorVariant } from '../presence/presenceInteraction.js';
 import { screenCoordsToFixedLayer } from '../coords/pointerViewport.js';
 import { taskModalCursorToViewport } from '../coords/taskModalCursorCoords.js';
 import { overlayScrollCursorToViewport } from '../coords/overlayScrollCursorCoords.js';
-import { boardContentCursorToViewport } from '../coords/boardCursorCoords.js';
+import {
+  boardContentCursorPosition,
+  boardContentCursorToViewport,
+} from '../coords/boardCursorCoords.js';
+import { getBoardPresenceLayerAnchor } from '../coords/scrollContentCoords.js';
 import './PresenceLayer.css';
 
 const POINTER_PATH = 'M2 2 L2 17 L7 12 L10.5 21 L13 19.5 L9.5 11.5 L16 11.5 Z';
@@ -51,6 +55,7 @@ function resolveViewportPosition(
       if (fromBoard) return fromBoard;
       return null;
     }
+    if (peer?.cursor?.space === 'board') return null;
     const cs = remote?.cursorScreen ?? peer.cursorScreen;
     if (cs && typeof cs.x === 'number' && typeof cs.y === 'number') {
       return screenCoordsToFixedLayer({ x: cs.x, y: cs.y });
@@ -79,6 +84,7 @@ export default function CollabPresenceLayer({
   /** Scroll/resize do board (sidebar, janela, etc.). */
   layoutRepaint = 0,
 }) {
+  const useBoardContentCoords = Boolean(boardScrollerRef);
   const peers = usePresenceStore((s) => s.peers);
   const cursorFrame = usePresenceStore((s) => s.cursorFrame);
   const collab = useCollab();
@@ -170,6 +176,27 @@ export default function CollabPresenceLayer({
   }, []);
 
   useEffect(() => {
+    if (!useBoardContentCoords) return undefined;
+    const layer = layerRef.current;
+    const scroller = boardScrollerRef?.current;
+    if (!layer || !scroller) return undefined;
+    const syncAnchor = () => {
+      const anchor = getBoardPresenceLayerAnchor(scroller);
+      layer.style.left = `${anchor.offsetLeft}px`;
+      layer.style.top = `${anchor.offsetTop}px`;
+      if (anchor.width != null) layer.style.width = `${anchor.width}px`;
+      if (anchor.height != null) layer.style.height = `${anchor.height}px`;
+    };
+    syncAnchor();
+    const lists = scroller.querySelector('.board-lists');
+    const ro = lists && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(syncAnchor)
+      : null;
+    ro?.observe(lists);
+    return () => ro?.disconnect();
+  }, [useBoardContentCoords, boardScrollerRef, layoutRepaint]);
+
+  useEffect(() => {
     const layer = layerRef.current;
     if (!layer) return;
 
@@ -210,23 +237,28 @@ export default function CollabPresenceLayer({
     for (const peer of visibleMeta) {
       const el = nodeRefs.current.get(peer.userId);
       if (!el) continue;
-      const screen = resolveViewportPosition(
-        peer,
-        remoteCursors,
-        mode,
-        px,
-        py,
-        z,
-        modalRoot,
-        overlayScrollSelector,
-        boardScroller,
-      );
-      if (!screen) {
+      let pos = null;
+      if (useBoardContentCoords && boardScroller && isPeerOnBoardContent(peer)) {
+        pos = boardContentCursorPosition(peer, boardScroller);
+      } else {
+        pos = resolveViewportPosition(
+          peer,
+          remoteCursors,
+          mode,
+          px,
+          py,
+          z,
+          modalRoot,
+          overlayScrollSelector,
+          boardScroller,
+        );
+      }
+      if (!pos) {
         el.style.display = 'none';
         continue;
       }
       el.style.display = '';
-      el.style.transform = `translate3d(${screen.x}px, ${screen.y}px, 0)`;
+      el.style.transform = `translate3d(${Math.round(pos.x * 10) / 10}px, ${Math.round(pos.y * 10) / 10}px, 0)`;
       applyCursorVariantToNode(el, peer);
     }
   }, [
@@ -238,7 +270,7 @@ export default function CollabPresenceLayer({
     panY,
     zoom,
     scrollRepaint,
-    layoutRepaint,
+    useBoardContentCoords,
     modalRootRef,
     overlayScrollSelector,
     boardScrollerRef,
@@ -246,12 +278,13 @@ export default function CollabPresenceLayer({
 
   if (!collab?.connected || !visibleMeta.length) return null;
 
-  const useViewportPortal = mode === 'screen';
+  const useViewportPortal = mode === 'screen' && !useBoardContentCoords;
   const layer = (
     <div
       ref={layerRef}
       className={[
         'collab-presence-layer',
+        useBoardContentCoords ? 'collab-presence-layer--board-content' : '',
         useViewportPortal ? 'collab-presence-layer--viewport' : 'collab-presence-layer--embedded',
         elevated ? 'collab-presence-layer--elevated' : '',
       ].filter(Boolean).join(' ')}

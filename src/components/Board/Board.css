@@ -553,11 +553,12 @@
     background: color-mix(in srgb, var(--card-accent) 10%, var(--bg-card));
     border-color: color-mix(in srgb, var(--card-accent) 35%, var(--border-color));
     box-shadow: 0 2px 12px color-mix(in srgb, var(--card-accent) 12%, transparent);
+    transition: opacity var(--transition-fast);
 }
 
 .board-card[data-colored="true"]:hover {
-    border-color: color-mix(in srgb, var(--card-accent) 55%, var(--border-color));
-    box-shadow: 0 6px 22px color-mix(in srgb, var(--card-accent) 16%, transparent);
+    border-color: color-mix(in srgb, var(--card-accent) 35%, var(--border-color));
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--card-accent) 12%, transparent);
 }
 
 .board-card-inner {

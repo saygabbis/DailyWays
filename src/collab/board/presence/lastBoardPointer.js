@@ -1,3 +1,5 @@
+import { boardListsContentPointFromClient } from '../coords/scrollContentCoords.js';
+
 const STORAGE_KEY = 'dailyways_last_board_pointers_v2';
 
 function readMap() {
@@ -38,20 +40,19 @@ export function getLastBoardPointer(boardId) {
   return entry;
 }
 
-/** Default cursor in board scroller space when no recent pointer. */
+/** Default cursor no espaço .board-lists (centro visível do scroller). */
 export function defaultBoardPointer(boardId) {
+  void boardId;
   const scroller = document.querySelector('.board-scroller');
   if (!scroller) return null;
   const rect = scroller.getBoundingClientRect();
-  const x = Math.max(8, rect.width * 0.5 + scroller.scrollLeft);
-  const y = Math.max(8, rect.height * 0.5 + scroller.scrollTop);
+  const clientX = rect.left + rect.width * 0.5;
+  const clientY = rect.top + rect.height * 0.5;
+  const content = boardListsContentPointFromClient(scroller, clientX, clientY);
   return {
-    x,
-    y,
-    cursorScreen: {
-      x: rect.left + rect.width * 0.5,
-      y: rect.top + rect.height * 0.5,
-    },
+    x: content.x,
+    y: content.y,
+    cursorScreen: { x: clientX, y: clientY },
   };
 }
 

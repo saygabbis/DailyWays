@@ -10,6 +10,49 @@ import FloatingSaveError from '../components/Common/FloatingSaveError';
 import FloatingInvitationToast from '../components/Common/FloatingInvitationToast';
 import { logger } from '../utils/logger';
 import { isCollabEnabled } from '../collab/core/collabConfig.js';
+import { applyBoardAction } from '@dailyways/collab-protocol';
+
+const BOARD_APPLY_ACTION_TYPES = new Set([
+  'UPDATE_BOARD',
+  'ADD_LIST',
+  'UPDATE_LIST',
+  'DELETE_LIST',
+  'MOVE_LIST',
+  'ADD_CARD',
+  'UPDATE_CARD',
+  'DELETE_CARD',
+  'MOVE_CARD',
+  'TOGGLE_SUBTASK',
+  'ADD_SUBTASK',
+  'UPDATE_SUBTASK',
+  'DELETE_SUBTASK',
+]);
+
+function applyBoardActionToState(state, action) {
+  const targetId = action.type === 'UPDATE_BOARD'
+    ? action.payload?.id
+    : action.payload?.boardId;
+  if (!targetId) return state;
+
+  return {
+    ...state,
+    boards: state.boards.map((b) => {
+      if (b.id !== targetId) return b;
+      const next = applyBoardAction(b, action);
+      if (action.type === 'ADD_LIST' && next.lists.length > b.lists.length) {
+        const added = next.lists.find((l) => !b.lists.some((bl) => bl.id === l.id));
+        if (added) {
+          return {
+            ...next,
+            lists: next.lists.map((l) =>
+              (l.id === added.id ? { ...l, isNew: true } : l)),
+          };
+        }
+      }
+      return next;
+    }),
+  };
+}
 import { persistLastBoardId } from '../utils/restoreNavigation.js';
 
 const AppContext = createContext(null);
@@ -128,6 +171,10 @@ function createDefaultBoards() {
 }
 
 function appReducer(state, action) {
+    if (BOARD_APPLY_ACTION_TYPES.has(action.type)) {
+        return applyBoardActionToState(state, action);
+    }
+
     switch (action.type) {
         // ── Boards ──
         case 'SET_BOARDS': {
@@ -393,274 +440,6 @@ function appReducer(state, action) {
             const duplicated = duplicateBoardStructure(orig);
             return { ...state, boards: [...state.boards, duplicated] };
         }
-
-        case 'MOVE_LIST': {
-            const { boardId: mlBoardId, sourceIndex: mlSrc, destIndex: mlDest } = action.payload;
-            return {
-                ...state,
-                boards: state.boards.map(b => {
-                    if (b.id !== mlBoardId) return b;
-                    const newLists = [...b.lists];
-                    const [movedList] = newLists.splice(mlSrc, 1);
-                    newLists.splice(mlDest, 0, movedList);
-                    return { ...b, lists: newLists };
-                }),
-            };
-        }
-
-        // ── Lists ──
-        case 'ADD_LIST': {
-            const newList = {
-                id: action.payload.id || uuidv4(),
-                title: action.payload.title || 'Nova Lista',
-                color: null,
-                isCompletionList: false,
-                cards: [],
-                isNew: true // Simple flag for immediate animation
-            };
-            return {
-                ...state,
-                boards: state.boards.map(b =>
-                    b.id === action.payload.boardId ? { ...b, lists: [...b.lists, newList] } : b
-                ),
-            };
-        }
-
-        case 'UPDATE_LIST':
-            return {
-                ...state,
-                boards: state.boards.map(b =>
-                    b.id === action.payload.boardId
-                        ? {
-                            ...b,
-                            lists: b.lists.map(l =>
-                                l.id === action.payload.listId ? { ...l, ...action.payload.updates } : l
-                            ),
-                        }
-                        : b
-                ),
-            };
-
-        case 'DELETE_LIST':
-            return {
-                ...state,
-                boards: state.boards.map(b =>
-                    b.id === action.payload.boardId
-                        ? { ...b, lists: b.lists.filter(l => l.id !== action.payload.listId) }
-                        : b
-                ),
-            };
-
-        // ── Cards ──
-        case 'ADD_CARD': {
-            const now = new Date().toISOString();
-            const newCard = {
-                id: uuidv4(),
-                title: action.payload.title || 'Nova Tarefa',
-                description: '',
-                labels: [],
-                priority: 'none',
-                dueDate: null,
-                startDate: null,
-                isAllDay: true,
-                recurrenceRule: null,
-                coverAttachmentId: null,
-                myDay: false,
-                subtasks: [],
-                createdAt: now,
-                updatedAt: now,
-                ...action.payload.cardData,
-            };
-            return {
-                ...state,
-                boards: state.boards.map(b =>
-                    b.id === action.payload.boardId
-                        ? {
-                            ...b,
-                            lists: b.lists.map(l =>
-                                l.id === action.payload.listId ? { ...l, cards: [...l.cards, newCard] } : l
-                            ),
-                        }
-                        : b
-                ),
-            };
-        }
-
-        case 'UPDATE_CARD':
-            return {
-                ...state,
-                boards: state.boards.map(b =>
-                    b.id === action.payload.boardId
-                        ? {
-                            ...b,
-                            lists: b.lists.map(l =>
-                                l.id === action.payload.listId
-                                    ? {
-                                        ...l,
-                                        cards: l.cards.map(c =>
-                                            c.id === action.payload.cardId ? { ...c, ...action.payload.updates } : c
-                                        ),
-                                    }
-                                    : l
-                            ),
-                        }
-                        : b
-                ),
-            };
-
-        case 'DELETE_CARD':
-            return {
-                ...state,
-                boards: state.boards.map(b =>
-                    b.id === action.payload.boardId
-                        ? {
-                            ...b,
-                            lists: b.lists.map(l =>
-                                l.id === action.payload.listId
-                                    ? { ...l, cards: l.cards.filter(c => c.id !== action.payload.cardId) }
-                                    : l
-                            ),
-                        }
-                        : b
-                ),
-            };
-
-        case 'MOVE_CARD': {
-            const { boardId, sourceListId, destListId, sourceIndex, destIndex } = action.payload;
-            return {
-                ...state,
-                boards: state.boards.map(b => {
-                    if (b.id !== boardId) return b;
-                    const newLists = b.lists.map(l => ({ ...l, cards: [...l.cards] }));
-                    const sourceList = newLists.find(l => l.id === sourceListId);
-                    const destList = newLists.find(l => l.id === destListId);
-                    if (!sourceList || !destList) return b;
-                    const [movedCard] = sourceList.cards.splice(sourceIndex, 1);
-                    destList.cards.splice(destIndex, 0, movedCard);
-                    return { ...b, lists: newLists };
-                }),
-            };
-        }
-
-        // ── Subtasks ──
-        case 'TOGGLE_SUBTASK':
-            return {
-                ...state,
-                boards: state.boards.map(b =>
-                    b.id === action.payload.boardId
-                        ? {
-                            ...b,
-                            lists: b.lists.map(l =>
-                                l.id === action.payload.listId
-                                    ? {
-                                        ...l,
-                                        cards: l.cards.map(c =>
-                                            c.id === action.payload.cardId
-                                                ? {
-                                                    ...c,
-                                                    subtasks: c.subtasks.map(st =>
-                                                        st.id === action.payload.subtaskId ? { ...st, done: !st.done } : st
-                                                    ),
-                                                }
-                                                : c
-                                        ),
-                                    }
-                                    : l
-                            ),
-                        }
-                        : b
-                ),
-            };
-
-        case 'ADD_SUBTASK': {
-            const newSubtask = {
-                id: uuidv4(),
-                title: action.payload.title,
-                done: false,
-                position: Date.now(),
-                linkUrl: null,
-                linkLabel: null,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-            };
-            return {
-                ...state,
-                boards: state.boards.map(b =>
-                    b.id === action.payload.boardId
-                        ? {
-                            ...b,
-                            lists: b.lists.map(l =>
-                                l.id === action.payload.listId
-                                    ? {
-                                        ...l,
-                                        cards: l.cards.map(c =>
-                                            c.id === action.payload.cardId
-                                                ? { ...c, subtasks: [...c.subtasks, newSubtask] }
-                                                : c
-                                        ),
-                                    }
-                                    : l
-                            ),
-                        }
-                        : b
-                ),
-            };
-        }
-
-        case 'UPDATE_SUBTASK':
-            return {
-                ...state,
-                boards: state.boards.map(b =>
-                    b.id === action.payload.boardId
-                        ? {
-                            ...b,
-                            lists: b.lists.map(l =>
-                                l.id === action.payload.listId
-                                    ? {
-                                        ...l,
-                                        cards: l.cards.map(c =>
-                                            c.id === action.payload.cardId
-                                                ? {
-                                                    ...c,
-                                                    subtasks: c.subtasks.map(st =>
-                                                        st.id === action.payload.subtaskId
-                                                            ? { ...st, ...action.payload.updates }
-                                                            : st
-                                                    ),
-                                                }
-                                                : c
-                                        ),
-                                    }
-                                    : l
-                            ),
-                        }
-                        : b
-                ),
-            };
-
-        case 'DELETE_SUBTASK':
-            return {
-                ...state,
-                boards: state.boards.map(b =>
-                    b.id === action.payload.boardId
-                        ? {
-                            ...b,
-                            lists: b.lists.map(l =>
-                                l.id === action.payload.listId
-                                    ? {
-                                        ...l,
-                                        cards: l.cards.map(c =>
-                                            c.id === action.payload.cardId
-                                                ? { ...c, subtasks: c.subtasks.filter(st => st.id !== action.payload.subtaskId) }
-                                                : c
-                                        ),
-                                    }
-                                    : l
-                            ),
-                        }
-                        : b
-                ),
-            };
 
         // ── Filters ──
         case 'SET_SEARCH':

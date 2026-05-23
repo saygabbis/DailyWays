@@ -1,9 +1,11 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../../../context/AppContext';
 import { useCollab } from '../../core/CollabContext.jsx';
 import { submitOp } from '../../core/collabClient.js';
 import { isCollabEnabled } from '../../core/collabConfig.js';
 import { uuidv4 } from '../../../utils/uuid';
+import { useToast } from '../../../context/ToastContext.jsx';
+import { toastCollabError } from '../../core/collabToast.js';
 
 /**
  * Padrão único de mutação de board:
@@ -13,12 +15,17 @@ import { uuidv4 } from '../../../utils/uuid';
  */
 
 const DEBOUNCE_ACTIONS = new Set(['UPDATE_CARD', 'UPDATE_SUBTASK']);
+const OP_RETRY_ATTEMPTS = 2;
+const OP_RETRY_DELAY_MS = 300;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const BoardCollabContext = createContext(null);
 
 export function BoardCollabProvider({ children }) {
   const { dispatch, persistBoard } = useApp();
   const collab = useCollab();
+  const { addToast } = useToast();
   const [activeBoardId, setActiveBoardId] = useState(null);
   const debounceTimers = useRef(new Map());
   const roomReadyRef = useRef({});
@@ -48,26 +55,51 @@ export function BoardCollabProvider({ children }) {
     const socket = collab?.socket;
     if (!socket?.connected || !boardId || !action?.type) return false;
     setCollabSaving(boardId, true);
+    const opPayload = {
+      opId: uuidv4(),
+      type: 'update',
+      entity: 'board',
+      id: boardId,
+      field: 'action',
+      value: action,
+      clientTs: Date.now(),
+    };
     try {
-      await submitOp(socket, {
-        opId: uuidv4(),
-        type: 'update',
-        entity: 'board',
-        id: boardId,
-        field: 'action',
-        value: action,
-        clientTs: Date.now(),
-      });
+      for (let attempt = 0; attempt <= OP_RETRY_ATTEMPTS; attempt += 1) {
+        try {
+          if (!socket?.connected) throw new Error('Socket not connected');
+          await submitOp(socket, opPayload);
+          return true;
+        } catch (err) {
+          if (attempt < OP_RETRY_ATTEMPTS) {
+            await sleep(OP_RETRY_DELAY_MS);
+            continue;
+          }
+          throw err;
+        }
+      }
       return true;
     } catch (err) {
       console.warn('[boardCollab] op failed', err.message);
+      const msg = err.message?.includes('Rate limit')
+        ? 'Muitas alterações ao mesmo tempo. Aguarde um instante.'
+        : 'Alteração no board não foi sincronizada. Salvando localmente…';
+      toastCollabError(addToast, msg);
       persistBoard(boardId, { force: true, ensureSave: true });
       return false;
     } finally {
       setCollabSaving(boardId, false);
       syncPendingFlag(boardId);
     }
-  }, [collab?.socket, persistBoard, setCollabSaving, syncPendingFlag]);
+  }, [collab?.socket, persistBoard, setCollabSaving, syncPendingFlag, addToast]);
+
+  useEffect(() => () => {
+    for (const timer of debounceTimers.current.values()) {
+      clearTimeout(timer);
+    }
+    debounceTimers.current.clear();
+    pendingOpsRef.current = {};
+  }, []);
 
   const flushPendingOps = useCallback((boardId) => {
     const queue = pendingOpsRef.current[boardId];
@@ -157,10 +189,11 @@ export function BoardCollabProvider({ children }) {
       }
     }
 
-    persistBoard(boardId, {
-      force: !live,
-      ensureSave: true,
-    });
+    if (!live) {
+      persistBoard(boardId, { force: true, ensureSave: true });
+    } else {
+      persistBoard(boardId, { force: false });
+    }
   }, [
     dispatch,
     collab?.connected,

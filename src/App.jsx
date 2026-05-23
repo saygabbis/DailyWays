@@ -166,6 +166,7 @@ function AppContent() {
       pushPresenceFields(boardId, {
         draggingListId: start.draggableId,
         draggingCardId: null,
+        selectedCardId: null,
         onBoardSurface: true,
       });
     } else if (
@@ -178,6 +179,7 @@ function AppContent() {
       pushPresenceFields(boardId, {
         draggingCardId: start.draggableId,
         draggingListId: start.source.droppableId,
+        selectedCardId: null,
         onBoardSurface: true,
       });
     }
