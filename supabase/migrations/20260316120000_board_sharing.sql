@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS public.board_invitations (
 ALTER TABLE public.board_invitations ENABLE ROW LEVEL SECURITY;
 
 -- Apenas o owner do board pode ver os convites desse board
+DROP POLICY IF EXISTS "Board owner can view invitations" ON public.board_invitations;
 CREATE POLICY "Board owner can view invitations"
   ON public.board_invitations FOR SELECT
   USING (
@@ -143,6 +144,12 @@ GRANT EXECUTE ON FUNCTION public.accept_board_invitation(uuid) TO authenticated;
 -- Boards: leitura para owner ou qualquer membro; escrita só owner/editor
 DROP POLICY IF EXISTS "Users can do all on own boards" ON public.boards;
 DROP POLICY IF EXISTS "Members can select and update shared boards" ON public.boards;
+DROP POLICY IF EXISTS "Members can update shared boards" ON public.boards;
+DROP POLICY IF EXISTS "Owner full access" ON public.boards;
+DROP POLICY IF EXISTS "Member read access" ON public.boards;
+DROP POLICY IF EXISTS "Member update access" ON public.boards;
+DROP POLICY IF EXISTS "Boards select owner or members" ON public.boards;
+DROP POLICY IF EXISTS "Boards write owner or editors" ON public.boards;
 
 CREATE POLICY "Boards select owner or members"
   ON public.boards FOR SELECT
@@ -173,6 +180,8 @@ CREATE POLICY "Boards write owner or editors"
 
 -- Lists: seguem acesso de leitura do board, escrita só para owner/editor
 DROP POLICY IF EXISTS "Lists follow board access" ON public.lists;
+DROP POLICY IF EXISTS "Lists select follow board access" ON public.lists;
+DROP POLICY IF EXISTS "Lists write owner or editors" ON public.lists;
 
 CREATE POLICY "Lists select follow board access"
   ON public.lists FOR SELECT
@@ -224,6 +233,8 @@ CREATE POLICY "Lists write owner or editors"
 
 -- Cards: seguem acesso de leitura do board, escrita só para owner/editor
 DROP POLICY IF EXISTS "Cards follow list/board access" ON public.cards;
+DROP POLICY IF EXISTS "Cards select follow board access" ON public.cards;
+DROP POLICY IF EXISTS "Cards write owner or editors" ON public.cards;
 
 CREATE POLICY "Cards select follow board access"
   ON public.cards FOR SELECT
@@ -278,6 +289,8 @@ CREATE POLICY "Cards write owner or editors"
 
 -- Subtasks: seguem acesso de leitura do board, escrita só para owner/editor
 DROP POLICY IF EXISTS "Subtasks follow card access" ON public.subtasks;
+DROP POLICY IF EXISTS "Subtasks select follow board access" ON public.subtasks;
+DROP POLICY IF EXISTS "Subtasks write owner or editors" ON public.subtasks;
 
 CREATE POLICY "Subtasks select follow board access"
   ON public.subtasks FOR SELECT

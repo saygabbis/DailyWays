@@ -79,7 +79,6 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     } = useCollabPresence(boardId, { mode: 'screen' });
     const collab = useCollab();
     const modalRef = useRef(null);
-    const [modalScrollRepaint, setModalScrollRepaint] = useState(0);
     const { user, profile } = useAuth();
     const myId = collab?.userId;
     const peers = usePresenceStore((s) => s.peers);
@@ -363,22 +362,6 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const handleModalPointerMove = useCallback((e) => {
         setHoverModalEl(resolveModalHoverEl(e.clientX, e.clientY));
     }, [resolveModalHoverEl, setHoverModalEl]);
-
-    useEffect(() => {
-        const root = modalRef.current;
-        if (!root) return undefined;
-        const bump = () => setModalScrollRepaint((n) => n + 1);
-        const scrollers = root.querySelectorAll('.task-detail-body, .task-detail-sidebar');
-        scrollers.forEach((el) => el.addEventListener('scroll', bump, { passive: true }));
-        const ro = new ResizeObserver(bump);
-        ro.observe(root);
-        window.addEventListener('resize', bump, { passive: true });
-        return () => {
-            scrollers.forEach((el) => el.removeEventListener('scroll', bump));
-            ro.disconnect();
-            window.removeEventListener('resize', bump);
-        };
-    }, [card?.id]);
 
     useDocumentPointerPresence({
         enabled: Boolean(boardId && card?.id && collab?.connected),
@@ -766,8 +749,6 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                         mode="screen"
                         elevated
                         modalRootRef={modalRef}
-                        scrollRepaint={modalScrollRepaint}
-                        layoutRepaint={modalScrollRepaint}
                         peerFilter={(p) => isPeerInTaskModal(p, card.id)}
                     />
                 )}

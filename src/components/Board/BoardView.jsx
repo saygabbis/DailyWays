@@ -861,12 +861,14 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
                             </div>
                         )}
                     </Droppable>
-                    <CollabPresenceLayer
-                        mode="screen"
-                        peerFilter={isPeerOnBoardSurface}
-                        boardScrollerRef={scrollerRef}
-                        layoutRepaint={layoutRepaint}
-                    />
+                    {!focusedCardId && !listDetails && (
+                        <CollabPresenceLayer
+                            mode="screen"
+                            peerFilter={isPeerOnBoardSurface}
+                            boardScrollerRef={scrollerRef}
+                            layoutRepaint={layoutRepaint}
+                        />
+                    )}
                     <RemoteDragLayer boardId={board.id} boardScrollerRef={scrollerRef} layoutRepaint={layoutRepaint} />
                 </>
             </div>

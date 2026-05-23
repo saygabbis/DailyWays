@@ -31,15 +31,18 @@ CREATE POLICY "Board members select"
   USING (user_id = auth.uid() OR is_board_owner(board_id));
 
 -- INSERT/UPDATE/DELETE: apenas owner do board
+DROP POLICY IF EXISTS "Board owner manages members" ON public.board_members;
 CREATE POLICY "Board owner manages members"
   ON public.board_members FOR INSERT
   WITH CHECK (is_board_owner(board_id));
 
+DROP POLICY IF EXISTS "Board owner updates members" ON public.board_members;
 CREATE POLICY "Board owner updates members"
   ON public.board_members FOR UPDATE
   USING (is_board_owner(board_id))
   WITH CHECK (is_board_owner(board_id));
 
+DROP POLICY IF EXISTS "Board owner deletes members" ON public.board_members;
 CREATE POLICY "Board owner deletes members"
   ON public.board_members FOR DELETE
   USING (is_board_owner(board_id));

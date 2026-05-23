@@ -124,6 +124,10 @@ export default function CollabPresenceLayer({
   const viewportRef = useRef(viewport);
   const smootherRef = useRef(null);
   const visibleMetaRef = useRef([]);
+  const scrollRepaintRef = useRef(scrollRepaint);
+  const layoutRepaintRef = useRef(layoutRepaint);
+  scrollRepaintRef.current = scrollRepaint;
+  layoutRepaintRef.current = layoutRepaint;
 
   if (!smootherRef.current) {
     smootherRef.current = createRemoteCursorSmoother();
@@ -233,7 +237,7 @@ export default function CollabPresenceLayer({
       : null;
     ro?.observe(lists);
     return () => ro?.disconnect();
-  }, [useBoardContentCoords, boardScrollerRef, layoutRepaint]);
+  }, [useBoardContentCoords, boardScrollerRef, layoutRepaint]); // layoutRepaint: re-anchor on board layout changes
 
   useEffect(() => {
     const layer = layerRef.current;
@@ -272,11 +276,18 @@ export default function CollabPresenceLayer({
   useEffect(() => {
     if (!collab?.connected || !visibleMeta.length) return undefined;
 
+    // #region agent log
+    fetch('http://127.0.0.1:7696/ingest/01fa34d4-9615-473f-b720-e19b7f0835ca',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'64ad20'},body:JSON.stringify({sessionId:'64ad20',location:'CollabPresenceLayer.jsx:raf',message:'raf-loop-start',data:{peerCount:visibleMeta.length,elevated,useBoardContentCoords},timestamp:Date.now(),hypothesisId:'H-overlay',runId:'overlay-perf'})}).catch(()=>{});
+    // #endregion
+
     let rafId = 0;
     const smoother = smootherRef.current;
 
     const frame = () => {
       rafId = 0;
+      // scrollRepaint/layoutRepaint refs: scroll/layout bump without restarting this loop
+      void scrollRepaintRef.current;
+      void layoutRepaintRef.current;
       const meta = visibleMetaRef.current;
       if (!meta.length) return;
 
@@ -335,6 +346,9 @@ export default function CollabPresenceLayer({
 
     rafId = requestAnimationFrame(frame);
     return () => {
+      // #region agent log
+      fetch('http://127.0.0.1:7696/ingest/01fa34d4-9615-473f-b720-e19b7f0835ca',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'64ad20'},body:JSON.stringify({sessionId:'64ad20',location:'CollabPresenceLayer.jsx:raf',message:'raf-loop-stop',data:{},timestamp:Date.now(),hypothesisId:'H-overlay',runId:'overlay-perf'})}).catch(()=>{});
+      // #endregion
       if (rafId) cancelAnimationFrame(rafId);
     };
   }, [
@@ -344,8 +358,6 @@ export default function CollabPresenceLayer({
     panX,
     panY,
     zoom,
-    scrollRepaint,
-    layoutRepaint,
     useBoardContentCoords,
     modalRootRef,
     overlayScrollSelector,
