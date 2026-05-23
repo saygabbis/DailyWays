@@ -1,94 +1,66 @@
 /**
- * VPS: collab-server (2529) + Vite (5174).
- * O Vite sozinho dá ECONNREFUSED no proxy /socket.io sem o collab.
+ * VPS: build front + verificar back, depois collab (PORT do .env) + preview Vite (5174).
+ * Mesmas portas que dev:all; qualquer falha imprime ERRO e termina com código ≠ 0.
  */
-import { spawn } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import {
+  VITE_PORT,
+  getCollabPort,
+  collabHealthUrl,
+  freePort,
+  waitForHealth,
+  createProcessRunner,
+  runStepOrExit,
+  assertCollabEnv,
+  assertDistBuild,
+} from './lib/board-runtime.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const envPath = path.resolve(root, 'server/collab-server/.env');
-
-function getCollabPort() {
-  try {
-    const match = fs.readFileSync(envPath, 'utf8').match(/^PORT\s*=\s*(\d+)/m);
-    if (match) return Number(match[1]);
-  } catch {
-    /* ignore */
-  }
-  return 2529;
-}
-
+const LOG = '[start:vps]';
 const port = getCollabPort();
-const healthUrl = `http://127.0.0.1:${port}/health`;
-const children = [];
+const healthUrl = collabHealthUrl(port);
 
-async function isHealthOk(url) {
-  try {
-    const res = await fetch(url);
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
+console.log(`${LOG} preparando ambiente de produção local (portas: collab ${port}, front ${VITE_PORT})`);
+console.log('');
 
-async function waitForHealth(url, timeoutMs = 60000) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (await isHealthOk(url)) {
-      console.log(`[start:vps] collab OK → ${url}`);
-      return;
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error(`Collab não respondeu em ${url}. Confira server/collab-server/.env (PORT=${port})`);
-}
+assertCollabEnv(LOG);
 
-function run(name, command, args, cwd = root) {
-  const child = spawn(command, args, {
-    cwd,
-    stdio: 'inherit',
-    shell: false,
-  });
-  child.on('exit', (code) => {
-    if (code && code !== 0) {
-      console.error(`[start:vps] ${name} saiu com código ${code}`);
-      shutdown(code);
-    }
-  });
-  children.push(child);
-  return child;
-}
+console.log(`${LOG} — build —`);
+runStepOrExit(LOG, 'Build do frontend (vite build)', 'npm', ['run', 'build']);
+assertDistBuild(LOG);
 
-function shutdown(code = 0) {
-  for (const c of children) {
-    try {
-      c.kill('SIGTERM');
-    } catch {
-      /* ignore */
-    }
-  }
-  process.exit(code);
-}
+runStepOrExit(LOG, 'Verificação do backend (testes collab-protocol)', 'npm', [
+  'run',
+  'test',
+  '-w',
+  '@dailyways/collab-protocol',
+]);
+runStepOrExit(LOG, 'Verificação do backend (testes collab-server)', 'npm', [
+  'run',
+  'test',
+  '-w',
+  '@dailyways/collab-server',
+]);
+
+console.log('');
+console.log(`${LOG} — arranque —`);
+console.log(`${LOG} liberando portas ${port} e ${VITE_PORT}...`);
+freePort(port, LOG);
+freePort(VITE_PORT, LOG);
+await new Promise((r) => setTimeout(r, 600));
+
+const { run, shutdown } = createProcessRunner(LOG);
 
 process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
 
-console.log(`[start:vps] collab porta ${port}`);
+run('collab', 'npm', ['run', 'start:collab']);
 
-if (!(await isHealthOk(healthUrl))) {
-  console.log('[start:vps] subindo collab-server...');
-  run('collab', 'npm', ['run', 'start:collab']);
-  try {
-    await waitForHealth(healthUrl);
-  } catch (err) {
-    console.error('[start:vps]', err.message);
-    shutdown(1);
-  }
-} else {
-  console.log('[start:vps] collab já estava rodando');
+try {
+  await waitForHealth(healthUrl, 60000, LOG);
+} catch (err) {
+  console.error(`${LOG} ERRO:`, err.message);
+  console.error(`${LOG} O collab-server não ficou disponível. Revise server/collab-server/.env e logs acima.\n`);
+  shutdown(1);
 }
 
-console.log('[start:vps] subindo Vite (5174)...');
-run('vite', 'npm', ['run', 'dev', '--', '--host']);
+console.log(`${LOG} subindo frontend (vite preview :${VITE_PORT})...`);
+run('preview', 'npm', ['run', 'preview', '--', '--host', '--port', String(VITE_PORT)]);

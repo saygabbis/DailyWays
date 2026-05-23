@@ -55,32 +55,42 @@ export default defineConfig({
     },
   },
 
+  const socketIoProxy = {
+    '/socket.io': {
+      target: collabTarget,
+      ws: true,
+      configure: (proxy) => {
+        const ignore = (err) => err?.code === 'ECONNRESET' || err?.code === 'EPIPE';
+        proxy.on('error', (err, _req, res) => {
+          if (ignore(err)) return;
+          if (res && typeof res.writeHead === 'function' && !res.headersSent) {
+            res.writeHead(502);
+            res.end();
+          }
+        });
+        proxy.on('proxyReqWs', (_proxyReq, _req, socket) => {
+          socket?.on?.('error', (err) => {
+            if (ignore(err)) return;
+          });
+        });
+      },
+    },
+  },
+
   // 🌐 Config do servidor (resolve o erro de host bloqueado)
   server: {
     host: true,
     allowedHosts: ['dailyways.saygabbis.cloud'],
     port: 5174,
-    proxy: {
-      '/socket.io': {
-        target: collabTarget,
-        ws: true,
-        configure: (proxy) => {
-          const ignore = (err) => err?.code === 'ECONNRESET' || err?.code === 'EPIPE';
-          proxy.on('error', (err, _req, res) => {
-            if (ignore(err)) return;
-            if (res && typeof res.writeHead === 'function' && !res.headersSent) {
-              res.writeHead(502);
-              res.end();
-            }
-          });
-          proxy.on('proxyReqWs', (_proxyReq, _req, socket) => {
-            socket?.on?.('error', (err) => {
-              if (ignore(err)) return;
-            });
-          });
-        },
-      },
-    },
+    proxy: socketIoProxy,
+  },
+
+  /** start:vps — mesma porta e proxy que dev */
+  preview: {
+    host: true,
+    allowedHosts: ['dailyways.saygabbis.cloud'],
+    port: 5174,
+    proxy: socketIoProxy,
   },
 
   // ⚠️ IMPORTANTE: raiz do domínio
