@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS public.groups (
 -- Enable RLS for groups
 ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can manage their own groups" ON public.groups;
 CREATE POLICY "Users can manage their own groups" 
 ON public.groups FOR ALL 
 USING (auth.uid() = owner_id);
@@ -47,6 +48,7 @@ CREATE TABLE IF NOT EXISTS public.spaces (
 -- Enable RLS for spaces
 ALTER TABLE public.spaces ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can manage their own spaces" ON public.spaces;
 CREATE POLICY "Users can manage their own spaces" 
 ON public.spaces FOR ALL 
 USING (auth.uid() = owner_id);
@@ -56,14 +58,27 @@ ALTER TABLE public.boards
 ADD COLUMN IF NOT EXISTS group_id UUID REFERENCES public.groups(id) ON DELETE SET NULL;
 
 -- Triggers for updated_at
+DROP TRIGGER IF EXISTS handle_updated_at_groups ON public.groups;
 CREATE TRIGGER handle_updated_at_groups 
     BEFORE UPDATE ON public.groups 
     FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
+DROP TRIGGER IF EXISTS handle_updated_at_spaces ON public.spaces;
 CREATE TRIGGER handle_updated_at_spaces 
     BEFORE UPDATE ON public.spaces 
     FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- Add Spaces and Groups to Realtime publication
-ALTER PUBLICATION supabase_realtime ADD TABLE public.groups;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.spaces;
+-- Add Spaces and Groups to Realtime publication (idempotent)
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.groups;
+EXCEPTION WHEN duplicate_object THEN
+    RAISE NOTICE 'Table public.groups already in supabase_realtime publication.';
+END $$;
+
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.spaces;
+EXCEPTION WHEN duplicate_object THEN
+    RAISE NOTICE 'Table public.spaces already in supabase_realtime publication.';
+END $$;

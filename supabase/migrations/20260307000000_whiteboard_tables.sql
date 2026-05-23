@@ -27,12 +27,14 @@ CREATE INDEX IF NOT EXISTS idx_space_nodes_parent ON public.space_nodes(space_id
 
 ALTER TABLE public.space_nodes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can manage space_nodes of own spaces" ON public.space_nodes;
 CREATE POLICY "Users can manage space_nodes of own spaces"
 ON public.space_nodes FOR ALL
 USING (
     EXISTS (SELECT 1 FROM public.spaces s WHERE s.id = space_nodes.space_id AND s.owner_id = auth.uid())
 );
 
+DROP TRIGGER IF EXISTS handle_updated_at_space_nodes ON public.space_nodes;
 CREATE TRIGGER handle_updated_at_space_nodes
     BEFORE UPDATE ON public.space_nodes
     FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
@@ -53,12 +55,14 @@ CREATE INDEX IF NOT EXISTS idx_space_connectors_space_id ON public.space_connect
 
 ALTER TABLE public.space_connectors ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can manage space_connectors of own spaces" ON public.space_connectors;
 CREATE POLICY "Users can manage space_connectors of own spaces"
 ON public.space_connectors FOR ALL
 USING (
     EXISTS (SELECT 1 FROM public.spaces s WHERE s.id = space_connectors.space_id AND s.owner_id = auth.uid())
 );
 
+DROP TRIGGER IF EXISTS handle_updated_at_space_connectors ON public.space_connectors;
 CREATE TRIGGER handle_updated_at_space_connectors
     BEFORE UPDATE ON public.space_connectors
     FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
@@ -82,6 +86,7 @@ CREATE INDEX IF NOT EXISTS idx_space_comments_parent_id ON public.space_comments
 
 ALTER TABLE public.space_comments ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can manage space_comments of own spaces" ON public.space_comments;
 CREATE POLICY "Users can manage space_comments of own spaces"
 ON public.space_comments FOR ALL
 USING (
@@ -103,6 +108,7 @@ CREATE INDEX IF NOT EXISTS idx_space_assets_space_id ON public.space_assets(spac
 
 ALTER TABLE public.space_assets ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can manage space_assets of own spaces" ON public.space_assets;
 CREATE POLICY "Users can manage space_assets of own spaces"
 ON public.space_assets FOR ALL
 USING (
