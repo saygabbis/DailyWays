@@ -97,6 +97,7 @@ export default function BoardCard({
                 payload: {
                     boardId, listId,
                     cardData: {
+                        id: uuidv4(),
                         title: `${card.title} (cópia)`,
                         description: card.description,
                         labels: [...card.labels],

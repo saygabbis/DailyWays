@@ -11,7 +11,7 @@ import { flushRoom } from './persistence.js';
 import { flushBoard } from './flushBoard.js';
 import { createOpIdTracker } from './opIdTracker.js';
 
-const FLUSH_MS = Number(process.env.COLLAB_FLUSH_MS || 3000);
+const FLUSH_MS = Number(process.env.COLLAB_FLUSH_MS || 600);
 // Aumentado de 2min para 10min — boards idle recarregavam do banco ao reentrar rapidamente
 const IDLE_EVICT_MS = Number(process.env.COLLAB_IDLE_EVICT_MS || 600000);
 const MAX_FLUSH_ERRORS = 5;
@@ -97,10 +97,27 @@ export class RoomManager {
     this.loading = new Map();
   }
 
-  async getOrLoad(roomId) {
+  evictRoom(roomId) {
+    const room = this.rooms.get(roomId);
+    if (room?.flushTimer) clearTimeout(room.flushTimer);
+    this.rooms.delete(roomId);
+    this.loading.delete(roomId);
+  }
+
+  async getOrLoad(roomId, { accessToken } = {}) {
     if (this.rooms.has(roomId)) {
       const room = this.rooms.get(roomId);
       room.lastActivity = Date.now();
+      if (parseRoomKind(roomId) === 'board' && !room.board && accessToken) {
+        const boardId = parseBoardIdFromRoom(roomId);
+        const data = boardId
+          ? await loadBoardFromDb(boardId, accessToken)
+          : { board: null };
+        if (data.board) {
+          room.board = data.board;
+          room.revision = data.revision ?? 0;
+        }
+      }
       return room;
     }
     if (this.loading.has(roomId)) {
@@ -117,7 +134,9 @@ export class RoomManager {
         room = { ...createSpaceRoom(), ...data };
       } else if (kind === 'board') {
         const boardId = parseBoardIdFromRoom(roomId);
-        const data = boardId ? await loadBoardFromDb(boardId) : { board: null };
+        const data = boardId
+          ? await loadBoardFromDb(boardId, accessToken)
+          : { board: null };
         room = { ...createBoardRoom(), board: data.board, revision: data.revision ?? 0 };
       } else {
         room = createSpaceRoom();
@@ -131,24 +150,54 @@ export class RoomManager {
     return this.rooms.get(roomId);
   }
 
+  async flushNow(roomId) {
+    const room = this.rooms.get(roomId);
+    if (!room?.dirty) return;
+    if (room.flushTimer) {
+      clearTimeout(room.flushTimer);
+      room.flushTimer = null;
+    }
+    try {
+      if (room.kind === 'space') {
+        const spaceId = parseSpaceIdFromRoom(roomId);
+        if (spaceId) await flushRoom(room, spaceId);
+      } else if (room.kind === 'board') {
+        await flushBoard(room);
+      }
+      room.flushErrorCount = 0;
+    } catch (err) {
+      recordFlushError(room, roomId, err);
+    }
+  }
+
   scheduleFlush(roomId) {
     const room = this.rooms.get(roomId);
     if (!room) return;
     if (room.flushTimer) clearTimeout(room.flushTimer);
     room.flushTimer = setTimeout(async () => {
       room.flushTimer = null;
-      try {
-        if (room.kind === 'space') {
-          const spaceId = parseSpaceIdFromRoom(roomId);
-          if (spaceId) await flushRoom(room, spaceId);
-        } else if (room.kind === 'board') {
-          await flushBoard(room);
-        }
-        room.flushErrorCount = 0;
-      } catch (err) {
-        recordFlushError(room, roomId, err);
-      }
+      await this.flushNow(roomId);
     }, FLUSH_MS);
+  }
+
+  shouldFlushBoardOpImmediately(op) {
+    if (op?.entity !== 'board' || op?.field !== 'action') return false;
+    const action = op.value;
+    const t = action?.type;
+    if ([
+      'MOVE_CARD',
+      'MOVE_LIST',
+      'ADD_CARD',
+      'DELETE_CARD',
+      'ADD_LIST',
+      'DELETE_LIST',
+    ].includes(t)) {
+      return true;
+    }
+    if (t === 'UPDATE_CARD' && action?.payload?.updates && 'completed' in action.payload.updates) {
+      return true;
+    }
+    return false;
   }
 
   async applyOp(roomId, op) {
@@ -167,7 +216,11 @@ export class RoomManager {
         : applyOpToRoom(room, op);
 
     if (result.ok) {
-      this.scheduleFlush(roomId);
+      if (room.kind === 'board' && this.shouldFlushBoardOpImmediately(op)) {
+        void this.flushNow(roomId);
+      } else {
+        this.scheduleFlush(roomId);
+      }
       room.lastActivity = Date.now();
     }
     return { ...result, revision: room.revision };

@@ -3,6 +3,10 @@ import { useEffect, useRef, useCallback } from 'react';
 import { SERVER_EVENTS } from '@dailyways/collab-protocol';
 
 import { useApp } from '../../../context/AppContext';
+import {
+  boardStructuralFingerprint,
+  isStaleBoardSnapshot,
+} from './boardFingerprint.js';
 
 import { useAuth } from '../../../context/AuthContext';
 
@@ -54,7 +58,7 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
   const boardCollab = useBoardCollabContext();
 
-  const { dispatch, setCollabActiveBoardId, setCollabConnectedForBoard } = useApp();
+  const { dispatch, setCollabActiveBoardId, setCollabConnectedForBoard, getActiveBoard } = useApp();
 
   const joinedRef = useRef(null);
 
@@ -178,17 +182,24 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
 
     const applyBoardSnapshot = (board) => {
-
       if (!board || cancelled) return;
-
+      const current = getActiveBoard();
+      if (current?.id === board.id && isStaleBoardSnapshot(current, board)) {
+        // #region agent log
+        fetch('http://127.0.0.1:7696/ingest/01fa34d4-9615-473f-b720-e19b7f0835ca',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'64ad20'},body:JSON.stringify({sessionId:'64ad20',hypothesisId:'H8',location:'BoardCollabSync.jsx:applyBoardSnapshot',message:'rejected stale snapshot',data:{localCards:current?.lists?.reduce((n,l)=>n+(l.cards?.length||0),0),serverCards:board?.lists?.reduce((n,l)=>n+(l.cards?.length||0),0)},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        return;
+      }
+      if (
+        current?.id === board.id
+        && boardStructuralFingerprint(current) === boardStructuralFingerprint(board)
+      ) {
+        return;
+      }
       dispatch({
-
         type: 'UPDATE_BOARD',
-
         payload: { id: board.id, updates: board },
-
       });
-
     };
 
 
@@ -301,35 +312,24 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
         boardCollabRef.current?.setActiveBoardId?.(joiningBoardId);
 
+        const alreadyHydrated = hydratedBoardIdsRef.current.has(joiningBoardId);
+
+        if (!alreadyHydrated && res.board) {
+          applyBoardSnapshot(res.board);
+          hydratedBoardIdsRef.current.add(joiningBoardId);
+        }
+
         boardCollabRef.current?.setBoardRoomReady?.(joiningBoardId, true);
 
         prepareBoardSurfacePresence(joiningBoardId);
 
-
-
         const publishPresenceAfterPaint = () => {
-
           if (cancelled || effectGenRef.current !== gen) return;
-
           scheduleBoardPresencePublish(socket, joiningBoardId, authRef.current);
-
           announcePresence(joiningBoardId);
-
         };
 
         publishPresenceAfterPaint();
-
-
-
-        const alreadyHydrated = hydratedBoardIdsRef.current.has(joiningBoardId);
-
-        if (!alreadyHydrated && res.board) {
-
-          applyBoardSnapshot(res.board);
-
-          hydratedBoardIdsRef.current.add(joiningBoardId);
-
-        }
 
         if (res.peers) flushPresenceSyncNow(res.peers);
 

@@ -36,18 +36,20 @@ function unbindCollabSocket(sock) {
 }
 
 export default function CollabProviderRoot({ children }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { addToast } = useToast();
   const [connected, setConnected] = useState(false);
   const [socket, setSocket] = useState(null);
   const userIdRef = useRef(user?.id);
+  const authLoadingRef = useRef(authLoading);
 
   useEffect(() => {
     userIdRef.current = user?.id;
-  }, [user?.id]);
+    authLoadingRef.current = authLoading;
+  }, [user?.id, authLoading]);
 
   useEffect(() => {
-    if (!isCollabEnabled() || !user?.id) {
+    if (!isCollabEnabled() || !user?.id || authLoadingRef.current) {
       disconnectCollabSocket();
       setSocket(null);
       setConnected(false);
@@ -76,6 +78,9 @@ export default function CollabProviderRoot({ children }) {
           typeof xhr?.responseText === 'string'
             ? xhr.responseText.slice(0, 200)
             : undefined;
+        // #region agent log
+        fetch('http://127.0.0.1:7696/ingest/01fa34d4-9615-473f-b720-e19b7f0835ca',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'64ad20'},body:JSON.stringify({sessionId:'64ad20',hypothesisId:'H4-H5',location:'CollabProviderRoot.jsx:onConnectError',message:'collab connect_error',data:{errMsg:err?.message??null,httpStatus:xhr?.status??null,responseSnippet,type:err?.type??null,url:getCollabServerUrl()},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         console.warn('[collab] connect error', err?.message || err, {
           url: getCollabServerUrl(),
           origin: typeof window !== 'undefined' ? window.location.origin : undefined,
@@ -87,6 +92,10 @@ export default function CollabProviderRoot({ children }) {
         setConnected(false);
         const msg = (err?.message || '').toLowerCase();
         if (msg.includes('unauthorized') || msg.includes('auth')) {
+          if (sock?.io) {
+            sock.io.opts.reconnection = false;
+          }
+          sock?.disconnect();
           toastCollabError(
             addToast,
             'Sessão expirada. Recarregue a página ou faça login novamente.',
@@ -141,6 +150,9 @@ export default function CollabProviderRoot({ children }) {
     (async () => {
       const { data } = await supabase.auth.getSession();
       const token = data?.session?.access_token;
+      // #region agent log
+      fetch('http://127.0.0.1:7696/ingest/01fa34d4-9615-473f-b720-e19b7f0835ca',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'64ad20'},body:JSON.stringify({sessionId:'64ad20',hypothesisId:'H2-H5',location:'CollabProviderRoot.jsx:getSession',message:'collab connect prep',data:{hasToken:!!token,tokenLen:token?.length??0,userIdPrefix:user?.id?.slice(0,8)??null,url:getCollabServerUrl(),cancelled},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       if (!token || cancelled) return;
 
       sock = connectCollabSocket(token);

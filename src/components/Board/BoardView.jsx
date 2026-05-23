@@ -26,7 +26,8 @@ import {
 import { publishBoardPresenceFocus } from '../../collab/board/presence/boardPresenceFocus.js';
 import { announcePresence } from '../../collab/board/presence/presenceBridge.js';
 import { useBoardPresenceHighlights } from '../../hooks/useBoardPresenceHighlights';
-import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
+import { useBoardCollabDispatch, useBoardCollabContext } from '../../collab/board/ops/BoardCollabContext.jsx';
+import { isCollabEnabled } from '../../collab/core/collabConfig.js';
 import { useCollabPresence } from '../../collab/board/presence/useCollabPresence.js';
 import { uuidv4 } from '../../utils/uuid';
 import './Board.css';
@@ -138,7 +139,14 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
 
     const board = getActiveBoard();
     const editorsByCardId = useMergedBoardEditors(focusedCardId, board?.id);
+    const boardCollab = useBoardCollabContext();
     const { collabDispatch, connected: collabConnected } = useBoardCollabDispatch(board?.id);
+    const collabHydrating = Boolean(
+        isCollabEnabled()
+        && board?.id
+        && boardCollab
+        && !boardCollab.isBoardRoomReady(board.id),
+    );
     const {
         updateCursor: updateBoardCursor,
         setHoverTarget,
@@ -742,12 +750,18 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
             )}
 
             <div
-                className={`board-scroller ${isPanning ? 'is-panning' : ''}`}
+                className={`board-scroller ${isPanning ? 'is-panning' : ''} ${collabHydrating ? 'board-scroller--hydrating' : ''}`}
                 ref={scrollerRef}
                 onPointerMove={handleBoardPointerMove}
                 onPointerDown={handlePanPointerDown}
                 onContextMenu={handleContextMenu}
             >
+                {collabHydrating && (
+                    <div className="board-collab-hydrate-overlay" role="status" aria-live="polite">
+                        <Loader2 size={28} className="spin" />
+                        <span>Sincronizando board…</span>
+                    </div>
+                )}
                 <>
                     <Droppable droppableId="board" direction="horizontal" type="list">
                         {(provided) => (

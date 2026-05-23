@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react';
 import { endOfWeek, endOfMonth, endOfYear } from 'date-fns';
 import SmartTaskItem from '../SmartViews/SmartTaskItem';
 import DiarySelect from './DiarySelect';
+import { uuidv4 } from '../../utils/uuid';
 
 const PERIODS = [
     { id: 'day', label: 'Dia' },
@@ -118,6 +119,7 @@ export default function DiaryQuickPlanner({ onCardClick }) {
                 listId: selectedListId,
                 title: trimmedTitle,
                 cardData: {
+                    id: uuidv4(),
                     myDay: true,
                     dueDate: dueDate.toISOString(),
                     journalMeta: {

@@ -28,6 +28,25 @@
     user-select: none;
 }
 
+.board-scroller--hydrating .board-lists {
+    visibility: hidden;
+}
+
+.board-collab-hydrate-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-md);
+    background: color-mix(in srgb, var(--bg-primary) 88%, transparent);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    pointer-events: none;
+}
+
 /* Custom scrollbar for horizontal board scroll */
 .board-scroller::-webkit-scrollbar {
     height: 8px;

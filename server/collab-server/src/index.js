@@ -1,4 +1,5 @@
 import './loadEnv.js';
+import { validateCollabEnv } from './validateEnv.js';
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
@@ -50,6 +51,7 @@ const io = new Server(httpServer, {
   maxHttpBufferSize: 1e6,
 });
 
+validateCollabEnv();
 registerSocketHandlers(io);
 
 io.engine.on('connection_error', (err) => {
