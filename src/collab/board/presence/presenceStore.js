@@ -25,7 +25,7 @@ function metaSignature(peers) {
     .map((p) => (
       `${p.userId}:${p.name || ''}:${p.color || ''}:${p.draggingCardId || ''}:`
       + `${p.draggingListId || ''}:${p.hoverCardId || ''}:${p.hoverListId || ''}:`
-      + `${p.selectedCardId || ''}:${p.onBoardSurface === false ? 0 : 1}:`
+      + `${p.selectedCardId || ''}:${(p.selectedCardIds || []).join(',')}:${p.onBoardSurface === false ? 0 : 1}:`
       + `${p.hoverModalEl || ''}:${JSON.stringify(p.liveDraft ?? null)}`
     ))
     .sort()

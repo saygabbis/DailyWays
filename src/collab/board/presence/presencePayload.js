@@ -34,6 +34,7 @@ function presenceFieldsForEmit(boardId) {
   const f = getPresenceFields(boardId);
   const out = {
     selectedCardId: f.selectedCardId ?? null,
+    selectedCardIds: f.selectedCardIds ?? [],
     onBoardSurface: f.onBoardSurface !== false,
     draggingCardId: f.draggingCardId ?? null,
     draggingListId: f.draggingListId ?? null,

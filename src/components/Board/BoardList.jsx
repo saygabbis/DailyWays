@@ -7,6 +7,7 @@ import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContex
 import { useContextMenu } from '../Common/ContextMenu';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import BoardCard from './BoardCard';
+import BoardMultiDragStack from './BoardMultiDragStack';
 import ListDetailsModal from './ListDetailsModal';
 import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy, Settings2, CheckCircle } from 'lucide-react';
 import { uuidv4 } from '../../utils/uuid';
@@ -14,6 +15,7 @@ import { uuidv4 } from '../../utils/uuid';
 export default function BoardList({
     list,
     boardId,
+    boardLists = [],
     onCardClick,
     index,
     onOpenListDetails,
@@ -29,6 +31,12 @@ export default function BoardList({
     onPresenceHoverEnd,
     remoteDraggingCardIds,
     remoteDragByCardId = {},
+    remoteDragPeerByCardId = {},
+    remoteSelectionByCardId = {},
+    multiDragCardIds = [],
+    multiDragCardPreviews = [],
+    remoteMultiDragCompanionIds = null,
+    shiftSelecting = false,
 }) {
     const { state, showConfirm } = useApp();
     const { collabDispatch } = useBoardCollabDispatch(boardId);
@@ -55,6 +63,8 @@ export default function BoardList({
         if (state.filterLabel !== 'all' && !card.labels.includes(state.filterLabel)) return false;
         return true;
     });
+
+    const filteredCardIds = filteredCards.map((c) => c.id);
 
     const handleAddCard = (e) => {
         e.preventDefault();
@@ -220,9 +230,23 @@ export default function BoardList({
                                     key={card.id}
                                     draggableId={card.id}
                                     index={index}
-                                    isDragDisabled={isFiltering}
+                                    isDragDisabled={isFiltering || shiftSelecting}
                                 >
                                     {(provided, snapshot) => {
+                                        const isMultiDragLead = snapshot.isDragging
+                                            && multiDragCardIds.length > 1;
+                                        const isMultiDragCompanion = !snapshot.isDragging
+                                            && multiDragCardIds.length > 1
+                                            && multiDragCardIds.includes(card.id);
+                                        const isRemoteMultiDragCompanion = remoteMultiDragCompanionIds?.has(card.id);
+                                        const isRemoteMultiDragLead = remoteDragByCardId?.[card.id]?.multiDragCardIds?.length > 1;
+                                        const isRemoteSingleDragging = remoteDraggingCardIds?.has(card.id)
+                                            && !isRemoteMultiDragLead;
+                                        const isRemoteMultiDragSlot = isRemoteMultiDragLead || isRemoteMultiDragCompanion;
+                                        const isRemoteDragGap = isRemoteSingleDragging || isRemoteMultiDragSlot;
+                                        const remoteDragPeer = remoteDragPeerByCardId?.[card.id]
+                                            || remoteDragByCardId?.[card.id];
+                                        const stackItems = multiDragCardPreviews.filter((p) => p.id !== card.id);
                                         const cardContent = (
                                             <div
                                                 ref={provided.innerRef}
@@ -232,26 +256,50 @@ export default function BoardList({
                                                     'board-card-drag-wrap',
                                                     provided.draggableProps.className,
                                                     snapshot.isDragging && coarsePointer ? 'board-card-drag-touch' : '',
+                                                    isMultiDragLead ? 'board-card-drag-wrap--multi-stack' : '',
+                                                    isMultiDragCompanion ? 'board-card-drag-wrap--multi-hidden' : '',
                                                 ].filter(Boolean).join(' ')}
                                                 style={{
                                                     ...provided.draggableProps.style,
                                                     cursor: snapshot.isDragging ? 'grabbing' : 'pointer',
                                                 }}
                                             >
-                                                <BoardCard
-                                                    card={card}
-                                                    boardId={boardId}
-                                                    listId={list.id}
-                                                    listColor={list.color}
-                                                    isDragging={snapshot.isDragging}
-                                                    isRemoteDragging={remoteDraggingCardIds?.has(card.id)}
-                                                    remoteDragPeer={remoteDragByCardId?.[card.id]}
-                                                    onClick={() => onCardClick(card, boardId, list.id)}
-                                                    editingEditors={editingByCardId?.[card.id] || []}
-                                                    hoverPeers={hoverByCardId?.[card.id] || []}
-                                                    onHoverStart={() => onCardHover?.(card.id)}
-                                                    onHoverEnd={() => onCardHoverEnd?.(list.id)}
-                                                />
+                                                {isRemoteDragGap ? (
+                                                    <div
+                                                        className="board-card-remote-drag-gap"
+                                                        style={remoteDragPeer?.color
+                                                            ? { '--presence-color': remoteDragPeer.color }
+                                                            : undefined}
+                                                        aria-hidden
+                                                    />
+                                                ) : (
+                                                    <>
+                                                        {isMultiDragLead && (
+                                                            <BoardMultiDragStack
+                                                                count={multiDragCardIds.length}
+                                                                items={stackItems}
+                                                            />
+                                                        )}
+                                                        <BoardCard
+                                                            card={card}
+                                                            boardId={boardId}
+                                                            listId={list.id}
+                                                            listColor={list.color}
+                                                            boardLists={boardLists}
+                                                            visibleCardIds={filteredCardIds}
+                                                            isDragging={snapshot.isDragging}
+                                                            isMultiDragLead={isMultiDragLead}
+                                                            multiDragCount={multiDragCardIds.length}
+                                                            remoteDragPeer={remoteDragPeer}
+                                                            onClick={() => onCardClick(card, boardId, list.id)}
+                                                            editingEditors={editingByCardId?.[card.id] || []}
+                                                            hoverPeers={hoverByCardId?.[card.id] || []}
+                                                            remoteSelectionPeers={remoteSelectionByCardId?.[card.id] || []}
+                                                            onHoverStart={() => onCardHover?.(card.id)}
+                                                            onHoverEnd={() => onCardHoverEnd?.(list.id)}
+                                                        />
+                                                    </>
+                                                )}
                                             </div>
                                         );
 

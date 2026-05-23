@@ -37,6 +37,7 @@ import PlannedDropPopover from './components/Common/PlannedDropPopover';
 import FloatingSaveButton from './components/Common/FloatingSaveButton';
 import { useContextMenu } from './components/Common/ContextMenu';
 import { DragDropContext } from '@hello-pangea/dnd';
+import { useBoardSelectionStore } from './stores/boardSelectionStore';
 import { LayoutDashboard, Sun, Star, CalendarDays, Search, Settings, PanelLeft, Maximize, Plus } from 'lucide-react';
 import './styles/global.css';
 import './App.css';
@@ -176,6 +177,10 @@ function AppContent() {
       && start.source.droppableId !== 'board'
       && start.source.droppableId !== 'boards'
     ) {
+      useBoardSelectionStore.getState().beginMultiDrag(start.draggableId);
+      if (useBoardSelectionStore.getState().multiDragCardIds.length > 1) {
+        document.body.classList.add('board-multi-drag-active');
+      }
       pushPresenceFields(boardId, {
         draggingCardId: start.draggableId,
         draggingListId: start.source.droppableId,
@@ -195,6 +200,7 @@ function AppContent() {
 
   const handleGlobalDragEnd = useCallback((result) => {
     document.body.classList.remove('dnd-dragging');
+    try {
     const boardId = getActiveBoard()?.id;
     if (boardId) {
       pushPresenceFields(boardId, { draggingCardId: null, draggingListId: null });
@@ -268,6 +274,10 @@ function AppContent() {
     // Board card / list DnD — delegate to BoardView
     if (boardViewRef.current?.handleDragEnd) {
       boardViewRef.current.handleDragEnd(result);
+    }
+    } finally {
+      document.body.classList.remove('board-multi-drag-active');
+      useBoardSelectionStore.getState().clearMultiDrag();
     }
   }, [state.boards, collabDispatch, user?.id, profile, collab?.socket, collab?.connected, getActiveBoard, updateBoardsOrder, suppressRealtime]);
 

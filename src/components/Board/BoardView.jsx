@@ -30,6 +30,17 @@ import { useBoardCollabDispatch, useBoardCollabContext } from '../../collab/boar
 import { isCollabEnabled } from '../../collab/core/collabConfig.js';
 import { useCollabPresence } from '../../collab/board/presence/useCollabPresence.js';
 import { uuidv4 } from '../../utils/uuid';
+import { useBoardSelectionStore } from '../../stores/boardSelectionStore';
+import { useBoardRemoteSelection } from '../../hooks/useBoardRemoteSelection';
+import BoardMarqueeSelection from './BoardMarqueeSelection';
+import {
+    copyCardsToClipboard,
+    cutCardsToClipboard,
+    pasteCardsFromClipboard,
+    bulkDeleteCards,
+    bulkMoveCardsToIndex,
+    resolveSelectedCards,
+} from './boardCardBulkOps';
 import './Board.css';
 
 /** Zona do menu de perfil (viewport): padding horizontal + respiro por baixo do dropdown (como na zona vermelha). */
@@ -85,7 +96,7 @@ function rectsIntersect(a, b) {
 }
 
 function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false }, ref) {
-    const { state, getActiveBoard, dispatch, isSavingBoard, showBoardToolbar, profileMenuOpen } = useApp();
+    const { state, getActiveBoard, dispatch, isSavingBoard, showBoardToolbar, profileMenuOpen, showConfirm } = useApp();
     const { user, profile } = useAuth();
     const collab = useCollab();
     const [addingList, setAddingList] = useState(false);
@@ -149,9 +160,37 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
     );
     const {
         updateCursor: updateBoardCursor,
+        updateCardSelection,
         setHoverTarget,
         clearHoverTarget,
     } = useCollabPresence(board?.id, { mode: 'screen' });
+
+    const selectedCardIds = useBoardSelectionStore((s) => s.selectedCardIds);
+    const shiftSelecting = useBoardSelectionStore((s) => s.shiftSelecting);
+    const setBoardSelection = useBoardSelectionStore((s) => s.setBoard);
+    const clearSelection = useBoardSelectionStore((s) => s.clearSelection);
+    const clipboard = useBoardSelectionStore((s) => s.clipboard);
+    const setClipboard = useBoardSelectionStore((s) => s.setClipboard);
+    const anchorListId = useBoardSelectionStore((s) => s.anchorListId);
+    const multiDragCardIds = useBoardSelectionStore((s) => s.multiDragCardIds);
+    const { remoteSelectionByCardId } = useBoardRemoteSelection();
+
+    const multiDragCardPreviews = useMemo(() => {
+        if (!board || multiDragCardIds.length < 2) return [];
+        return resolveSelectedCards(board, multiDragCardIds).map(({ card }) => ({
+            id: card.id,
+            title: card.title,
+        }));
+    }, [board, multiDragCardIds]);
+
+    useEffect(() => {
+        if (board?.id) setBoardSelection(board.id);
+    }, [board?.id, setBoardSelection]);
+
+    useEffect(() => {
+        if (!board?.id) return;
+        updateCardSelection(selectedCardIds);
+    }, [board?.id, selectedCardIds, updateCardSelection]);
 
     const onBoardSurface = Boolean(
         board?.id
@@ -232,6 +271,32 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         for (const d of remoteDrags) map[d.cardId] = d;
         return map;
     }, [remoteDrags]);
+
+    /** Peer de arrasto por card (inclui todos os slots da multiseleção remota). */
+    const remoteDragPeerByCardId = useMemo(() => {
+        const map = {};
+        for (const d of remoteDrags) {
+            if (d.multiDragCardIds?.length > 1) {
+                for (const cardId of d.multiDragCardIds) {
+                    map[cardId] = d;
+                }
+            } else if (d.cardId) {
+                map[d.cardId] = d;
+            }
+        }
+        return map;
+    }, [remoteDrags]);
+
+    const remoteMultiDragCompanionIds = useMemo(() => {
+        const ids = new Set();
+        for (const d of remoteDrags) {
+            if (!d.multiDragCardIds || d.multiDragCardIds.length < 2) continue;
+            for (const cardId of d.multiDragCardIds) {
+                if (cardId !== d.cardId) ids.add(cardId);
+            }
+        }
+        return ids;
+    }, [remoteDrags]);
     const remoteDragByListId = useMemo(() => {
         const map = {};
         for (const d of remoteListDrags) map[d.listId] = d;
@@ -309,9 +374,14 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
     const handlePanPointerDown = (e) => {
         if (e.pointerType !== 'mouse') return;
         if (e.button !== 0 && e.button !== 1 && e.button !== 2) return;
+        if (e.shiftKey) return;
         const target = e.target;
         const isInteractive = target.closest('button, a, input, textarea, .board-card, .board-list-header, .board-list-footer');
         if (isInteractive) return;
+
+        if (!e.shiftKey && !target.closest('.board-card')) {
+            clearSelection();
+        }
 
         panningData.current = {
             isDown: true,
@@ -355,7 +425,17 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
 
         const { source, destination, type, draggableId } = result;
         if (!destination) return;
-        if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+
+        const dragIdsFromStore = useBoardSelectionStore.getState().multiDragCardIds;
+        const isMultiDrag = dragIdsFromStore.length > 1;
+
+        if (
+            !isMultiDrag
+            && source.droppableId === destination.droppableId
+            && source.index === destination.index
+        ) {
+            return;
+        }
 
         // Handle List Reordering
         if (type === 'list') {
@@ -384,6 +464,21 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         if (!sourceList || !destList) return;
 
         const cardId = draggableId;
+        const dragIds = isMultiDrag ? dragIdsFromStore : [cardId];
+        const cardsToMove = resolveSelectedCards(b, dragIds);
+
+        if (cardsToMove.length > 1) {
+            bulkMoveCardsToIndex(
+                cardsToMove,
+                destination.droppableId,
+                destination.index,
+                cardId,
+                getActiveBoard,
+                collabDispatch,
+            );
+            return;
+        }
+
         const sourceIndex = sourceList.cards.findIndex((c) => c.id === cardId);
         if (sourceIndex < 0) return;
 
@@ -567,6 +662,84 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         return undefined;
     }, [profileMenuAvoidMinTop, toolbarPos]);
 
+    useEffect(() => {
+        const isEditableTarget = () => {
+            const el = document.activeElement;
+            if (!el) return false;
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable) {
+                return true;
+            }
+            return false;
+        };
+
+        const shouldHandleShortcut = () => {
+            if (focusedCardId) return false;
+            if (isEditableTarget()) return false;
+            return Boolean(getActiveBoard()?.id);
+        };
+
+        const onKeyDown = async (e) => {
+            const activeBoard = getActiveBoard();
+            if (!shouldHandleShortcut() || !activeBoard) return;
+            const mod = e.ctrlKey || e.metaKey;
+            const key = e.key.toLowerCase();
+
+            if (e.key === 'Escape') {
+                if (selectedCardIds.length) {
+                    e.preventDefault();
+                    clearSelection();
+                }
+                return;
+            }
+
+            if (!selectedCardIds.length && !mod) return;
+
+            if (mod && key === 'c') {
+                e.preventDefault();
+                const cards = resolveSelectedCards(activeBoard, selectedCardIds);
+                copyCardsToClipboard(cards, activeBoard.id, anchorListId, setClipboard);
+                return;
+            }
+            if (mod && key === 'x') {
+                e.preventDefault();
+                const cards = resolveSelectedCards(activeBoard, selectedCardIds);
+                await cutCardsToClipboard(cards, activeBoard.id, anchorListId, setClipboard, collabDispatch);
+                clearSelection();
+                return;
+            }
+            if (mod && key === 'v') {
+                e.preventDefault();
+                if (!clipboard?.cards?.length) return;
+                const targetListId = anchorListId || activeBoard.lists[0]?.id;
+                if (!targetListId) return;
+                pasteCardsFromClipboard(clipboard, targetListId, activeBoard.id, collabDispatch);
+                if (clipboard.mode === 'cut') {
+                    useBoardSelectionStore.getState().clearClipboard();
+                }
+                return;
+            }
+            if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCardIds.length) {
+                e.preventDefault();
+                const cards = resolveSelectedCards(activeBoard, selectedCardIds);
+                const ok = await bulkDeleteCards(cards, activeBoard.id, collabDispatch, showConfirm);
+                if (ok) clearSelection();
+            }
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [
+        getActiveBoard,
+        selectedCardIds,
+        focusedCardId,
+        clipboard,
+        anchorListId,
+        clearSelection,
+        setClipboard,
+        collabDispatch,
+        showConfirm,
+    ]);
+
     if (!board) {
         return (
             <div className="empty-state">
@@ -749,6 +922,8 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
                 </div>
             )}
 
+            <BoardMarqueeSelection scrollerRef={scrollerRef} />
+
             <div
                 className={`board-scroller ${isPanning ? 'is-panning' : ''} ${collabHydrating ? 'board-scroller--hydrating' : ''}`}
                 ref={scrollerRef}
@@ -805,12 +980,19 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
                                                             <BoardList
                                                                 list={list}
                                                                 boardId={board.id}
+                                                                boardLists={board.lists}
                                                                 onCardClick={onCardClick}
                                                                 editingByCardId={editorsByCardId}
                                                                 hoverByCardId={hoverByCardId}
                                                                 hoverByListId={hoverByListId}
                                                                 remoteDraggingCardIds={remoteDraggingCardIds}
                                                                 remoteDragByCardId={remoteDragByCardId}
+                                                                remoteDragPeerByCardId={remoteDragPeerByCardId}
+                                                                remoteSelectionByCardId={remoteSelectionByCardId}
+                                                                multiDragCardIds={multiDragCardIds}
+                                                                multiDragCardPreviews={multiDragCardPreviews}
+                                                                remoteMultiDragCompanionIds={remoteMultiDragCompanionIds}
+                                                                shiftSelecting={shiftSelecting}
                                                                 onCardHover={handleCardHover}
                                                                 onCardHoverEnd={handleCardHoverEnd}
                                                                 onListHover={handleListHover}

@@ -7,6 +7,7 @@ import { usePresenceStore } from '../presence/presenceStore';
 import { presenceLabelTextColor } from '../../../utils/presenceLabelContrast.js';
 import { boardContentCursorPosition } from '../coords/boardCursorCoords.js';
 import { getBoardPresenceLayerAnchor } from '../coords/scrollContentCoords.js';
+import BoardMultiDragStack from '../../../components/Board/BoardMultiDragStack';
 import './PresenceLayer.css';
 
 const CARD_OFFSET_X = 14;
@@ -37,28 +38,49 @@ function PeerBadge({ drag, color }) {
   );
 }
 
-function CardGhost({ card, drag, color, pos }) {
+function CardGhost({ card, drag, color, pos, multiCount = 1, stackItems = [] }) {
   const isCompleted = Boolean(card.completed);
+  const isMulti = multiCount > 1;
+
   return (
     <div
       className="collab-remote-drag-ghost"
       style={{
         transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`,
         '--presence-color': color,
+        '--multi-drag-accent': color,
       }}
     >
-      <div className="collab-remote-drag-ghost-card collab-remote-drag-ghost-card--active">
-        <PeerBadge drag={drag} color={color} />
-        <div className="collab-remote-drag-ghost-card-header">
-          <span
-            className={`collab-remote-drag-ghost-check${isCompleted ? ' collab-remote-drag-ghost-check--done' : ''}`}
-            aria-hidden
-          >
-            {isCompleted ? <CheckCircle2 size={16} strokeWidth={2} /> : <Circle size={16} strokeWidth={2} />}
-          </span>
-          <span className={`collab-remote-drag-ghost-title${isCompleted ? ' collab-remote-drag-ghost-title--done' : ''}`}>
-            {card.title || 'Tarefa'}
-          </span>
+      <div className="collab-remote-drag-ghost-bundle">
+        {isMulti && (
+          <div className="collab-remote-drag-ghost-stack-host">
+            <BoardMultiDragStack count={multiCount} items={stackItems} variant="remote" />
+          </div>
+        )}
+        <div
+          className={[
+            'collab-remote-drag-ghost-card',
+            'collab-remote-drag-ghost-card--dragging',
+            isMulti ? 'collab-remote-drag-ghost-card--multi' : '',
+          ].filter(Boolean).join(' ')}
+        >
+          {isMulti && (
+            <span className="board-card-multi-drag-badge board-card-multi-drag-badge--remote" aria-hidden>
+              {multiCount}
+            </span>
+          )}
+          <PeerBadge drag={drag} color={color} />
+          <div className="collab-remote-drag-ghost-card-header">
+            <span
+              className={`collab-remote-drag-ghost-check${isCompleted ? ' collab-remote-drag-ghost-check--done' : ''}`}
+              aria-hidden
+            >
+              {isCompleted ? <CheckCircle2 size={16} strokeWidth={2} /> : <Circle size={16} strokeWidth={2} />}
+            </span>
+            <span className={`collab-remote-drag-ghost-title${isCompleted ? ' collab-remote-drag-ghost-title--done' : ''}`}>
+              {card.title || 'Tarefa'}
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -161,12 +183,23 @@ export default function RemoteDragLayer({ boardId, boardScrollerRef = null, layo
       if (!card) continue;
       const pos = resolveDragContentPosition(drag, peers, scrollerEl, CARD_OFFSET_X, CARD_OFFSET_Y);
       if (!pos) continue;
+      const multiIds = drag.multiDragCardIds?.length > 1 ? drag.multiDragCardIds : [drag.cardId];
+      const multiCount = multiIds.length;
+      const stackItems = multiIds
+        .filter((id) => id !== drag.cardId)
+        .map((id) => {
+          const c = boardData.cardsById[id];
+          return c ? { id: c.id, title: c.title } : null;
+        })
+        .filter(Boolean);
       cards.push({
         key: `card-${drag.userId}-${drag.cardId}`,
         card,
         drag,
         color: drag.color || '#7c3aed',
         pos,
+        multiCount,
+        stackItems,
       });
     }
 
@@ -202,8 +235,16 @@ export default function RemoteDragLayer({ boardId, boardScrollerRef = null, layo
       {listGhosts.map(({ key, list, drag, color, pos }) => (
         <ListGhost key={key} list={list} drag={drag} color={color} pos={pos} />
       ))}
-      {cardGhosts.map(({ key, card, drag, color, pos }) => (
-        <CardGhost key={key} card={card} drag={drag} color={color} pos={pos} />
+      {cardGhosts.map(({ key, card, drag, color, pos, multiCount, stackItems }) => (
+        <CardGhost
+          key={key}
+          card={card}
+          drag={drag}
+          color={color}
+          pos={pos}
+          multiCount={multiCount}
+          stackItems={stackItems}
+        />
       ))}
     </div>
   );

@@ -147,6 +147,21 @@
   pointer-events: none;
 }
 
+.collab-remote-drag-ghost-bundle {
+  position: relative;
+}
+
+.collab-remote-drag-ghost-stack-host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.collab-remote-drag-ghost-stack-host .board-multi-drag-stack__layer {
+  min-height: 52px;
+}
+
 .collab-remote-drag-ghost-card {
   width: 272px;
   max-width: min(272px, 88vw);
@@ -159,20 +174,18 @@
     0 14px 36px rgba(0, 0, 0, 0.38);
   opacity: 0.96;
   position: relative;
+  z-index: 1;
 }
 
-.collab-remote-drag-ghost-card--active {
-  animation: collab-remote-drag-float 0.55s ease-in-out infinite alternate;
+.collab-remote-drag-ghost-card--multi {
+  z-index: 2;
+}
+
+/* Alinhado a .board-card-dragging (arrasto local) */
+.collab-remote-drag-ghost-card--dragging {
   transform: rotate(2deg);
-}
-
-@keyframes collab-remote-drag-float {
-  0% {
-    transform: rotate(2deg) translateY(0);
-  }
-  100% {
-    transform: rotate(2.5deg) translateY(-4px);
-  }
+  border-color: color-mix(in srgb, var(--presence-color) 75%, var(--border-color, #333)) !important;
+  box-shadow: var(--shadow-xl, 0 14px 36px rgba(0, 0, 0, 0.38)) !important;
 }
 
 .collab-remote-drag-ghost-badge {
@@ -238,8 +251,8 @@
 }
 
 .collab-remote-drag-ghost-list--active {
-  animation: collab-remote-drag-float 0.55s ease-in-out infinite alternate;
-  transform: rotate(1deg);
+  transform: rotate(2deg);
+  box-shadow: var(--shadow-xl, 0 14px 36px rgba(0, 0, 0, 0.38));
 }
 
 .collab-remote-drag-ghost-list-header {

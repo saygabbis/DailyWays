@@ -1,32 +1,59 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRemoteCardAnim } from '../../hooks/useBoardRemoteAnim';
 import { useApp } from '../../context/AppContext';
 import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
-import { useContextMenu, useLongPress } from '../Common/ContextMenu';
+import { useContextMenu, useLongPressSelect } from '../Common/ContextMenu';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
-import { Calendar, CheckSquare, AlertCircle, Sun, Edit3, Trash2, Star, Tag, Copy, ArrowRight, Circle, CheckCircle2, MoreHorizontal, FileText } from 'lucide-react';
+import { useBoardSelectionStore } from '../../stores/boardSelectionStore';
+import { Calendar, CheckSquare, AlertCircle, Sun, Edit3, Trash2, Star, Copy, ArrowRight, Circle, CheckCircle2, MoreHorizontal, FileText } from 'lucide-react';
 import { formatCardDateTime, isCardDueToday, isCardOverdue } from '../../utils/cardDateTime';
-import { uuidv4 } from '../../utils/uuid';
 import { useCardCoverImage } from '../../hooks/useCardCoverImage';
+import {
+    buildDuplicateCardPayload,
+    bulkDeleteCards,
+    bulkUpdateCards,
+    bulkDuplicateCards,
+    bulkMoveCardsToList,
+    buildMoveToListMenuItems,
+    resolveSelectedCards,
+} from './boardCardBulkOps';
 
 export default function BoardCard({
     card,
     boardId,
     listId,
     listColor,
+    boardLists = [],
+    visibleCardIds = [],
     isDragging,
-    isRemoteDragging,
+    isMultiDragLead = false,
+    multiDragCount = 0,
     remoteDragPeer = null,
     onClick,
     editingEditors = [],
     hoverPeers = [],
+    remoteSelectionPeers = [],
     onHoverStart,
     onHoverEnd,
 }) {
-    const { LABEL_COLORS, showConfirm } = useApp();
+    const { LABEL_COLORS, showConfirm, getActiveBoard } = useApp();
     const { collabDispatch } = useBoardCollabDispatch(boardId);
     const { showContextMenu } = useContextMenu();
+    const cardRef = useRef(null);
     const isCompleted = card.completed || false;
+
+    const selectedCardIds = useBoardSelectionStore((s) => s.selectedCardIds);
+    const toggleCard = useBoardSelectionStore((s) => s.toggleCard);
+    const selectRangeInList = useBoardSelectionStore((s) => s.selectRangeInList);
+    const clearSelection = useBoardSelectionStore((s) => s.clearSelection);
+    const longPressPendingCardId = useBoardSelectionStore((s) => s.longPressPendingCardId);
+    const setLongPressPending = useBoardSelectionStore((s) => s.setLongPressPending);
+
+    const isSelected = selectedCardIds.includes(card.id);
+    const selectionCount = selectedCardIds.length;
+    const isBulkContext = isSelected && selectionCount > 1;
+    const isLongPressPending = longPressPendingCardId === card.id;
+    const remoteSelectionPeer = remoteSelectionPeers?.[0] || null;
 
     const handleToggleComplete = (e) => {
         e.stopPropagation();
@@ -56,6 +83,7 @@ export default function BoardCard({
     const hoverPeer = hoverPeers?.[0] || null;
     const presenceColor = primaryEditor?.color
         || remoteDragPeer?.color
+        || remoteSelectionPeer?.color
         || hoverPeer?.color
         || 'var(--accent-primary)';
     const isBeingEdited = Array.isArray(editingEditors) && editingEditors.length > 0;
@@ -63,7 +91,14 @@ export default function BoardCard({
     const fetchedCoverUrl = useCardCoverImage(card.id, card.coverAttachmentId);
     const coverUrl = fetchedCoverUrl || card.coverPreviewUrl || null;
 
-    const getContextMenuItems = () => [
+    const board = getActiveBoard();
+    const selectedCards = resolveSelectedCards(board, selectedCardIds);
+
+    const getMoveToListItems = () => buildMoveToListMenuItems(boardLists, listId, (destListId) => {
+        bulkMoveCardsToList([{ card, listId }], destListId, getActiveBoard, collabDispatch);
+    });
+
+    const getSingleContextMenuItems = () => [
         {
             label: 'Editar tarefa',
             icon: <Edit3 size={15} />,
@@ -90,37 +125,15 @@ export default function BoardCard({
         },
         { type: 'divider' },
         {
+            label: 'Mover para coluna',
+            icon: <ArrowRight size={15} />,
+            disabled: true,
+        },
+        ...getMoveToListItems(),
+        {
             label: 'Duplicar tarefa',
             icon: <Copy size={15} />,
-            action: () => collabDispatch({
-                type: 'ADD_CARD',
-                payload: {
-                    boardId, listId,
-                    cardData: {
-                        id: uuidv4(),
-                        title: `${card.title} (cópia)`,
-                        description: card.description,
-                        labels: [...card.labels],
-                        priority: card.priority,
-                        dueDate: card.dueDate,
-                        startDate: card.startDate,
-                        isAllDay: card.isAllDay ?? true,
-                        recurrenceRule: card.recurrenceRule ?? null,
-                        coverAttachmentId: card.coverAttachmentId ?? null,
-                        myDay: false,
-                        subtasks: card.subtasks.map((st, index) => ({
-                            id: uuidv4(),
-                            title: st.title,
-                            done: false,
-                            position: st.position ?? index,
-                            linkUrl: st.linkUrl ?? null,
-                            linkLabel: st.linkLabel ?? null,
-                            createdAt: new Date().toISOString(),
-                            updatedAt: new Date().toISOString(),
-                        })),
-                    },
-                },
-            }),
+            action: () => collabDispatch(buildDuplicateCardPayload(card, listId, boardId)),
         },
         { type: 'divider' },
         {
@@ -132,7 +145,7 @@ export default function BoardCard({
                     title: 'Deletar Tarefa',
                     message: `Tem certeza que deseja deletar "${card.title}"?`,
                     confirmLabel: 'Deletar',
-                    type: 'danger'
+                    type: 'danger',
                 });
                 if (confirmed) {
                     collabDispatch({
@@ -144,25 +157,112 @@ export default function BoardCard({
         },
     ];
 
+    const getBulkContextMenuItems = () => {
+        const count = selectionCount;
+        const allMyDay = selectedCards.every(({ card: c }) => c.myDay);
+        const allImportant = selectedCards.every(({ card: c }) => c.priority === 'high');
+        return [
+            {
+                label: 'Limpar seleção',
+                icon: <Edit3 size={15} />,
+                action: () => clearSelection(),
+            },
+            { type: 'divider' },
+            {
+                label: allMyDay ? 'Remover do Meu Dia' : 'Adicionar ao Meu Dia',
+                icon: <Sun size={15} />,
+                action: () => bulkUpdateCards(selectedCards, boardId, { myDay: !allMyDay }, collabDispatch),
+            },
+            {
+                label: allImportant ? 'Remover importância' : 'Marcar como importante',
+                icon: <Star size={15} />,
+                action: () => bulkUpdateCards(
+                    selectedCards,
+                    boardId,
+                    { priority: allImportant ? 'none' : 'high' },
+                    collabDispatch,
+                ),
+            },
+            {
+                label: 'Duplicar selecionados',
+                icon: <Copy size={15} />,
+                action: () => bulkDuplicateCards(selectedCards, boardId, collabDispatch),
+            },
+            {
+                label: 'Mover para coluna',
+                icon: <ArrowRight size={15} />,
+                disabled: true,
+            },
+            ...buildMoveToListMenuItems(boardLists, null, (destListId) => {
+                bulkMoveCardsToList(selectedCards, destListId, getActiveBoard, collabDispatch);
+                clearSelection();
+            }),
+            { type: 'divider' },
+            {
+                label: 'Deletar selecionados',
+                icon: <Trash2 size={15} />,
+                danger: true,
+                action: async () => {
+                    const ok = await bulkDeleteCards(selectedCards, boardId, collabDispatch, showConfirm);
+                    if (ok) clearSelection();
+                },
+            },
+        ].filter(Boolean);
+    };
+
     const handleContextMenu = (e) => {
-        showContextMenu(e, getContextMenuItems(), { title: card.title, tint: effectiveColor || null });
+        if (isBulkContext) {
+            showContextMenu(e, getBulkContextMenuItems(), { title: `${selectionCount} Selecionados` });
+            return;
+        }
+        showContextMenu(e, getSingleContextMenuItems(), { title: card.title, tint: effectiveColor || null });
     };
 
     const coarsePointer = useCoarsePointer();
-    const { cancel: cancelLongPress, ...cardLongPressTouch } = useLongPress(handleContextMenu, undefined, { disabled: coarsePointer });
+
+    const handleCardClick = (e) => {
+        if (e.defaultPrevented) return;
+        const mod = e.ctrlKey || e.metaKey;
+        if (mod) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleCard(card.id, listId);
+            return;
+        }
+        if (e.shiftKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            selectRangeInList(listId, visibleCardIds, card.id);
+            return;
+        }
+        if (selectionCount > 0 && coarsePointer) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleCard(card.id, listId);
+            return;
+        }
+        if (selectionCount > 0) {
+            clearSelection();
+        }
+        onClick();
+    };
+
+    const { cancel: cancelLongPressSelect, ...longPressSelectTouch } = useLongPressSelect({
+        onSelect: () => toggleCard(card.id, listId),
+        elementRef: cardRef,
+        disabled: !coarsePointer,
+        onPendingChange: (pending) => setLongPressPending(pending ? card.id : null),
+    });
 
     useEffect(() => {
-        if (isDragging) cancelLongPress?.();
-    }, [isDragging, cancelLongPress]);
+        if (isDragging) cancelLongPressSelect?.();
+    }, [isDragging, cancelLongPressSelect]);
 
     const remoteAnim = useRemoteCardAnim(card.id);
 
-    // Animation auto-cleanup to prevent restart on DND portal remount
     const [shouldAnimate, setShouldAnimate] = useState(true);
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setShouldAnimate(false);
-        }, 600);
+        const timer = setTimeout(() => setShouldAnimate(false), 600);
         return () => clearTimeout(timer);
     }, []);
 
@@ -175,18 +275,39 @@ export default function BoardCard({
 
     return (
         <div
-            className={`board-card ${isDragging ? 'board-card-dragging' : ''} ${isRemoteDragging ? 'board-card-remote-drag-source' : ''} ${remoteAnim ? 'board-card-remote-drop-anim' : ''} ${isCompleted ? 'board-card-done-state' : ''} ${allDone ? 'board-card-all-subtasks-done' : ''} ${isBeingEdited ? 'board-card-presence-active' : ''} ${isRemoteHover ? 'board-card-remote-hover' : ''}`}
-            onClick={onClick}
+            ref={cardRef}
+            data-card-id={card.id}
+            className={[
+                'board-card',
+                isDragging ? 'board-card-dragging' : '',
+                isMultiDragLead ? 'board-card-multi-drag-lead' : '',
+                remoteAnim ? 'board-card-remote-drop-anim' : '',
+                isCompleted ? 'board-card-done-state' : '',
+                allDone ? 'board-card-all-subtasks-done' : '',
+                isBeingEdited ? 'board-card-presence-active' : '',
+                isRemoteHover ? 'board-card-remote-hover' : '',
+                isSelected ? 'board-card--selected' : '',
+                isLongPressPending ? 'board-card--long-press-pending' : '',
+                remoteSelectionPeer ? 'board-card--remote-selected' : '',
+            ].filter(Boolean).join(' ')}
+            onClick={handleCardClick}
             onContextMenu={handleContextMenu}
             onMouseEnter={() => onHoverStart?.()}
             onMouseLeave={() => onHoverEnd?.()}
-            {...cardLongPressTouch}
+            {...longPressSelectTouch}
             style={{
               ...(effectiveColor ? { '--card-accent': effectiveColor } : {}),
-              ...((isBeingEdited || isRemoteHover || isRemoteDragging) ? { '--presence-color': presenceColor } : {}),
+              ...((isBeingEdited || isRemoteHover || remoteSelectionPeer)
+                ? { '--presence-color': presenceColor }
+                : {}),
             }}
             data-colored={effectiveColor ? 'true' : undefined}
         >
+            {isMultiDragLead && multiDragCount > 1 && (
+                <span className="board-card-multi-drag-badge" aria-hidden>
+                    {multiDragCount}
+                </span>
+            )}
             {card.coverAttachmentId && (
                 <div
                     className={`board-card-cover board-card-cover-active${coverUrl ? ' board-card-cover-loaded' : ''}`}
@@ -221,17 +342,13 @@ export default function BoardCard({
                                 const fallback = wrap?.querySelector('.board-card-presence-fallback');
                                 if (fallback) fallback.style.display = 'none';
                             }}
-                            onError={(e) => {
-                                // se falhar, mantém o fallback visível
-                                void e;
-                            }}
+                            onError={() => {}}
                         />
                     ) : null}
                     <span className="board-card-presence-fallback">{primaryEditor?.avatarInitial || '?'}</span>
                 </div>
             )}
             <div className={`board-card-inner ${shouldAnimate ? 'animate-slide-up-jelly' : ''}`}>
-                {/* Labels */}
                 {card.labels.length > 0 && (
                     <div className="board-card-labels">
                         {card.labels.map(labelId => {
@@ -248,7 +365,6 @@ export default function BoardCard({
                     </div>
                 )}
 
-                {/* Title and Checkbox */}
                 <div className="board-card-header">
                     <button
                         className={`board-card-check ${isCompleted ? 'completed' : ''}`}
@@ -268,7 +384,6 @@ export default function BoardCard({
                     </button>
                 </div>
 
-                {/* Meta */}
                 <div className="board-card-meta">
                     {hasDescription && (
                         <span className="board-card-desc" title="Este card tem descrição">
@@ -303,7 +418,6 @@ export default function BoardCard({
                     )}
                 </div>
 
-                {/* Progress bar for subtasks */}
                 {hasSubtasks && (
                     <div className="board-card-progress">
                         <div

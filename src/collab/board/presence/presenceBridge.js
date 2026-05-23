@@ -8,6 +8,7 @@ function roomFields(roomId) {
       cursor: null,
       selectedNodeIds: undefined,
       selectedCardId: null,
+      selectedCardIds: [],
       onBoardSurface: true,
       draggingCardId: null,
       draggingListId: null,
@@ -55,6 +56,7 @@ export function resetPresenceFields(roomId) {
   f.cursorScreen = null;
   f.cursorModal = null;
   f.selectedCardId = null;
+  f.selectedCardIds = [];
   f.onBoardSurface = true;
   f.draggingCardId = null;
   f.draggingListId = null;

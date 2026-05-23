@@ -25,6 +25,16 @@ function draggingCursorSig(state) {
   return parts.sort().join('|');
 }
 
+/** IDs do grupo quando o peer arrasta um card que faz parte da seleção dele. */
+export function getRemoteMultiDragIds(peer) {
+  const selected = Array.isArray(peer?.selectedCardIds) ? peer.selectedCardIds : [];
+  const lead = peer?.draggingCardId;
+  if (lead && selected.includes(lead) && selected.length > 1) {
+    return [...selected];
+  }
+  return lead ? [lead] : [];
+}
+
 /** Posição de arrasto no conteúdo do board (não viewport). */
 function dragPosition(peer) {
   const c = peer.cursor;
@@ -69,10 +79,12 @@ export function useBoardPresenceHighlights() {
       }
       if (peer.draggingCardId) {
         const { x, y } = dragPosition(peer);
+        const multiDragCardIds = getRemoteMultiDragIds(peer);
         remoteDrags.push({
           ...meta,
           cardId: peer.draggingCardId,
           listId: peer.draggingListId || null,
+          multiDragCardIds,
           x,
           y,
         });

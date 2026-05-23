@@ -66,6 +66,9 @@ export function validatePresence(payload) {
   if (payload.selectedNodeIds != null && !Array.isArray(payload.selectedNodeIds)) {
     return 'Invalid selectedNodeIds';
   }
+  if (payload.selectedCardIds != null && !Array.isArray(payload.selectedCardIds)) {
+    return 'Invalid selectedCardIds';
+  }
   for (const key of [
     'selectedCardId',
     'draggingCardId',

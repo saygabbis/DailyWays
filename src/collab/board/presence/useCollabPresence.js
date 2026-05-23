@@ -202,6 +202,11 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
     mergeFields({ draggingCardId: null, draggingListId: null });
   }, [mergeFields]);
 
+  const updateCardSelection = useCallback((selectedCardIds) => {
+    mergeFields({ selectedCardIds: selectedCardIds || [] });
+    scheduleMetaSend();
+  }, [mergeFields, scheduleMetaSend]);
+
   const setSelectedCardId = useCallback((cardId) => {
     mergeFields({ selectedCardId: cardId ?? null });
   }, [mergeFields]);
@@ -221,6 +226,7 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
     clearHoverTarget,
     setDragTarget,
     clearDragTarget,
+    updateCardSelection,
     setSelectedCardId,
     setHoverModalEl,
     setLiveDraft,
