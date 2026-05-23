@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import './DraggablePanel.css';
+import '../styles/DraggablePanel.css';
 
 const STORAGE_KEY = 'dailyways_panel_positions';
 

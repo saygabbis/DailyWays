@@ -1,10 +1,10 @@
 import React from 'react';
 import BaseNode from './BaseNode';
-import { useWhiteboardStore } from '../../../stores/whiteboardStore';
-import { useCollabPatch } from '../../../collab/whiteboard/CollabOpsContext.jsx';
-import { recordNodesMutation } from '../whiteboardHistory';
+import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
+import { useCollabPatch } from '../../../../collab/whiteboard/CollabOpsContext.jsx';
+import { recordNodesMutation } from '../../core/history/whiteboardHistory';
 import { Check, Square } from 'lucide-react';
-import { uuidv4 } from '../../../utils/uuid';
+import { uuidv4 } from '../../../../utils/uuid';
 
 export default function TodoListNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const items = node.data?.items ?? [{ id: uuidv4(), text: 'Item', done: false }];

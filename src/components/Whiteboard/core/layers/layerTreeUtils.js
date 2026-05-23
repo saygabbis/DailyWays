@@ -1,5 +1,5 @@
-import { CONTAINER_NODE_TYPES } from './viewportUtils';
-import { getNodePageId } from './whiteboardPages';
+import { CONTAINER_NODE_TYPES } from '../../interaction/viewport/viewportUtils';
+import { getNodePageId } from '../pages/whiteboardPages';
 
 export function buildLayerTree(nodes, pageId) {
     const pageNodes = (nodes ?? []).filter((n) => getNodePageId(n) === pageId);

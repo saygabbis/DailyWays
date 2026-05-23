@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { useWhiteboardStore } from '../../stores/whiteboardStore';
-import { useAuth } from '../../context/AuthContext';
-import { insertComment } from '../../services/whiteboardService';
+import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { useAuth } from '../../../context/AuthContext';
+import { insertComment } from '../../../services/whiteboardService';
 import { MessageSquare, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import './CommentsPanel.css';
+import '../styles/CommentsPanel.css';
 
 export default function CommentsPanel({ onClose }) {
     const { user } = useAuth();

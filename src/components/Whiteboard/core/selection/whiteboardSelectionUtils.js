@@ -1,5 +1,5 @@
-import { pruneHierarchyIds } from './layerTreeUtils';
-import { expandIdsToNodeGroups } from './whiteboardGroupOps';
+import { pruneHierarchyIds } from '../layers/layerTreeUtils';
+import { expandIdsToNodeGroups } from '../layers/whiteboardGroupOps';
 
 /** @deprecated Use pruneHierarchyIds — mantido para imports existentes. */
 export const pruneNestedDragIds = pruneHierarchyIds;

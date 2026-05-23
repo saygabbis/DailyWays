@@ -13,8 +13,8 @@ import {
     BringToFront,
     SendToBack,
 } from 'lucide-react';
-import { getNodeCreateOffset } from './whiteboardCreateOffsets';
-import './WhiteboardContextMenu.css';
+import { getNodeCreateOffset } from '../core/whiteboardCreateOffsets';
+import '../styles/WhiteboardContextMenu.css';
 
 const CREATE_ITEMS = [
     { type: 'sticky_note', label: 'Nota', icon: StickyNote },

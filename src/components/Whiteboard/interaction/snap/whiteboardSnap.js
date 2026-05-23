@@ -1,7 +1,7 @@
-import { buildNodesById, nodeToWorld } from './whiteboardNodeOps';
-import { getSelectionWorldBounds } from './whiteboardAlign';
-import { getNodePageId } from './whiteboardPages';
-import { isDescendantOf } from './layerTreeUtils';
+import { buildNodesById, nodeToWorld } from '../../core/ops/whiteboardNodeOps';
+import { getSelectionWorldBounds } from '../../core/align/whiteboardAlign';
+import { getNodePageId } from '../../core/pages/whiteboardPages';
+import { isDescendantOf } from '../../core/layers/layerTreeUtils';
 
 function worldBounds(node, nodesById) {
     const { x, y } = nodeToWorld(node, nodesById);

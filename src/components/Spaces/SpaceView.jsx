@@ -1,9 +1,10 @@
 import React, { useRef, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useWhiteboardStore } from '../../stores/whiteboardStore';
-import { getInspectorInsetPx } from '../Whiteboard/inspectorLayout';
-import CanvasEngine from '../Whiteboard/CanvasEngine';
+import { getInspectorInsetPx, CanvasEngine } from '../Whiteboard';
 import { CollabOpsProvider } from '../../collab/whiteboard/CollabOpsContext.jsx';
+import WhiteboardCollabSync from '../../collab/whiteboard/sync/WhiteboardCollabSync.jsx';
+import WhiteboardCollabStatusBanner from '../../collab/whiteboard/ui/WhiteboardCollabStatusBanner.jsx';
 import PresenceOnlineList from '../../collab/board/ui/PresenceOnlineList.jsx';
 import './SpaceView.css';
 
@@ -44,6 +45,8 @@ export default function SpaceView({ spaceId }) {
             }}
         >
             <CollabOpsProvider>
+                <WhiteboardCollabSync spaceId={spaceId} />
+                <WhiteboardCollabStatusBanner />
                 <div className="space-presence-bar">
                     <PresenceOnlineList />
                 </div>

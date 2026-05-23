@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import BaseNode from './BaseNode';
-import { useWhiteboardStore } from '../../../stores/whiteboardStore';
-import { useCollabPatch } from '../../../collab/whiteboard/CollabOpsContext.jsx';
-import { recordNodesMutation } from '../whiteboardHistory';
+import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
+import { useCollabPatch } from '../../../../collab/whiteboard/CollabOpsContext.jsx';
+import { recordNodesMutation } from '../../core/history/whiteboardHistory';
 
 export default function CommentNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const message = node.data?.message ?? '';

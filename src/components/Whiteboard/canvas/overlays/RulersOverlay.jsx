@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { screenToWorldWithContainer } from './viewportUtils';
+import { screenToWorldWithContainer } from '../../interaction/viewport/viewportUtils';
 import './RulersOverlay.css';
 
 const RULER_SIZE = 22;

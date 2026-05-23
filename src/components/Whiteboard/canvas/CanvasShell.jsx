@@ -1,28 +1,36 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { useViewport } from './ViewportController';
-import { useWhiteboardStore } from '../../stores/whiteboardStore';
-import { getDefaultNodePayload, isCreationTool } from '../../stores/whiteboardStore';
-import { insertNode, insertConnector, uploadSpaceAsset, deleteNode as deleteNodeService } from '../../services/whiteboardService';
-import CollabSync from '../../collab/whiteboard/CollabSync.jsx';
-import PresenceLayer from '../../collab/board/ui/PresenceLayer.jsx';
-import { useCollabPatch } from '../../collab/whiteboard/CollabOpsContext.jsx';
-import { useCollabPresence } from '../../collab/board/presence/useCollabPresence.js';
-import { screenToWorldWithContainer, worldToScreenWithContainer, rectIntersects, findContainerAt } from './viewportUtils';
-import { computeResizeBounds } from './resizeBounds';
-import { computeSkewResizeBounds } from './resizeSkew';
-import { worldBoxFromAnchor } from './createDragBounds';
+import { useAuth } from '../../../context/AuthContext';
+import { useViewport } from '../interaction/hooks/useViewport';
+import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { getDefaultNodePayload, isCreationTool } from '../../../stores/whiteboardStore';
+import { insertNode, insertConnector, uploadSpaceAsset, deleteNode as deleteNodeService } from '../../../services/whiteboardService';
+import { useWhiteboardUndo } from '../interaction/hooks/useWhiteboardUndo';
+import { useCanvasShortcuts } from '../interaction/hooks/useCanvasShortcuts';
+import {
+    CREATION_DRAG_TOOLS,
+    CREATE_DRAG_THRESHOLD_PX,
+    CREATE_MIN_SIZE,
+    creationToolToNodeType,
+    isDragCreationTool as checkDragCreationTool,
+} from '../interaction/hooks/useCreateTool';
+import { useResizeRotateState } from '../interaction/hooks/useResizeRotate';
+import PresenceLayer from '../../../collab/board/ui/PresenceLayer.jsx';
+import { useCollabPatch } from '../../../collab/whiteboard/CollabOpsContext.jsx';
+import { useCollabPresence } from '../../../collab/board/presence/useCollabPresence.js';
+import { screenToWorldWithContainer, worldToScreenWithContainer, rectIntersects, findContainerAt } from '../interaction/viewport/viewportUtils';
+import { computeResizeBounds } from '../interaction/transform/resizeBounds';
+import { computeSkewResizeBounds } from '../interaction/transform/resizeSkew';
+import { worldBoxFromAnchor } from '../interaction/transform/createDragBounds';
 import NodeLayer from './NodeLayer';
-import SelectionTransformOverlay from './SelectionTransformOverlay';
+import SelectionTransformOverlay from './overlays/SelectionTransformOverlay';
 import ConnectorLayer from './ConnectorLayer';
-import SelectionManager from './SelectionManager';
-import ResizeHandles from './ResizeHandles';
-import RulersOverlay from './RulersOverlay';
-import { applyHistoryToCollab } from './whiteboardHistorySync';
-import { captureNodesSnapshot, cloneNode } from './whiteboardHistory';
-import { filterNodesByPage } from './whiteboardPages';
-import { getInspectorInsetPx } from './inspectorLayout';
-import { getNodeCenterWorld, pointerWorldAngleDeg, computeRotationFromPointer } from './rotatePointer';
+import SelectionManager from './overlays/SelectionManager';
+import ResizeHandles from './overlays/ResizeHandles';
+import RulersOverlay from './overlays/RulersOverlay';
+import { captureNodesSnapshot, cloneNode } from '../core/history/whiteboardHistory';
+import { filterNodesByPage } from '../core/pages/whiteboardPages';
+import { getInspectorInsetPx } from '../shared/inspectorLayout';
+import { getNodeCenterWorld, pointerWorldAngleDeg, computeRotationFromPointer } from '../interaction/transform/rotatePointer';
 import {
     copyNodesToClipboard,
     setClipboardFromNodes,
@@ -30,19 +38,19 @@ import {
     pasteFromClipboard,
     nudgeSelectedNodes,
     patchZIndexSelected,
-} from './whiteboardNodeOps';
-import { computeViewportToFitNodes } from './viewportFit';
-import ShortcutsHelp from './ShortcutsHelp';
-import SnapGuidesOverlay from './SnapGuidesOverlay';
-import InspectorPanel from './InspectorPanel';
-import { computeSnapForDrag } from './whiteboardSnap';
-import { resolveDragNodeIds } from './whiteboardSelectionUtils';
-import { getNodeCreateOffset } from './whiteboardCreateOffsets';
+} from '../core/ops/whiteboardNodeOps';
+import { computeViewportToFitNodes } from '../interaction/viewport/viewportFit';
+import ShortcutsHelp from '../panels/ShortcutsHelp';
+import SnapGuidesOverlay from './overlays/SnapGuidesOverlay';
+import InspectorPanel from '../panels/InspectorPanel';
+import { computeSnapForDrag } from '../interaction/snap/whiteboardSnap';
+import { resolveDragNodeIds } from '../core/selection/whiteboardSelectionUtils';
+import { getNodeCreateOffset } from '../core/whiteboardCreateOffsets';
 import {
     groupSelectedNodes,
     ungroupSelectedNodes,
     getSelectionContextFlags,
-} from './whiteboardGroupOps';
+} from '../core/layers/whiteboardGroupOps';
 import {
     SELECTION_TRANSFORM_ID,
     getTransformTargetIds,
@@ -50,24 +58,24 @@ import {
     computeMultiResizePatches,
     computeMultiRotatePatches,
     getSelectionTransformCenter,
-} from './selectionTransform';
-import { getSelectionWorldBounds } from './whiteboardAlign';
-import { contrastingTextColor } from '../../utils/contrastingTextColor';
-import { recordNodesMutation } from './whiteboardHistory';
-import LeftToolbar from './LeftToolbar';
-import DraggablePanel from './DraggablePanel';
-import WhiteboardContextMenu from './WhiteboardContextMenu';
+} from '../interaction/transform/selectionTransform';
+import { getSelectionWorldBounds } from '../core/align/whiteboardAlign';
+import { contrastingTextColor } from '../../../utils/contrastingTextColor';
+import { recordNodesMutation } from '../core/history/whiteboardHistory';
+import LeftToolbar from '../panels/LeftToolbar';
+import DraggablePanel from '../panels/DraggablePanel';
+import WhiteboardContextMenu from '../panels/WhiteboardContextMenu';
 import { Grid3X3, ZoomIn, ZoomOut, Ruler, HelpCircle, Focus } from 'lucide-react';
-import { uuidv4 } from '../../utils/uuid';
-import './CanvasEngine.css';
+import { uuidv4 } from '../../../utils/uuid';
+import './CanvasShell.css';
 
 export default function CanvasEngine({ spaceId, space, onViewportChange, onRegisterViewportControl }) {
     const containerRef = useRef(null);
     const [selectionBox, setSelectionBox] = useState(null);
     const [createPreview, setCreatePreview] = useState(null);
     const [isSpacePressed, setIsSpacePressed] = useState(false);
-    const [resizeState, setResizeState] = useState(null);
-    const [rotateState, setRotateState] = useState(null);
+    const { resizeActiveRef, resizeState, setResizeState, rotateState, setRotateState } =
+        useResizeRotateState();
     const [contextMenuPosition, setContextMenuPosition] = useState(null);
     const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
     const [snapGuides, setSnapGuides] = useState([]);
@@ -75,7 +83,6 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     const openImagePickerRef = useRef(null);
     const openFilePickerRef = useRef(null);
     const nodeDragRef = useRef(null);
-    const resizeActiveRef = useRef(false);
     const createDragRef = useRef(null);
     const viewportRef = useRef(null);
     const lastPointerClientRef = useRef(null);
@@ -112,37 +119,12 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         setRulersVisible,
         inspectorPanelOpen,
         setInspectorPanelOpen,
-        undo,
-        redo,
         pushHistory,
     } = useWhiteboardStore();
 
     const NODE_TYPES_ALLOWED = ['sticky_note', 'text', 'shape', 'frame', 'image', 'comment', 'link', 'todo_list', 'file_card', 'drawing', 'column', 'table'];
 
-    /** Ferramentas que criam elemento com clique+arraste para definir tamanho (âncora = canto inicial). */
-    const CREATION_DRAG_TOOLS = new Set([
-        'sticky_note',
-        'text',
-        'shape',
-        'frame',
-        'todo_list',
-        'column',
-        'table',
-        'comment',
-        'link',
-        'draw',
-    ]);
-    const CREATE_DRAG_THRESHOLD_PX = 4;
-    const CREATE_MIN_SIZE = 0;
-
-    const creationToolToNodeType = (tool) => {
-        if (tool === 'draw') return 'drawing';
-        if (tool === 'file') return 'file_card';
-        return tool;
-    };
-
-    const isDragCreationTool = (tool) =>
-        CREATION_DRAG_TOOLS.has(tool) && NODE_TYPES_ALLOWED.includes(creationToolToNodeType(tool));
+    const isDragCreationTool = (tool) => checkDragCreationTool(tool, NODE_TYPES_ALLOWED);
 
     const createNodeAt = useCallback(
         async (type, worldX, worldY, extraData = {}, dims) => {
@@ -301,29 +283,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     }, []);
 
-    const performUndo = useCallback(() => {
-        const state = useWhiteboardStore.getState();
-        if (state.historyIndex < 0) return;
-        const entry = state.history[state.historyIndex];
-        undo();
-        applyHistoryToCollab(entry, 'undo', {
-            collabPatchNode,
-            collabCreateNode,
-            collabDeleteNodes,
-        });
-    }, [undo, collabPatchNode, collabCreateNode, collabDeleteNodes]);
-
-    const performRedo = useCallback(() => {
-        const state = useWhiteboardStore.getState();
-        if (!state.canRedo()) return;
-        const entry = state.history[state.historyIndex + 1];
-        redo();
-        applyHistoryToCollab(entry, 'redo', {
-            collabPatchNode,
-            collabCreateNode,
-            collabDeleteNodes,
-        });
-    }, [redo, collabPatchNode, collabCreateNode, collabDeleteNodes]);
+    const { undo: performUndo, redo: performRedo } = useWhiteboardUndo();
 
     const nodeOpsCtx = useCallback(
         () => ({
@@ -383,290 +343,11 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         }
     }, []);
 
-    useEffect(() => {
-        const isEditableTarget = () => {
-            const el = document.activeElement;
-            if (!el) return false;
-            const tag = el.tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable) {
-                return true;
-            }
-            return false;
-        };
-
-        const isSpaceUiTextFocus = () => {
-            const el = document.activeElement;
-            if (!el || !isEditableTarget()) return false;
-            if (el.closest?.('.whiteboard-node-wrapper')) return false;
-            if (el.closest?.('.whiteboard-floating-toolbar')) return false;
-            return true;
-        };
-
-        const isEditingWhiteboardText = () => {
-            const el = document.activeElement;
-            if (!el) return false;
-            if (el.tagName !== 'TEXTAREA' && el.tagName !== 'INPUT') return false;
-            return !!el.closest?.('.whiteboard-node-wrapper');
-        };
-
-        const shouldHandleCanvasShortcut = () =>
-            !isEditingWhiteboardText() && !isSpaceUiTextFocus();
-
-        const onKeyDown = (e) => {
-            if (e.key === ' ') {
-                if (!shouldHandleCanvasShortcut()) return;
-                e.preventDefault();
-                setIsSpacePressed(true);
-                return;
-            }
-
-            const mod = e.ctrlKey || e.metaKey;
-            const keyLower = e.key.toLowerCase();
-
-            if (mod) {
-                if (keyLower === 'r') {
-                    if (!shouldHandleCanvasShortcut()) return;
-                    e.preventDefault();
-                    setRulersVisible(!useWhiteboardStore.getState().rulersVisible);
-                    return;
-                }
-                if (shouldHandleCanvasShortcut()) {
-                    if (keyLower === 'g') {
-                        e.preventDefault();
-                        if (e.shiftKey) {
-                            ungroupSelectedNodes(useWhiteboardStore, collabPatchNodes, collabDeleteNodes);
-                        } else {
-                            groupSelectedNodes(useWhiteboardStore, collabPatchNodes);
-                        }
-                        return;
-                    }
-                    if (keyLower === 'z') {
-                        e.preventDefault();
-                        if (e.shiftKey) performRedo();
-                        else performUndo();
-                        return;
-                    }
-                    if (keyLower === 'y') {
-                        e.preventDefault();
-                        performRedo();
-                        return;
-                    }
-                    if (keyLower === 'x') {
-                        e.preventDefault();
-                        handleCut();
-                        return;
-                    }
-                    if (keyLower === 'c') {
-                        e.preventDefault();
-                        handleCopy();
-                        return;
-                    }
-                    if (keyLower === 'v' || e.code === 'KeyV') {
-                        e.preventDefault();
-                        if (e.shiftKey) handlePasteInPlace();
-                        else handlePaste();
-                        return;
-                    }
-                    if (keyLower === 'd' || e.code === 'KeyD') {
-                        e.preventDefault();
-                        handleDuplicate();
-                        return;
-                    }
-                    if (keyLower === 'a') {
-                        e.preventDefault();
-                        const st = useWhiteboardStore.getState();
-                        st.setSelection(st.nodes.map((n) => n.id));
-                        return;
-                    }
-                    if (keyLower === '0') {
-                        e.preventDefault();
-                        viewportState.setViewport({ x: 0, y: 0 }, 1);
-                        return;
-                    }
-                    if (keyLower === '1') {
-                        e.preventDefault();
-                        const rect = containerRef.current?.getBoundingClientRect();
-                        const st = useWhiteboardStore.getState();
-                        const target =
-                            st.selectedNodeIds.length > 0
-                                ? st.nodes.filter((n) => st.selectedNodeIds.includes(n.id))
-                                : st.nodes;
-                        const fit = computeViewportToFitNodes(target, rect);
-                        viewportState.setViewport(fit.pan, fit.zoom);
-                        return;
-                    }
-                    if (keyLower === '=' || keyLower === '+') {
-                        e.preventDefault();
-                        const { x, y } = getZoomFocalClient();
-                        viewportState.zoomAtClient(x, y, 1.2);
-                        return;
-                    }
-                    if (keyLower === '-') {
-                        e.preventDefault();
-                        const { x, y } = getZoomFocalClient();
-                        viewportState.zoomAtClient(x, y, 1 / 1.2);
-                        return;
-                    }
-                    if (e.key === ']') {
-                        e.preventDefault();
-                        patchZIndexSelected(
-                            useWhiteboardStore,
-                            collabPatchNodes,
-                            e.shiftKey ? 'front' : 'forward'
-                        );
-                        return;
-                    }
-                    if (e.key === '[') {
-                        e.preventDefault();
-                        patchZIndexSelected(
-                            useWhiteboardStore,
-                            collabPatchNodes,
-                            e.shiftKey ? 'back' : 'backward'
-                        );
-                        return;
-                    }
-                }
-            }
-
-            if (e.shiftKey && !mod && e.key === '1') {
-                if (!shouldHandleCanvasShortcut()) return;
-                e.preventDefault();
-                const rect = containerRef.current?.getBoundingClientRect();
-                const st = useWhiteboardStore.getState();
-                const target =
-                    st.selectedNodeIds.length > 0
-                        ? st.nodes.filter((n) => st.selectedNodeIds.includes(n.id))
-                        : st.nodes;
-                const fit = computeViewportToFitNodes(target, rect);
-                viewportState.setViewport(fit.pan, fit.zoom);
-                return;
-            }
-
-            if (e.key === 'Escape') {
-                const st = useWhiteboardStore.getState();
-                if (st.editingNodeId) {
-                    commitTextEdit();
-                    return;
-                }
-                if (st.connectorFromNodeId) {
-                    st.setConnectorFromNodeId(null);
-                    return;
-                }
-                if (st.selectedNodeIds.length || st.activeTool !== 'select') {
-                    e.preventDefault();
-                    st.setSelection([]);
-                    st.setActiveTool('select');
-                    setContextMenuPosition(null);
-                }
-                return;
-            }
-
-            if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
-                if (shouldHandleCanvasShortcut()) {
-                    e.preventDefault();
-                    setShortcutsHelpOpen((v) => !v);
-                    return;
-                }
-            }
-
-            if (
-                !mod &&
-                !e.altKey &&
-                ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(keyLower)
-            ) {
-                if (shouldHandleCanvasShortcut()) {
-                    const st = useWhiteboardStore.getState();
-                    if (st.selectedNodeIds.length) {
-                        e.preventDefault();
-                        const step = e.shiftKey ? 10 : 1;
-                        const dx = keyLower === 'arrowleft' ? -step : keyLower === 'arrowright' ? step : 0;
-                        const dy = keyLower === 'arrowup' ? -step : keyLower === 'arrowdown' ? step : 0;
-                        nudgeSelectedNodes(useWhiteboardStore, collabPatchNodes, dx, dy);
-                        return;
-                    }
-                }
-            }
-
-            if (e.key === 'Delete' || e.key === 'Backspace') {
-                if (isSpaceUiTextFocus()) return;
-                const state = useWhiteboardStore.getState();
-                if (state.editingNodeId) return;
-                if (!state.selectedNodeIds.length) return;
-                e.preventDefault();
-                const selectedNodes = state.nodes.filter((n) => state.selectedNodeIds.includes(n.id));
-                state.pushHistory({
-                    type: 'node_delete',
-                    payload: { nodes: selectedNodes.map((n) => ({ ...n })) },
-                });
-                if (!collabConnected) {
-                    for (const id of state.selectedNodeIds) {
-                        deleteNodeService(id);
-                    }
-                }
-                collabDeleteNodes(state.selectedNodeIds);
-                state.setSelection([]);
-                return;
-            }
-
-            if (!mod && !e.altKey && e.key.length === 1 && shouldHandleCanvasShortcut()) {
-                const toolByKey = {
-                    v: 'select',
-                    t: 'text',
-                    s: 'sticky_note',
-                    r: 'shape',
-                    f: 'frame',
-                    l: 'connector',
-                    p: 'draw',
-                    m: 'comment',
-                    g: null,
-                };
-                const tool = toolByKey[keyLower];
-                if (keyLower === 'g') {
-                    e.preventDefault();
-                    const st = useWhiteboardStore.getState();
-                    setGridVisible(!st.gridVisible);
-                    return;
-                }
-                if (tool) {
-                    e.preventDefault();
-                    setActiveTool(tool);
-                    if (tool === 'connector') setConnectorFromNodeId(null);
-                    return;
-                }
-            }
-
-            if (mod || e.altKey) return;
-            if (e.key.length !== 1) return;
-            if (isSpaceUiTextFocus()) return;
-
-            const state = useWhiteboardStore.getState();
-            if (state.editingNodeId) return;
-            if (state.selectedNodeIds.length !== 1) return;
-
-            const node = state.nodes.find((n) => n.id === state.selectedNodeIds[0]);
-            if (!node || (node.type !== 'text' && node.type !== 'sticky_note')) return;
-
-            e.preventDefault();
-            state.setEditingNodeId(node.id);
-            state.setEditTypingSeed(e.key);
-        };
-        const onKeyUp = (e) => {
-            if (e.key === ' ') {
-                setIsSpacePressed(false);
-            }
-        };
-        window.addEventListener('keydown', onKeyDown, true);
-        window.addEventListener('keyup', onKeyUp);
-        return () => {
-            window.removeEventListener('keydown', onKeyDown, true);
-            window.removeEventListener('keyup', onKeyUp);
-        };
-    }, [
+    useCanvasShortcuts({
+        containerRef,
         collabConnected,
         collabDeleteNodes,
-        collabPatchNode,
         collabPatchNodes,
-        collabCreateNode,
         performUndo,
         performRedo,
         handleCut,
@@ -674,7 +355,6 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         handlePaste,
         handlePasteInPlace,
         handleDuplicate,
-        nodeOpsCtx,
         setRulersVisible,
         setGridVisible,
         setActiveTool,
@@ -682,7 +362,10 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         viewportState,
         getZoomFocalClient,
         commitTextEdit,
-    ]);
+        setIsSpacePressed,
+        setShortcutsHelpOpen,
+        setContextMenuPosition,
+    });
     const viewportForChildren = {
         panX: viewportState.pan.x,
         panY: viewportState.pan.y,
@@ -1572,7 +1255,6 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
 
     return (
         <>
-            <CollabSync spaceId={spaceId} />
             <div
                 className="whiteboard-editor-layout"
                 style={{ '--inspector-inset': `${getInspectorInsetPx(inspectorPanelOpen)}px` }}

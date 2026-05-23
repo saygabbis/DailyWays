@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import BaseNode from './BaseNode';
-import { useWhiteboardStore } from '../../../stores/whiteboardStore';
-import { useCollabPatch } from '../../../collab/whiteboard/CollabOpsContext.jsx';
-import { recordNodesMutation } from '../whiteboardHistory';
-import { contrastingTextColor } from '../../../utils/contrastingTextColor';
+import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
+import { useCollabPatch } from '../../../../collab/whiteboard/CollabOpsContext.jsx';
+import { recordNodesMutation } from '../../core/history/whiteboardHistory';
+import { contrastingTextColor } from '../../../../utils/contrastingTextColor';
 
 export default function StickyNoteNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const text = node.data?.text ?? '';

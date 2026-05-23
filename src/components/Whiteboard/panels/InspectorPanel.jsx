@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useWhiteboardStore } from '../../stores/whiteboardStore';
-import { useCollabPatch } from '../../collab/whiteboard/CollabOpsContext.jsx';
-import { alignSelectedNodes } from './whiteboardAlign';
-import { nodeToWorld, buildNodesById } from './whiteboardNodeOps';
-import { patchNodeWithHistory } from './whiteboardHistory';
+import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { useCollabPatch } from '../../../collab/whiteboard/CollabOpsContext.jsx';
+import { alignSelectedNodes } from '../core/align/whiteboardAlign';
+import { nodeToWorld, buildNodesById } from '../core/ops/whiteboardNodeOps';
+import { patchNodeWithHistory } from '../core/history/whiteboardHistory';
 import LayersTab from './LayersTab';
 import {
     PanelRightClose,
@@ -18,7 +18,7 @@ import {
     Layers,
     SlidersHorizontal,
 } from 'lucide-react';
-import './InspectorPanel.css';
+import '../styles/InspectorPanel.css';
 
 const TYPE_LABELS = {
     shape: 'Forma',

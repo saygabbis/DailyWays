@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { useWhiteboardStore } from '../../stores/whiteboardStore';
+import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 import {
     MousePointer2,
     StickyNote,
@@ -19,11 +19,11 @@ import {
     Undo2,
     Redo2,
 } from 'lucide-react';
-import CommentsPanel from './CommentsPanel';
-import DraggablePanel from './DraggablePanel';
-import { useCollabPatch } from '../../collab/whiteboard/CollabOpsContext.jsx';
-import { applyHistoryToCollab } from './whiteboardHistorySync';
-import './LeftToolbar.css';
+import CommentsPanel from '../panels/CommentsPanel';
+import DraggablePanel from '../panels/DraggablePanel';
+import { useCollabPatch } from '../../../collab/whiteboard/CollabOpsContext.jsx';
+import { performUndo, performRedo } from '../core/history/undoController';
+import '../styles/LeftToolbar.css';
 
 const TOOLS = [
     { id: 'select', icon: MousePointer2, label: 'Selecionar' },
@@ -47,28 +47,16 @@ export default function LeftToolbar({ onUploadImage, onUploadFile, registerOpenI
     const {
         activeTool,
         setActiveTool,
-        undo,
-        redo,
         canUndo,
         canRedo,
     } = useWhiteboardStore();
     const { collabPatchNode, collabCreateNode, collabDeleteNodes } = useCollabPatch();
 
-    const handleUndo = () => {
-        const state = useWhiteboardStore.getState();
-        if (state.historyIndex < 0) return;
-        const entry = state.history[state.historyIndex];
-        applyHistoryToCollab(entry, 'undo', { collabPatchNode, collabCreateNode, collabDeleteNodes });
-        undo();
-    };
+    const collabApi = { collabPatchNode, collabCreateNode, collabDeleteNodes };
 
-    const handleRedo = () => {
-        const state = useWhiteboardStore.getState();
-        if (!state.canRedo()) return;
-        const entry = state.history[state.historyIndex + 1];
-        redo();
-        applyHistoryToCollab(entry, 'redo', { collabPatchNode, collabCreateNode, collabDeleteNodes });
-    };
+    const handleUndo = () => performUndo(collabApi);
+
+    const handleRedo = () => performRedo(collabApi);
 
     const handleToolClick = (toolId) => {
         if (toolId === 'comment') {

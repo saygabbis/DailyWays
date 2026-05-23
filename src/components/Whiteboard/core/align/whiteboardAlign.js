@@ -1,6 +1,6 @@
-import { nodeToWorld, buildNodesById, worldTopLeftToNodePatch } from './whiteboardNodeOps';
-import { recordNodesMutation } from './whiteboardHistory';
-import { resolveDragNodeIds } from './whiteboardSelectionUtils';
+import { nodeToWorld, buildNodesById, worldTopLeftToNodePatch } from '../ops/whiteboardNodeOps';
+import { recordNodesMutation } from '../history/whiteboardHistory';
+import { resolveDragNodeIds } from '../selection/whiteboardSelectionUtils';
 
 export function getSelectionWorldBounds(selectedNodes, allNodes) {
     const byId = buildNodesById(allNodes);

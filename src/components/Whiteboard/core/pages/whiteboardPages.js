@@ -1,4 +1,4 @@
-import { uuidv4 } from '../../utils/uuid';
+import { uuidv4 } from '../../../../utils/uuid';
 
 export const DEFAULT_PAGE_ID = 'page-main';
 

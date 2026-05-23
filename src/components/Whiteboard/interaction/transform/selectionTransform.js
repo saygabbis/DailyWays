@@ -1,6 +1,6 @@
-import { buildNodesById, nodeToWorld, worldTopLeftToNodePatch } from './whiteboardNodeOps';
-import { getSelectionWorldBounds } from './whiteboardAlign';
-import { resolveDragNodeIds } from './whiteboardSelectionUtils';
+import { buildNodesById, nodeToWorld, worldTopLeftToNodePatch } from '../../core/ops/whiteboardNodeOps';
+import { getSelectionWorldBounds } from '../../core/align/whiteboardAlign';
+import { resolveDragNodeIds } from '../../core/selection/whiteboardSelectionUtils';
 
 export const SELECTION_TRANSFORM_ID = '__selection_transform__';
 

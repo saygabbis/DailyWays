@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { zoomViewportAtClient } from './viewportUtils';
+import { zoomViewportAtClient } from '../viewport/viewportUtils';
 
 /**
  * Handles pan and zoom for the canvas (Miro-style).

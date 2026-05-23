@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
-import { useWhiteboardStore } from '../../stores/whiteboardStore';
+import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
 import ResizeHandles from './ResizeHandles';
 import {
     buildPseudoNodeForSelection,
     getTransformTargetIds,
     shouldUseUnifiedTransform,
-} from './selectionTransform';
+} from '../../interaction/transform/selectionTransform';
 
 /**
  * Handles unificados de resize/rotação (multi-seleção e grupos).

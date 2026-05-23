@@ -1,4 +1,4 @@
-import { nodeToWorld } from './whiteboardNodeOps';
+import { nodeToWorld } from '../../core/ops/whiteboardNodeOps';
 
 export function getNodeCenterWorld(node, allNodes) {
     const byId = new Map((allNodes ?? []).map((n) => [n.id, n]));

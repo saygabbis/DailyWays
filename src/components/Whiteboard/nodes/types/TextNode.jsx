@@ -1,34 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import BaseNode from './BaseNode';
-import { useWhiteboardStore } from '../../../stores/whiteboardStore';
-import { useCollabPatch } from '../../../collab/whiteboard/CollabOpsContext.jsx';
-import { recordNodesMutation } from '../whiteboardHistory';
+import { useEditableNodeField } from '../../interaction/hooks/useEditableNodeField';
 
 export default function TextNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const text = node.data?.text ?? 'Text';
-    const { editingNodeId, editTypingSeed, setEditingNodeId, setEditTypingSeed } = useWhiteboardStore();
-    const { collabPatchNode } = useCollabPatch();
-    const isEditing = editingNodeId === node.id;
-    const [editValue, setEditValue] = useState(text);
-    useEffect(() => {
-        if (!isEditing) return;
-        if (editTypingSeed) {
-            const base = text === 'Text' ? '' : (text || '');
-            setEditValue(base + editTypingSeed);
-            setEditTypingSeed(null);
-        } else {
-            setEditValue(text);
-        }
-    }, [isEditing, text, editTypingSeed, setEditTypingSeed]);
+    const { isEditing, editValue, setEditValue, commitBlur } = useEditableNodeField(node.id, 'text', {
+        displayValue: text,
+        emptySeedValue: 'Text',
+    });
 
     const handleBlur = () => {
-        if (editValue !== text) {
-            recordNodesMutation(useWhiteboardStore, [node.id], () => {
-                collabPatchNode(node.id, { data: { ...node.data, text: editValue } });
-            });
-        }
-        setEditingNodeId(null);
-        setEditTypingSeed(null);
+        commitBlur(node, (n, value) => ({ data: { ...n.data, text: value } }));
     };
 
     return (

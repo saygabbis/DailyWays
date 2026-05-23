@@ -1,11 +1,11 @@
-import { uuidv4 } from '../../utils/uuid';
-import { getDefaultNodePayload } from '../../stores/whiteboardStore';
-import { insertNode } from '../../services/whiteboardService';
-import { buildNodesById, nodeToWorld } from './whiteboardNodeOps';
-import { recordNodesMutation, patchNodesWithHistory, pushNodesAddBatch } from './whiteboardHistory';
-import { CONTAINER_NODE_TYPES } from './viewportUtils';
-import { getNodePageId, filterNodesByPage } from './whiteboardPages';
-import { collectDescendantIds, isDescendantOf } from './layerTreeUtils';
+import { uuidv4 } from '../../../../utils/uuid';
+import { getDefaultNodePayload } from '../../../../stores/whiteboardStore';
+import { insertNode } from '../../../../services/whiteboardService';
+import { buildNodesById, nodeToWorld } from '../ops/whiteboardNodeOps';
+import { recordNodesMutation, patchNodesWithHistory, pushNodesAddBatch } from '../history/whiteboardHistory';
+import { CONTAINER_NODE_TYPES } from '../../interaction/viewport/viewportUtils';
+import { getNodePageId, filterNodesByPage } from '../pages/whiteboardPages';
+import { collectDescendantIds, isDescendantOf } from '../layers/layerTreeUtils';
 
 const PASTE_STEP = 20;
 

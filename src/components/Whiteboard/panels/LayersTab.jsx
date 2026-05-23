@@ -1,8 +1,8 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { useWhiteboardStore } from '../../stores/whiteboardStore';
-import { useCollabPatch } from '../../collab/whiteboard/CollabOpsContext.jsx';
-import { useAuth } from '../../context/AuthContext';
-import { layerDisplayName, renamePatchForNode } from './layerTreeUtils';
+import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { useCollabPatch } from '../../../collab/whiteboard/CollabOpsContext.jsx';
+import { useAuth } from '../../../context/AuthContext';
+import { layerDisplayName, renamePatchForNode } from '../core/layers/layerTreeUtils';
 import {
     buildLayerTreeWithGroups,
     resolveLayerClickSelection,
@@ -15,9 +15,9 @@ import {
     parseVirtualGroupId,
     getGroupMemberIds,
     getGroupDisplayName,
-} from './whiteboardGroupOps';
-import { CONTAINER_NODE_TYPES } from './viewportUtils';
-import { patchNodeWithHistory } from './whiteboardHistory';
+} from '../core/layers/whiteboardGroupOps';
+import { CONTAINER_NODE_TYPES } from '../interaction/viewport/viewportUtils';
+import { patchNodeWithHistory } from '../core/history/whiteboardHistory';
 import {
     nestNodeInContainer,
     unnestNodeToRoot,
@@ -27,7 +27,7 @@ import {
     createFrameLayer,
     clonePageNodes,
     deletePageNodes,
-} from './layersPanelOps';
+} from '../core/layers/layersPanelOps';
 import {
     Plus,
     Copy,

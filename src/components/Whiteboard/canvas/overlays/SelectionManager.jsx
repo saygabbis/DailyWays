@@ -1,6 +1,6 @@
 import React from 'react';
-import { worldBoxFromAnchor } from './createDragBounds';
-import { worldToScreenWithContainer } from './viewportUtils';
+import { worldBoxFromAnchor } from '../../interaction/transform/createDragBounds';
+import { worldToScreenWithContainer } from '../../interaction/viewport/viewportUtils';
 
 function MarqueeBox({ left, top, width, height, className = 'whiteboard-selection-box' }) {
     if (width < 2 && height < 2) return null;

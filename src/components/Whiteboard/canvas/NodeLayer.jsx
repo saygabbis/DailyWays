@@ -1,38 +1,10 @@
 import React, { useMemo } from 'react';
-import { useWhiteboardStore } from '../../stores/whiteboardStore';
-import { intersectsViewport, CONTAINER_NODE_TYPES } from './viewportUtils';
-import { getNodePageId } from './whiteboardPages';
-import ResizeHandles from './ResizeHandles';
-import { getTransformTargetIds } from './selectionTransform';
-import StickyNoteNode from './nodes/StickyNoteNode';
-import TextNode from './nodes/TextNode';
-import ShapeNode from './nodes/ShapeNode';
-import FrameNode from './nodes/FrameNode';
-import ImageNode from './nodes/ImageNode';
-import ConnectorNode from './nodes/ConnectorNode';
-import CommentNode from './nodes/CommentNode';
-import LinkCardNode from './nodes/LinkCardNode';
-import TodoListNode from './nodes/TodoListNode';
-import FileCardNode from './nodes/FileCardNode';
-import DrawingNode from './nodes/DrawingNode';
-import ColumnNode from './nodes/ColumnNode';
-import TableNode from './nodes/TableNode';
-
-const NODE_COMPONENTS = {
-    sticky_note: StickyNoteNode,
-    text: TextNode,
-    shape: ShapeNode,
-    frame: FrameNode,
-    image: ImageNode,
-    connector: ConnectorNode,
-    comment: CommentNode,
-    link: LinkCardNode,
-    todo_list: TodoListNode,
-    file_card: FileCardNode,
-    drawing: DrawingNode,
-    column: ColumnNode,
-    table: TableNode,
-};
+import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { intersectsViewport, CONTAINER_NODE_TYPES } from '../interaction/viewport/viewportUtils';
+import { getNodePageId } from '../core/pages/whiteboardPages';
+import ResizeHandles from './overlays/ResizeHandles';
+import { getTransformTargetIds } from '../interaction/transform/selectionTransform';
+import { NODE_COMPONENTS } from '../nodes/registry';
 
 function getRoots(nodes) {
     return nodes.filter((n) => !n.parentId);

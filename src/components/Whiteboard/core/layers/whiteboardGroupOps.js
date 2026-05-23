@@ -1,8 +1,8 @@
-import { uuidv4 } from '../../utils/uuid';
-import { recordNodesMutation } from './whiteboardHistory';
-import { buildLayerTree, collectDescendantIds, isDescendantOf, pruneHierarchyIds } from './layerTreeUtils';
-import { CONTAINER_NODE_TYPES } from './viewportUtils';
-import { getNodePageId } from './whiteboardPages';
+import { uuidv4 } from '../../../../utils/uuid';
+import { recordNodesMutation } from '../history/whiteboardHistory';
+import { buildLayerTree, collectDescendantIds, isDescendantOf, pruneHierarchyIds } from '../layers/layerTreeUtils';
+import { CONTAINER_NODE_TYPES } from '../../interaction/viewport/viewportUtils';
+import { getNodePageId } from '../pages/whiteboardPages';
 
 /** ID lógico de grupo no canvas (não cria nó container). */
 export const NODE_GROUP_KEY = 'nodeGroupId';

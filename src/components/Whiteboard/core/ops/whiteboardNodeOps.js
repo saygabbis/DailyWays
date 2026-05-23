@@ -1,58 +1,21 @@
-import { uuidv4 } from '../../utils/uuid';
-import { insertNode } from '../../services/whiteboardService';
-import { findContainerAt } from './viewportUtils';
-import { pushNodesAddBatch, recordNodesMutation } from './whiteboardHistory';
-import { resolveDragNodeIds } from './whiteboardSelectionUtils';
-import { assignFreshGroupIdToClones } from './whiteboardGroupOps';
-import { filterNodesByPage } from './whiteboardPages';
+import { uuidv4 } from '../../../../utils/uuid';
+import { insertNode } from '../../../../services/whiteboardService';
+import { findContainerAt } from '../../interaction/viewport/viewportUtils';
+import { pushNodesAddBatch, recordNodesMutation } from '../history/whiteboardHistory';
+import { resolveDragNodeIds } from '../selection/whiteboardSelectionUtils';
+import { assignFreshGroupIdToClones } from '../layers/whiteboardGroupOps';
+import { filterNodesByPage } from '../pages/whiteboardPages';
+
+import {
+    buildNodesById,
+    nodeToWorld,
+    worldTopLeftToNodePatch,
+    normalizeNodesForClipboard,
+} from '../nodeGeometry.js';
+
+export { buildNodesById, nodeToWorld, worldTopLeftToNodePatch, normalizeNodesForClipboard };
 
 const PASTE_STEP = 20;
-
-export function buildNodesById(allNodes) {
-    return new Map((allNodes ?? []).map((n) => [n.id, n]));
-}
-
-/** Converte posição do nó para coordenadas mundo (soma offsets dos pais). */
-export function nodeToWorld(node, nodesById) {
-    let x = node.x ?? 0;
-    let y = node.y ?? 0;
-    let pid = node.parentId;
-    while (pid) {
-        const parent = nodesById.get(pid);
-        if (!parent) break;
-        x += parent.x ?? 0;
-        y += parent.y ?? 0;
-        pid = parent.parentId;
-    }
-    return { x, y };
-}
-
-/** Converte canto superior-esquerdo em mundo para patch local (respeita parentId). */
-export function worldTopLeftToNodePatch(node, worldX, worldY, allNodes, extraPatch = {}) {
-    const byId = buildNodesById(allNodes);
-    if (!node.parentId) {
-        return { x: worldX, y: worldY, ...extraPatch };
-    }
-    const parent = byId.get(node.parentId);
-    if (!parent) {
-        return { x: worldX, y: worldY, parentId: null, ...extraPatch };
-    }
-    const pw = nodeToWorld(parent, byId);
-    return { x: worldX - pw.x, y: worldY - pw.y, ...extraPatch };
-}
-
-/** Cópia profunda com x/y em mundo e sem parentId (pronto para colar/duplicar). */
-export function normalizeNodesForClipboard(nodes, allNodes) {
-    const byId = buildNodesById(allNodes);
-    return nodes.map((n) => {
-        const { x, y } = nodeToWorld(n, byId);
-        const copy = JSON.parse(JSON.stringify(n));
-        copy.x = x;
-        copy.y = y;
-        copy.parentId = null;
-        return copy;
-    });
-}
 
 function cloneNodeForInsert(node, offsetX, offsetY, userId) {
     const newNode = JSON.parse(JSON.stringify(node));

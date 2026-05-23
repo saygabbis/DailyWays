@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useWhiteboardStore } from '../../stores/whiteboardStore';
+import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 
 function getNodeCenter(node) {
     if (!node) return { x: 0, y: 0 };

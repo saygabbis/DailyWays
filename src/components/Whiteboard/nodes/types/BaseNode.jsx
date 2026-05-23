@@ -1,12 +1,16 @@
 import React, { useRef, useCallback } from 'react';
-import { useWhiteboardStore } from '../../../stores/whiteboardStore';
-import { getNodeTransformStyle } from '../nodeTransform';
-import { resolveNodeClickSelection } from '../whiteboardGroupOps';
+import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
+import { getNodeTransformStyle } from '../../core/nodeTransform';
+import { resolveNodeClickSelection } from '../../core/layers/whiteboardGroupOps';
+import { useWhiteboardRemoteSelection } from '../../../../hooks/useWhiteboardRemoteSelection';
 
 export default function BaseNode({ node, children, onNodePointerDown, onNodeContextMenu }) {
     const ref = useRef(null);
     const { nodes, selectedNodeIds, setSelection, setEditingNodeId } = useWhiteboardStore();
+    const { remoteSelectionByNodeId } = useWhiteboardRemoteSelection();
     const isSelected = selectedNodeIds.includes(node.id);
+    const remotePeers = remoteSelectionByNodeId[node.id];
+    const isRemoteSelected = Boolean(remotePeers?.length);
 
     const handlePointerDown = useCallback(
         (e) => {
@@ -43,13 +47,16 @@ export default function BaseNode({ node, children, onNodePointerDown, onNodeCont
     return (
         <div
             ref={ref}
-            className={`whiteboard-node-wrapper ${isSelected ? 'selected' : ''}`}
+            className={`whiteboard-node-wrapper ${isSelected ? 'selected' : ''} ${isRemoteSelected ? 'whiteboard-node--remote-selected' : ''}`}
             style={{
                 position: 'absolute',
                 left: node.x,
                 top: node.y,
                 width: node.width,
                 height: node.height,
+                ...(isRemoteSelected && remotePeers[0]?.color
+                    ? { '--remote-selection-color': remotePeers[0].color }
+                    : {}),
             }}
             onPointerDown={handlePointerDown}
             onContextMenu={handleContextMenu}

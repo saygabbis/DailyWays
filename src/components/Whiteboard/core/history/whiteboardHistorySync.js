@@ -1,5 +1,5 @@
 /** Aplica no collab o inverso (undo) ou replay (redo) de uma entrada do histórico local. */
-import { nodeToCollabPatch } from './whiteboardHistory';
+import { nodeToCollabPatch } from '../history/whiteboardHistory';
 
 export function applyHistoryToCollab(entry, direction, collab) {
     if (!entry || !collab) return;

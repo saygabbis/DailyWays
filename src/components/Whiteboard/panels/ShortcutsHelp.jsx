@@ -1,6 +1,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import './ShortcutsHelp.css';
+import '../styles/ShortcutsHelp.css';
 
 const SECTIONS = [
     {
