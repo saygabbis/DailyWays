@@ -1,4 +1,4 @@
-﻿CREATE OR REPLACE FUNCTION public.handle_updated_at()
+CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS trigger AS $$
 BEGIN
   NEW.updated_at = now();
