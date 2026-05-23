@@ -1,8 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useBoardSelectionStore } from '../../stores/boardSelectionStore';
-
-const EDGE_ZONE_PX = 40;
-const MAX_SCROLL_SPEED = 18;
+import { useBoardEdgeAutoScroll } from '../../hooks/useBoardEdgeAutoScroll';
 
 function MarqueeBox({ left, top, width, height }) {
     if (width < 2 && height < 2) return null;
@@ -33,38 +31,10 @@ export default function BoardMarqueeSelection({ scrollerRef }) {
     const [box, setBox] = useState(null);
     const activeRef = useRef(false);
     const startRef = useRef({ x: 0, y: 0 });
-    const rafRef = useRef(null);
     const pointerRef = useRef({ x: 0, y: 0 });
     const shiftHeldRef = useRef(false);
 
-    const stopScrollLoop = useCallback(() => {
-        if (rafRef.current) {
-            cancelAnimationFrame(rafRef.current);
-            rafRef.current = null;
-        }
-    }, []);
-
-    const scrollLoop = useCallback(() => {
-        const scroller = scrollerRef.current;
-        if (!scroller || !activeRef.current) {
-            stopScrollLoop();
-            return;
-        }
-        const rect = scroller.getBoundingClientRect();
-        const { x } = pointerRef.current;
-        let delta = 0;
-        if (x < rect.left + EDGE_ZONE_PX) {
-            const t = (rect.left + EDGE_ZONE_PX - x) / EDGE_ZONE_PX;
-            delta = -Math.ceil(MAX_SCROLL_SPEED * Math.min(1, t));
-        } else if (x > rect.right - EDGE_ZONE_PX) {
-            const t = (x - (rect.right - EDGE_ZONE_PX)) / EDGE_ZONE_PX;
-            delta = Math.ceil(MAX_SCROLL_SPEED * Math.min(1, t));
-        }
-        if (delta !== 0) {
-            scroller.scrollLeft += delta;
-        }
-        rafRef.current = requestAnimationFrame(scrollLoop);
-    }, [scrollerRef, stopScrollLoop]);
+    const { startEdgeScroll, stopEdgeScroll, updatePointer } = useBoardEdgeAutoScroll(scrollerRef);
 
     useEffect(() => {
         const onKeyDown = (e) => {
@@ -98,25 +68,24 @@ export default function BoardMarqueeSelection({ scrollerRef }) {
             activeRef.current = true;
             startRef.current = { x: e.clientX, y: e.clientY };
             pointerRef.current = { x: e.clientX, y: e.clientY };
+            updatePointer(e.clientX, e.clientY);
             setBox({ start: startRef.current, current: startRef.current });
             setShiftSelecting(true);
+            startEdgeScroll();
             e.preventDefault();
-
-            if (!rafRef.current) {
-                rafRef.current = requestAnimationFrame(scrollLoop);
-            }
         };
 
         const onPointerMove = (e) => {
             if (!activeRef.current) return;
             pointerRef.current = { x: e.clientX, y: e.clientY };
+            updatePointer(e.clientX, e.clientY);
             setBox({ start: startRef.current, current: { x: e.clientX, y: e.clientY } });
         };
 
         const finish = () => {
             if (!activeRef.current) return;
             activeRef.current = false;
-            stopScrollLoop();
+            stopEdgeScroll();
 
             const start = startRef.current;
             const current = pointerRef.current;
@@ -164,9 +133,9 @@ export default function BoardMarqueeSelection({ scrollerRef }) {
             window.removeEventListener('pointerup', onPointerUp, true);
             window.removeEventListener('pointercancel', onPointerUp, true);
             window.removeEventListener('keyup', onKeyUpMarquee);
-            stopScrollLoop();
+            stopEdgeScroll();
         };
-    }, [selectMany, clearSelection, setShiftSelecting, scrollLoop, stopScrollLoop]);
+    }, [selectMany, clearSelection, setShiftSelecting, startEdgeScroll, stopEdgeScroll, updatePointer]);
 
     if (!box) return null;
     const { start, current } = box;

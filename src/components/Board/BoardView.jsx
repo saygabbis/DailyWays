@@ -33,6 +33,7 @@ import { uuidv4 } from '../../utils/uuid';
 import { useBoardSelectionStore } from '../../stores/boardSelectionStore';
 import { useBoardRemoteSelection } from '../../hooks/useBoardRemoteSelection';
 import BoardMarqueeSelection from './BoardMarqueeSelection';
+import BoardDragEdgeScroll from './BoardDragEdgeScroll';
 import {
     copyCardsToClipboard,
     cutCardsToClipboard,
@@ -923,6 +924,7 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
             )}
 
             <BoardMarqueeSelection scrollerRef={scrollerRef} />
+            <BoardDragEdgeScroll scrollerRef={scrollerRef} />
 
             <div
                 className={`board-scroller ${isPanning ? 'is-panning' : ''} ${collabHydrating ? 'board-scroller--hydrating' : ''}`}
