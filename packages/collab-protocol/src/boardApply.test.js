@@ -63,6 +63,33 @@ describe('applyBoardAction MOVE_LIST', () => {
   });
 });
 
+describe('applyBoardAction ADD_SUBTASK', () => {
+  it('usa índice sequencial como position (compatível com integer do Postgres)', () => {
+    const board = {
+      id: 'b1',
+      lists: [
+        {
+          id: 'l1',
+          cards: [
+            {
+              id: 'c1',
+              subtasks: [{ id: 'st0', title: 'A', done: false, position: 0 }],
+            },
+          ],
+        },
+      ],
+    };
+    const next = applyBoardAction(board, {
+      type: 'ADD_SUBTASK',
+      payload: { boardId: 'b1', listId: 'l1', cardId: 'c1', title: 'B' },
+    });
+    const subtasks = next.lists[0].cards[0].subtasks;
+    assert.equal(subtasks.length, 2);
+    assert.equal(subtasks[1].position, 1);
+    assert.ok(subtasks[1].position < 2147483647);
+  });
+});
+
 describe('applyBoardAction UPDATE_CARD', () => {
   it('atualiza updatedAt', () => {
     const card = baseBoard.lists[0].cards[0];

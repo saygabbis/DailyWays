@@ -19,6 +19,16 @@ import { supabase } from './supabaseClient';
  * }
  */
 
+// PostgreSQL integer max — subtask.position must stay within this range
+const PG_INT_MAX = 2147483647;
+
+/** Normaliza position para colunas integer no Postgres (ex.: subtasks criadas com Date.now()). */
+function normalizePgIntPosition(value, fallbackIndex) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0 || n > PG_INT_MAX) return fallbackIndex;
+  return Math.trunc(n);
+}
+
 // ── Helpers: app → DB row ──────────────────────────────────────────
 
 function listToRow(list, boardId, position) {
@@ -60,7 +70,7 @@ function subtaskToRow(st, cardId, position = 0) {
     card_id: cardId,
     title: st.title ?? '',
     done: st.done ?? false,
-    position: st.position ?? position,
+    position: normalizePgIntPosition(st.position, position),
     link_url: st.linkUrl ?? null,
     link_label: st.linkLabel ?? null,
     created_at: st.createdAt ?? new Date().toISOString(),
@@ -687,7 +697,7 @@ export async function updateBoardFull(userId, board) {
               id: st.id,
               title: st.title ?? '',
               done: st.done ?? false,
-              position: st.position ?? index,
+              position: normalizePgIntPosition(st.position, index),
               linkUrl: st.linkUrl ?? null,
               linkLabel: st.linkLabel ?? null,
               createdAt: st.createdAt ?? new Date().toISOString(),

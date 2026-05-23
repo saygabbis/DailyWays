@@ -165,25 +165,27 @@ export function applyBoardAction(board, action) {
     case 'ADD_SUBTASK': {
       const { boardId, listId, cardId, title, subtaskId } = action.payload || {};
       if (board.id !== boardId) return board;
-      const newSubtask = {
-        id: subtaskId || newId(),
-        title,
-        done: false,
-        position: Date.now(),
-        linkUrl: null,
-        linkLabel: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
       return {
         ...board,
         lists: board.lists.map((l) =>
           l.id === listId
             ? {
                 ...l,
-                cards: l.cards.map((c) =>
-                  c.id === cardId ? { ...c, subtasks: [...c.subtasks, newSubtask] } : c
-                ),
+                cards: l.cards.map((c) => {
+                  if (c.id !== cardId) return c;
+                  const subtasks = c.subtasks ?? [];
+                  const newSubtask = {
+                    id: subtaskId || newId(),
+                    title,
+                    done: false,
+                    position: subtasks.length,
+                    linkUrl: null,
+                    linkLabel: null,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                  };
+                  return { ...c, subtasks: [...subtasks, newSubtask] };
+                }),
               }
             : l
         ),
