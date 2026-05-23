@@ -26,6 +26,7 @@ DROP POLICY IF EXISTS "Board owner can insert/update/delete members" ON public.b
 DROP POLICY IF EXISTS "Board owner manages members" ON public.board_members;
 
 -- SELECT: membro vê sua própria row OU owner do board vê todos
+DROP POLICY IF EXISTS "Board members select" ON public.board_members;
 CREATE POLICY "Board members select"
   ON public.board_members FOR SELECT
   USING (user_id = auth.uid() OR is_board_owner(board_id));
@@ -58,6 +59,7 @@ CREATE POLICY "Invitees can view own invitations"
     OR lower(invitee_email) = lower(auth.jwt() ->> 'email')
   );
 
+DROP POLICY IF EXISTS "Invitees can update own invitations" ON public.board_invitations;
 CREATE POLICY "Invitees can update own invitations"
   ON public.board_invitations FOR UPDATE
   USING (

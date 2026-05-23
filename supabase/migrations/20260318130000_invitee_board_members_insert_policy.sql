@@ -19,6 +19,7 @@ CREATE POLICY "Invitees can insert board_members from invitations"
   );
 
 -- UPDATE: cobre casos de upsert (ON CONFLICT) e ajuste de role após aceitar
+DROP POLICY IF EXISTS "Invitees can update board_members from invitations" ON public.board_members;
 CREATE POLICY "Invitees can update board_members from invitations"
   ON public.board_members FOR UPDATE
   USING (

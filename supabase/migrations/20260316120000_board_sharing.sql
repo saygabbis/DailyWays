@@ -5,6 +5,7 @@
 ALTER TABLE public.board_members
   ALTER COLUMN role SET DEFAULT 'editor';
 
+ALTER TABLE public.board_members DROP CONSTRAINT IF EXISTS board_members_role_check;
 ALTER TABLE public.board_members
   ADD CONSTRAINT board_members_role_check
   CHECK (role IN ('owner', 'editor', 'reader'));
@@ -161,6 +162,7 @@ CREATE POLICY "Boards select owner or members"
     )
   );
 
+DROP POLICY IF EXISTS "Boards write owner or editors" ON public.boards;
 CREATE POLICY "Boards write owner or editors"
   ON public.boards FOR ALL
   USING (
@@ -200,6 +202,7 @@ CREATE POLICY "Lists select follow board access"
     )
   );
 
+DROP POLICY IF EXISTS "Lists write owner or editors" ON public.lists;
 CREATE POLICY "Lists write owner or editors"
   ON public.lists FOR ALL
   USING (
@@ -254,6 +257,7 @@ CREATE POLICY "Cards select follow board access"
     )
   );
 
+DROP POLICY IF EXISTS "Cards write owner or editors" ON public.cards;
 CREATE POLICY "Cards write owner or editors"
   ON public.cards FOR ALL
   USING (
@@ -311,6 +315,7 @@ CREATE POLICY "Subtasks select follow board access"
     )
   );
 
+DROP POLICY IF EXISTS "Subtasks write owner or editors" ON public.subtasks;
 CREATE POLICY "Subtasks write owner or editors"
   ON public.subtasks FOR ALL
   USING (
