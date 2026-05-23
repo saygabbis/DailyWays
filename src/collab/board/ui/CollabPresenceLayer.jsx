@@ -276,10 +276,6 @@ export default function CollabPresenceLayer({
   useEffect(() => {
     if (!collab?.connected || !visibleMeta.length) return undefined;
 
-    // #region agent log
-    fetch('http://127.0.0.1:7696/ingest/01fa34d4-9615-473f-b720-e19b7f0835ca',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'64ad20'},body:JSON.stringify({sessionId:'64ad20',location:'CollabPresenceLayer.jsx:raf',message:'raf-loop-start',data:{peerCount:visibleMeta.length,elevated,useBoardContentCoords},timestamp:Date.now(),hypothesisId:'H-overlay',runId:'overlay-perf'})}).catch(()=>{});
-    // #endregion
-
     let rafId = 0;
     const smoother = smootherRef.current;
 
@@ -346,9 +342,6 @@ export default function CollabPresenceLayer({
 
     rafId = requestAnimationFrame(frame);
     return () => {
-      // #region agent log
-      fetch('http://127.0.0.1:7696/ingest/01fa34d4-9615-473f-b720-e19b7f0835ca',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'64ad20'},body:JSON.stringify({sessionId:'64ad20',location:'CollabPresenceLayer.jsx:raf',message:'raf-loop-stop',data:{},timestamp:Date.now(),hypothesisId:'H-overlay',runId:'overlay-perf'})}).catch(()=>{});
-      // #endregion
       if (rafId) cancelAnimationFrame(rafId);
     };
   }, [

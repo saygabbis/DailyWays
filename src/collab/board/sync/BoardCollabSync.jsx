@@ -185,9 +185,6 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
       if (!board || cancelled) return;
       const current = getActiveBoard();
       if (current?.id === board.id && isStaleBoardSnapshot(current, board)) {
-        // #region agent log
-        fetch('http://127.0.0.1:7696/ingest/01fa34d4-9615-473f-b720-e19b7f0835ca',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'64ad20'},body:JSON.stringify({sessionId:'64ad20',hypothesisId:'H8',location:'BoardCollabSync.jsx:applyBoardSnapshot',message:'rejected stale snapshot',data:{localCards:current?.lists?.reduce((n,l)=>n+(l.cards?.length||0),0),serverCards:board?.lists?.reduce((n,l)=>n+(l.cards?.length||0),0)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         return;
       }
       if (

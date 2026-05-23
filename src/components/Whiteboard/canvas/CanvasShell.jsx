@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { useViewport } from '../interaction/hooks/useViewport';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { useWhiteboardSelectionStore } from '../../../stores/whiteboardSelectionStore';
+import { useWhiteboardDocumentStore } from '../../../stores/whiteboardDocumentStore';
 import { getDefaultNodePayload, isCreationTool } from '../../../stores/whiteboardStore';
 import { insertNode, insertConnector, uploadSpaceAsset, deleteNode as deleteNodeService } from '../../../services/whiteboardService';
 import { useWhiteboardUndo } from '../interaction/hooks/useWhiteboardUndo';
@@ -43,7 +45,7 @@ import { computeViewportToFitNodes } from '../interaction/viewport/viewportFit';
 import ShortcutsHelp from '../panels/ShortcutsHelp';
 import SnapGuidesOverlay from './overlays/SnapGuidesOverlay';
 import InspectorPanel from '../panels/InspectorPanel';
-import { computeSnapForDrag, computeSnapForResize } from '../interaction/snap/whiteboardSnap';
+import { computeSnapForDrag, computeSnapForResize, buildSnapExcludeIds, snapGuidesEqual } from '../interaction/snap/whiteboardSnap';
 import { nodeToWorld, worldTopLeftToNodePatch, buildNodesById } from '../core/ops/whiteboardNodeOps';
 import { resolveDragNodeIds } from '../core/selection/whiteboardSelectionUtils';
 import { getNodeCreateOffset } from '../core/whiteboardCreateOffsets';
@@ -81,6 +83,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     const [contextMenuPosition, setContextMenuPosition] = useState(null);
     const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
     const [snapGuides, setSnapGuides] = useState([]);
+    const snapGuidesRef = useRef([]);
+    const setSnapGuidesIfChanged = useCallback((guides) => {
+        const next = guides ?? [];
+        if (snapGuidesEqual(snapGuidesRef.current, next)) return;
+        snapGuidesRef.current = next;
+        setSnapGuides(next);
+    }, []);
     const pendingUploadWorldPositionRef = useRef(null);
     const openImagePickerRef = useRef(null);
     const openFilePickerRef = useRef(null);
@@ -103,19 +112,19 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         collabDeleteNodes,
         connected: collabConnected,
     } = useCollabPatch();
+    const collabPatchNodeRef = useRef(collabPatchNode);
+    const collabPatchNodesRef = useRef(collabPatchNodes);
+    const setSnapGuidesIfChangedRef = useRef(setSnapGuidesIfChanged);
+    collabPatchNodeRef.current = collabPatchNode;
+    collabPatchNodesRef.current = collabPatchNodes;
+    setSnapGuidesIfChangedRef.current = setSnapGuidesIfChanged;
     const { updateCursor, updateSelection } = useCollabPresence(spaceId);
     const {
-        setSpaceId,
-        setViewport: setStoreViewport,
         setSelection,
-        addNode,
-        addConnector,
         setActiveTool,
         activeTool,
         connectorFromNodeId,
         setConnectorFromNodeId,
-        nodes,
-        connectors,
         selectedNodeIds,
         gridVisible,
         setGridVisible,
@@ -125,8 +134,8 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         setSnapEnabled,
         inspectorPanelOpen,
         setInspectorPanelOpen,
-        pushHistory,
-    } = useWhiteboardStore();
+        setViewport: setStoreViewport,
+    } = useWhiteboardSelectionStore();
 
     const NODE_TYPES_ALLOWED = ['sticky_note', 'text', 'shape', 'frame', 'image', 'comment', 'link', 'todo_list', 'file_card', 'drawing', 'column', 'table'];
 
@@ -158,7 +167,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             } else {
                 const res = await insertNode(spaceId, payload, user?.id);
                 if (res.success) {
-                    addNode(payload);
+                    useWhiteboardStore.getState().addNode(payload);
                 } else {
                     return null;
                 }
@@ -169,7 +178,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             });
             return payload.id;
         },
-        [spaceId, user?.id, addNode, collabCreateNode, collabConnected]
+        [spaceId, user?.id, collabCreateNode, collabConnected]
     );
 
     const applyCreateDragBox = useCallback(
@@ -234,13 +243,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     collabCreateNode({ ...payload, createdBy: user?.id ?? null });
                 } else {
                     const res = await insertNode(spaceId, payload, user?.id);
-                    if (res.success) addNode(payload);
+                    if (res.success) useWhiteboardStore.getState().addNode(payload);
                 }
             } catch (err) {
                 console.error('[CanvasEngine] handleUploadImage error', err);
             }
         },
-        [spaceId, user?.id, addNode, collabCreateNode, collabConnected, getViewportCenterWorld]
+        [spaceId, user?.id, collabCreateNode, collabConnected, getViewportCenterWorld]
     );
 
     const handleUploadFile = useCallback(
@@ -268,13 +277,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     collabCreateNode({ ...payload, createdBy: user?.id ?? null });
                 } else {
                     const res = await insertNode(spaceId, payload, user?.id);
-                    if (res.success) addNode(payload);
+                    if (res.success) useWhiteboardStore.getState().addNode(payload);
                 }
             } catch (err) {
                 console.error('[CanvasEngine] handleUploadFile error', err);
             }
         },
-        [spaceId, user?.id, addNode, collabCreateNode, collabConnected, getViewportCenterWorld]
+        [spaceId, user?.id, collabCreateNode, collabConnected, getViewportCenterWorld]
     );
 
     const persistViewport = useCallback(
@@ -303,11 +312,9 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             userId: user?.id,
             collabCreateNode,
             collabConnected,
-            addNode,
-            pushHistory,
             store: useWhiteboardStore,
         }),
-        [spaceId, user?.id, collabCreateNode, collabConnected, addNode, pushHistory]
+        [spaceId, user?.id, collabCreateNode, collabConnected]
     );
 
     const handleCopy = useCallback(() => {
@@ -331,7 +338,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         if (!state.selectedNodeIds.length) return;
         const selectedNodes = state.nodes.filter((n) => state.selectedNodeIds.includes(n.id));
         setClipboardFromNodes(useWhiteboardStore, selectedNodes);
-        pushHistory({
+        useWhiteboardStore.getState().pushHistory({
             type: 'node_delete',
             payload: { nodes: selectedNodes.map((n) => JSON.parse(JSON.stringify(n))) },
         });
@@ -342,7 +349,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         }
         collabDeleteNodes(state.selectedNodeIds);
         setSelection([]);
-    }, [pushHistory, collabConnected, collabDeleteNodes, setSelection]);
+    }, [collabConnected, collabDeleteNodes, setSelection]);
 
     const commitTextEdit = useCallback(() => {
         const el = document.activeElement;
@@ -391,7 +398,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
 
     useEffect(() => {
         if (!spaceId) return;
-        setSpaceId(spaceId);
+        useWhiteboardDocumentStore.getState().setSpaceId(spaceId);
         viewportState.setViewport(initialPan, initialZoom);
         setStoreViewport({ panX: initialPan.x, panY: initialPan.y, zoom: initialZoom });
         // eslint-disable-next-line react-hooks/exhaustive-deps -- só ao trocar de space
@@ -512,6 +519,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 nodeIds: transformIds,
                 corner,
                 beforeSnapshots,
+                snapExcludeIds: buildSnapExcludeIds(transformIds, state.nodes),
                 origin: {
                     x: box.minX,
                     y: box.minY,
@@ -529,6 +537,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             corner,
             mode: e.ctrlKey ? 'skew' : 'resize',
             beforeNode: cloneNode(node),
+            snapExcludeIds: buildSnapExcludeIds([nodeId], state.nodes),
             origin: {
                 x: node.x,
                 y: node.y,
@@ -544,8 +553,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         if (!resizeState) return;
 
         if (resizeState.mode === 'selection') {
-            const { corner: handle, origin, beforeSnapshots, nodeIds } = resizeState;
-            const onMove = (e) => {
+            const { corner: handle, origin, beforeSnapshots, nodeIds, snapExcludeIds } = resizeState;
+            let rafId = 0;
+            let pendingEvent = null;
+            const flushMove = () => {
+                rafId = 0;
+                const e = pendingEvent;
+                if (!e) return;
                 const rect = containerRef.current?.getBoundingClientRect();
                 if (!rect || !viewportRef.current) return;
                 const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
@@ -562,18 +576,25 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     fromCenter: modifiers.altKey,
                     originForAspect: modifiers.shiftKey ? origin : null,
                     enabled: state.snapEnabled,
+                    excludeIds: snapExcludeIds,
                 });
-                setSnapGuides(guides);
+                setSnapGuidesIfChangedRef.current(guides);
                 const patches = computeMultiResizePatches(
                     beforeSnapshots,
                     state.nodes,
                     origin,
                     snappedBox
                 );
-                if (patches.length) collabPatchNodes(patches);
+                if (patches.length) collabPatchNodesRef.current(patches);
             };
-            const onUp = () => {
-                setSnapGuides([]);
+            const onMove = (e) => {
+                pendingEvent = e;
+                if (rafId) return;
+                rafId = requestAnimationFrame(flushMove);
+            };
+            const finishResize = () => {
+                if (rafId) cancelAnimationFrame(rafId);
+                setSnapGuidesIfChangedRef.current([]);
                 const before = resizeState.beforeSnapshots ?? [];
                 const after = captureNodesSnapshot(useWhiteboardStore, nodeIds);
                 const changed =
@@ -593,23 +614,32 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 setResizeState(null);
             };
             window.addEventListener('pointermove', onMove);
-            window.addEventListener('pointerup', onUp);
+            window.addEventListener('pointerup', finishResize);
+            window.addEventListener('pointercancel', finishResize);
             return () => {
+                if (rafId) cancelAnimationFrame(rafId);
                 window.removeEventListener('pointermove', onMove);
-                window.removeEventListener('pointerup', onUp);
+                window.removeEventListener('pointerup', finishResize);
+                window.removeEventListener('pointercancel', finishResize);
+                resizeActiveRef.current = false;
             };
         }
 
-        const { nodeId, corner: handle, origin, mode } = resizeState;
-        const onMove = (e) => {
+        const { nodeId, corner: handle, origin, mode, snapExcludeIds } = resizeState;
+        let rafId = 0;
+        let pendingEvent = null;
+        const flushMove = () => {
+            rafId = 0;
+            const e = pendingEvent;
+            if (!e) return;
             const rect = containerRef.current?.getBoundingClientRect();
             if (!rect || !viewportRef.current) return;
             const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
             const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey, min: 0 };
             if (mode === 'skew' || e.ctrlKey) {
-                setSnapGuides([]);
+                setSnapGuidesIfChangedRef.current([]);
                 const patch = computeSkewResizeBounds(origin, handle, world, modifiers);
-                collabPatchNode(nodeId, patch);
+                collabPatchNodeRef.current(nodeId, patch);
                 return;
             }
             const patch = computeResizeBounds(origin, handle, world, modifiers);
@@ -642,16 +672,23 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 fromCenter: modifiers.altKey,
                 originForAspect: modifiers.shiftKey ? worldOrigin : null,
                 enabled: state.snapEnabled,
+                excludeIds: snapExcludeIds,
             });
-            setSnapGuides(guides);
+            setSnapGuidesIfChangedRef.current(guides);
             const finalPatch = worldTopLeftToNodePatch(node, snappedBox.x, snappedBox.y, state.nodes, {
                 width: snappedBox.width,
                 height: snappedBox.height,
             });
-            collabPatchNode(nodeId, finalPatch);
+            collabPatchNodeRef.current(nodeId, finalPatch);
         };
-        const onUp = () => {
-            setSnapGuides([]);
+        const onMove = (e) => {
+            pendingEvent = e;
+            if (rafId) return;
+            rafId = requestAnimationFrame(flushMove);
+        };
+        const finishResize = () => {
+            if (rafId) cancelAnimationFrame(rafId);
+            setSnapGuidesIfChangedRef.current([]);
             const before = resizeState.beforeNode;
             const afterSnap = captureNodesSnapshot(useWhiteboardStore, [nodeId])[0];
             if (before && afterSnap?.node && JSON.stringify(before) !== JSON.stringify(afterSnap.node)) {
@@ -667,12 +704,16 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             setResizeState(null);
         };
         window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointerup', finishResize);
+        window.addEventListener('pointercancel', finishResize);
         return () => {
+            if (rafId) cancelAnimationFrame(rafId);
             window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointerup', finishResize);
+            window.removeEventListener('pointercancel', finishResize);
+            resizeActiveRef.current = false;
         };
-    }, [resizeState, collabPatchNode, collabPatchNodes]);
+    }, [resizeState]);
 
     const handleRotateStart = useCallback((nodeId, e) => {
         e.stopPropagation();
@@ -741,9 +782,9 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     center,
                     delta
                 );
-                if (patches.length) collabPatchNodes(patches);
+                if (patches.length) collabPatchNodesRef.current(patches);
             };
-            const onUp = () => {
+            const finishRotate = () => {
                 const before = rotateState.beforeSnapshots ?? [];
                 const after = captureNodesSnapshot(useWhiteboardStore, nodeIds);
                 const changed =
@@ -763,10 +804,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 setRotateState(null);
             };
             window.addEventListener('pointermove', onMove);
-            window.addEventListener('pointerup', onUp);
+            window.addEventListener('pointerup', finishRotate);
+            window.addEventListener('pointercancel', finishRotate);
             return () => {
                 window.removeEventListener('pointermove', onMove);
-                window.removeEventListener('pointerup', onUp);
+                window.removeEventListener('pointerup', finishRotate);
+                window.removeEventListener('pointercancel', finishRotate);
+                resizeActiveRef.current = false;
             };
         }
 
@@ -782,9 +826,9 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 currentAngle,
                 e.shiftKey
             );
-            collabPatchNode(nodeId, { rotation });
+            collabPatchNodeRef.current(nodeId, { rotation });
         };
-        const onUp = () => {
+        const finishRotate = () => {
             const before = rotateState.beforeNode;
             const afterSnap = captureNodesSnapshot(useWhiteboardStore, [nodeId])[0];
             if (before && afterSnap?.node && JSON.stringify(before) !== JSON.stringify(afterSnap.node)) {
@@ -800,12 +844,15 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             setRotateState(null);
         };
         window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointerup', finishRotate);
+        window.addEventListener('pointercancel', finishRotate);
         return () => {
             window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointerup', finishRotate);
+            window.removeEventListener('pointercancel', finishRotate);
+            resizeActiveRef.current = false;
         };
-    }, [rotateState, collabPatchNode, collabPatchNodes]);
+    }, [rotateState]);
 
     const COLORABLE_TYPES = new Set(['sticky_note', 'text', 'shape', 'frame', 'comment']);
 
@@ -853,7 +900,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         const ids = resolveDragNodeIds(state.selectedNodeIds, state.nodes);
         if (!ids.length) return;
         const selectedNodes = state.nodes.filter((n) => ids.includes(n.id));
-        pushHistory({
+        useWhiteboardStore.getState().pushHistory({
             type: 'node_delete',
             payload: { nodes: selectedNodes.map((n) => JSON.parse(JSON.stringify(n))) },
         });
@@ -864,7 +911,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         }
         collabDeleteNodes(ids);
         setSelection([]);
-    }, [pushHistory, collabConnected, collabDeleteNodes, setSelection]);
+    }, [collabConnected, collabDeleteNodes, setSelection]);
 
     const handleSelectionColor = useCallback(
         (color) => {
@@ -904,9 +951,10 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             if (e.target?.closest?.('.whiteboard-resize-handle, .whiteboard-rotate-handle')) return;
             if (resizeActiveRef.current) return;
             const editingId = useWhiteboardStore.getState().editingNodeId;
-            if (editingId && editingId !== nodeId) {
-                commitTextEdit();
-            } else if (editingId === nodeId && !e.target.closest('textarea, input')) {
+            if (editingId === nodeId && e.target.closest('textarea, input')) {
+                return;
+            }
+            if (editingId) {
                 commitTextEdit();
             }
             if (activeTool === 'connector') {
@@ -929,7 +977,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     } else {
                         (async () => {
                             const res = await insertConnector(spaceId, conn);
-                            if (res.success) addConnector(conn);
+                            if (res.success) useWhiteboardStore.getState().addConnector(conn);
                         })();
                     }
                     setConnectorFromNodeId(null);
@@ -949,49 +997,28 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 pointerStartWorld: world,
                 dragIds: prunedDragIds,
                 beforeSnapshots: captureNodesSnapshot(useWhiteboardStore, prunedDragIds),
+                snapExcludeIds: buildSnapExcludeIds(prunedDragIds, state.nodes),
             };
+            const captureEl = e.currentTarget ?? e.target;
+            if (captureEl?.setPointerCapture) {
+                try {
+                    captureEl.setPointerCapture(e.pointerId);
+                } catch (_) {}
+            }
         },
-        [viewportForChildren, activeTool, connectorFromNodeId, setConnectorFromNodeId, spaceId, addConnector, collabConnected, collabCreateConnector, commitTextEdit]
+        [viewportForChildren, activeTool, connectorFromNodeId, setConnectorFromNodeId, spaceId, collabConnected, collabCreateConnector, commitTextEdit]
     );
 
     useEffect(() => {
-        const onMove = (e) => {
-            if (resizeActiveRef.current) return;
-            const ref = nodeDragRef.current;
-            if (!ref || !containerRef.current) return;
-            const rect = containerRef.current.getBoundingClientRect();
-            const vp = viewportRef.current;
-            const curWorld = screenToWorldWithContainer(e.clientX, e.clientY, rect, vp);
-            const totalDx = curWorld.x - ref.pointerStartWorld.x;
-            const totalDy = curWorld.y - ref.pointerStartWorld.y;
-            const state = useWhiteboardStore.getState();
-            const ids = ref.dragIds ?? [ref.nodeId];
-            const snap = computeSnapForDrag({
-                nodes: state.nodes,
-                movingIds: ids,
-                initialSnapshots: ref.beforeSnapshots,
-                totalDx,
-                totalDy,
-                zoom: vp?.zoom ?? 1,
-                pageId: state.activePageId,
-                enabled: state.snapEnabled,
-            });
-            setSnapGuides(snap.guides);
-            const patches = ids.map((id) => {
-                const initial = ref.beforeSnapshots?.find((b) => b.id === id)?.node;
-                if (!initial) return null;
-                return {
-                    id,
-                    patch: {
-                        x: (initial.x ?? 0) + snap.dx,
-                        y: (initial.y ?? 0) + snap.dy,
-                    },
-                };
-            }).filter(Boolean);
-            if (patches.length) collabPatchNodes(patches);
-        };
-        const onUp = () => {
-            setSnapGuides([]);
+        let rafId = 0;
+        let pendingEvent = null;
+
+        const finishDrag = () => {
+            if (rafId) {
+                cancelAnimationFrame(rafId);
+                rafId = 0;
+            }
+            setSnapGuidesIfChangedRef.current([]);
             const ref = nodeDragRef.current;
             if (ref) {
                 const state = useWhiteboardStore.getState();
@@ -1009,7 +1036,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     const h = node.height ?? 0;
                     const inside = px >= 0 && py >= 0 && px + w <= pw && py + h <= ph;
                     if (!inside) {
-                        collabPatchNode(id, {
+                        collabPatchNodeRef.current(id, {
                             parentId: null,
                             x: parent.x + px,
                             y: parent.y + py,
@@ -1034,13 +1061,63 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             }
             nodeDragRef.current = null;
         };
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onUp);
-        return () => {
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', onUp);
+
+        const flushMove = () => {
+            rafId = 0;
+            const e = pendingEvent;
+            if (!e || resizeActiveRef.current) return;
+            const ref = nodeDragRef.current;
+            if (!ref || !containerRef.current) return;
+            const rect = containerRef.current.getBoundingClientRect();
+            const vp = viewportRef.current;
+            const curWorld = screenToWorldWithContainer(e.clientX, e.clientY, rect, vp);
+            const totalDx = curWorld.x - ref.pointerStartWorld.x;
+            const totalDy = curWorld.y - ref.pointerStartWorld.y;
+            const state = useWhiteboardStore.getState();
+            const ids = ref.dragIds ?? [ref.nodeId];
+            const snap = computeSnapForDrag({
+                nodes: state.nodes,
+                movingIds: ids,
+                initialSnapshots: ref.beforeSnapshots,
+                totalDx,
+                totalDy,
+                zoom: vp?.zoom ?? 1,
+                pageId: state.activePageId,
+                enabled: state.snapEnabled,
+                excludeIds: ref.snapExcludeIds,
+            });
+            setSnapGuidesIfChangedRef.current(snap.guides);
+            const patches = ids.map((id) => {
+                const initial = ref.beforeSnapshots?.find((b) => b.id === id)?.node;
+                if (!initial) return null;
+                return {
+                    id,
+                    patch: {
+                        x: (initial.x ?? 0) + snap.dx,
+                        y: (initial.y ?? 0) + snap.dy,
+                    },
+                };
+            }).filter(Boolean);
+            if (patches.length) collabPatchNodesRef.current(patches);
         };
-    }, [collabPatchNode, collabPatchNodes]);
+
+        const onMove = (e) => {
+            if (resizeActiveRef.current) return;
+            pendingEvent = e;
+            if (rafId) return;
+            rafId = requestAnimationFrame(flushMove);
+        };
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', finishDrag);
+        window.addEventListener('pointercancel', finishDrag);
+        return () => {
+            if (rafId) cancelAnimationFrame(rafId);
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', finishDrag);
+            window.removeEventListener('pointercancel', finishDrag);
+        };
+    }, []);
 
     const finalizeCreateDrag = useCallback(
         async (drag, e, rect) => {
@@ -1191,7 +1268,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                                 width: Math.abs(w2.x - w1.x),
                                 height: Math.abs(w2.y - w1.y),
                             };
-                            const hitIds = nodes
+                            const hitIds = useWhiteboardStore.getState().nodes
                                 .filter((n) =>
                                     rectIntersects(box, {
                                         x: n.x,
@@ -1201,7 +1278,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                                     })
                                 )
                                 .map((n) => n.id);
-                            setSelection(resolveDragNodeIds(hitIds, nodes));
+                            setSelection(resolveDragNodeIds(hitIds, useWhiteboardStore.getState().nodes));
                         }
                     }
                     setSelectionBox(null);
@@ -1209,7 +1286,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             }
             viewportState.handleMouseUp();
         },
-        [selectionBox, viewportForChildren, nodes, setSelection, activeTool, createNodeAt, finalizeCreateDrag]
+        [selectionBox, viewportForChildren, setSelection, activeTool, createNodeAt, finalizeCreateDrag]
     );
 
     const handlePointerMove = useCallback(
@@ -1367,7 +1444,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                             collabCreateNode({ ...payload, createdBy: user?.id ?? null });
                         } else {
                             const res = await insertNode(spaceId, payload, user?.id);
-                            if (res.success) addNode(payload);
+                            if (res.success) useWhiteboardStore.getState().addNode(payload);
                         }
                     }
                 } else {
@@ -1385,13 +1462,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                             collabCreateNode({ ...payload, createdBy: user?.id ?? null });
                         } else {
                             const res = await insertNode(spaceId, payload, user?.id);
-                            if (res.success) addNode(payload);
+                            if (res.success) useWhiteboardStore.getState().addNode(payload);
                         }
                     }
                 }
             }
         },
-        [viewportForChildren, spaceId, user?.id, createNodeAt, addNode, collabCreateNode, collabConnected]
+        [viewportForChildren, spaceId, user?.id, createNodeAt, collabCreateNode, collabConnected]
     );
 
     return (
@@ -1488,7 +1565,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         onClick={() => {
                             const next = !snapEnabled;
                             setSnapEnabled(next);
-                            if (!next) setSnapGuides([]);
+                            if (!next) setSnapGuidesIfChangedRef.current([]);
                         }}
                     >
                         <Magnet size={18} />

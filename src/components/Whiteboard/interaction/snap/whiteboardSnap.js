@@ -58,6 +58,25 @@ function snapScalar(movingEdges, targets, threshold) {
     return { delta: bestDelta ?? 0, guide: bestGuide };
 }
 
+/** Pré-calcula IDs a ignorar no snap (nó + descendentes). */
+export function buildSnapExcludeIds(movingIds, nodes) {
+    const excludeIds = new Set(movingIds);
+    for (const id of movingIds) {
+        for (const n of nodes) {
+            if (isDescendantOf(id, n.id, nodes)) excludeIds.add(n.id);
+        }
+    }
+    return excludeIds;
+}
+
+export function snapGuidesEqual(a, b) {
+    const prev = a ?? [];
+    const next = b ?? [];
+    if (prev === next) return true;
+    if (prev.length !== next.length) return false;
+    return prev.every((g, i) => g.axis === next[i].axis && g.pos === next[i].pos);
+}
+
 /**
  * Ajusta delta de arraste com imãs estilo Figma (bordas e centros).
  * @returns {{ dx: number, dy: number, guides: Array<{ axis: 'x'|'y', pos: number }> }}
@@ -71,6 +90,7 @@ export function computeSnapForDrag({
     zoom = 1,
     pageId,
     enabled = true,
+    excludeIds: excludeIdsInput = null,
 }) {
     if (!enabled) {
         return { dx: totalDx, dy: totalDy, guides: [] };
@@ -95,12 +115,7 @@ export function computeSnapForDrag({
     const bbox = getSelectionWorldBounds(simulated, nodes);
     const threshold = 8 / Math.max(zoom, 0.15);
 
-    const excludeIds = new Set(prunedIds);
-    for (const id of prunedIds) {
-        for (const n of nodes) {
-            if (isDescendantOf(id, n.id, nodes)) excludeIds.add(n.id);
-        }
-    }
+    const excludeIds = excludeIdsInput ?? buildSnapExcludeIds(movingIds, nodes);
 
     const others = nodes.filter(
         (n) =>
@@ -209,6 +224,7 @@ export function computeSnapForResize({
     /** Caixa inicial do resize (mesmo espaço que `box`); com Shift reaplica proporção após snap */
     originForAspect = null,
     enabled = true,
+    excludeIds: excludeIdsInput = null,
 }) {
     const prunedIds = new Set(movingIds);
     if (!enabled || !box || !handle || prunedIds.size === 0) {
@@ -218,12 +234,7 @@ export function computeSnapForResize({
     const byId = buildNodesById(nodes);
     const threshold = 8 / Math.max(zoom, 0.15);
 
-    const excludeIds = new Set(prunedIds);
-    for (const id of prunedIds) {
-        for (const n of nodes) {
-            if (isDescendantOf(id, n.id, nodes)) excludeIds.add(n.id);
-        }
-    }
+    const excludeIds = excludeIdsInput ?? buildSnapExcludeIds(movingIds, nodes);
 
     const others = nodes.filter(
         (n) =>
