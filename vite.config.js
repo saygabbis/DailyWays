@@ -38,6 +38,28 @@ devLogger.error = (msg, options) => {
   logError(msg, options)
 }
 
+const socketIoProxy = {
+  '/socket.io': {
+    target: collabTarget,
+    ws: true,
+    configure: (proxy) => {
+      const ignore = (err) => err?.code === 'ECONNRESET' || err?.code === 'EPIPE'
+      proxy.on('error', (err, _req, res) => {
+        if (ignore(err)) return
+        if (res && typeof res.writeHead === 'function' && !res.headersSent) {
+          res.writeHead(502)
+          res.end()
+        }
+      })
+      proxy.on('proxyReqWs', (_proxyReq, _req, socket) => {
+        socket?.on?.('error', (err) => {
+          if (ignore(err)) return
+        })
+      })
+    },
+  },
+}
+
 export default defineConfig({
   customLogger: devLogger,
   envDir: __dirname,
@@ -52,28 +74,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@dailyways/collab-protocol': path.resolve(__dirname, 'packages/collab-protocol/src/index.js'),
-    },
-  },
-
-  const socketIoProxy = {
-    '/socket.io': {
-      target: collabTarget,
-      ws: true,
-      configure: (proxy) => {
-        const ignore = (err) => err?.code === 'ECONNRESET' || err?.code === 'EPIPE';
-        proxy.on('error', (err, _req, res) => {
-          if (ignore(err)) return;
-          if (res && typeof res.writeHead === 'function' && !res.headersSent) {
-            res.writeHead(502);
-            res.end();
-          }
-        });
-        proxy.on('proxyReqWs', (_proxyReq, _req, socket) => {
-          socket?.on?.('error', (err) => {
-            if (ignore(err)) return;
-          });
-        });
-      },
     },
   },
 
