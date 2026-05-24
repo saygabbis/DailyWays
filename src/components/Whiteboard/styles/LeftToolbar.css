@@ -132,6 +132,106 @@
     background: var(--bg-primary);
 }
 
+/* Grupo de ferramenta com submenu (ex.: formas) */
+.left-toolbar-tool-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+    border-radius: 8px;
+}
+
+.left-toolbar-tool-group.active .left-toolbar-tool-group__main,
+.left-toolbar-tool-group.active .left-toolbar-tool-group__chevron {
+    background: var(--accent, #4d96ff);
+    color: white;
+}
+
+.left-toolbar-tool-group__main {
+    width: 32px;
+    height: 40px;
+    border-radius: 8px 0 0 8px;
+}
+
+.left-toolbar-tool-group__chevron {
+    width: 18px;
+    height: 40px;
+    border-radius: 0 8px 8px 0;
+    padding: 0;
+}
+
+.left-toolbar-menu {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+    padding: 4px;
+    z-index: 1000;
+}
+
+.left-toolbar-menu:not(.left-toolbar-menu--portal) {
+    position: absolute;
+}
+
+.left-toolbar-menu--portal {
+    position: fixed;
+    z-index: 10001;
+    margin: 0;
+}
+
+.left-toolbar-menu--vertical {
+    min-width: 140px;
+}
+
+.left-toolbar-menu--vertical:not(.left-toolbar-menu--portal) {
+    left: 100%;
+    top: 0;
+    margin-left: 4px;
+}
+
+.left-toolbar-menu--horizontal:not(.left-toolbar-menu--portal) {
+    left: 100%;
+    top: 0;
+    margin-left: 4px;
+}
+
+.left-toolbar-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.left-toolbar-menu button:hover,
+.left-toolbar-menu button.active {
+    background: var(--bg-primary);
+}
+
+.left-toolbar-bottom .left-toolbar-tool-group .left-toolbar-menu--vertical {
+    left: 50%;
+    top: auto;
+    bottom: 100%;
+    margin-left: 0;
+    margin-bottom: 4px;
+    transform: translateX(-50%);
+}
+
+.left-toolbar-bottom .left-toolbar-more .left-toolbar-menu--horizontal {
+    left: 50%;
+    top: auto;
+    bottom: 100%;
+    margin-left: 0;
+    margin-bottom: 4px;
+    transform: translateX(-50%);
+}
+
 .left-toolbar-bottom .left-toolbar-actions {
     border-top: none;
     border-left: 1px solid var(--border-color, #333);

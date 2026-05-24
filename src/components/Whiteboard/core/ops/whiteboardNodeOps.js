@@ -29,6 +29,12 @@ function cloneNodeForInsert(node, offsetX, offsetY, userId) {
     return newNode;
 }
 
+/** Evita que texto antigo do SO sobrescreva colagem de nós copiados no app. */
+function clearSystemClipboardText() {
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
+    navigator.clipboard.writeText('').catch(() => {});
+}
+
 /** Copia nós selecionados para a área de transferência interna. */
 export function copyNodesToClipboard(store) {
     const state = store.getState();
@@ -37,6 +43,7 @@ export function copyNodesToClipboard(store) {
     const nodes = normalizeNodesForClipboard(selected, state.nodes);
     state.setClipboardNodes(nodes);
     state.setClipboardPasteGeneration(0);
+    clearSystemClipboardText();
     return true;
 }
 
@@ -46,6 +53,7 @@ export function setClipboardFromNodes(store, nodes) {
     const normalized = normalizeNodesForClipboard(nodes, state.nodes);
     state.setClipboardNodes(normalized);
     state.setClipboardPasteGeneration(0);
+    clearSystemClipboardText();
 }
 
 /** Duplica ou cola nós; retorna ids criados. */

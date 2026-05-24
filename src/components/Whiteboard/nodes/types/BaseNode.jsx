@@ -1,14 +1,18 @@
 import React, { useRef, useCallback } from 'react';
 import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
+import { useWhiteboardSelectionStore } from '../../../../stores/whiteboardSelectionStore';
 import { getNodeTransformStyle } from '../../core/nodeTransform';
 import { resolveNodeClickSelection } from '../../core/layers/whiteboardGroupOps';
 import { useWhiteboardRemoteSelection } from '../../../../hooks/useWhiteboardRemoteSelection';
+import { useNodeDragTranslate, dragTranslateStyle } from '../../interaction/hooks/useNodeDragTranslate';
 
 export default function BaseNode({ node, children, onNodePointerDown, onNodeContextMenu }) {
     const ref = useRef(null);
-    const { nodes, selectedNodeIds, setSelection, setEditingNodeId } = useWhiteboardStore();
+    const setSelection = useWhiteboardSelectionStore((s) => s.setSelection);
+    const setEditingNodeId = useWhiteboardSelectionStore((s) => s.setEditingNodeId);
+    const isSelected = useWhiteboardSelectionStore((s) => s.selectedNodeIds.includes(node.id));
+    const dragTranslate = useNodeDragTranslate(node.id);
     const { remoteSelectionByNodeId } = useWhiteboardRemoteSelection();
-    const isSelected = selectedNodeIds.includes(node.id);
     const remotePeers = remoteSelectionByNodeId[node.id];
     const isRemoteSelected = Boolean(remotePeers?.length);
 
@@ -17,6 +21,7 @@ export default function BaseNode({ node, children, onNodePointerDown, onNodeCont
             if (e.button === 1) return;
             e.stopPropagation();
             if (e.button !== 0) return;
+            const { nodes, selectedNodeIds } = useWhiteboardStore.getState();
             const next = resolveNodeClickSelection(node.id, nodes, selectedNodeIds, {
                 shiftKey: e.shiftKey,
                 ctrlKey: e.ctrlKey || e.metaKey,
@@ -24,7 +29,7 @@ export default function BaseNode({ node, children, onNodePointerDown, onNodeCont
             setSelection(next);
             onNodePointerDown?.(e, node.id);
         },
-        [node.id, nodes, selectedNodeIds, setSelection, onNodePointerDown]
+        [node.id, setSelection, onNodePointerDown]
     );
 
     const handleContextMenu = useCallback(
@@ -48,13 +53,14 @@ export default function BaseNode({ node, children, onNodePointerDown, onNodeCont
         <div
             ref={ref}
             data-node-id={node.id}
-            className={`whiteboard-node-wrapper ${isSelected ? 'selected' : ''} ${isRemoteSelected ? 'whiteboard-node--remote-selected' : ''}`}
+            className={`whiteboard-node-wrapper ${isSelected ? 'selected' : ''} ${isRemoteSelected ? 'whiteboard-node--remote-selected' : ''}${dragTranslate ? ' is-drag-preview' : ''}`}
             style={{
                 position: 'absolute',
                 left: node.x,
                 top: node.y,
                 width: node.width,
                 height: node.height,
+                transform: dragTranslateStyle(dragTranslate),
                 ...(isRemoteSelected && remotePeers[0]?.color
                     ? { '--remote-selection-color': remotePeers[0].color }
                     : {}),

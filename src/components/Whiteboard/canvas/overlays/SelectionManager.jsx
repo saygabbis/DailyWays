@@ -1,5 +1,5 @@
 import React from 'react';
-import { worldBoxFromAnchor } from '../../interaction/transform/createDragBounds';
+import { worldBoxFromAnchorWithModifiers } from '../../interaction/transform/createDragBounds';
 import { worldToScreenWithContainer } from '../../interaction/viewport/viewportUtils';
 
 function MarqueeBox({ left, top, width, height, className = 'whiteboard-selection-box' }) {
@@ -30,7 +30,16 @@ function MarqueeBox({ left, top, width, height, className = 'whiteboard-selectio
 export default function SelectionManager({ selectionBox, createPreview, viewport, containerRef }) {
     if (createPreview && viewport && containerRef?.current) {
         const rect = containerRef.current.getBoundingClientRect();
-        const box = worldBoxFromAnchor(createPreview.anchorWorld, createPreview.currentWorld, 0);
+        const box = worldBoxFromAnchorWithModifiers(
+            createPreview.anchorWorld,
+            createPreview.currentWorld,
+            {
+                minSize: 0,
+                shiftKey: createPreview.shiftKey,
+                altKey: createPreview.altKey,
+                aspectRatio: createPreview.aspectRatio ?? 1,
+            }
+        );
         const tl = worldToScreenWithContainer(box.x, box.y, rect, viewport);
         const br = worldToScreenWithContainer(box.x + box.width, box.y + box.height, rect, viewport);
         return (

@@ -26,6 +26,13 @@ import {
     TEXT_STYLE_NODE_TYPES,
     getTextStyleFromNode,
 } from '../shared/textStyle';
+import { APPEARANCE_NODE_TYPES } from '../shared/appearanceStyle';
+import ShapeVariantSection from './inspector/ShapeVariantSection.jsx';
+import AppearanceOpacitySection from './inspector/AppearanceOpacitySection.jsx';
+import AppearanceCornersSection from './inspector/AppearanceCornersSection.jsx';
+import AppearanceFillSection from './inspector/AppearanceFillSection.jsx';
+import AppearanceStrokeSection from './inspector/AppearanceStrokeSection.jsx';
+import InspectorSection from './inspector/InspectorSection.jsx';
 import '../styles/InspectorPanel.css';
 
 const TYPE_LABELS = {
@@ -35,7 +42,6 @@ const TYPE_LABELS = {
     frame: 'Frame',
     link: 'Link',
     todo_list: 'To-do',
-    column: 'Coluna',
     table: 'Tabela',
     comment: 'Comentário',
     image: 'Imagem',
@@ -83,8 +89,7 @@ function TextDesignSection({ node }) {
     };
 
     return (
-        <div className="space-inspector-section">
-            <div className="space-inspector-section-title">Tipografia</div>
+        <InspectorSection title="Tipografia" defaultExpanded={false}>
             <label className="space-inspector-field space-inspector-field--full">
                 <span>Fonte</span>
                 <select
@@ -182,11 +187,12 @@ function TextDesignSection({ node }) {
                     );
                 })}
             </div>
-        </div>
+            
+        </InspectorSection>
     );
 }
 
-function DesignTab({ selectedNodes, single, nodes }) {
+function DesignTab({ selectedNodes, single, nodes, spaceId }) {
     const { collabPatchNode, collabPatchNodes } = useCollabPatch();
     const [posX, setPosX] = useState('');
     const [posY, setPosY] = useState('');
@@ -268,8 +274,7 @@ function DesignTab({ selectedNodes, single, nodes }) {
                 </div>
             </div>
 
-            <div className="space-inspector-section">
-                <div className="space-inspector-section-title">Alinhar</div>
+            <InspectorSection title="Alinhar" defaultExpanded>
                 <div className="space-inspector-align-row">
                     <button type="button" title="Esquerda" onClick={() => align('left')}>
                         <AlignLeft size={16} />
@@ -298,34 +303,42 @@ function DesignTab({ selectedNodes, single, nodes }) {
                         <Focus size={16} />
                     </button>
                 </div>
-            </div>
+            </InspectorSection>
 
             {single && TEXT_STYLE_NODE_TYPES.has(single.type) && (
                 <TextDesignSection node={single} />
             )}
 
+            {single?.type === 'shape' && <ShapeVariantSection node={single} />}
+
+            {single && APPEARANCE_NODE_TYPES.has(single.type) && (
+                <>
+                    <AppearanceOpacitySection node={single} />
+                    <AppearanceCornersSection node={single} />
+                    <AppearanceFillSection node={single} spaceId={spaceId} />
+                    <AppearanceStrokeSection node={single} />
+                </>
+            )}
+
             {single && (
                 <>
-                    <div className="space-inspector-section">
-                        <div className="space-inspector-section-title">Posição (mundo)</div>
+                    <InspectorSection title="Posição (mundo)" defaultExpanded={false}>
                         <div className="space-inspector-grid">
                             <NumField label="X" value={posX} onChange={setPosX} onCommit={applyPosition} />
                             <NumField label="Y" value={posY} onChange={setPosY} onCommit={applyPosition} />
                         </div>
-                    </div>
+                    </InspectorSection>
 
-                    <div className="space-inspector-section">
-                        <div className="space-inspector-section-title">Tamanho</div>
+                    <InspectorSection title="Tamanho" defaultExpanded={false}>
                         <div className="space-inspector-grid">
                             <NumField label="L" value={sizeW} onChange={setSizeW} onCommit={applySize} min={0} />
                             <NumField label="A" value={sizeH} onChange={setSizeH} onCommit={applySize} min={0} />
                         </div>
-                    </div>
+                    </InspectorSection>
 
-                    <div className="space-inspector-section">
-                        <div className="space-inspector-section-title">Rotação</div>
+                    <InspectorSection title="Rotação" defaultExpanded={false}>
                         <NumField label="°" value={rotation} onChange={setRotation} onCommit={applyRotation} />
-                    </div>
+                    </InspectorSection>
                 </>
             )}
         </div>
@@ -390,7 +403,7 @@ export default function InspectorPanel({ spaceId, spaceTitle, open, onToggle }) 
                 {inspectorTab === 'layers' ? (
                     <LayersTab spaceId={spaceId} spaceTitle={spaceTitle} />
                 ) : (
-                    <DesignTab selectedNodes={selectedNodes} single={single} nodes={nodes} />
+                    <DesignTab selectedNodes={selectedNodes} single={single} nodes={nodes} spaceId={spaceId} />
                 )}
             </div>
         </aside>

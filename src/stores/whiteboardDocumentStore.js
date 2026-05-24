@@ -7,6 +7,7 @@ import {
     DEFAULT_PAGE_ID,
     filterNodesByPage,
 } from '../components/Whiteboard/core/pages/whiteboardPages';
+import { normalizeNodes } from '../components/Whiteboard/core/nodeNormalize.js';
 import { useWhiteboardSelectionStore } from './whiteboardSelectionStore';
 
 const MAX_HISTORY = 600;
@@ -103,7 +104,7 @@ export const useWhiteboardDocumentStore = create((set, get) => ({
         return filterNodesByPage(state.nodes, state.activePageId);
     },
 
-    setNodes: (nodes) => set({ nodes: nodes ?? [] }),
+    setNodes: (nodes) => set({ nodes: normalizeNodes(nodes ?? []) }),
     setConnectors: (connectors) => set({ connectors: connectors ?? [] }),
     setComments: (comments) => set({ comments: comments ?? [] }),
 
@@ -339,7 +340,7 @@ export const useWhiteboardDocumentStore = create((set, get) => ({
     hydrateRoom: ({ nodes, connectors, comments, revision }) => {
         useWhiteboardSelectionStore.getState().setSelection([]);
         set({
-            nodes: nodes ?? [],
+            nodes: normalizeNodes(nodes ?? []),
             connectors: connectors ?? [],
             comments: comments ?? [],
             revision: revision ?? 0,

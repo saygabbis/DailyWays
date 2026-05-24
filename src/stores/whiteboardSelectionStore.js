@@ -61,6 +61,14 @@ export const useWhiteboardSelectionStore = create((set, get) => ({
     snapEnabled: loadSnapEnabled(),
     viewport: { panX: 0, panY: 0, zoom: 1 },
     lastCreatedNodeId: null,
+    /** toolId → variantId para ferramentas com submenu (ex.: shape → rectangle) */
+    toolVariants: { shape: 'rectangle' },
+
+    /** sectionId → expanded (persiste enquanto o painel estiver aberto) */
+    inspectorSectionState: {},
+
+    /** Preview visual do arraste — evita patchNodes a cada frame */
+    nodeDragPreview: null,
 
     resetForSpace: () => set({
         selectedNodeIds: [],
@@ -68,6 +76,9 @@ export const useWhiteboardSelectionStore = create((set, get) => ({
         connectorFromNodeId: null,
         editingNodeId: null,
         editTypingSeed: null,
+        toolVariants: { shape: 'rectangle' },
+        inspectorSectionState: {},
+        nodeDragPreview: null,
     }),
 
     setActiveTool: (activeTool) => set({ activeTool }),
@@ -139,4 +150,32 @@ export const useWhiteboardSelectionStore = create((set, get) => ({
     },
 
     setLastCreatedNodeId: (id) => set({ lastCreatedNodeId: id ?? null }),
+
+    setToolVariant: (toolId, variantId) => set((state) => ({
+        toolVariants: {
+            ...state.toolVariants,
+            [toolId]: variantId,
+        },
+    })),
+
+    getToolVariant: (toolId) => {
+        const state = get();
+        return state.toolVariants?.[toolId] ?? null;
+    },
+
+    getInspectorSectionExpanded: (sectionId, defaultExpanded = false) => {
+        const stored = get().inspectorSectionState?.[sectionId];
+        return stored !== undefined ? stored : defaultExpanded;
+    },
+
+    setInspectorSectionExpanded: (sectionId, expanded) => set((state) => ({
+        inspectorSectionState: {
+            ...state.inspectorSectionState,
+            [sectionId]: expanded,
+        },
+    })),
+
+    setNodeDragPreview: (preview) => set({ nodeDragPreview: preview }),
+
+    clearNodeDragPreview: () => set({ nodeDragPreview: null }),
 }));

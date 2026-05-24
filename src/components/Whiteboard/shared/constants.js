@@ -6,7 +6,6 @@ export const CREATION_TOOLS = [
     'frame',
     'link',
     'todo_list',
-    'column',
     'table',
     'connector',
     'comment',
@@ -26,6 +25,5 @@ export const NODE_TYPES_ALLOWED = [
     'todo_list',
     'file_card',
     'drawing',
-    'column',
     'table',
 ];

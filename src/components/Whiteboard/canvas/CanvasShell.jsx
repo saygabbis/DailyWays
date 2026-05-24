@@ -5,6 +5,9 @@ import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 import { useWhiteboardSelectionStore } from '../../../stores/whiteboardSelectionStore';
 import { useWhiteboardDocumentStore } from '../../../stores/whiteboardDocumentStore';
 import { getDefaultNodePayload, isCreationTool } from '../../../stores/whiteboardStore';
+import { applyToolVariantToPayload } from '../core/creation/applyToolVariant.js';
+import { buildImageNodePayload } from '../core/creation/imageNodePayload.js';
+import { TOOL_VARIANT_MIME } from '../panels/toolbar/toolMenuRegistry.js';
 import { insertNode, insertConnector, uploadSpaceAsset, deleteNode as deleteNodeService } from '../../../services/whiteboardService';
 import { useWhiteboardUndo } from '../interaction/hooks/useWhiteboardUndo';
 import { useCanvasShortcuts } from '../interaction/hooks/useCanvasShortcuts';
@@ -22,7 +25,7 @@ import { useCollabPresence } from '../../../collab/board/presence/useCollabPrese
 import { screenToWorldWithContainer, worldToScreenWithContainer, rectIntersects, findContainerAt } from '../interaction/viewport/viewportUtils';
 import { computeResizeBounds } from '../interaction/transform/resizeBounds';
 import { computeSkewResizeBounds } from '../interaction/transform/resizeSkew';
-import { worldBoxFromAnchor } from '../interaction/transform/createDragBounds';
+import { worldBoxFromAnchorWithModifiers } from '../interaction/transform/createDragBounds';
 import NodeLayer from './NodeLayer';
 import SelectionTransformOverlay from './overlays/SelectionTransformOverlay';
 import ConnectorLayer from './ConnectorLayer';
@@ -41,6 +44,7 @@ import {
     nudgeSelectedNodes,
     patchZIndexSelected,
 } from '../core/ops/whiteboardNodeOps';
+import { pasteClipboardContent } from '../core/ops/pasteExternalContent.js';
 import { computeViewportToFitNodes } from '../interaction/viewport/viewportFit';
 import ShortcutsHelp from '../panels/ShortcutsHelp';
 import SnapGuidesOverlay from './overlays/SnapGuidesOverlay';
@@ -137,7 +141,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         setViewport: setStoreViewport,
     } = useWhiteboardSelectionStore();
 
-    const NODE_TYPES_ALLOWED = ['sticky_note', 'text', 'shape', 'frame', 'image', 'comment', 'link', 'todo_list', 'file_card', 'drawing', 'column', 'table'];
+    const NODE_TYPES_ALLOWED = ['sticky_note', 'text', 'shape', 'frame', 'image', 'comment', 'link', 'todo_list', 'file_card', 'drawing', 'table'];
 
     const isDragCreationTool = (tool) => checkDragCreationTool(tool, NODE_TYPES_ALLOWED);
 
@@ -152,6 +156,11 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             if (extraData.style) Object.assign(payload.style, extraData.style);
             if (dims?.width != null) payload.width = Math.max(CREATE_MIN_SIZE, dims.width);
             if (dims?.height != null) payload.height = Math.max(CREATE_MIN_SIZE, dims.height);
+            const variantPayload = applyToolVariantToPayload(type, payload, extraData.variantId);
+            Object.assign(payload, variantPayload);
+            if (variantPayload.data) {
+                payload.data = { ...payload.data, pageId };
+            }
             const allNodes = useWhiteboardStore.getState().nodes;
             const pageNodes = filterNodesByPage(allNodes, pageId);
             const centerX = worldX + (payload.width ?? 0) / 2;
@@ -182,8 +191,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     );
 
     const applyCreateDragBox = useCallback(
-        async (drag, currentWorld) => {
-            const box = worldBoxFromAnchor(drag.anchorWorld, currentWorld, CREATE_MIN_SIZE);
+        async (drag, currentWorld, modifiers = {}) => {
+            const box = worldBoxFromAnchorWithModifiers(drag.anchorWorld, currentWorld, {
+                minSize: CREATE_MIN_SIZE,
+                shiftKey: modifiers.shiftKey,
+                altKey: modifiers.altKey,
+                aspectRatio: drag.aspectRatio ?? 1,
+            });
             const nodeType = creationToolToNodeType(drag.tool);
             if (!drag.nodeId) {
                 if (!drag._initPromise) {
@@ -209,6 +223,39 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         [createNodeAt, collabPatchNode]
     );
 
+    useEffect(() => {
+        if (!createPreview) return undefined;
+        const refreshFromModifiers = (e) => {
+            if (e.key !== 'Shift' && e.key !== 'Alt') return;
+            const drag = createDragRef.current;
+            const p = lastPointerClientRef.current;
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (!drag?.anchorWorld || !p || !rect || !viewportRef.current) return;
+            const currentWorld = screenToWorldWithContainer(p.x, p.y, rect, viewportRef.current);
+            const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey };
+            setCreatePreview((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          currentWorld,
+                          shiftKey: modifiers.shiftKey,
+                          altKey: modifiers.altKey,
+                      }
+                    : null
+            );
+            const dist = Math.hypot(p.x - drag.startScreen.x, p.y - drag.startScreen.y);
+            if (dist >= CREATE_DRAG_THRESHOLD_PX) {
+                void applyCreateDragBox(drag, currentWorld, modifiers);
+            }
+        };
+        window.addEventListener('keydown', refreshFromModifiers);
+        window.addEventListener('keyup', refreshFromModifiers);
+        return () => {
+            window.removeEventListener('keydown', refreshFromModifiers);
+            window.removeEventListener('keyup', refreshFromModifiers);
+        };
+    }, [createPreview, applyCreateDragBox]);
+
     const getViewportCenterWorld = useCallback(() => {
         const rect = containerRef.current?.getBoundingClientRect();
         if (!rect || !viewportRef.current) return { x: 0, y: 0 };
@@ -230,15 +277,16 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     console.error('[CanvasEngine] upload image failed', result.error);
                     return;
                 }
-                let place = pendingUploadWorldPositionRef.current;
-                if (place) pendingUploadWorldPositionRef.current = null;
-                else {
+                let placement;
+                const pending = pendingUploadWorldPositionRef.current;
+                if (pending) {
+                    pendingUploadWorldPositionRef.current = null;
+                    placement = { x: pending.x, y: pending.y, anchor: pending.anchor ?? 'center' };
+                } else {
                     const center = getViewportCenterWorld();
-                    place = { x: center.x - 100, y: center.y - 75 };
+                    placement = { x: center.x, y: center.y, anchor: 'center' };
                 }
-                const sizeStr = file.size != null ? (file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`) : '';
-                const payload = getDefaultNodePayload('image', place.x, place.y);
-                Object.assign(payload.data, { url: result.url, filename: file.name, size: sizeStr });
+                const payload = await buildImageNodePayload(file, result.url, placement);
                 if (collabConnected) {
                     collabCreateNode({ ...payload, createdBy: user?.id ?? null });
                 } else {
@@ -261,17 +309,35 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     console.error('[CanvasEngine] upload file failed', result.error);
                     return;
                 }
-                let place = pendingUploadWorldPositionRef.current;
-                if (place) pendingUploadWorldPositionRef.current = null;
-                else {
+                let placement;
+                const pending = pendingUploadWorldPositionRef.current;
+                if (pending) {
+                    pendingUploadWorldPositionRef.current = null;
+                    placement = { x: pending.x, y: pending.y, anchor: pending.anchor ?? 'center' };
+                } else {
                     const center = getViewportCenterWorld();
-                    const isImg = file.type?.startsWith('image/');
-                    place = { x: center.x - (isImg ? 100 : 110), y: center.y - (isImg ? 75 : 40) };
+                    placement = { x: center.x, y: center.y, anchor: 'center' };
+                }
+                const isImage = file.type?.startsWith('image/');
+                if (isImage) {
+                    const payload = await buildImageNodePayload(file, result.url, placement);
+                    if (collabConnected) {
+                        collabCreateNode({ ...payload, createdBy: user?.id ?? null });
+                    } else {
+                        const res = await insertNode(spaceId, payload, user?.id);
+                        if (res.success) useWhiteboardStore.getState().addNode(payload);
+                    }
+                    return;
                 }
                 const sizeStr = file.size != null ? (file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`) : '';
-                const isImage = file.type?.startsWith('image/');
-                const type = isImage ? 'image' : 'file_card';
-                const payload = getDefaultNodePayload(type, place.x, place.y);
+                const type = 'file_card';
+                const defaultKey = 'file';
+                const offsetX = 110;
+                const offsetY = 40;
+                const place = placement.anchor === 'topleft'
+                    ? placement
+                    : { x: placement.x - offsetX, y: placement.y - offsetY, anchor: 'topleft' };
+                const payload = getDefaultNodePayload(defaultKey, place.x, place.y);
                 Object.assign(payload.data, { url: result.url, filename: file.name, size: sizeStr });
                 if (collabConnected) {
                     collabCreateNode({ ...payload, createdBy: user?.id ?? null });
@@ -321,13 +387,55 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         copyNodesToClipboard(useWhiteboardStore);
     }, []);
 
-    const handlePaste = useCallback(async () => {
-        await pasteFromClipboard(nodeOpsCtx());
-    }, [nodeOpsCtx]);
+    const getPastePlacement = useCallback(() => {
+        const rect = containerRef.current?.getBoundingClientRect();
+        const p = lastPointerClientRef.current;
+        if (p && rect && viewportRef.current) {
+            const world = screenToWorldWithContainer(p.x, p.y, rect, viewportRef.current);
+            return { x: world.x, y: world.y, anchor: 'center' };
+        }
+        const center = getViewportCenterWorld();
+        return { x: center.x, y: center.y, anchor: 'center' };
+    }, [getViewportCenterWorld]);
 
-    const handlePasteInPlace = useCallback(async () => {
-        await pasteFromClipboard(nodeOpsCtx(), { inPlace: true });
-    }, [nodeOpsCtx]);
+    const handlePaste = useCallback(
+        async (clipboardData = null) => {
+            const ctx = nodeOpsCtx();
+            const placement = getPastePlacement();
+            await pasteClipboardContent(ctx, placement, clipboardData, () => pasteFromClipboard(ctx));
+        },
+        [nodeOpsCtx, getPastePlacement]
+    );
+
+    const handlePasteInPlace = useCallback(
+        async (clipboardData = null) => {
+            const ctx = nodeOpsCtx();
+            const placement = getPastePlacement();
+            await pasteClipboardContent(ctx, placement, clipboardData, () =>
+                pasteFromClipboard(ctx, { inPlace: true })
+            );
+        },
+        [nodeOpsCtx, getPastePlacement]
+    );
+
+    const handleViewportPaste = useCallback(
+        (e) => {
+            const el = document.activeElement;
+            if (el) {
+                const tag = el.tagName;
+                const isEditable =
+                    tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+                if (isEditable) {
+                    if (el.closest?.('.whiteboard-node-wrapper')) return;
+                    if (el.closest?.('.whiteboard-floating-toolbar')) return;
+                    return;
+                }
+            }
+            e.preventDefault();
+            void handlePaste(e.clipboardData);
+        },
+        [handlePaste]
+    );
 
     const handleDuplicate = useCallback(async () => {
         await duplicateSelectedNodes(nodeOpsCtx());
@@ -461,14 +569,27 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                             rect,
                             viewportForChildren
                         );
+                        const nodeType = creationToolToNodeType(activeTool);
+                        const defaultKey =
+                            nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType;
+                        const defaults = getDefaultNodePayload(defaultKey, anchorWorld.x, anchorWorld.y);
+                        const aspectRatio =
+                            defaults.width && defaults.height ? defaults.width / defaults.height : 1;
                         createDragRef.current = {
                             tool: activeTool,
                             anchorWorld,
                             startScreen: { x: e.clientX, y: e.clientY },
                             nodeId: null,
                             creating: false,
+                            aspectRatio,
                         };
-                        setCreatePreview({ anchorWorld, currentWorld: anchorWorld });
+                        setCreatePreview({
+                            anchorWorld,
+                            currentWorld: anchorWorld,
+                            shiftKey: e.shiftKey,
+                            altKey: e.altKey,
+                            aspectRatio,
+                        });
                     }
                     if (e.currentTarget && typeof e.currentTarget.setPointerCapture === 'function') {
                         e.currentTarget.setPointerCapture(e.pointerId);
@@ -998,7 +1119,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 dragIds: prunedDragIds,
                 beforeSnapshots: captureNodesSnapshot(useWhiteboardStore, prunedDragIds),
                 snapExcludeIds: buildSnapExcludeIds(prunedDragIds, state.nodes),
+                lastOffset: { dx: 0, dy: 0 },
             };
+            useWhiteboardSelectionStore.getState().setNodeDragPreview({
+                ids: prunedDragIds,
+                dx: 0,
+                dy: 0,
+            });
             const captureEl = e.currentTarget ?? e.target;
             if (captureEl?.setPointerCapture) {
                 try {
@@ -1021,8 +1148,26 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             setSnapGuidesIfChangedRef.current([]);
             const ref = nodeDragRef.current;
             if (ref) {
-                const state = useWhiteboardStore.getState();
                 const ids = ref.dragIds ?? [ref.nodeId];
+                const offset = ref.lastOffset ?? { dx: 0, dy: 0 };
+                const patches = ids
+                    .map((id) => {
+                        const initial = ref.beforeSnapshots?.find((b) => b.id === id)?.node;
+                        if (!initial) return null;
+                        return {
+                            id,
+                            patch: {
+                                x: (initial.x ?? 0) + offset.dx,
+                                y: (initial.y ?? 0) + offset.dy,
+                            },
+                        };
+                    })
+                    .filter(Boolean);
+                if (patches.length) collabPatchNodesRef.current(patches);
+
+                useWhiteboardSelectionStore.getState().clearNodeDragPreview();
+
+                const state = useWhiteboardStore.getState();
                 ids.forEach((id) => {
                     const node = state.nodes.find((n) => n.id === id);
                     if (!node?.parentId) return;
@@ -1060,6 +1205,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 }
             }
             nodeDragRef.current = null;
+            useWhiteboardSelectionStore.getState().clearNodeDragPreview();
         };
 
         const flushMove = () => {
@@ -1087,18 +1233,16 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 excludeIds: ref.snapExcludeIds,
             });
             setSnapGuidesIfChangedRef.current(snap.guides);
-            const patches = ids.map((id) => {
-                const initial = ref.beforeSnapshots?.find((b) => b.id === id)?.node;
-                if (!initial) return null;
-                return {
-                    id,
-                    patch: {
-                        x: (initial.x ?? 0) + snap.dx,
-                        y: (initial.y ?? 0) + snap.dy,
-                    },
-                };
-            }).filter(Boolean);
-            if (patches.length) collabPatchNodesRef.current(patches);
+            ref.lastOffset = { dx: snap.dx, dy: snap.dy };
+
+            const preview = useWhiteboardSelectionStore.getState().nodeDragPreview;
+            if (preview?.dx === snap.dx && preview?.dy === snap.dy) return;
+
+            useWhiteboardSelectionStore.getState().setNodeDragPreview({
+                ids,
+                dx: snap.dx,
+                dy: snap.dy,
+            });
         };
 
         const onMove = (e) => {
@@ -1169,7 +1313,10 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     });
                 }
             } else {
-                await applyCreateDragBox(drag, currentWorld);
+                await applyCreateDragBox(drag, currentWorld, {
+                    shiftKey: e.shiftKey,
+                    altKey: e.altKey,
+                });
                 if (drag.nodeId) {
                     applyPostCreateActions({
                         nodeId: drag.nodeId,
@@ -1307,13 +1454,20 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         rect,
                         viewportRef.current
                     );
-                    setCreatePreview({ anchorWorld: drag.anchorWorld, currentWorld });
+                    const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey };
+                    setCreatePreview({
+                        anchorWorld: drag.anchorWorld,
+                        currentWorld,
+                        shiftKey: modifiers.shiftKey,
+                        altKey: modifiers.altKey,
+                        aspectRatio: drag.aspectRatio ?? 1,
+                    });
                     const dist = Math.hypot(
                         e.clientX - drag.startScreen.x,
                         e.clientY - drag.startScreen.y
                     );
                     if (dist >= CREATE_DRAG_THRESHOLD_PX) {
-                        void applyCreateDragBox(drag, currentWorld);
+                        void applyCreateDragBox(drag, currentWorld, modifiers);
                     }
                 }
             } else {
@@ -1370,8 +1524,9 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     const handleContextMenuUploadImage = useCallback(() => {
         if (contextMenuPosition) {
             pendingUploadWorldPositionRef.current = {
-                x: contextMenuPosition.worldX - 100,
-                y: contextMenuPosition.worldY - 75,
+                x: contextMenuPosition.worldX,
+                y: contextMenuPosition.worldY,
+                anchor: 'center',
             };
             setContextMenuPosition(null);
         }
@@ -1381,8 +1536,9 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     const handleContextMenuUploadFile = useCallback(() => {
         if (contextMenuPosition) {
             pendingUploadWorldPositionRef.current = {
-                x: contextMenuPosition.worldX - 110,
-                y: contextMenuPosition.worldY - 40,
+                x: contextMenuPosition.worldX,
+                y: contextMenuPosition.worldY,
+                anchor: 'center',
             };
             setContextMenuPosition(null);
         }
@@ -1403,7 +1559,17 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             const toolType = e.dataTransfer.getData('application/x-whiteboard-tool');
             if (toolType && NODE_TYPES_ALLOWED.includes(toolType)) {
                 const [ox, oy] = getNodeCreateOffset(toolType);
-                const id = await createNodeAt(toolType, world.x - ox, world.y - oy);
+                let variantId = null;
+                try {
+                    const variantRaw = e.dataTransfer.getData(TOOL_VARIANT_MIME);
+                    if (variantRaw) {
+                        const parsed = JSON.parse(variantRaw);
+                        if (parsed.toolId === toolType) variantId = parsed.variantId;
+                    }
+                } catch {
+                    /* ignore malformed drag payload */
+                }
+                const id = await createNodeAt(toolType, world.x - ox, world.y - oy, { variantId });
                 if (id) {
                     applyPostCreateActions({
                         nodeId: id,
@@ -1432,13 +1598,18 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 if (file.type.startsWith('image/')) {
                     const result = await uploadSpaceAsset(spaceId, file, user?.id);
                     if (result?.url) {
-                        const sizeStr = file.size != null ? (file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`) : '';
-                        const payload = getDefaultNodePayload('image', wx, wy);
-                        Object.assign(payload.data, { url: result.url, filename: file.name, size: sizeStr });
+                        const payload = await buildImageNodePayload(file, result.url, {
+                            x: world.x + i * 20,
+                            y: world.y + i * 20,
+                            anchor: 'center',
+                        });
+                        const centerX = payload.x + payload.width / 2;
+                        const centerY = payload.y + payload.height / 2;
+                        const container = findContainerAt(nodes, centerX, centerY);
                         if (container) {
                             payload.parentId = container.id;
-                            payload.x = wx - container.x;
-                            payload.y = wy - container.y;
+                            payload.x = payload.x - container.x;
+                            payload.y = payload.y - container.y;
                         }
                         if (collabConnected) {
                             collabCreateNode({ ...payload, createdBy: user?.id ?? null });
@@ -1451,7 +1622,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     const result = await uploadSpaceAsset(spaceId, file, user?.id);
                     if (result?.url) {
                         const sizeStr = file.size != null ? (file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`) : '';
-                        const payload = getDefaultNodePayload('file_card', wx, wy);
+                        const payload = getDefaultNodePayload('file', wx, wy);
                         Object.assign(payload.data, { url: result.url, filename: file.name, size: sizeStr });
                         if (container) {
                             payload.parentId = container.id;
@@ -1493,6 +1664,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 onContextMenu={handleContextMenu}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
+                onPaste={handleViewportPaste}
                 style={{
                     backgroundSize: `${24 * viewportState.zoom}px ${24 * viewportState.zoom}px`,
                     backgroundPosition: `${viewportState.pan.x % (24 * viewportState.zoom)}px ${viewportState.pan.y % (24 * viewportState.zoom)}px`,

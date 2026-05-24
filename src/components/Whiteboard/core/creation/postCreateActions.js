@@ -8,7 +8,6 @@ export const NODE_TYPES_REVERT_TO_SELECT = new Set([
     'sticky_note',
     'link',
     'todo_list',
-    'column',
 ]);
 
 /** Tipos que entram em edição de texto logo após criar. */

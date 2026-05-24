@@ -1,5 +1,6 @@
 import { uuidv4 } from '../../../utils/uuid';
 import { CREATION_TOOLS } from '../shared/constants.js';
+import { getDefaultAppearanceStyle } from '../shared/appearanceStyle.js';
 
 export function getDefaultNodePayload(type, x, y) {
     const id = uuidv4();
@@ -13,11 +14,22 @@ export function getDefaultNodePayload(type, x, y) {
             style: { backgroundColor: '#fef08a', color: '#111827', fontSize: 14, lineHeight: 1.35 },
         },
         text: { type: 'text', width: 200, height: 40, data: { text: '' }, style: { fontSize: 16, color: 'var(--text-primary)' } },
-        shape: { type: 'shape', width: 100, height: 100, data: { shape: 'rectangle' }, style: { fill: 'var(--bg-elevated)', stroke: 'var(--border-color)' } },
-        frame: { type: 'frame', width: 300, height: 200, data: { title: 'Frame' }, style: {} },
+        shape: {
+            type: 'shape',
+            width: 100,
+            height: 100,
+            data: { shape: 'rectangle', polygonSides: 6 },
+            style: { appearance: getDefaultAppearanceStyle('shape') },
+        },
+        frame: {
+            type: 'frame',
+            width: 300,
+            height: 200,
+            data: { title: 'Frame' },
+            style: { appearance: getDefaultAppearanceStyle('frame') },
+        },
         link: { type: 'link', width: 240, height: 80, data: { url: '', title: '' }, style: { fontSize: 14, color: 'var(--text-primary)' } },
         todo_list: { type: 'todo_list', width: 220, height: 120, data: { items: [{ id: uuidv4(), text: 'Item', done: false }] }, style: {} },
-        column: { type: 'column', width: 200, height: 200, data: { title: '' }, style: {} },
         table: { type: 'table', width: 280, height: 120, data: { rows: [], cols: [] }, style: {} },
         connector: { type: 'connector', width: 0, height: 0, data: {}, style: {} },
         comment: { type: 'comment', width: 200, height: 80, data: { message: '' }, style: {} },

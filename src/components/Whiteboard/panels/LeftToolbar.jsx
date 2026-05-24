@@ -8,7 +8,6 @@ import {
     Layout,
     Link2,
     ListTodo,
-    Columns,
     Table2,
     ArrowRightLeft,
     MessageSquare,
@@ -23,6 +22,10 @@ import CommentsPanel from '../panels/CommentsPanel';
 import DraggablePanel from '../panels/DraggablePanel';
 import { useCollabPatch } from '../../../collab/whiteboard/CollabOpsContext.jsx';
 import { performUndo, performRedo } from '../core/history/undoController';
+import { getToolMenuConfig } from './toolbar/toolMenuRegistry.js';
+import ToolbarToolGroup from './toolbar/ToolbarToolGroup.jsx';
+import ToolbarToolButton from './toolbar/ToolbarToolButton.jsx';
+import ToolbarToolMenu from './toolbar/ToolbarToolMenu.jsx';
 import '../styles/LeftToolbar.css';
 
 const TOOLS = [
@@ -33,7 +36,6 @@ const TOOLS = [
     { id: 'frame', icon: Layout, label: 'Frame' },
     { id: 'link', icon: Link2, label: 'Link' },
     { id: 'todo_list', icon: ListTodo, label: 'To-do' },
-    { id: 'column', icon: Columns, label: 'Coluna' },
     { id: 'table', icon: Table2, label: 'Tabela' },
     { id: 'connector', icon: ArrowRightLeft, label: 'Conector' },
     { id: 'comment', icon: MessageSquare, label: 'Comentário' },
@@ -42,11 +44,14 @@ const TOOLS = [
 export default function LeftToolbar({ onUploadImage, onUploadFile, registerOpenImagePicker, registerOpenFilePicker, variant }) {
     const imageInputRef = useRef(null);
     const fileInputRef = useRef(null);
+    const moreRef = useRef(null);
     const [showMore, setShowMore] = useState(false);
     const [showComments, setShowComments] = useState(false);
     const {
         activeTool,
         setActiveTool,
+        toolVariants,
+        setToolVariant,
         canUndo,
         canRedo,
     } = useWhiteboardStore();
@@ -95,39 +100,51 @@ export default function LeftToolbar({ onUploadImage, onUploadFile, registerOpenI
     return (
         <div className={`left-toolbar ${variant === 'bottom' ? 'left-toolbar-bottom' : ''}`}>
             <div className="left-toolbar-tools">
-                {TOOLS.map(({ id, icon: Icon, label }) => (
-                    <button
-                        key={id}
-                        type="button"
-                        className={`left-toolbar-btn ${activeTool === id ? 'active' : ''}`}
-                        onClick={() => handleToolClick(id)}
-                        title={label}
-                        draggable={id !== 'select'}
-                        onDragStart={(e) => {
-                            if (id === 'select') return;
-                            e.dataTransfer.setData('application/x-whiteboard-tool', id);
-                            e.dataTransfer.effectAllowed = 'copy';
-                        }}
-                    >
-                        <Icon size={20} />
-                    </button>
-                ))}
-                <div className="left-toolbar-more">
+                {TOOLS.map((tool) => {
+                    const menuConfig = getToolMenuConfig(tool.id);
+                    if (menuConfig) {
+                        return (
+                            <ToolbarToolGroup
+                                key={tool.id}
+                                tool={tool}
+                                config={menuConfig}
+                                activeTool={activeTool}
+                                activeVariant={toolVariants?.[tool.id] ?? menuConfig.defaultVariant}
+                                onSelectTool={handleToolClick}
+                                onSelectVariant={setToolVariant}
+                            />
+                        );
+                    }
+                    return (
+                        <ToolbarToolButton
+                            key={tool.id}
+                            tool={tool}
+                            active={activeTool === tool.id}
+                            onClick={handleToolClick}
+                        />
+                    );
+                })}
+                <div ref={moreRef} className="left-toolbar-more">
                     <button
                         type="button"
                         className="left-toolbar-btn"
                         onClick={() => setShowMore((v) => !v)}
                         title="Mais"
+                        aria-expanded={showMore}
                     >
                         <MoreHorizontal size={20} />
                     </button>
-                    {showMore && (
-                        <div className="left-toolbar-dropdown">
-                            <button type="button" onClick={() => { setShowMore(false); setActiveTool('draw'); }}>
-                                <Pencil size={16} /> Desenho
-                            </button>
-                        </div>
-                    )}
+                    <ToolbarToolMenu
+                        open={showMore}
+                        onClose={() => setShowMore(false)}
+                        orientation="horizontal"
+                        anchorRef={moreRef}
+                        triggerRef={moreRef}
+                    >
+                        <button type="button" onClick={() => { setShowMore(false); setActiveTool('draw'); }}>
+                            <Pencil size={16} /> Desenho
+                        </button>
+                    </ToolbarToolMenu>
                 </div>
                 <button type="button" className="left-toolbar-btn" onClick={handleImageClick} title="Enviar imagem">
                     <ImagePlus size={20} />

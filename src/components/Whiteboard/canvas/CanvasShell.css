@@ -163,6 +163,16 @@
     user-select: none;
 }
 
+.whiteboard-appearance-renderer {
+    overflow: visible;
+    display: block;
+}
+
+.shape-node,
+.frame-node {
+    overflow: visible;
+}
+
 .whiteboard-node-wrapper img {
     -webkit-user-drag: none;
     user-drag: none;
@@ -171,6 +181,11 @@
 
 .whiteboard-node-wrapper.selected {
     outline: none;
+}
+
+.whiteboard-node-wrapper.is-drag-preview,
+.whiteboard-frame-group[style*='translate'] {
+    will-change: transform;
 }
 
 .whiteboard-resize-handles {

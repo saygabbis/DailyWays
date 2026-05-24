@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient';
 import { uuidv4 } from '../utils/uuid';
 
-const NODE_TYPES = ['sticky_note', 'text', 'shape', 'frame', 'connector', 'image', 'comment', 'link', 'todo_list', 'file_card', 'drawing', 'column', 'table'];
+const NODE_TYPES = ['sticky_note', 'text', 'shape', 'frame', 'connector', 'image', 'comment', 'link', 'todo_list', 'file_card', 'drawing', 'table'];
 
 function nodeToRow(node, spaceId) {
     return {

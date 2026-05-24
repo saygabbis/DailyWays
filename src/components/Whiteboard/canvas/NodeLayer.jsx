@@ -1,10 +1,68 @@
-import React, { useMemo } from 'react';
-import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import React, { useMemo, memo } from 'react';
+import { useWhiteboardDocumentStore } from '../../../stores/whiteboardDocumentStore';
+import { useWhiteboardSelectionStore } from '../../../stores/whiteboardSelectionStore';
 import { intersectsViewport, CONTAINER_NODE_TYPES } from '../interaction/viewport/viewportUtils';
 import { getNodePageId } from '../core/pages/whiteboardPages';
 import ResizeHandles from './overlays/ResizeHandles';
 import { getTransformTargetIds } from '../interaction/transform/selectionTransform';
 import { NODE_COMPONENTS } from '../nodes/registry';
+import { useNodeDragTranslate, dragTranslateStyle } from '../interaction/hooks/useNodeDragTranslate';
+
+const CanvasNode = memo(function CanvasNode({ node, onNodePointerDown, onNodeContextMenu }) {
+    const Comp = NODE_COMPONENTS[node.type] ?? NODE_COMPONENTS.sticky_note;
+    return (
+        <Comp
+            node={node}
+            onNodePointerDown={onNodePointerDown}
+            onNodeContextMenu={onNodeContextMenu}
+        />
+    );
+}, (prev, next) =>
+    prev.node === next.node &&
+    prev.onNodePointerDown === next.onNodePointerDown &&
+    prev.onNodeContextMenu === next.onNodeContextMenu);
+
+function FrameGroupShell({ root, children, onNodePointerDown, onNodeContextMenu }) {
+    const dragTranslate = useNodeDragTranslate(root.id);
+    const FrameComp = NODE_COMPONENTS[root.type] ?? NODE_COMPONENTS.frame;
+    const rootAtZero = { ...root, x: 0, y: 0 };
+
+    return (
+        <div
+            className="whiteboard-frame-group"
+            style={{
+                position: 'absolute',
+                left: root.x,
+                top: root.y,
+                width: root.width ?? 0,
+                height: root.height ?? 0,
+                pointerEvents: 'none',
+                transform: dragTranslateStyle(dragTranslate),
+            }}
+        >
+            <div style={{ pointerEvents: 'auto' }}>
+                <FrameComp
+                    node={rootAtZero}
+                    onNodePointerDown={onNodePointerDown}
+                    onNodeContextMenu={onNodeContextMenu}
+                />
+            </div>
+            <div
+                className="whiteboard-frame-children"
+                style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    width: '100%',
+                    height: '100%',
+                    pointerEvents: 'none',
+                }}
+            >
+                {children}
+            </div>
+        </div>
+    );
+}
 
 function getRoots(nodes) {
     return nodes.filter((n) => !n.parentId);
@@ -15,7 +73,10 @@ function getChildren(nodes, parentId) {
 }
 
 export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, onResizeStart, onRotateStart }) {
-    const { nodes, viewport, selectedNodeIds, activePageId } = useWhiteboardStore();
+    const nodes = useWhiteboardDocumentStore((s) => s.nodes);
+    const activePageId = useWhiteboardDocumentStore((s) => s.activePageId);
+    const selectedNodeIds = useWhiteboardSelectionStore((s) => s.selectedNodeIds);
+    const viewport = useWhiteboardSelectionStore((s) => s.viewport);
     const pageNodes = useMemo(
         () => nodes.filter((n) => getNodePageId(n) === activePageId),
         [nodes, activePageId]
@@ -63,17 +124,14 @@ export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, onResi
     const useUnifiedTransform = transformIds.length > 1;
     const transformIdSet = useMemo(() => new Set(transformIds), [transformIds]);
 
-    const renderNode = (node) => {
-        const Comp = NODE_COMPONENTS[node.type] || StickyNoteNode;
-        return (
-            <Comp
-                key={node.id}
-                node={node}
-                onNodePointerDown={onNodePointerDown}
-                onNodeContextMenu={onNodeContextMenu}
-            />
-        );
-    };
+    const renderNode = (node) => (
+        <CanvasNode
+            key={node.id}
+            node={node}
+            onNodePointerDown={onNodePointerDown}
+            onNodeContextMenu={onNodeContextMenu}
+        />
+    );
 
     return (
         <>
@@ -82,46 +140,22 @@ export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, onResi
                 const isContainerWithChildren =
                     CONTAINER_NODE_TYPES.includes(root.type) && children.length > 0;
                 if (isContainerWithChildren) {
-                    const FrameComp = NODE_COMPONENTS[root.type] || FrameNode;
-                    const rootAtZero = { ...root, x: 0, y: 0 };
                     return (
-                        <div
+                        <FrameGroupShell
                             key={root.id}
-                            className="whiteboard-frame-group"
-                            style={{
-                                position: 'absolute',
-                                left: root.x,
-                                top: root.y,
-                                width: root.width ?? 0,
-                                height: root.height ?? 0,
-                                pointerEvents: 'none',
-                            }}
+                            root={root}
+                            onNodePointerDown={onNodePointerDown}
+                            onNodeContextMenu={onNodeContextMenu}
                         >
-                            <div style={{ pointerEvents: 'auto' }}>
-                                <FrameComp
-                                    node={rootAtZero}
-                                    onNodePointerDown={onNodePointerDown}
-                                    onNodeContextMenu={onNodeContextMenu}
-                                />
-                            </div>
-                            <div
-                                className="whiteboard-frame-children"
-                                style={{
-                                    position: 'absolute',
-                                    left: 0,
-                                    top: 0,
-                                    width: '100%',
-                                    height: '100%',
-                                    pointerEvents: 'none',
-                                }}
-                            >
-                                {children.map((child) => (
-                                    <div key={child.id} style={{ position: 'absolute', left: child.x, top: child.y, pointerEvents: 'auto' }}>
-                                        {renderNode(child)}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                            {children.map((child) => (
+                                <div
+                                    key={child.id}
+                                    style={{ position: 'absolute', left: child.x, top: child.y, pointerEvents: 'auto' }}
+                                >
+                                    {renderNode(child)}
+                                </div>
+                            ))}
+                        </FrameGroupShell>
                     );
                 }
                 return renderNode(root);

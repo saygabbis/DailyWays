@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
+import { useNodeDragTranslate } from '../../interaction/hooks/useNodeDragTranslate';
 
 /** Tamanho visual e área de clique em pixels de tela (compensam zoom do canvas). */
 const HANDLE_VISUAL_PX = 10;
@@ -21,6 +22,7 @@ export default function ResizeHandles({ node, onResizeStart, onRotateStart, offs
     const z = Math.max(0.15, zoom || 1);
     const visualSize = HANDLE_VISUAL_PX / z;
     const hitSize = (HANDLE_VISUAL_PX + HANDLE_HIT_PAD_PX * 2) / z;
+    const dragTranslate = useNodeDragTranslate(node.id);
 
     const handlePointerDown = useCallback(
         (e, handleId) => {
@@ -45,8 +47,10 @@ export default function ResizeHandles({ node, onResizeStart, onRotateStart, offs
     const boxStyle = useMemo(() => {
         const w = Math.max(node.width ?? 0, 1);
         const h = Math.max(node.height ?? 0, 1);
-        const baseLeft = offset ? offset.x + node.x : node.x;
-        const baseTop = offset ? offset.y + node.y : node.y;
+        const dragDx = dragTranslate?.dx ?? 0;
+        const dragDy = dragTranslate?.dy ?? 0;
+        const baseLeft = (offset ? offset.x + node.x : node.x) + dragDx;
+        const baseTop = (offset ? offset.y + node.y : node.y) + dragDy;
         const rot = node.rotation ?? 0;
         return {
             position: 'absolute',
@@ -59,7 +63,7 @@ export default function ResizeHandles({ node, onResizeStart, onRotateStart, offs
             pointerEvents: 'none',
             boxSizing: 'border-box',
         };
-    }, [node.x, node.y, node.width, node.height, node.rotation, offset]);
+    }, [node.x, node.y, node.width, node.height, node.rotation, offset, dragTranslate]);
 
     if ((node.width ?? 0) <= 0 && (node.height ?? 0) <= 0) return null;
 

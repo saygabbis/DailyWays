@@ -10,7 +10,7 @@ export const BOARD_ACTION_TYPES = new Set([
 ]);
 export const NODE_TYPES = [
   'sticky_note', 'text', 'shape', 'frame', 'connector', 'image', 'comment',
-  'link', 'todo_list', 'file_card', 'drawing', 'column', 'table',
+  'link', 'todo_list', 'file_card', 'drawing', 'table',
 ];
 
 /** High-frequency fields (throttle on client). */

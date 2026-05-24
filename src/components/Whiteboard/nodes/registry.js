@@ -9,7 +9,6 @@ import LinkCardNode from './types/LinkCardNode.jsx';
 import TodoListNode from './types/TodoListNode.jsx';
 import FileCardNode from './types/FileCardNode.jsx';
 import DrawingNode from './types/DrawingNode.jsx';
-import ColumnNode from './types/ColumnNode.jsx';
 import TableNode from './types/TableNode.jsx';
 
 /** Tabela única: tipo → componente, ferramenta, metadados. */
@@ -25,7 +24,6 @@ export const NODE_REGISTRY = [
     { type: 'todo_list', component: TodoListNode, tool: 'todo_list', label: 'To-do' },
     { type: 'file_card', component: FileCardNode, tool: 'file', label: 'Ficheiro' },
     { type: 'draw', component: DrawingNode, tool: 'draw', label: 'Desenho' },
-    { type: 'column', component: ColumnNode, tool: 'column', label: 'Coluna' },
     { type: 'table', component: TableNode, tool: 'table', label: 'Tabela' },
 ];
 

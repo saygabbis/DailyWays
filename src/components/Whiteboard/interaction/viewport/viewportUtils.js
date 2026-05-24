@@ -82,7 +82,7 @@ export function rectIntersects(a, b) {
 }
 
 /** Frame/container types that can hold child nodes. */
-export const CONTAINER_NODE_TYPES = ['frame', 'column', 'table'];
+export const CONTAINER_NODE_TYPES = ['frame', 'table'];
 
 /** Find topmost container node that contains (worldX, worldY). Uses world coords for roots. */
 export function findContainerAt(nodes, worldX, worldY) {

@@ -1,22 +1,33 @@
-import React from 'react';
+import React, { memo } from 'react';
 import BaseNode from './BaseNode';
+import AppearanceRenderer from '../../shared/AppearanceRenderer.jsx';
+import { sameNodeVisual } from '../../shared/appearanceStyle.js';
+
+const ShapeNodeVisual = memo(function ShapeNodeVisual({ node }) {
+    const shape = node.data?.shape ?? 'rectangle';
+    const polygonSides = node.data?.polygonSides ?? 6;
+    const shapeKind = shape === 'ellipse' ? 'ellipse' : shape === 'polygon' ? 'polygon' : 'rectangle';
+
+    return (
+        <div
+            className="whiteboard-node shape-node"
+            style={{ width: node.width, height: node.height, overflow: 'visible' }}
+        >
+            <AppearanceRenderer
+                node={node}
+                width={node.width}
+                height={node.height}
+                shapeKind={shapeKind}
+                polygonSides={polygonSides}
+            />
+        </div>
+    );
+}, (prev, next) => sameNodeVisual(prev.node, next.node));
 
 export default function ShapeNode({ node, onNodePointerDown, onNodeContextMenu }) {
-    const shape = node.data?.shape ?? 'rectangle';
-    const fill = node.style?.fill ?? 'var(--bg-elevated)';
-    const stroke = node.style?.stroke ?? 'var(--border-color)';
     return (
         <BaseNode node={node} onNodePointerDown={onNodePointerDown} onNodeContextMenu={onNodeContextMenu}>
-            <div
-                className="whiteboard-node shape-node"
-                style={{
-                    width: node.width,
-                    height: node.height,
-                    backgroundColor: fill,
-                    border: `2px solid ${stroke}`,
-                    borderRadius: shape === 'ellipse' ? '50%' : 4,
-                }}
-            />
+            <ShapeNodeVisual node={node} />
         </BaseNode>
     );
 }

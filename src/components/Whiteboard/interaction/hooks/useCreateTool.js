@@ -5,7 +5,6 @@ export const CREATION_DRAG_TOOLS = new Set([
     'shape',
     'frame',
     'todo_list',
-    'column',
     'table',
     'comment',
     'link',

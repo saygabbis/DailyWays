@@ -11,7 +11,6 @@ export const NODE_CREATE_OFFSETS = {
     todo_list: [110, 60],
     drawing: [100, 75],
     draw: [100, 75],
-    column: [100, 100],
     table: [140, 60],
 };
 

@@ -74,8 +74,6 @@ export function layerDisplayName(node) {
         frame: 'Frame',
         link: 'Link',
         todo_list: 'To-do',
-        column: 'Coluna',
-        table: 'Tabela',
         comment: 'Comentário',
         image: 'Imagem',
         file_card: 'Arquivo',
