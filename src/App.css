@@ -10,10 +10,12 @@
   margin-left: 0;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   background: var(--bg-primary);
   transition: background-color var(--transition-base), margin-left var(--transition-base);
-  /* Allow flex children to shrink and scroll */
   min-width: 0;
 }
 
@@ -23,8 +25,20 @@
 
 .app-content {
   flex: 1;
-  /* Simple flex container, no overflow or scroll stability to avoid DND confusion */
   min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* Views do Geral: o scroll fica em .app-content (body tem overflow:hidden) */
+.app-content .dashboard-view,
+.app-content .myday-view,
+.app-content .smart-view {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
 }
 
 /* Board: altura limitada ao viewport; scroll vertical fica em cada coluna */
@@ -173,4 +187,22 @@
     min-height: 0;
     max-height: 100%;
   }
+}
+
+.help-view-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-2xl);
+  margin-top: 80px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.help-view-placeholder h2 {
+  font-size: 1.5rem;
+  color: var(--text-primary);
+  margin: 0;
 }

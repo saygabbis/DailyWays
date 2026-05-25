@@ -194,7 +194,8 @@ export class RoomManager {
     ].includes(t)) {
       return true;
     }
-    if (t === 'UPDATE_CARD' && action?.payload?.updates && 'completed' in action.payload.updates) {
+    if (t === 'UPDATE_CARD') return true;
+    if (t === 'UPDATE_SUBTASK' || t === 'TOGGLE_SUBTASK' || t === 'ADD_SUBTASK' || t === 'DELETE_SUBTASK') {
       return true;
     }
     return false;

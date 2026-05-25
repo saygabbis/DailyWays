@@ -31,3 +31,19 @@ export function shouldDebounceBoardAction(action) {
   if (action?.type === 'UPDATE_SUBTASK') return true;
   return isTextOnlyCardUpdate(action);
 }
+
+/** Toda mutação de card/subtask deve ir ao Supabase (F5 e tabs sem collab). */
+export function shouldBackupBoardActionToSupabase(action) {
+  if (!action?.type) return false;
+  if (STRUCTURAL_ACTIONS.has(action.type)) return true;
+  if (action.type === 'UPDATE_CARD') return true;
+  if (
+    action.type === 'UPDATE_SUBTASK'
+    || action.type === 'TOGGLE_SUBTASK'
+    || action.type === 'ADD_SUBTASK'
+    || action.type === 'DELETE_SUBTASK'
+  ) {
+    return true;
+  }
+  return false;
+}

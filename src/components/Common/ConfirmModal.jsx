@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import './ConfirmModal.css';
 import { AlertTriangle, Info, X } from 'lucide-react';
 
@@ -9,9 +10,28 @@ export default function ConfirmModal({
     onCancel,
     confirmLabel = 'Confirmar',
     cancelLabel = 'Cancelar',
-    type = 'danger'
+    type = 'danger',
+    checkbox = null,
 }) {
+    const [checkboxChecked, setCheckboxChecked] = useState(false);
+
+    useEffect(() => {
+        if (show && checkbox) {
+            setCheckboxChecked(!!checkbox.defaultChecked);
+        }
+    }, [show, checkbox?.defaultChecked, checkbox?.label]);
+
     if (!show) return null;
+
+    const resolvedConfirmLabel = checkbox
+        ? (checkboxChecked
+            ? (checkbox.confirmLabelChecked ?? 'Eliminar para sempre')
+            : (checkbox.confirmLabelUnchecked ?? confirmLabel))
+        : confirmLabel;
+
+    const handleConfirm = () => {
+        onConfirm(checkbox ? checkboxChecked : undefined);
+    };
 
     return (
         <>
@@ -29,6 +49,16 @@ export default function ConfirmModal({
                 <div className="confirm-modal-content">
                     <h3>{title}</h3>
                     <p>{message}</p>
+                    {checkbox?.label && (
+                        <label className="confirm-modal-checkbox">
+                            <input
+                                type="checkbox"
+                                checked={checkboxChecked}
+                                onChange={(e) => setCheckboxChecked(e.target.checked)}
+                            />
+                            <span>{checkbox.label}</span>
+                        </label>
+                    )}
                 </div>
 
                 <div className="confirm-modal-actions">
@@ -37,9 +67,9 @@ export default function ConfirmModal({
                     </button>
                     <button
                         className={`btn ${type === 'danger' ? 'btn-danger' : 'btn-primary'}`}
-                        onClick={onConfirm}
+                        onClick={handleConfirm}
                     >
-                        {confirmLabel}
+                        {resolvedConfirmLabel}
                     </button>
                 </div>
             </div>

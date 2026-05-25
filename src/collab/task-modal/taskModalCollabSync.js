@@ -25,6 +25,8 @@ export const MODAL_STRUCTURE_FIELDS = new Set([
   'recurrenceRule',
   'isAllDay',
   'myDay',
+  'dayCategory',
+  'estimatedMinutes',
   'labels',
   'cardColor',
 ]);

@@ -1,102 +1,80 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Bell } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Bell, Check, X } from 'lucide-react';
 import './Notification.css';
-import { useAuth } from '../../context/AuthContext';
-import { fetchMyInvitations } from '../../services/boardService';
 
-export default function NotificationDropdown({ onClose, onOpenInvitations }) {
-    const { user } = useAuth();
-
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [invitations, setInvitations] = useState([]);
-    const [readIds, setReadIds] = useState(() => new Set());
-
-    const readKey = useMemo(() => (user?.id ? `dailyways_invite_read_${user.id}` : null), [user?.id]);
-
-    const loadReadIds = () => {
-        if (!readKey) return new Set();
-        try {
-            const raw = window.localStorage.getItem(readKey);
-            const arr = raw ? JSON.parse(raw) : [];
-            return new Set(Array.isArray(arr) ? arr : []);
-        } catch (_) {
-            return new Set();
-        }
-    };
+export default function NotificationDropdown({
+    anchorRef,
+    open,
+    onClose,
+    notifications,
+    loading,
+    unreadCount,
+    onMarkAllRead,
+    onItemClick,
+    onAccept,
+    onDecline,
+}) {
+    const [position, setPosition] = useState({ top: 0, right: 16 });
 
     useEffect(() => {
-        setReadIds(loadReadIds());
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [readKey]);
+        if (!open || !anchorRef?.current) return;
 
-    const loadInvites = async () => {
-        if (!user?.id) return;
-        setLoading(true);
-        setError('');
-        try {
-            const { data, error: err } = await fetchMyInvitations();
-            if (err) setError(err || 'Erro ao carregar convites.');
-            setInvitations(data || []);
-        } catch (e) {
-            setError(e?.message || 'Erro ao carregar convites.');
-        } finally {
-            setLoading(false);
-        }
-    };
+        const updatePosition = () => {
+            const rect = anchorRef.current.getBoundingClientRect();
+            setPosition({
+                top: rect.bottom + 8,
+                right: Math.max(12, window.innerWidth - rect.right),
+            });
+        };
+
+        updatePosition();
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+
+        return () => {
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [open, anchorRef]);
 
     useEffect(() => {
-        loadInvites();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id]);
+        if (!open) return;
+        const onKey = (e) => {
+            if (e.key === 'Escape') onClose?.();
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [open, onClose]);
 
-    const notifications = useMemo(() => {
-        return (invitations || []).map((inv) => ({
-            id: inv.id,
-            type: 'invitation',
-            avatar: (inv.boardEmoji || '📋')[0],
-            user: inv.inviteeEmail || 'Convite',
-            text: 'foi convidado para',
-            target: inv.boardTitle,
-            time: inv.createdAt ? new Date(inv.createdAt).toLocaleString() : '',
-            read: readIds.has(inv.id),
-        }));
-    }, [invitations, readIds]);
+    if (!open) return null;
 
-    const persistReadIds = (nextSet) => {
-        if (!readKey) return;
-        try {
-            window.localStorage.setItem(readKey, JSON.stringify(Array.from(nextSet)));
-        } catch (_) { }
-    };
-
-    const markAllRead = () => {
-        const next = new Set(notifications.map(n => n.id));
-        setReadIds(next);
-        persistReadIds(next);
-    };
-
-    const handleClick = (id) => {
-        setReadIds((prev) => {
-            const next = new Set(prev);
-            next.add(id);
-            persistReadIds(next);
-            return next;
-        });
-
-        // Abre diretamente a seção de convites do painel de configurações.
-        if (typeof onOpenInvitations === 'function') onOpenInvitations();
-    };
-
-    return (
+    return createPortal(
         <>
             <div className="notification-backdrop" onClick={onClose} />
-            <div className="notification-dropdown animate-pop-in">
+            <div
+                className="notification-dropdown animate-pop-in"
+                style={{
+                    top: position.top,
+                    right: position.right,
+                }}
+                role="dialog"
+                aria-label="Notificações"
+            >
                 <div className="notification-header">
-                    <h3>Notificações</h3>
-                    <button className="btn-text btn-xs" onClick={markAllRead}>
-                        Marcar todas como lidas
-                    </button>
+                    <div>
+                        <h3>Notificações</h3>
+                        {unreadCount > 0 && (
+                            <span className="notification-header-count">
+                                {unreadCount} nova{unreadCount > 1 ? 's' : ''}
+                            </span>
+                        )}
+                    </div>
+                    {notifications.length > 0 && (
+                        <button type="button" className="btn-text btn-xs" onClick={onMarkAllRead}>
+                            Marcar todas como lidas
+                        </button>
+                    )}
                 </div>
 
                 <div className="notification-list">
@@ -106,41 +84,65 @@ export default function NotificationDropdown({ onClose, onOpenInvitations }) {
                         </div>
                     )}
 
-                    {!loading && error && (
-                        <div className="notification-empty" style={{ color: 'var(--danger)' }}>
-                            {error}
-                        </div>
-                    )}
-
-                    {!loading && !error && notifications.length === 0 && (
+                    {!loading && notifications.length === 0 && (
                         <div className="notification-empty">
                             <Bell size={24} />
                             <p>Nenhuma notificação nova</p>
                         </div>
                     )}
 
-                    {!loading && !error && notifications.length > 0 && (
-                        notifications.map(n => (
-                            <div
-                                key={n.id}
-                                className={`notification-item ${!n.read ? 'unread' : ''}`}
-                                onClick={() => handleClick(n.id)}
-                            >
+                    {!loading && notifications.map((n) => (
+                        <div
+                            key={n.id}
+                            className={`notification-item ${!n.read ? 'unread' : ''}`}
+                        >
+                            <div className="notification-item-main" onClick={() => onItemClick?.(n.id)}>
                                 <div className={`notification-avatar ${n.type}`}>
-                                    {n.avatar}
+                                    {n.kind === 'space' ? (n.spaceEmoji || '🌌') : (n.boardEmoji || '📋')}
                                 </div>
                                 <div className="notification-content">
                                     <p>
-                                        <span className="notification-user">{n.user}</span> {n.text} <span className="notification-target">{n.target}</span>
+                                        Convite para {n.kind === 'space' ? 'o space' : 'o board'}{' '}
+                                        <span className="notification-target">
+                                            {n.kind === 'space' ? n.spaceTitle : n.boardTitle}
+                                        </span>
                                     </p>
+                                    <span className="notification-meta">
+                                        Acesso como {n.role === 'editor' ? 'Editor' : 'Leitor'}
+                                    </span>
                                     <span className="notification-time">{n.time}</span>
                                 </div>
                                 {!n.read && <div className="notification-dot" />}
                             </div>
-                        ))
-                    )}
+                            <div className="notification-item-actions">
+                                <button
+                                    type="button"
+                                    className="notification-action-btn accept"
+                                    title="Aceitar"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onAccept?.(n);
+                                    }}
+                                >
+                                    <Check size={14} />
+                                </button>
+                                <button
+                                    type="button"
+                                    className="notification-action-btn decline"
+                                    title="Recusar"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDecline?.(n);
+                                    }}
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
-        </>
+        </>,
+        document.body
     );
 }

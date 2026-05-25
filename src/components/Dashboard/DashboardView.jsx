@@ -13,7 +13,7 @@ const CIRCLE_R = 52;
 const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_R;
 
 export default function DashboardView() {
-    const { state, getMyDayCards } = useApp();
+    const { state, getMyDayCards, getMyDayCardsAll } = useApp();
     const [animatedRate, setAnimatedRate] = useState(0);
     const hasAnimated = useRef(false);
 
@@ -54,8 +54,9 @@ export default function DashboardView() {
     const plannedCount = allCardsWithList.filter(c => !isCardInCompletionList(c) && parseCardDate(c.dueDate)).length;
     const noDueDateCount = allCardsWithList.filter(c => !isCardInCompletionList(c) && !parseCardDate(c.dueDate)).length;
 
-    const myDayCount = getMyDayCards().length;
-    const myDayCompleted = getMyDayCards().filter(c => c.completed).length;
+    const myDayPending = getMyDayCards().length;
+    const myDayAll = getMyDayCardsAll();
+    const myDayCompleted = myDayAll.filter(c => c.completed || c.isCompletionList).length;
 
     const recentlyCompleted = allCardsWithList
         .filter(isCardInCompletionList)
@@ -142,7 +143,7 @@ export default function DashboardView() {
                             <Clock size={24} color="white" />
                         </div>
                         <div className="stat-info">
-                            <span className="stat-value">{myDayCompleted}/{myDayCount}</span>
+                            <span className="stat-value">{myDayCompleted}/{myDayAll.length}</span>
                             <span className="stat-label">Meu Dia</span>
                         </div>
                     </div>

@@ -1,0 +1,29 @@
+/* Herda cor/hover de .header-icon-btn; só destaca quando o dia está completo */
+.header-streak-btn--active {
+    color: #f97316;
+}
+
+.header-streak-btn--active:hover {
+    color: #ea580c;
+}
+
+.header-streak-count {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: 999px;
+    background: color-mix(in srgb, #f97316 90%, #000);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 14px;
+    text-align: center;
+}
+
+.header-streak-btn--loading {
+    opacity: 0.5;
+    pointer-events: none;
+}

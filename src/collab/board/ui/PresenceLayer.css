@@ -32,6 +32,17 @@
   z-index: calc(var(--z-modal) + 5);
 }
 
+/* DEV: remover com boardDevPrank */
+.collab-presence-cursor--dev-prank {
+  pointer-events: auto;
+  cursor: grab;
+  z-index: 200;
+}
+
+.collab-presence-cursor--dev-prank:active {
+  cursor: grabbing;
+}
+
 .collab-presence-cursor {
   will-change: transform;
   position: absolute;
@@ -54,10 +65,11 @@
   transform-origin: 2px 2px;
 }
 
-/* Hover remoto em botões/campos (board + modal) */
+/* Hover remoto em botões/campos (board + modal) — sem transição (evita flash branco → cor) */
 .presence-remote-hover-target {
   outline: 2px solid color-mix(in srgb, var(--presence-color) 70%, transparent);
   outline-offset: 2px;
+  transition: none !important;
 }
 
 .collab-presence-cursor--grabbing .collab-presence-pointer {

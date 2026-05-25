@@ -1,15 +1,29 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../../../context/AppContext';
+import { useAuth } from '../../../context/AuthContext.jsx';
 import { useCollab } from '../../core/CollabContext.jsx';
+import {
+  recordBoardHistory,
+  commitPendingTextHistory,
+  flushAllPendingTextHistory,
+  registerTextHistoryFlush,
+} from '../history/boardHistoryController.js';
+import {
+  historyDebounceKey,
+  stashTextHistoryPending,
+} from '../history/boardHistoryCoalesce.js';
+import { useBoardHistoryStore } from '../history/boardHistoryStore.js';
+import { ensureBoardHistoryHydrated } from '../history/boardHistorySync.js';
 import { submitOp } from '../../core/collabClient.js';
 import { isCollabEnabled } from '../../core/collabConfig.js';
 import { uuidv4 } from '../../../utils/uuid';
 import { useToast } from '../../../context/ToastContext.jsx';
 import { toastCollabError } from '../../core/collabToast.js';
 import {
-  isImmediateBoardAction,
   shouldDebounceBoardAction,
+  shouldBackupBoardActionToSupabase,
 } from './boardActionPriority.js';
+import { isBoardPrankFrozen } from '../dev/boardDevPrank.js';
 
 /**
  * Padrão único de mutação de board:
@@ -27,15 +41,40 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const BoardCollabContext = createContext(null);
 
 export function BoardCollabProvider({ children }) {
-  const { dispatch, persistBoard } = useApp();
+  const { dispatch, persistBoard, flushBoardPersist, setCollabBoardRoomLive, state } = useApp();
+  const { user } = useAuth();
   const collab = useCollab();
+  const boardsRef = useRef(state.boards);
+  boardsRef.current = state.boards;
   const { addToast } = useToast();
   const [activeBoardId, setActiveBoardId] = useState(null);
   const [roomReadyMap, setRoomReadyMap] = useState({});
+  const roomReadyMapRef = useRef(roomReadyMap);
+  roomReadyMapRef.current = roomReadyMap;
   const debounceTimers = useRef(new Map());
   const debouncedActionsRef = useRef(new Map());
   const roomReadyRef = useRef({});
   const pendingOpsRef = useRef({});
+  const textHistoryPendingRef = useRef(new Map());
+  const textHistoryCommitTimers = useRef(new Map());
+
+  useEffect(() => {
+    useBoardHistoryStore.getState().initForUser(user?.id ?? null);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !activeBoardId) return;
+    let cancelled = false;
+    (async () => {
+      await ensureBoardHistoryHydrated(user.id, activeBoardId);
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, activeBoardId]);
+
+  const getBoardSnapshot = useCallback((boardId) => {
+    const b = boardsRef.current.find((x) => x.id === boardId);
+    return b ? JSON.parse(JSON.stringify(b)) : null;
+  }, []);
 
   const setCollabPending = useCallback((boardId, pending) => {
     if (!boardId) return;
@@ -59,8 +98,8 @@ export function BoardCollabProvider({ children }) {
 
   const isBoardRoomReady = useCallback((boardId) => {
     if (!isCollabEnabled() || !boardId) return true;
-    return Boolean(roomReadyMap[boardId]);
-  }, [roomReadyMap]);
+    return Boolean(roomReadyMapRef.current[boardId]);
+  }, []);
 
   const submitActionToServer = useCallback(async (boardId, action) => {
     const socket = collab?.socket;
@@ -80,7 +119,7 @@ export function BoardCollabProvider({ children }) {
         try {
           if (!socket?.connected) throw new Error('Socket not connected');
           await submitOp(socket, opPayload);
-          if (isImmediateBoardAction(action)) {
+          if (shouldBackupBoardActionToSupabase(action)) {
             persistBoard(boardId, { force: true, ensureSave: true });
           }
           return true;
@@ -134,33 +173,44 @@ export function BoardCollabProvider({ children }) {
 
   const setBoardRoomReady = useCallback((boardId, ready) => {
     if (!boardId) return;
-    setRoomReadyMap((prev) => ({ ...prev, [boardId]: !!ready }));
+    const nextReady = !!ready;
+    setRoomReadyMap((prev) => {
+      if (!!prev[boardId] === nextReady) return prev;
+      return { ...prev, [boardId]: nextReady };
+    });
     if (ready) {
       roomReadyRef.current[boardId] = true;
+      setCollabBoardRoomLive(true);
       flushPendingOps(boardId);
     } else {
       delete roomReadyRef.current[boardId];
+      setCollabBoardRoomLive(false);
       setCollabSaving(boardId, false);
     }
-  }, [flushPendingOps, setCollabSaving]);
+  }, [flushPendingOps, setCollabSaving, setCollabBoardRoomLive]);
 
   const sendBoardOp = useCallback((boardId, action) => {
-    if (!boardId || !action?.type) return;
+    if (!boardId || !action?.type) return Promise.resolve(false);
 
-    if (!collab?.socket?.connected) return;
+    if (!collab?.socket?.connected) return Promise.resolve(false);
 
     if (!roomReadyRef.current[boardId]) {
       if (!pendingOpsRef.current[boardId]) pendingOpsRef.current[boardId] = [];
       pendingOpsRef.current[boardId].push(action);
       syncPendingFlag(boardId);
-      return;
+      return Promise.resolve(false);
     }
 
-    submitActionToServer(boardId, action);
+    return submitActionToServer(boardId, action);
   }, [collab?.socket, submitActionToServer, syncPendingFlag]);
 
   useEffect(() => {
     const flushDebounced = () => {
+      for (const timer of textHistoryCommitTimers.current.values()) {
+        clearTimeout(timer);
+      }
+      textHistoryCommitTimers.current.clear();
+      flushAllPendingTextHistory(textHistoryPendingRef.current);
       for (const [key, action] of debouncedActionsRef.current.entries()) {
         const boardId = key.split(':')[0];
         const timer = debounceTimers.current.get(key);
@@ -182,13 +232,52 @@ export function BoardCollabProvider({ children }) {
     };
   }, [sendBoardOp]);
 
-  const emitBoardAction = useCallback((boardId, action) => {
-    if (!boardId || !action?.type) return;
+  const commitTextHistoryForKey = useCallback((boardId, key) => {
+    const pending = textHistoryPendingRef.current.get(key);
+    if (!pending) return;
+    commitPendingTextHistory(boardId, pending);
+    textHistoryPendingRef.current.delete(key);
+    const timer = textHistoryCommitTimers.current.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      textHistoryCommitTimers.current.delete(key);
+    }
+  }, []);
+
+  const scheduleTextHistoryCommit = useCallback((boardId, key) => {
+    const existing = textHistoryCommitTimers.current.get(key);
+    if (existing) clearTimeout(existing);
+    textHistoryCommitTimers.current.set(
+      key,
+      setTimeout(() => {
+        textHistoryCommitTimers.current.delete(key);
+        commitTextHistoryForKey(boardId, key);
+      }, TEXT_DEBOUNCE_MS),
+    );
+  }, [commitTextHistoryForKey]);
+
+  useEffect(() => {
+    const flushTextHistoryForBoard = (boardId) => {
+      if (!boardId) return;
+      for (const [key, timer] of textHistoryCommitTimers.current.entries()) {
+        if (!key.startsWith(`${boardId}:`)) continue;
+        clearTimeout(timer);
+        textHistoryCommitTimers.current.delete(key);
+        commitTextHistoryForKey(boardId, key);
+      }
+      flushAllPendingTextHistory(textHistoryPendingRef.current, boardId);
+    };
+    registerTextHistoryFlush(flushTextHistoryForBoard);
+    return () => registerTextHistoryFlush(null);
+  }, [commitTextHistoryForKey]);
+
+  const emitBoardAction = useCallback((boardId, action, options = {}) => {
+    if (!boardId || !action?.type) return Promise.resolve();
 
     const send = () => sendBoardOp(boardId, action);
 
-    if (shouldDebounceBoardAction(action)) {
-      const key = `${boardId}:${action.type}:${action.payload?.cardId || ''}:${action.payload?.listId || ''}`;
+    if (shouldDebounceBoardAction(action) && !options.skipHistory) {
+      const key = historyDebounceKey(boardId, action);
       setCollabPending(boardId, true);
       debouncedActionsRef.current.set(key, action);
       if (debounceTimers.current.has(key)) clearTimeout(debounceTimers.current.get(key));
@@ -200,14 +289,33 @@ export function BoardCollabProvider({ children }) {
           send();
         }, TEXT_DEBOUNCE_MS),
       );
-      return;
+      return Promise.resolve();
     }
 
-    send();
+    return send();
   }, [sendBoardOp, setCollabPending]);
 
-  const collabDispatchForBoard = useCallback((boardId, action) => {
+  const collabDispatchForBoard = useCallback(async (boardId, action, options = {}) => {
     if (!action?.type || !boardId) return;
+    if (isBoardPrankFrozen()) return;
+
+    const textDebounced = shouldDebounceBoardAction(action) && !options.skipHistory;
+
+    if (!options.skipHistory) {
+      if (textDebounced) {
+        const key = historyDebounceKey(boardId, action);
+        stashTextHistoryPending(
+          textHistoryPendingRef.current,
+          boardId,
+          getBoardSnapshot(boardId),
+          action,
+        );
+        scheduleTextHistoryCommit(boardId, key);
+      } else {
+        flushAllPendingTextHistory(textHistoryPendingRef.current, boardId);
+        recordBoardHistory(boardId, getBoardSnapshot(boardId), action);
+      }
+    }
 
     dispatch(action);
 
@@ -218,22 +326,54 @@ export function BoardCollabProvider({ children }) {
       && activeBoardId === boardId
       && !live;
 
-    if (collabOn && collab?.connected) {
-      if (live) {
-        emitBoardAction(boardId, action);
+    const collabConnected = collabOn && collab?.connected;
+    const offRoom = collabConnected && !live;
+
+    // Socket só com sala do board ativa (vista Board). Fora da sala → só Supabase (sem toast).
+    if (collabConnected && live) {
+      const sendOp = async () => {
+        if (shouldDebounceBoardAction(action) && !options.skipHistory) {
+          if (options.awaitCollab) {
+            await emitBoardAction(boardId, action, options);
+          } else {
+            emitBoardAction(boardId, action, options);
+          }
+          return;
+        }
+        if (options.awaitCollab) {
+          await submitActionToServer(boardId, action);
+        } else {
+          emitBoardAction(boardId, action, options);
+        }
+      };
+
+      if (options.awaitCollab) {
+        await sendOp();
       } else if (joiningActiveBoard) {
         if (!pendingOpsRef.current[boardId]) pendingOpsRef.current[boardId] = [];
         pendingOpsRef.current[boardId].push(action);
         syncPendingFlag(boardId);
+      } else {
+        sendOp().catch((err) => console.warn('[boardCollab] op failed', err?.message));
       }
+    } else if (collabConnected && joiningActiveBoard) {
+      if (!pendingOpsRef.current[boardId]) pendingOpsRef.current[boardId] = [];
+      pendingOpsRef.current[boardId].push(action);
+      syncPendingFlag(boardId);
     }
 
-    if (live && isImmediateBoardAction(action)) {
-      persistBoard(boardId, { force: true, ensureSave: true });
-    } else if (!live && !joiningActiveBoard) {
-      persistBoard(boardId, { force: true, ensureSave: true });
-    } else if (live && shouldDebounceBoardAction(action)) {
-      persistBoard(boardId, { force: false });
+    const needsDbBackup = !options.deferPersist && (
+      options.forcePersist
+      || (offRoom && (options.skipHistory || shouldBackupBoardActionToSupabase(action)))
+      || (!collabConnected && !options.skipHistory && shouldBackupBoardActionToSupabase(action))
+    );
+
+    if (needsDbBackup) {
+      if (options.awaitPersist && flushBoardPersist) {
+        await flushBoardPersist(boardId);
+      } else {
+        persistBoard(boardId, { force: true, ensureSave: true });
+      }
     }
   }, [
     dispatch,
@@ -243,9 +383,12 @@ export function BoardCollabProvider({ children }) {
     persistBoard,
     isBoardRoomLive,
     syncPendingFlag,
+    getBoardSnapshot,
+    flushBoardPersist,
+    scheduleTextHistoryCommit,
   ]);
 
-  const collabDispatch = useCallback((action, explicitBoardId) => {
+  const collabDispatch = useCallback((action, explicitBoardId, options) => {
     const boardId =
       explicitBoardId
       || action?.payload?.boardId
@@ -254,7 +397,7 @@ export function BoardCollabProvider({ children }) {
       dispatch(action);
       return;
     }
-    collabDispatchForBoard(boardId, action);
+    collabDispatchForBoard(boardId, action, options);
   }, [activeBoardId, collabDispatchForBoard, dispatch]);
 
   const value = useMemo(() => ({
@@ -294,11 +437,11 @@ export function useBoardCollabDispatch(boardId) {
   const resolvedBoardId = boardId ?? ctx?.activeBoardId;
 
   const collabDispatch = useCallback(
-    (action) => {
+    (action, options) => {
       if (ctx && resolvedBoardId) {
-        ctx.collabDispatchForBoard(resolvedBoardId, action);
+        ctx.collabDispatchForBoard(resolvedBoardId, action, options);
       } else if (ctx) {
-        ctx.collabDispatch(action);
+        ctx.collabDispatch(action, resolvedBoardId, options);
       } else {
         dispatch(action);
       }

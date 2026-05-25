@@ -14,6 +14,7 @@ import {
   pushPresenceFields as pushFields,
 } from './presenceBridge.js';
 import { getGlobalJoinedBoardId } from '../sync/boardCollabSession.js';
+import { isBoardPrankFrozen, isBoardPrankHeld } from '../dev/boardDevPrank.js';
 import { boardScreenPointFromContent } from '../coords/scrollContentCoords.js';
 
 const CURSOR_EMIT_MS = 16;
@@ -53,6 +54,7 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
   }, [roomId, user?.id, profile?.name, profile?.photo_url, profile?.presence_color]);
 
   const canEmitPresence = useCallback(() => {
+    if (isBoardPrankFrozen() || isBoardPrankHeld()) return false;
     if (!roomId || !collab?.socket?.connected) return false;
     const joined = getGlobalJoinedBoardId();
     if (joined && joined !== roomId) return false;
@@ -180,16 +182,19 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
     mergeFields({ selectedNodeIds: selectedNodeIds || [] });
   }, [mergeFields]);
 
-  const setHoverTarget = useCallback(({ cardId = null, listId = null } = {}) => {
+  const setHoverTarget = useCallback(({ cardId = null, listId = null, uiKey = null } = {}) => {
     mergeFields({
       hoverCardId: cardId,
       hoverListId: listId,
+      hoverUiKey: uiKey,
     });
-  }, [mergeFields]);
+    scheduleMetaSend();
+  }, [mergeFields, scheduleMetaSend]);
 
   const clearHoverTarget = useCallback(() => {
-    mergeFields({ hoverCardId: null, hoverListId: null });
-  }, [mergeFields]);
+    mergeFields({ hoverCardId: null, hoverListId: null, hoverUiKey: null });
+    scheduleMetaSend();
+  }, [mergeFields, scheduleMetaSend]);
 
   const setDragTarget = useCallback(({ cardId = null, listId = null } = {}) => {
     mergeFields({

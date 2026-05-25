@@ -1,4 +1,6 @@
 import { supabase } from './supabaseClient';
+import { normalizeInviteIdentifier } from '../utils/inviteIdentifier.js';
+import { formatInviteError } from '../utils/inviteErrors.js';
 
 /**
  * Formato esperado de um board (como no AppContext):
@@ -54,6 +56,8 @@ function cardToRow(card, listId, position = 0) {
     is_all_day: card.isAllDay ?? true,
     recurrence_rule: card.recurrenceRule ?? null,
     my_day: card.myDay ?? false,
+    day_category: card.dayCategory ?? null,
+    estimated_minutes: card.estimatedMinutes ?? null,
     labels: Array.isArray(card.labels) ? card.labels : [],
     color: card.color ?? null,
     cover_attachment_id: card.coverAttachmentId ?? null,
@@ -102,6 +106,8 @@ function rowToCard(row, subtasks = []) {
     isAllDay: row.is_all_day ?? true,
     recurrenceRule: row.recurrence_rule ?? null,
     myDay: row.my_day ?? false,
+    dayCategory: row.day_category ?? null,
+    estimatedMinutes: row.estimated_minutes ?? null,
     color: row.color ?? null,
     coverAttachmentId: row.cover_attachment_id ?? null,
     subtasks: subtasks.map(s => ({
@@ -397,24 +403,146 @@ export async function fetchBoardMembers(boardId) {
 }
 
 /**
- * Convida alguém para um board por e-mail, com role 'editor' ou 'reader'.
- * Usa a RPC invite_board_member definida nas migrations.
+ * Convida alguém para um board por @username ou e-mail (utilizador tem de existir no BD).
+ * Usa a RPC invite_board_member (p_email aceita identifier).
  */
-export async function inviteBoardMember(boardId, email, role = 'reader') {
-  if (!boardId || !email) {
-    return { success: false, error: 'Board ou e-mail inválido.' };
+export async function inviteBoardMember(boardId, identifier, role = 'reader') {
+  if (!boardId || !identifier?.trim()) {
+    return { success: false, error: 'Indica um @username ou e-mail válido.' };
   }
   const normalizedRole = role === 'editor' ? 'editor' : 'reader';
   const { error } = await supabase.rpc('invite_board_member', {
     p_board_id: boardId,
-    p_email: email,
+    p_email: normalizeInviteIdentifier(identifier),
     p_role: normalizedRole,
   });
   if (error) {
     console.error('[boardService] inviteBoardMember error', error);
-    return { success: false, error: error.message || 'Erro ao enviar convite.' };
+    return { success: false, error: formatInviteError(error.message) };
   }
   return { success: true };
+}
+
+const INVITE_BASE_SELECT = 'id, board_id, inviter_id, invitee_email, invitee_user_id, role, status, created_at';
+const SPACE_INVITE_BASE_SELECT = 'id, space_id, inviter_id, invitee_email, invitee_user_id, role, status, created_at';
+
+function mapBoardInviteRow(row) {
+  return {
+    id: row.id,
+    kind: 'board',
+    boardId: row.board_id,
+    spaceId: null,
+    role: row.role,
+    status: row.status,
+    inviteeEmail: row.invitee_email,
+    inviterId: row.inviter_id,
+    createdAt: row.created_at,
+    boardTitle: 'Board',
+    boardEmoji: '📋',
+    spaceTitle: null,
+    spaceEmoji: null,
+  };
+}
+
+function mapSpaceInviteRow(row) {
+  return {
+    id: row.id,
+    kind: 'space',
+    boardId: null,
+    spaceId: row.space_id,
+    role: row.role,
+    status: row.status,
+    inviteeEmail: row.invitee_email,
+    inviterId: row.inviter_id,
+    createdAt: row.created_at,
+    boardTitle: null,
+    boardEmoji: null,
+    spaceTitle: 'Space',
+    spaceEmoji: '🌌',
+  };
+}
+
+async function fetchInviteRowsForUser(table, baseSelect, statusFilter, user, emailLower) {
+  const isPending = statusFilter === 'pending';
+  const statusClause = Array.isArray(statusFilter)
+    ? (q) => q.in('status', statusFilter)
+    : (q) => q.eq('status', statusFilter);
+
+  let q1 = statusClause(
+    supabase.from(table).select(baseSelect).eq('invitee_user_id', user.id),
+  );
+  let q2 = statusClause(
+    supabase.from(table).select(baseSelect).ilike('invitee_email', emailLower),
+  );
+
+  const isHistory = Array.isArray(statusFilter);
+  if (isHistory) {
+    q1 = q1.is('history_dismissed_at', null);
+    q2 = q2.is('history_dismissed_at', null);
+  }
+
+  let orderQ1 = q1;
+  let orderQ2 = q2;
+  if (!isPending) {
+    orderQ1 = q1.order('created_at', { ascending: false });
+    orderQ2 = q2.order('created_at', { ascending: false });
+  }
+
+  const [r1, r2] = await Promise.all([orderQ1, orderQ2]);
+  if (r1.error) return { data: [], error: r1.error };
+  if (r2.error) return { data: [], error: r2.error };
+
+  const unique = new Map();
+  for (const row of [...(r1.data || []), ...(r2.data || [])]) {
+    unique.set(row.id, row);
+  }
+  return { data: [...unique.values()], error: null };
+}
+
+async function enrichInvitations(items) {
+  if (!items.length) return items;
+
+  const boardIds = [...new Set(items.filter((i) => i.kind !== 'space').map((i) => i.boardId).filter(Boolean))];
+  const spaceIds = [...new Set(items.filter((i) => i.kind === 'space').map((i) => i.spaceId).filter(Boolean))];
+  const inviterIds = [...new Set(items.map((i) => i.inviterId).filter(Boolean))];
+
+  const boardMap = new Map();
+  const spaceMap = new Map();
+  const profileMap = new Map();
+
+  if (boardIds.length) {
+    const { data: boards } = await supabase.from('boards').select('id, title, emoji').in('id', boardIds);
+    for (const b of boards || []) boardMap.set(b.id, b);
+  }
+  if (spaceIds.length) {
+    const { data: spaces } = await supabase.from('spaces').select('id, title, emoji').in('id', spaceIds);
+    for (const s of spaces || []) spaceMap.set(s.id, s);
+  }
+  if (inviterIds.length) {
+    const { data: profiles } = await supabase.from('profiles').select('id, name, username').in('id', inviterIds);
+    for (const p of profiles || []) profileMap.set(p.id, p);
+  }
+
+  return items.map((inv) => {
+    const inviter = profileMap.get(inv.inviterId);
+    const inviterLabel = inviter?.name || inviter?.username || null;
+    if (inv.kind === 'space') {
+      const s = spaceMap.get(inv.spaceId);
+      return {
+        ...inv,
+        spaceTitle: s?.title || inv.spaceTitle,
+        spaceEmoji: s?.emoji || inv.spaceEmoji,
+        inviterLabel,
+      };
+    }
+    const b = boardMap.get(inv.boardId);
+    return {
+      ...inv,
+      boardTitle: b?.title || inv.boardTitle,
+      boardEmoji: b?.emoji || inv.boardEmoji,
+      inviterLabel,
+    };
+  });
 }
 
 /**
@@ -430,52 +558,84 @@ export async function fetchMyInvitations() {
     return { data: [], error: null };
   }
   const user = sessionData.session.user;
-
-  const baseSelect = 'id, board_id, inviter_id, invitee_email, invitee_user_id, role, status, created_at';
-
-  // Importante: evitamos `boards!inner` aqui porque o convidado ainda não está em `board_members` até aceitar.
-  // Assim garantimos que a lista de convites apareça mesmo antes do accept.
-  const q1 = supabase
-    .from('board_invitations')
-    .select(baseSelect)
-    .eq('status', 'pending')
-    .eq('invitee_user_id', user.id);
-
   const emailLower = (user?.email || '').toLowerCase();
-  const q2 = supabase
-    .from('board_invitations')
-    .select(baseSelect)
-    .eq('status', 'pending')
-    .ilike('invitee_email', emailLower);
 
-  const [r1, r2] = await Promise.all([q1, q2]);
-  const err1 = r1?.error ?? null;
-  const err2 = r2?.error ?? null;
+  const [boardRes, spaceRes] = await Promise.all([
+    fetchInviteRowsForUser('board_invitations', INVITE_BASE_SELECT, 'pending', user, emailLower),
+    fetchInviteRowsForUser('space_invitations', SPACE_INVITE_BASE_SELECT, 'pending', user, emailLower),
+  ]);
 
-  if (err1 || err2) {
-    console.error('[boardService] fetchMyInvitations error', err1 || err2);
-    return { data: [], error: (err1 || err2)?.message || 'Erro ao carregar convites.' };
+  if (boardRes.error || spaceRes.error) {
+    console.error('[boardService] fetchMyInvitations error', boardRes.error || spaceRes.error);
+    return { data: [], error: (boardRes.error || spaceRes.error)?.message || 'Erro ao carregar convites.' };
   }
 
-  const merged = [...(r1.data || []), ...(r2.data || [])];
-  const uniqueById = new Map();
-  for (const row of merged) uniqueById.set(row.id, row);
-
-  const invitations = Array.from(uniqueById.values()).map((row) => ({
-    id: row.id,
-    boardId: row.board_id,
-    role: row.role,
-    status: row.status,
-    inviteeEmail: row.invitee_email,
-    createdAt: row.created_at,
-    boardTitle: 'Board',
-    boardEmoji: '📋',
-  }));
-
-  return { data: invitations, error: null };
+  const raw = [
+    ...boardRes.data.map(mapBoardInviteRow),
+    ...spaceRes.data.map(mapSpaceInviteRow),
+  ];
+  const data = await enrichInvitations(raw);
+  return { data, error: null };
 }
 
-export async function acceptInvitation(inviteId) {
+/**
+ * Histórico de convites aceitos/recusados (auditoria).
+ */
+export async function fetchMyInvitationHistory({ limit = 100 } = {}) {
+  const {
+    data: sessionData,
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError || !sessionData?.session?.user) {
+    return { data: [], error: null };
+  }
+  const user = sessionData.session.user;
+  const emailLower = (user?.email || '').toLowerCase();
+  const statuses = ['accepted', 'declined'];
+
+  const [boardRes, spaceRes] = await Promise.all([
+    fetchInviteRowsForUser('board_invitations', INVITE_BASE_SELECT, statuses, user, emailLower),
+    fetchInviteRowsForUser('space_invitations', SPACE_INVITE_BASE_SELECT, statuses, user, emailLower),
+  ]);
+
+  if (boardRes.error) {
+    console.error('[boardService] fetchMyInvitationHistory board', boardRes.error);
+  }
+  if (spaceRes.error) {
+    console.error('[boardService] fetchMyInvitationHistory space', spaceRes.error);
+  }
+
+  const merged = [
+    ...(boardRes.data || []).map(mapBoardInviteRow),
+    ...(spaceRes.data || []).map(mapSpaceInviteRow),
+  ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  const sliced = merged.slice(0, limit);
+  const data = await enrichInvitations(sliced);
+  return {
+    data,
+    error: (boardRes.error || spaceRes.error)?.message || null,
+  };
+}
+
+/**
+ * Oculta do histórico do convidado os convites aceites/recusados (não apaga do owner).
+ */
+export async function clearMyInvitationHistory() {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !sessionData?.session?.user) {
+    return { success: false, error: 'Sessão inválida.' };
+  }
+
+  const { error } = await supabase.rpc('clear_my_invitation_history');
+  if (error) {
+    console.error('[boardService] clearMyInvitationHistory', error);
+    return { success: false, error: error.message || 'Erro ao limpar histórico.' };
+  }
+  return { success: true };
+}
+
+export async function acceptInvitation(inviteId, kind = 'board') {
   if (!inviteId) return { success: false, error: 'Convite inválido.' };
 
   const { data: sessData } = await supabase.auth.getSession();
@@ -483,29 +643,40 @@ export async function acceptInvitation(inviteId) {
 
   let inviteRow = null;
   try {
-    const { data: r, error: rErr } = await supabase
-      .from('board_invitations')
-      .select('id, board_id, invitee_user_id, status')
-      .eq('id', inviteId)
-      .maybeSingle();
-    if (!rErr && r) inviteRow = r;
+    if (kind === 'space') {
+      const { data: r, error: rErr } = await supabase
+        .from('space_invitations')
+        .select('id, space_id, invitee_user_id, status')
+        .eq('id', inviteId)
+        .maybeSingle();
+      if (!rErr && r) inviteRow = { board_id: r.space_id, ...r };
+    } else {
+      const { data: r, error: rErr } = await supabase
+        .from('board_invitations')
+        .select('id, board_id, invitee_user_id, status')
+        .eq('id', inviteId)
+        .maybeSingle();
+      if (!rErr && r) inviteRow = r;
+    }
   } catch (_) { }
 
-  const { error } = await supabase.rpc('accept_board_invitation', { p_invite_id: inviteId });
+  const rpcName = kind === 'space' ? 'accept_space_invitation' : 'accept_board_invitation';
+  const { error } = await supabase.rpc(rpcName, { p_invite_id: inviteId });
   if (error) {
     console.error('[boardService] acceptInvitation error', error);
     return { success: false, error: error.message || 'Erro ao aceitar convite.' };
   }
 
-  // Verifica se a linha em board_members apareceu para o invitee
   let membersCountAfter = null;
   try {
-    const boardId = inviteRow?.board_id;
-    if (boardId && userId) {
+    const resourceId = kind === 'space' ? inviteRow?.space_id : inviteRow?.board_id;
+    const table = kind === 'space' ? 'space_members' : 'board_members';
+    const idCol = kind === 'space' ? 'space_id' : 'board_id';
+    if (resourceId && userId) {
       const { data: bmRows, error: bmErr } = await supabase
-        .from('board_members')
+        .from(table)
         .select('user_id')
-        .eq('board_id', boardId)
+        .eq(idCol, resourceId)
         .eq('user_id', userId);
       if (!bmErr) membersCountAfter = (bmRows || []).length;
     }
@@ -514,10 +685,11 @@ export async function acceptInvitation(inviteId) {
   return { success: true };
 }
 
-export async function declineInvitation(inviteId) {
+export async function declineInvitation(inviteId, kind = 'board') {
   if (!inviteId) return { success: false, error: 'Convite inválido.' };
+  const table = kind === 'space' ? 'space_invitations' : 'board_invitations';
   const { error } = await supabase
-    .from('board_invitations')
+    .from(table)
     .update({ status: 'declined' })
     .eq('id', inviteId);
   if (error) {
@@ -687,6 +859,8 @@ export async function updateBoardFull(userId, board) {
             isAllDay: card.isAllDay ?? true,
             recurrenceRule: card.recurrenceRule ?? null,
             myDay: card.myDay ?? false,
+            dayCategory: card.dayCategory ?? null,
+            estimatedMinutes: card.estimatedMinutes ?? null,
             labels: Array.isArray(card.labels) ? card.labels : [],
             color: card.color ?? null,
             coverAttachmentId: card.coverAttachmentId ?? null,
@@ -810,5 +984,46 @@ export async function updateBoardsOrder(userId, payloads) {
     return { success: false, error: 'Erro ao salvar nova ordem dos boards.' };
   }
 
+  return { success: true };
+}
+
+/** Pilha undo/redo do board (por utilizador). */
+export async function fetchBoardUndoStack(boardId) {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !sessionData?.session?.user?.id) {
+    return { data: null, error: null };
+  }
+  const userId = sessionData.session.user.id;
+  const { data, error } = await supabase
+    .from('board_undo_stacks')
+    .select('stack')
+    .eq('user_id', userId)
+    .eq('board_id', boardId)
+    .maybeSingle();
+  if (error) {
+    console.error('[boardService] fetchBoardUndoStack', error);
+    return { data: null, error: error.message };
+  }
+  return { data: data?.stack ?? null, error: null };
+}
+
+export async function upsertBoardUndoStack(boardId, stack) {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !sessionData?.session?.user?.id) {
+    return { success: false, error: 'Sessão inválida.' };
+  }
+  const userId = sessionData.session.user.id;
+  const { error } = await supabase
+    .from('board_undo_stacks')
+    .upsert({
+      user_id: userId,
+      board_id: boardId,
+      stack,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,board_id' });
+  if (error) {
+    console.error('[boardService] upsertBoardUndoStack', error);
+    return { success: false, error: error.message };
+  }
   return { success: true };
 }

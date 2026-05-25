@@ -12,6 +12,37 @@
     padding: var(--space-xs);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--glass-border);
     backdrop-filter: blur(14px) saturate(1.08);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.context-menu--flyout {
+    min-width: 180px;
+    z-index: 100000;
+}
+
+.context-menu-scroll {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    max-height: min(70vh, calc(100dvh - 16px));
+    padding: 0;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--accent-primary) 35%, transparent) transparent;
+}
+
+.context-menu-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.context-menu-scroll::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--accent-primary) 40%, var(--border-color));
+    border-radius: var(--radius-full);
+}
+
+.context-menu-scroll::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 .context-menu-title {
@@ -83,6 +114,31 @@
     font-size: var(--font-size-xs);
     color: var(--text-secondary);
     font-weight: 600;
+}
+
+.context-menu-submenu-trigger {
+    position: relative;
+}
+
+.context-menu-item--submenu {
+    padding-right: var(--space-sm);
+}
+
+.context-menu-item--submenu.is-disabled,
+.context-menu-item--submenu:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.context-menu-chevron {
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+    margin-left: auto;
+}
+
+.context-menu-submenu-trigger:hover .context-menu-item--submenu,
+.context-menu-submenu-trigger:focus-within .context-menu-item--submenu {
+    background: var(--ctx-hover-bg, var(--bg-hover));
 }
 
 /* ── Scale In Animation ── */

@@ -10,6 +10,7 @@ import {
 import { verifyToken, canAccessSpace, canAccessBoard } from './auth.js';
 import { roomManager } from './roomManager.js';
 import { enrichPresenceFromProfile } from './presenceProfile.js';
+import { isDevPrankAttacker } from './devAccess.js';
 
 const MAX_OPS_PER_SEC = 120;
 const MAX_POSITION_OPS_PER_SEC = 300;
@@ -350,6 +351,74 @@ export function registerSocketHandlers(io) {
       );
       const peers = roomManager.setPresence(roomId, socket.data.userId, full, socket.id) || [];
       io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, presenceSyncPayload(roomId, peers));
+    });
+
+    /** DEV ONLY — prank no board (somente contas DEV). */
+    socket.on('dev:prank', async (payload, ack) => {
+      if (!(await isDevPrankAttacker(socket))) {
+        ack?.({ ok: false, error: 'forbidden' });
+        return;
+      }
+      const { boardId, targetUserId, action } = payload || {};
+      if (!boardId || !targetUserId || !['freeze', 'hold', 'release', 'drag'].includes(action)) {
+        ack?.({ ok: false, error: 'invalid' });
+        return;
+      }
+      const roomId = roomIdForBoard(boardId);
+      const room = roomManager.rooms.get(roomId);
+      if (!room) {
+        ack?.({ ok: false, error: 'room not loaded' });
+        return;
+      }
+      const socketIds = room.presenceSockets?.get(targetUserId);
+      if (!socketIds?.size) {
+        ack?.({ ok: false, error: 'user not in room' });
+        return;
+      }
+      if (action === 'hold' || action === 'release') {
+        const held = action === 'hold';
+        for (const sid of [...socketIds]) {
+          io.sockets.sockets.get(sid)?.emit('dev:prank-hold', { held, boardId });
+        }
+        ack?.({ ok: true });
+        return;
+      }
+      if (action === 'drag') {
+        const { x, y } = payload || {};
+        if (typeof x !== 'number' || typeof y !== 'number') {
+          ack?.({ ok: false, error: 'invalid cursor' });
+          return;
+        }
+        const cursorPayload = {
+          cursor: { x, y, space: 'board' },
+          onBoardSurface: true,
+          cursorModal: null,
+        };
+        for (const sid of [...socketIds]) {
+          io.sockets.sockets.get(sid)?.emit('dev:prank-cursor', { boardId, x, y });
+        }
+        const peers = roomManager.setPresence(roomId, targetUserId, cursorPayload) || [];
+        io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, presenceSyncPayload(roomId, peers));
+        ack?.({ ok: true });
+        return;
+      }
+      for (const sid of [...socketIds]) {
+        const targetSock = io.sockets.sockets.get(sid);
+        if (!targetSock) continue;
+        targetSock.emit('dev:prank-frozen', {
+          frozen: true,
+          message: 'Mouse congelado (dev prank). F5 para voltar.',
+        });
+        const prevRoom = targetSock.data.roomId;
+        if (prevRoom) {
+          targetSock.leave(prevRoom);
+          roomManager.untrackSocket(prevRoom, targetUserId, sid);
+          finalizeLeavePresence(io, prevRoom, targetUserId, sid);
+        }
+        targetSock.data.roomId = null;
+        targetSock.data.canWrite = false;
+      }
+      ack?.({ ok: true });
     });
 
     socket.on('disconnect', async () => {

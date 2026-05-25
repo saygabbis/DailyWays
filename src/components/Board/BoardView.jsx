@@ -26,6 +26,7 @@ import {
 import { publishBoardPresenceFocus } from '../../collab/board/presence/boardPresenceFocus.js';
 import { announcePresence } from '../../collab/board/presence/presenceBridge.js';
 import { useBoardPresenceHighlights } from '../../hooks/useBoardPresenceHighlights';
+import { BOARD_UI_HOVER, boardUiHoverProps } from '../../collab/board/presence/boardUiHover.js';
 import { useBoardCollabDispatch, useBoardCollabContext } from '../../collab/board/ops/BoardCollabContext.jsx';
 import { isCollabEnabled } from '../../collab/core/collabConfig.js';
 import { useCollabPresence } from '../../collab/board/presence/useCollabPresence.js';
@@ -39,62 +40,12 @@ import {
     cutCardsToClipboard,
     pasteCardsFromClipboard,
     bulkDeleteCards,
+    bulkDuplicateCards,
     bulkMoveCardsToIndex,
     resolveSelectedCards,
 } from './boardCardBulkOps';
 import './Board.css';
-
-/** Zona do menu de perfil (viewport): padding horizontal + respiro por baixo do dropdown (como na zona vermelha). */
-const PROFILE_MENU_ZONE_PAD_X = 8;
-const PROFILE_MENU_ZONE_PAD_BELOW = 16;
-/** Espaço visível entre o fundo do dropdown e o topo da toolbar (px). */
-const PROFILE_MENU_GAP_AFTER_ZONE = 20;
-
-/** Mínimos para interseção antes do layout medir a toolbar (offsetWidth 0 não pode virar largura 1px). */
-const TOOLBAR_SYNTHETIC_MIN_W = 300;
-const TOOLBAR_SYNTHETIC_MIN_H = 48;
-
-/**
- * Posição da toolbar em viewport para interseção com o menu de perfil (sintético).
- * `narrowLayout`: canto inferior direito do board (mobile); senão canto superior direito (desktop).
- */
-function getToolbarSyntheticViewportRect(boardRect, toolbarPos, toolbarW, toolbarH, narrowLayout) {
-    if (toolbarPos != null) {
-        const w = Math.max(toolbarW || 0, 1);
-        const h = Math.max(toolbarH || 0, 1);
-        return {
-            left: boardRect.left + toolbarPos.x,
-            top: boardRect.top + toolbarPos.y,
-            right: boardRect.left + toolbarPos.x + w,
-            bottom: boardRect.top + toolbarPos.y + h,
-        };
-    }
-    const w = Math.max(toolbarW || 0, TOOLBAR_SYNTHETIC_MIN_W);
-    const h = Math.max(toolbarH || 0, TOOLBAR_SYNTHETIC_MIN_H);
-    if (narrowLayout) {
-        const pad = 12;
-        const right = boardRect.right - pad;
-        const bottom = boardRect.bottom - pad;
-        return {
-            left: right - w,
-            top: bottom - h,
-            right,
-            bottom,
-        };
-    }
-    const right = boardRect.right - 20;
-    const top = boardRect.top + 20;
-    return {
-        left: right - w,
-        top,
-        right,
-        bottom: top + h,
-    };
-}
-
-function rectsIntersect(a, b) {
-    return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
-}
+import { computeProfileMenuAvoidance } from './boardToolbarProfileAvoid';
 
 function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false }, ref) {
     const { state, getActiveBoard, dispatch, isSavingBoard, showBoardToolbar, profileMenuOpen, showConfirm } = useApp();
@@ -153,6 +104,10 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
     const editorsByCardId = useMergedBoardEditors(focusedCardId, board?.id);
     const boardCollab = useBoardCollabContext();
     const { collabDispatch, connected: collabConnected } = useBoardCollabDispatch(board?.id);
+    const getBoardSnapshot = useCallback((boardId) => {
+        const b = state.boards.find((x) => x.id === boardId);
+        return b ? JSON.parse(JSON.stringify(b)) : null;
+    }, [state.boards]);
     const collabHydrating = Boolean(
         isCollabEnabled()
         && board?.id
@@ -258,7 +213,7 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         return () => cancelAnimationFrame(raf);
     }, [board?.id, collab?.socket, collab?.connected, user?.id, profile]);
 
-    const { hoverByCardId, hoverByListId, remoteDrags, remoteListDrags } = useBoardPresenceHighlights();
+    const { hoverByCardId, hoverByListId, hoverByUiKey, remoteDrags, remoteListDrags } = useBoardPresenceHighlights();
     const remoteDraggingCardIds = useMemo(
         () => new Set(remoteDrags.map((d) => d.cardId)),
         [remoteDrags],
@@ -476,6 +431,7 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
                 cardId,
                 getActiveBoard,
                 collabDispatch,
+                getBoardSnapshot,
             );
             return;
         }
@@ -499,7 +455,7 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         });
 
         if (destList?.isCompletionList && movedCard) {
-            const allSubtasksDone = movedCard.subtasks?.every(st => st.done);
+            const allSubtasksDone = movedCard.subtasks?.every((st) => st.done);
             if (!movedCard.completed || !allSubtasksDone) {
                 collabDispatch({
                     type: 'UPDATE_CARD',
@@ -509,7 +465,7 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
                         cardId: movedCard.id,
                         updates: {
                             completed: true,
-                            subtasks: (movedCard.subtasks || []).map(st => ({ ...st, done: true })),
+                            subtasks: (movedCard.subtasks || []).map((st) => ({ ...st, done: true })),
                         },
                     },
                 });
@@ -603,65 +559,80 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         };
     }, [isDragging, handleToolbarPointerUpGlobal]);
 
-    const [profileMenuAvoidMinTop, setProfileMenuAvoidMinTop] = useState(null);
+    /** Deslocamento temporário (viewport px) — não altera toolbarPos; zera ao fechar o menu. */
+    const [profileAvoidTranslate, setProfileAvoidTranslate] = useState({ x: 0, y: 0 });
 
     useLayoutEffect(() => {
         if (!profileMenuOpen || !showBoardToolbar) {
-            setProfileMenuAvoidMinTop(null);
-            return;
+            setProfileAvoidTranslate({ x: 0, y: 0 });
+            return undefined;
         }
+
         const run = () => {
             const boardEl = containerRef.current;
-            const menuEl = document.querySelector('.header-profile-dropdown');
+            const menuEl = document.querySelector('[data-profile-menu-dropdown]')
+                || document.querySelector('.header-profile-dropdown');
             const toolEl = toolbarRef.current;
-            if (!boardEl || !menuEl) {
-                setProfileMenuAvoidMinTop(null);
+            if (!boardEl || !menuEl || !toolEl) {
+                setProfileAvoidTranslate({ x: 0, y: 0 });
                 return;
             }
             const boardRect = boardEl.getBoundingClientRect();
             const menuRect = menuEl.getBoundingClientRect();
-            const rawW = toolEl?.offsetWidth || 0;
-            const rawH = toolEl?.offsetHeight || 0;
-            const tw = toolbarPos != null
-                ? Math.max(rawW, 1)
-                : Math.max(rawW, TOOLBAR_SYNTHETIC_MIN_W);
-            const th = toolbarPos != null
-                ? Math.max(rawH, 1)
-                : Math.max(rawH, TOOLBAR_SYNTHETIC_MIN_H);
-            const toolRect = getToolbarSyntheticViewportRect(boardRect, toolbarPos, tw, th, narrowBoardLayout);
-            const zone = {
-                left: menuRect.left - PROFILE_MENU_ZONE_PAD_X,
-                right: menuRect.right + PROFILE_MENU_ZONE_PAD_X,
-                top: menuRect.top,
-                bottom: menuRect.bottom + PROFILE_MENU_ZONE_PAD_BELOW,
-            };
-
-            if (!rectsIntersect(toolRect, zone)) {
-                setProfileMenuAvoidMinTop(null);
+            if (menuRect.width < 2 || menuRect.height < 2) {
                 return;
             }
-            setProfileMenuAvoidMinTop(zone.bottom + PROFILE_MENU_GAP_AFTER_ZONE - boardRect.top);
+            /* Medir posição “natural” sem o deslocamento de evitação do frame anterior */
+            const prevTransform = toolEl.style.transform;
+            toolEl.style.transform = 'none';
+            const toolRect = toolEl.getBoundingClientRect();
+            toolEl.style.transform = prevTransform;
+
+            setProfileAvoidTranslate(
+                computeProfileMenuAvoidance(toolRect, menuRect, boardRect),
+            );
         };
 
         run();
-        const id = requestAnimationFrame(run);
+        const raf1 = requestAnimationFrame(() => {
+            run();
+            requestAnimationFrame(run);
+        });
         window.addEventListener('resize', run);
-        return () => {
-            cancelAnimationFrame(id);
-            window.removeEventListener('resize', run);
-        };
-    }, [profileMenuOpen, showBoardToolbar, toolbarPos?.x, toolbarPos?.y, board?.id, narrowBoardLayout]);
 
-    const toolbarDefaultBottomCorner = narrowBoardLayout && toolbarPos == null && profileMenuAvoidMinTop == null;
-
-    const toolbarComputedTop = useMemo(() => {
-        if (toolbarPos != null) {
-            if (profileMenuAvoidMinTop == null) return toolbarPos.y;
-            return Math.max(toolbarPos.y, profileMenuAvoidMinTop);
+        let ro;
+        if (typeof ResizeObserver !== 'undefined') {
+            ro = new ResizeObserver(run);
+            const menuEl = document.querySelector('[data-profile-menu-dropdown]')
+                || document.querySelector('.header-profile-dropdown');
+            if (menuEl) ro.observe(menuEl);
+            if (toolbarRef.current) ro.observe(toolbarRef.current);
         }
-        if (profileMenuAvoidMinTop != null) return profileMenuAvoidMinTop;
-        return undefined;
-    }, [profileMenuAvoidMinTop, toolbarPos]);
+
+        return () => {
+            cancelAnimationFrame(raf1);
+            window.removeEventListener('resize', run);
+            ro?.disconnect();
+        };
+    }, [
+        profileMenuOpen,
+        showBoardToolbar,
+        toolbarPos?.x,
+        toolbarPos?.y,
+        board?.id,
+        narrowBoardLayout,
+        toolbarMembers.length,
+        toolbarMembersLoading,
+    ]);
+
+    const toolbarDefaultBottomCorner = narrowBoardLayout && toolbarPos == null;
+
+    const toolbarAvoidTransform = useMemo(() => {
+        if (!profileMenuOpen || isDragging) return 'none';
+        const { x, y } = profileAvoidTranslate;
+        if (!x && !y) return 'none';
+        return `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+    }, [profileMenuOpen, profileAvoidTranslate, isDragging]);
 
     useEffect(() => {
         const isEditableTarget = () => {
@@ -695,20 +666,29 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
 
             if (!selectedCardIds.length && !mod) return;
 
-            if (mod && key === 'c') {
+            if (mod && key === 'd' && !e.shiftKey) {
+                e.preventDefault();
+                const cards = resolveSelectedCards(activeBoard, selectedCardIds);
+                if (cards.length) {
+                    bulkDuplicateCards(cards, activeBoard.id, collabDispatch);
+                }
+                return;
+            }
+
+            if (mod && key === 'c' && !e.shiftKey) {
                 e.preventDefault();
                 const cards = resolveSelectedCards(activeBoard, selectedCardIds);
                 copyCardsToClipboard(cards, activeBoard.id, anchorListId, setClipboard);
                 return;
             }
-            if (mod && key === 'x') {
+            if (mod && key === 'x' && !e.shiftKey) {
                 e.preventDefault();
                 const cards = resolveSelectedCards(activeBoard, selectedCardIds);
-                await cutCardsToClipboard(cards, activeBoard.id, anchorListId, setClipboard, collabDispatch);
+                await cutCardsToClipboard(cards, activeBoard.id, anchorListId, setClipboard, collabDispatch, getBoardSnapshot);
                 clearSelection();
                 return;
             }
-            if (mod && key === 'v') {
+            if (mod && key === 'v' && !e.shiftKey) {
                 e.preventDefault();
                 if (!clipboard?.cards?.length) return;
                 const targetListId = anchorListId || activeBoard.lists[0]?.id;
@@ -722,7 +702,14 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
             if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCardIds.length) {
                 e.preventDefault();
                 const cards = resolveSelectedCards(activeBoard, selectedCardIds);
-                const ok = await bulkDeleteCards(cards, activeBoard.id, collabDispatch, showConfirm);
+                const ok = await bulkDeleteCards(
+                    cards,
+                    activeBoard.id,
+                    collabDispatch,
+                    showConfirm,
+                    getBoardSnapshot,
+                    { defaultPermanentChecked: e.shiftKey },
+                );
                 if (ok) clearSelection();
             }
         };
@@ -739,6 +726,7 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         setClipboard,
         collabDispatch,
         showConfirm,
+        getBoardSnapshot,
     ]);
 
     if (!board) {
@@ -771,22 +759,29 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
 
     const handleCardHover = useCallback((cardId) => {
         if (!onBoardSurface) return;
-        setHoverTarget({ cardId, listId: null });
+        setHoverTarget({ cardId, listId: null, uiKey: null });
     }, [setHoverTarget, onBoardSurface]);
 
     const handleCardHoverEnd = useCallback((listId) => {
         if (!onBoardSurface) return;
-        setHoverTarget({ listId: listId ?? null, cardId: null });
+        setHoverTarget({ listId: listId ?? null, cardId: null, uiKey: null });
     }, [setHoverTarget, onBoardSurface]);
 
     const handleListHover = useCallback((listId) => {
         if (!onBoardSurface) return;
-        setHoverTarget({ listId, cardId: null });
+        setHoverTarget({ listId, cardId: null, uiKey: null });
+    }, [setHoverTarget, onBoardSurface]);
+
+    const handleUiHover = useCallback((uiKey) => {
+        if (!onBoardSurface || !uiKey) return;
+        setHoverTarget({ uiKey, cardId: null, listId: null });
     }, [setHoverTarget, onBoardSurface]);
 
     const handlePresenceHoverEnd = useCallback(() => {
         clearHoverTarget();
     }, [clearHoverTarget]);
+
+    const addListBtnHover = boardUiHoverProps(hoverByUiKey, BOARD_UI_HOVER.addList, 'board-add-list-btn');
 
     return (
         <div
@@ -802,11 +797,14 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
                     className={`board-toolbar floating animate-slide-down ${isDragging ? 'dragging' : ''} ${toolbarDefaultBottomCorner ? 'board-toolbar--default-bottom' : ''}`}
                     style={{
                         left: toolbarPos != null ? toolbarPos.x : undefined,
-                        top: toolbarComputedTop,
+                        top: toolbarPos != null ? toolbarPos.y : undefined,
                         right: toolbarPos != null ? 'auto' : undefined,
                         bottom: toolbarPos != null ? 'auto' : undefined,
                         position: 'absolute',
-                        transition: isDragging ? 'none' : 'opacity 0.2s ease, transform 0.2s ease, top 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        transform: toolbarAvoidTransform,
+                        transition: isDragging
+                            ? 'none'
+                            : 'opacity 0.2s ease, transform 0.32s cubic-bezier(0.34, 1.2, 0.64, 1)',
                         touchAction: isDragging ? 'none' : undefined,
                     }}
                     onPointerDown={handleToolbarPointerDown}
@@ -814,13 +812,6 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
                     <div className="board-toolbar-handle">
                         <GripVertical size={14} />
                     </div>
-                    {isSavingBoard(board.id) && (
-                        <div className="board-toolbar-section">
-                            <span className="board-saving-indicator" title="Salvando alterações no servidor...">
-                                <Loader2 size={13} className="spinning" />
-                            </span>
-                        </div>
-                    )}
                     {collabConnected && (
                         <div className="board-toolbar-section board-toolbar-live">
                             <PresenceOnlineList />
@@ -987,6 +978,8 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
                                                                 editingByCardId={editorsByCardId}
                                                                 hoverByCardId={hoverByCardId}
                                                                 hoverByListId={hoverByListId}
+                                                                hoverByUiKey={hoverByUiKey}
+                                                                onUiHover={handleUiHover}
                                                                 remoteDraggingCardIds={remoteDraggingCardIds}
                                                                 remoteDragByCardId={remoteDragByCardId}
                                                                 remoteDragPeerByCardId={remoteDragPeerByCardId}
@@ -1033,7 +1026,14 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
                                                         </div>
                                                     </form>
                                                 ) : (
-                                                    <button className="board-add-list-btn" onClick={() => setAddingList(true)}>
+                                                    <button
+                                                        type="button"
+                                                        className={addListBtnHover.className}
+                                                        style={addListBtnHover.style}
+                                                        onMouseEnter={() => handleUiHover(BOARD_UI_HOVER.addList)}
+                                                        onMouseLeave={handlePresenceHoverEnd}
+                                                        onClick={() => setAddingList(true)}
+                                                    >
                                                         <Plus size={18} />
                                                         <span>Adicionar lista</span>
                                                     </button>
@@ -1051,6 +1051,7 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
                             peerFilter={isPeerOnBoardSurface}
                             boardScrollerRef={scrollerRef}
                             layoutRepaint={layoutRepaint}
+                            boardId={board.id}
                         />
                     )}
                     <RemoteDragLayer boardId={board.id} boardScrollerRef={scrollerRef} layoutRepaint={layoutRepaint} />

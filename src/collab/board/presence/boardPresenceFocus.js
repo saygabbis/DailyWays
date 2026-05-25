@@ -13,6 +13,7 @@ export function applyBoardPresenceFocus(boardId, focused) {
     f.cursorModal = null;
     f.hoverCardId = null;
     f.hoverListId = null;
+    f.hoverUiKey = null;
     f.hoverModalEl = null;
     f.liveDraft = null;
   }

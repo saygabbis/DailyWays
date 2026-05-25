@@ -3,6 +3,13 @@ import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
+import { useBoardUndo } from '../../hooks/useBoardUndo';
+import { DELETE_TASK_CONFIRM_CHECKBOX, isDeleteConfirmPermanent } from '../Board/boardCardBulkOps';
+import {
+    snapshotFromCard,
+    buildCardPersistDelta,
+    mergeCardPersistBase,
+} from './taskDetailCardPersist';
 import { useCollabPresence } from '../../collab/board/presence/useCollabPresence.js';
 import { announcePresence } from '../../collab/board/presence/presenceBridge.js';
 import { applyTaskModalPresence } from '../../collab/board/presence/boardPresenceFocus.js';
@@ -71,6 +78,7 @@ const RECURRENCE_OPTIONS = [
 export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const { dispatch, LABEL_COLORS, state, showConfirm } = useApp();
     const { collabDispatch } = useBoardCollabDispatch(boardId);
+    const { undo: boardUndo, redo: boardRedo } = useBoardUndo(boardId);
     const {
         updateCursor,
         setSelectedCardId,
@@ -97,6 +105,8 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         return list.cards.find(c => c.id === card.id) || card;
     })();
 
+    const lastPersistedRef = useRef(snapshotFromCard(liveCard));
+
     const [title, setTitle] = useState(liveCard.title);
     const [description, setDescription] = useState(liveCard.description || '');
     const [priority, setPriority] = useState(liveCard.priority || 'none');
@@ -106,6 +116,8 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const [showRecurrenceMenu, setShowRecurrenceMenu] = useState(false);
     const [isAllDay, setIsAllDay] = useState(liveCard.isAllDay ?? true);
     const [myDay, setMyDay] = useState(liveCard.myDay);
+    const [dayCategory, setDayCategory] = useState(liveCard.dayCategory || 'essential');
+    const [estimatedMinutes, setEstimatedMinutes] = useState(liveCard.estimatedMinutes ?? '');
     const [labels, setLabels] = useState(liveCard.labels || []);
     const [cardColor, setCardColor] = useState(liveCard.color || null);
     const [newSubtask, setNewSubtask] = useState('');
@@ -175,6 +187,10 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         recurrenceRule: recurrenceRule === 'none' ? null : recurrenceRule,
         isAllDay,
         myDay,
+        dayCategory: myDay ? (dayCategory || 'essential') : null,
+        estimatedMinutes: myDay && estimatedMinutes !== '' && estimatedMinutes != null
+            ? Number(estimatedMinutes)
+            : null,
         labels,
         color: cardColor || null,
     }), [
@@ -186,28 +202,24 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         recurrenceRule,
         isAllDay,
         myDay,
+        dayCategory,
+        estimatedMinutes,
         labels,
         cardColor,
     ]);
 
-    const cardSnapshotMatchesLive = useCallback((snap) => {
-        const norm = (v) => (v === undefined || v === '' ? null : v);
-        return norm(liveCard.title) === norm(snap.title)
-            && norm(liveCard.description) === norm(snap.description)
-            && (liveCard.priority || 'none') === (snap.priority || 'none')
-            && norm(liveCard.startDate) === norm(snap.startDate)
-            && norm(liveCard.dueDate) === norm(snap.dueDate)
-            && norm(liveCard.recurrenceRule) === norm(snap.recurrenceRule)
-            && !!liveCard.isAllDay === !!snap.isAllDay
-            && !!liveCard.myDay === !!snap.myDay
-            && JSON.stringify(liveCard.labels || []) === JSON.stringify(snap.labels || [])
-            && norm(liveCard.color) === norm(snap.color);
-    }, [liveCard]);
+    useEffect(() => {
+        lastPersistedRef.current = snapshotFromCard(liveCard);
+    }, [card.id]);
 
-    const persistCardSnapshot = useCallback((override = null) => {
+    const persistCardSnapshot = useCallback((fieldOverride = null) => {
         if (remoteSync.isLocked()) return;
-        const updates = override ? { ...cardUpdatesSnapshot, ...override } : cardUpdatesSnapshot;
-        if (cardSnapshotMatchesLive(updates)) return;
+        const nextSnap = fieldOverride
+            ? mergeCardPersistBase(cardUpdatesSnapshot, fieldOverride)
+            : cardUpdatesSnapshot;
+        const delta = buildCardPersistDelta(lastPersistedRef.current, nextSnap);
+        if (!Object.keys(delta).length) return;
+
         collabDispatch({
             type: 'UPDATE_CARD',
             payload: {
@@ -215,28 +227,27 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                 listId,
                 cardId: card.id,
                 updates: {
-                    ...updates,
+                    ...delta,
                     updatedAt: new Date().toISOString(),
                 },
             },
         });
-    }, [collabDispatch, boardId, listId, card.id, cardUpdatesSnapshot, cardSnapshotMatchesLive, remoteSync]);
+        lastPersistedRef.current = mergeCardPersistBase(lastPersistedRef.current, delta);
+    }, [collabDispatch, boardId, listId, card.id, cardUpdatesSnapshot, remoteSync]);
 
     const persistTimerRef = useRef(null);
-    const queuePersist = useCallback((override = null) => {
-        if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
-        const snapOverride = override;
-        persistTimerRef.current = setTimeout(() => {
-            persistTimerRef.current = null;
-            persistCardSnapshot(snapOverride);
-        }, 320);
-    }, [persistCardSnapshot]);
 
     const flushPersist = useCallback((override = null) => {
         if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
         persistTimerRef.current = null;
         persistCardSnapshot(override);
     }, [persistCardSnapshot]);
+
+    const applyDiscreteField = useCallback((fieldPatch, afterState) => {
+        flushPersist();
+        if (afterState) afterState();
+        persistCardSnapshot(fieldPatch);
+    }, [flushPersist, persistCardSnapshot]);
 
     useEffect(() => {
         if (!collab?.connected) return undefined;
@@ -248,15 +259,22 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
 
     useEffect(() => {
         if (remoteSync.isLocked()) return undefined;
-        queuePersist();
-        return () => {
-            if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
-        };
-    }, [cardUpdatesSnapshot, queuePersist, remoteSync]);
+        const id = setTimeout(() => persistCardSnapshot(), 480);
+        return () => clearTimeout(id);
+    }, [title, description, persistCardSnapshot, remoteSync]);
 
     useEffect(() => () => {
-        if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
-    }, []);
+        if (persistTimerRef.current) {
+            clearTimeout(persistTimerRef.current);
+            persistTimerRef.current = null;
+        }
+        persistCardSnapshot();
+    }, [persistCardSnapshot]);
+
+    const handleClose = useCallback(() => {
+        flushPersist();
+        onClose();
+    }, [flushPersist, onClose]);
 
     useEffect(() => {
         remoteSync.run(() => {
@@ -291,8 +309,11 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
             setRecurrenceRule(liveCard.recurrenceRule || 'none');
             setIsAllDay(liveCard.isAllDay ?? true);
             setMyDay(liveCard.myDay);
+            setDayCategory(liveCard.dayCategory || 'essential');
+            setEstimatedMinutes(liveCard.estimatedMinutes ?? '');
             setLabels(liveCard.labels || []);
             setCardColor(liveCard.color ?? null);
+            lastPersistedRef.current = snapshotFromCard(liveCard);
         });
     }, [
         liveCard.updatedAt,
@@ -304,6 +325,8 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         liveCard.recurrenceRule,
         liveCard.isAllDay,
         liveCard.myDay,
+        liveCard.dayCategory,
+        liveCard.estimatedMinutes,
         liveCard.labels,
         liveCard.color,
         titleFocused,
@@ -429,25 +452,32 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         return () => document.removeEventListener('mousedown', handleOutsideClick);
     }, []);
 
-    const handleDelete = async () => {
-        const confirmed = await showConfirm({
+    const handleDelete = useCallback(async ({ defaultPermanentChecked = false } = {}) => {
+        const result = await showConfirm({
             title: 'Deletar Tarefa',
             message: `Tem certeza que deseja deletar "${card.title}"?`,
             confirmLabel: 'Deletar',
-            type: 'danger'
+            type: 'danger',
+            checkbox: {
+                ...DELETE_TASK_CONFIRM_CHECKBOX,
+                defaultChecked: defaultPermanentChecked,
+            },
         });
 
-        if (confirmed) {
-            collabDispatch({ type: 'DELETE_CARD', payload: { boardId, listId, cardId: card.id } });
-            onClose();
-        }
-    };
+        if (!result) return;
+        const permanent = isDeleteConfirmPermanent(result);
+        collabDispatch(
+            { type: 'DELETE_CARD', payload: { boardId, listId, cardId: card.id } },
+            permanent ? { skipHistory: true } : undefined,
+        );
+        onClose();
+    }, [showConfirm, card.title, boardId, listId, card.id, collabDispatch, onClose]);
 
     const toggleLabel = (labelId) => {
         const newLabels = labels.includes(labelId)
-            ? labels.filter(l => l !== labelId)
+            ? labels.filter((l) => l !== labelId)
             : [...labels, labelId];
-        setLabels(newLabels);
+        applyDiscreteField({ labels: newLabels }, () => setLabels(newLabels));
     };
 
     const handleAddLabel = (e) => {
@@ -729,16 +759,38 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     ];
 
     useEffect(() => {
-        const onKey = (e) => {
-            if (e.key === 'Escape') onClose();
+        const onKey = async (e) => {
+            const mod = e.ctrlKey || e.metaKey;
+            const key = e.key?.toLowerCase?.() || e.key;
+
+            if (mod && key === 'z') {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.shiftKey) await boardRedo();
+                else await boardUndo();
+                return;
+            }
+            if (mod && key === 'y') {
+                e.preventDefault();
+                e.stopPropagation();
+                await boardRedo();
+                return;
+            }
+            if ((e.key === 'Delete' || e.key === 'Backspace') && e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                handleDelete({ defaultPermanentChecked: true });
+                return;
+            }
+            if (e.key === 'Escape') handleClose();
         };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [onClose]);
+        document.addEventListener('keydown', onKey, true);
+        return () => document.removeEventListener('keydown', onKey, true);
+    }, [handleClose, boardUndo, boardRedo, handleDelete]);
 
     return createPortal(
         <>
-            <div className="modal-backdrop" onClick={onClose} />
+            <div className="modal-backdrop" onClick={handleClose} />
             <div
                 ref={modalRef}
                 className="task-detail-modal animate-scale-in-centered"
@@ -760,7 +812,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
 
                 <div className="task-detail-header">
                     <h2>Detalhes da Tarefa</h2>
-                    <button type="button" {...ph(hoverByEl, 'close', 'btn-icon')} onClick={onClose} title="Fechar">
+                    <button type="button" {...ph(hoverByEl, 'close', 'btn-icon')} onClick={handleClose} title="Fechar">
                         <X size={20} />
                     </button>
                 </div>
@@ -773,7 +825,10 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                             value={title}
                             onChange={e => setTitle(e.target.value)}
                             onFocus={() => setTitleFocused(true)}
-                            onBlur={() => setTitleFocused(false)}
+                            onBlur={() => {
+                                setTitleFocused(false);
+                                flushPersist();
+                            }}
                             placeholder="Título da tarefa..."
                         />
 
@@ -782,7 +837,10 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                             value={description}
                             onChange={e => setDescription(e.target.value)}
                             onFocus={() => setDescFocused(true)}
-                            onBlur={() => setDescFocused(false)}
+                            onBlur={() => {
+                                setDescFocused(false);
+                                flushPersist();
+                            }}
                             placeholder="Adicionar descrição..."
                             rows={4}
                         />
@@ -791,11 +849,65 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                             <button
                                 type="button"
                                 {...ph(hoverByEl, 'quick-meu-dia', `task-detail-quick-btn ${myDay ? 'active' : ''}`)}
-                                onClick={() => setMyDay(!myDay)}
+                                onClick={() => {
+                                    const next = !myDay;
+                                    applyDiscreteField(
+                                        {
+                                            myDay: next,
+                                            dayCategory: next ? (dayCategory || 'essential') : null,
+                                            estimatedMinutes: next && estimatedMinutes !== ''
+                                                ? Number(estimatedMinutes)
+                                                : null,
+                                        },
+                                        () => setMyDay(next),
+                                    );
+                                }}
                             >
                                 <Sun size={16} />
                                 <span>{myDay ? 'Meu Dia ✓' : 'Meu Dia'}</span>
                             </button>
+                            {myDay && (
+                                <div className="task-detail-mission-meta">
+                                    <label className="task-detail-mission-label">Categoria do dia</label>
+                                    <div className="task-detail-mission-cats">
+                                        {[
+                                            { id: 'essential', label: '⚡ Obrigatório' },
+                                            { id: 'creative', label: '🎨 Criativo' },
+                                            { id: 'self', label: '💛 Você' },
+                                        ].map(cat => (
+                                            <button
+                                                key={cat.id}
+                                                type="button"
+                                                className={`task-detail-mission-cat ${dayCategory === cat.id ? 'active' : ''}`}
+                                                onClick={() => applyDiscreteField(
+                                                    { dayCategory: cat.id },
+                                                    () => setDayCategory(cat.id),
+                                                )}
+                                            >
+                                                {cat.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <label className="task-detail-mission-label" htmlFor="task-estimated-min">Tempo estimado (min)</label>
+                                    <input
+                                        id="task-estimated-min"
+                                        type="number"
+                                        min="0"
+                                        className="task-detail-mission-time-input"
+                                        value={estimatedMinutes}
+                                        onBlur={() => {
+                                            const mins = estimatedMinutes !== '' && estimatedMinutes != null
+                                                ? Number(estimatedMinutes)
+                                                : null;
+                                            persistCardSnapshot({
+                                                estimatedMinutes: Number.isFinite(mins) ? mins : null,
+                                            });
+                                        }}
+                                        onChange={(e) => setEstimatedMinutes(e.target.value)}
+                                        placeholder="ex: 35"
+                                    />
+                                </div>
+                            )}
                             <button
                                 type="button"
                                 {...ph(hoverByEl, 'quick-arquivo', 'task-detail-quick-btn')}
@@ -840,10 +952,10 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                                 !isGlass && c ? { background: c } : {},
                                             )}
                                             title={isGlass ? 'Vidro (usa a cor da lista)' : (c ?? 'Sem cor')}
-                                            onClick={() => {
-                                                setCardColor(c);
-                                                flushPersist({ color: c || null });
-                                            }}
+                                            onClick={() => applyDiscreteField(
+                                                { color: c || null },
+                                                () => setCardColor(c),
+                                            )}
                                         >
                                             {isGlass && <span className="task-detail-color-glass-dot" />}
                                         </button>
@@ -856,9 +968,12 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                             <TaskDateTimeField
                                 label="Início"
                                 value={startDate}
-                                onChange={setStartDate}
+                                onChange={(v) => applyDiscreteField({ startDate: v || null }, () => setStartDate(v))}
                                 isAllDay={isAllDay}
-                                onToggleAllDay={() => setIsAllDay((prev) => !prev)}
+                                onToggleAllDay={() => applyDiscreteField(
+                                    { isAllDay: !isAllDay },
+                                    () => setIsAllDay((prev) => !prev),
+                                )}
                                 hoverByEl={hoverByEl}
                                 presenceKey="inicio"
                             />
@@ -866,9 +981,12 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                             <TaskDateTimeField
                                 label="Fim"
                                 value={dueDate}
-                                onChange={setDueDate}
+                                onChange={(v) => applyDiscreteField({ dueDate: v || null }, () => setDueDate(v))}
                                 isAllDay={isAllDay}
-                                onToggleAllDay={() => setIsAllDay((prev) => !prev)}
+                                onToggleAllDay={() => applyDiscreteField(
+                                    { isAllDay: !isAllDay },
+                                    () => setIsAllDay((prev) => !prev),
+                                )}
                                 hoverByEl={hoverByEl}
                                 presenceKey="fim"
                             />
@@ -896,7 +1014,11 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                                         `task-detail-menu-option ${recurrenceRule === option.value ? 'active' : ''}`,
                                                     )}
                                                     onClick={() => {
-                                                        setRecurrenceRule(option.value);
+                                                        const val = option.value;
+                                                        applyDiscreteField(
+                                                            { recurrenceRule: val === 'none' ? null : val },
+                                                            () => setRecurrenceRule(val),
+                                                        );
                                                         setShowRecurrenceMenu(false);
                                                     }}
                                                 >
@@ -921,7 +1043,10 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                                 `task-detail-priority-btn ${priority === p.value ? 'active' : ''}`,
                                                 { '--priority-color': p.color },
                                             )}
-                                            onClick={() => setPriority(p.value)}
+                                            onClick={() => applyDiscreteField(
+                                                { priority: p.value },
+                                                () => setPriority(p.value),
+                                            )}
                                         >
                                             {p.label}
                                         </button>
@@ -1319,11 +1444,25 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                 </div>
 
                 <div className="task-detail-footer">
-                    <button type="button" {...ph(hoverByEl, 'delete', 'btn btn-danger btn-sm')} onClick={handleDelete}>
-                        <Trash2 size={14} /> Deletar
-                    </button>
+                    <div className="task-detail-footer-actions">
+                        <button
+                            type="button"
+                            {...ph(hoverByEl, 'delete', 'btn btn-danger btn-sm')}
+                            onClick={() => handleDelete({ defaultPermanentChecked: false })}
+                        >
+                            <Trash2 size={14} /> Deletar
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-ghost btn-sm task-detail-delete-permanent"
+                            onClick={() => handleDelete({ defaultPermanentChecked: true })}
+                            title="Eliminar para sempre (Shift+Delete)"
+                        >
+                            <Ban size={14} /> Eliminar para sempre
+                        </button>
+                    </div>
                     <div className="task-detail-footer-info">
-                        Alterações salvas automaticamente
+                        Ctrl+Z desfaz por ação · Shift+Delete elimina sem restaurar
                     </div>
                 </div>
             </div>

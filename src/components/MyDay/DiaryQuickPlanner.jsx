@@ -21,7 +21,7 @@ const CHARGES = [
     { id: 'monthly', label: 'Mensal' },
 ];
 
-export default function DiaryQuickPlanner({ onCardClick }) {
+export default function DiaryQuickPlanner({ onCardClick, inDrawer = false, defaultDayCategory = 'essential' }) {
     const { state, getMyDayCards, getActiveBoard } = useApp();
     const { collabDispatch } = useBoardCollabDispatch();
 
@@ -29,6 +29,7 @@ export default function DiaryQuickPlanner({ onCardClick }) {
     const activeBoard = getActiveBoard();
 
     const [period, setPeriod] = useState('day');
+    const [dayCategory, setDayCategory] = useState(defaultDayCategory);
     const [title, setTitle] = useState('');
     const [selectedBoardId, setSelectedBoardId] = useState(() => activeBoard?.id || boards[0]?.id || null);
     const [selectedListId, setSelectedListId] = useState(() => {
@@ -121,6 +122,8 @@ export default function DiaryQuickPlanner({ onCardClick }) {
                 cardData: {
                     id: uuidv4(),
                     myDay: true,
+                    dayCategory,
+                    estimatedMinutes,
                     dueDate: dueDate.toISOString(),
                     journalMeta: {
                         period,
@@ -136,8 +139,14 @@ export default function DiaryQuickPlanner({ onCardClick }) {
 
     const isSubmitDisabled = !title.trim() || !selectedBoardId || !selectedListId;
 
+    const categoryOptions = [
+        { value: 'essential', label: '⚡ Obrigatório' },
+        { value: 'creative', label: '🎨 Criativo' },
+        { value: 'self', label: '💛 Você' },
+    ];
+
     return (
-        <section className="diary-column diary-column-center diary-quick-planner">
+        <section className={`diary-quick-planner ${inDrawer ? 'diary-quick-planner--drawer' : 'diary-column diary-column-center'}`}>
             <div className="diary-column-header diary-column-header-quick">
                 <div className="diary-quick-heading">
                     <div className="diary-column-title">
@@ -170,6 +179,16 @@ export default function DiaryQuickPlanner({ onCardClick }) {
                         value={title}
                         onChange={e => setTitle(e.target.value)}
                     />
+
+                    <div className="diary-quick-section-label">Categoria</div>
+                    <div className="diary-quick-field">
+                        <DiarySelect
+                            id="dq-category"
+                            value={dayCategory}
+                            onChange={setDayCategory}
+                            options={categoryOptions}
+                        />
+                    </div>
 
                     <div className="diary-quick-section-label">Onde salvar</div>
                     <div className="diary-quick-row-pair">

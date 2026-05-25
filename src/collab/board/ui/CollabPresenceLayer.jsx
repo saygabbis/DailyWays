@@ -13,6 +13,9 @@ import {
 } from '../coords/boardCursorCoords.js';
 import { getBoardPresenceLayerAnchor } from '../coords/scrollContentCoords.js';
 import { createRemoteCursorSmoother } from '../presence/remoteCursorSmoother.js';
+import { isBoardDevPrankEnabled, useBoardDevPrankStore } from '../dev/boardDevPrank.js';
+import { attachDevPrankToCursor } from '../dev/attachDevPrankToCursor.js';
+import { useContextMenu } from '../../../components/Common/ContextMenu.jsx';
 import './PresenceLayer.css';
 
 const POINTER_PATH = 'M2 2 L2 17 L7 12 L10.5 21 L13 19.5 L9.5 11.5 L16 11.5 Z';
@@ -114,13 +117,19 @@ export default function CollabPresenceLayer({
   boardScrollerRef = null,
   /** Scroll/resize do board (sidebar, janela, etc.). */
   layoutRepaint = 0,
+  /** DEV: board ativo (dev prank freeze). */
+  boardId = null,
 }) {
   const useBoardContentCoords = Boolean(boardScrollerRef);
   const peers = usePresenceStore((s) => s.peers);
+  const devPrankHidden = useBoardDevPrankStore((s) => s.locallyHiddenIds);
+  const devPrankDraggingId = useBoardDevPrankStore((s) => s.draggingUserId);
+  const { showContextMenu } = useContextMenu();
   const collab = useCollab();
   const myId = collab?.userId;
   const layerRef = useRef(null);
   const nodeRefs = useRef(new Map());
+  const prankDetachRef = useRef(new Map());
   const viewportRef = useRef(viewport);
   const smootherRef = useRef(null);
   const visibleMetaRef = useRef([]);
@@ -140,9 +149,10 @@ export default function CollabPresenceLayer({
     if (!collab?.connected || !peers?.length) return [];
     const out = peers
       .filter((p) => p.userId && p.userId !== myId)
-      .filter((p) => (peerFilter ? peerFilter(p) : true));
+      .filter((p) => (peerFilter ? peerFilter(p) : true))
+      .filter((p) => !devPrankHidden[p.userId]);
     return out;
-  }, [peers, myId, peerFilter, collab?.connected]);
+  }, [peers, myId, peerFilter, collab?.connected, devPrankHidden]);
 
   visibleMetaRef.current = visibleMeta;
 
@@ -249,6 +259,8 @@ export default function CollabPresenceLayer({
         smootherRef.current?.remove(id);
         nodeRefs.current.get(id)?.remove();
         nodeRefs.current.delete(id);
+        prankDetachRef.current.get(id)?.();
+        prankDetachRef.current.delete(id);
       }
     }
 
@@ -270,8 +282,22 @@ export default function CollabPresenceLayer({
         applyPeerMetaToNode(el, peer);
       }
       applyCursorVariantToNode(el, peer);
+
+      if (isBoardDevPrankEnabled() && useBoardContentCoords) {
+        const alreadyBound = el.getAttribute('data-dw-dev-prank') === peer.userId;
+        const isDraggingThis = devPrankDraggingId === peer.userId;
+        if (!alreadyBound && !isDraggingThis) {
+          prankDetachRef.current.get(peer.userId)?.();
+          const detach = attachDevPrankToCursor(el, peer, {
+            boardScroller: boardScrollerRef?.current ?? null,
+            boardId,
+            showContextMenu,
+          });
+          prankDetachRef.current.set(peer.userId, detach);
+        }
+      }
     }
-  }, [visibleMeta]);
+  }, [visibleMeta, useBoardContentCoords, boardScrollerRef, boardId, showContextMenu, devPrankDraggingId]);
 
   useEffect(() => {
     if (!collab?.connected || !visibleMeta.length) return undefined;
@@ -309,14 +335,24 @@ export default function CollabPresenceLayer({
         if (!el) continue;
 
         const fullPeer = peerById.get(peer.userId) || peer;
-        const targetPos = resolvePeerCursorTarget(fullPeer, ctx);
+        let targetPos = resolvePeerCursorTarget(fullPeer, ctx);
+        const prank = useBoardDevPrankStore.getState();
+        const overridePos = isBoardDevPrankEnabled() && boardScroller
+          ? prank.getDisplayPoint(peer.userId, boardScroller)
+          : null;
+        const isDragged = prank.draggingUserId === peer.userId;
+        if (overridePos) targetPos = overridePos;
         if (!targetPos) {
           smoother.remove(peer.userId);
           el.style.display = 'none';
           continue;
         }
 
-        smoother.updateTarget(peer.userId, targetPos);
+        if (overridePos && isDragged) {
+          smoother.snapTo(peer.userId, targetPos);
+        } else {
+          smoother.updateTarget(peer.userId, targetPos);
+        }
       }
 
       smoother.tick();

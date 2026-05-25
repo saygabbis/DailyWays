@@ -8,6 +8,7 @@ import { usePomodoro } from '../../context/PomodoroContext';
 import { useRadio } from '../../context/RadioContext';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
+import SpaceDetailsModal from '../Sidebar/SpaceDetailsModal';
 import SidebarGroup from './SidebarGroup';
 import GroupDetailsModal from './GroupDetailsModal';
 import {
@@ -144,6 +145,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
     const [groupDetailsOpen, setGroupDetailsOpen] = useState(false);
     const [groupDetailsTarget, setGroupDetailsTarget] = useState(null);
     const [detailsBoard, setDetailsBoard] = useState(null);
+    const [detailsSpace, setDetailsSpace] = useState(null);
 
     // Resizable sidebar
     const sidebarRef = useRef(null);
@@ -358,6 +360,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
             emoji: '🌌',
             position: state.spaces.length,
             groupId: null,
+            ownerId: user.id,
             panX: 0,
             panY: 0,
             zoom: 1,
@@ -882,6 +885,11 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
             return handleBulkContextMenu(e, 'space');
         }
         showContextMenu(e, [
+            {
+                label: 'Detalhes',
+                icon: <MoreHorizontal size={15} />,
+                action: () => setDetailsSpace(space),
+            },
             {
                 label: 'Renomear',
                 icon: <Edit3 size={15} />,
@@ -1587,6 +1595,12 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                 <BoardDetailsModal
                     board={detailsBoard}
                     onClose={() => setDetailsBoard(null)}
+                />
+            )}
+            {detailsSpace && (
+                <SpaceDetailsModal
+                    space={detailsSpace}
+                    onClose={() => setDetailsSpace(null)}
                 />
             )}
         </>

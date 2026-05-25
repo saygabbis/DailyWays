@@ -14,6 +14,7 @@ function roomFields(roomId) {
       draggingListId: null,
       hoverCardId: null,
       hoverListId: null,
+      hoverUiKey: null,
       hoverModalEl: null,
       liveDraft: null,
       cursorScreen: null,
@@ -62,6 +63,7 @@ export function resetPresenceFields(roomId) {
   f.draggingListId = null;
   f.hoverCardId = null;
   f.hoverListId = null;
+  f.hoverUiKey = null;
   f.hoverModalEl = null;
   f.liveDraft = null;
 }
