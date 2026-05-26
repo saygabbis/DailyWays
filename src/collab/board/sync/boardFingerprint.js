@@ -18,8 +18,20 @@ export function countBoardCards(board) {
   return board.lists.reduce((n, list) => n + (list.cards?.length || 0), 0);
 }
 
+function countCompletedCards(board) {
+  if (!board?.lists?.length) return 0;
+  return board.lists.reduce(
+    (n, list) => n + (list.cards || []).filter((c) => c.completed).length,
+    0,
+  );
+}
+
 /** Snapshot do servidor não pode apagar cards que ainda existem localmente. */
 export function isStaleBoardSnapshot(localBoard, serverBoard) {
   if (!localBoard || !serverBoard || localBoard.id !== serverBoard.id) return false;
-  return countBoardCards(serverBoard) < countBoardCards(localBoard);
+  if (countBoardCards(serverBoard) < countBoardCards(localBoard)) return true;
+  if (boardStructuralFingerprint(localBoard) === boardStructuralFingerprint(serverBoard)) {
+    return false;
+  }
+  return countCompletedCards(serverBoard) < countCompletedCards(localBoard);
 }

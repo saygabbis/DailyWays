@@ -4,8 +4,6 @@
     padding: var(--space-xl);
     max-width: 1200px;
     margin: 0 auto;
-    height: 100%;
-    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: var(--space-xl);
@@ -264,6 +262,104 @@
     font-weight: 700;
     color: var(--text-primary);
     margin-bottom: var(--space-sm);
+}
+
+/* Concluídas recentemente */
+.smart-recent-completions {
+    margin-top: var(--space-xl);
+    padding-top: var(--space-lg);
+    border-top: 1px solid var(--border-color);
+}
+
+.smart-recent-completions-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
+    color: var(--text-secondary);
+}
+
+.smart-recent-completions-header h2 {
+    font-size: var(--font-size-md);
+    font-weight: 700;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.smart-recent-completions-count {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--success);
+    background: var(--success-bg, rgba(34, 197, 94, 0.12));
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+}
+
+.smart-recent-completions-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.smart-recent-completions-row {
+    display: flex;
+    align-items: stretch;
+    gap: var(--space-sm);
+}
+
+.smart-recent-completions-check {
+    flex-shrink: 0;
+    width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--success);
+    cursor: pointer;
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.smart-recent-completions-check:hover {
+    border-color: var(--success);
+    background: var(--bg-tertiary);
+}
+
+.smart-recent-completions-item {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    cursor: pointer;
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.smart-recent-completions-item:hover {
+    border-color: var(--success);
+    background: var(--bg-tertiary);
+}
+
+.smart-recent-completions-title {
+    display: block;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    text-decoration: line-through;
+    opacity: 0.85;
+}
+
+.smart-recent-completions-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
 }
 
 /* Mobile */

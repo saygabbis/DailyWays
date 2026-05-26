@@ -1,0 +1,19 @@
+/* Chat tokens (follow site theme) */
+.chat-wa {
+  /* Backgrounds */
+  --chat-bg: var(--bg-primary);
+  --chat-bg-pattern: var(--bg-secondary);
+  --chat-header-bg: var(--bg-secondary);
+  --chat-composer-bg: var(--bg-secondary);
+
+  /* Bubbles */
+  --chat-bubble-in: var(--bg-card);
+  --chat-bubble-out: color-mix(in srgb, var(--accent-primary) 22%, var(--bg-card));
+  --chat-bubble-in-text: var(--text-primary);
+  --chat-bubble-out-text: var(--text-primary);
+
+  /* Accents */
+  --chat-accent: var(--accent-primary);
+  --chat-tick: var(--text-tertiary);
+  --chat-tick-read: color-mix(in srgb, var(--accent-primary) 70%, #4aa3ff);
+}

@@ -15,8 +15,11 @@ import {
     bulkDuplicateCards,
     bulkMoveCardsToList,
     buildMoveToListMenuItems,
+    DELETE_TASK_CONFIRM_CHECKBOX,
+    isDeleteConfirmPermanent,
     resolveSelectedCards,
 } from './boardCardBulkOps';
+import { useSmartViewCardCompletion } from '../../hooks/useSmartViewCardCompletion';
 
 export default function BoardCard({
     card,
@@ -36,8 +39,14 @@ export default function BoardCard({
     onHoverStart,
     onHoverEnd,
 }) {
-    const { LABEL_COLORS, showConfirm, getActiveBoard } = useApp();
+    const { LABEL_COLORS, showConfirm, getActiveBoard, state } = useApp();
+
+    const getBoardSnapshot = (id) => {
+        const b = state.boards.find((x) => x.id === id);
+        return b ? JSON.parse(JSON.stringify(b)) : null;
+    };
     const { collabDispatch } = useBoardCollabDispatch(boardId);
+    const { toggleCardCompletion } = useSmartViewCardCompletion();
     const { showContextMenu } = useContextMenu();
     const cardRef = useRef(null);
     const isCompleted = card.completed || false;
@@ -57,10 +66,14 @@ export default function BoardCard({
 
     const handleToggleComplete = (e) => {
         e.stopPropagation();
-        collabDispatch({
-            type: 'UPDATE_CARD',
-            payload: { boardId, listId, cardId: card.id, updates: { completed: !isCompleted } },
-        });
+        const board = state.boards.find((b) => b.id === boardId);
+        if (!board) return;
+        toggleCardCompletion(
+            { ...card, boardId, listId },
+            { id: boardId, title: board.title, emoji: board.emoji },
+            { id: listId },
+            !isCompleted,
+        );
     };
 
     const doneSubtasks = card.subtasks.filter(st => st.done).length;
@@ -79,14 +92,15 @@ export default function BoardCard({
     const isDueToday = isCardDueToday(card);
     const hasDescription = Boolean(card.description && card.description.trim().length > 0);
     const effectiveColor = card.color === '__glass__' ? (listColor || null) : card.color || null;
-    const primaryEditor = editingEditors?.[0] || null;
+    const remoteEditors = (editingEditors || []).filter((e) => !e.isSelf);
+    const primaryEditor = remoteEditors[0] || null;
     const hoverPeer = hoverPeers?.[0] || null;
     const presenceColor = primaryEditor?.color
         || remoteDragPeer?.color
         || remoteSelectionPeer?.color
         || hoverPeer?.color
         || 'var(--accent-primary)';
-    const isBeingEdited = Array.isArray(editingEditors) && editingEditors.length > 0;
+    const isBeingEdited = remoteEditors.length > 0;
     const isRemoteHover = !isBeingEdited && Boolean(hoverPeer);
     const fetchedCoverUrl = useCardCoverImage(card.id, card.coverAttachmentId);
     const coverUrl = fetchedCoverUrl || card.coverPreviewUrl || null;
@@ -95,8 +109,10 @@ export default function BoardCard({
     const selectedCards = resolveSelectedCards(board, selectedCardIds);
 
     const getMoveToListItems = () => buildMoveToListMenuItems(boardLists, listId, (destListId) => {
-        bulkMoveCardsToList([{ card, listId }], destListId, getActiveBoard, collabDispatch);
+        bulkMoveCardsToList([{ card, listId }], destListId, getActiveBoard, collabDispatch, getBoardSnapshot);
     });
+
+    const moveSubmenuItems = getMoveToListItems();
 
     const getSingleContextMenuItems = () => [
         {
@@ -125,11 +141,11 @@ export default function BoardCard({
         },
         { type: 'divider' },
         {
-            label: 'Mover para coluna',
+            label: 'Mover tarefa',
             icon: <ArrowRight size={15} />,
-            disabled: true,
+            submenu: moveSubmenuItems,
+            disabled: moveSubmenuItems.length === 0,
         },
-        ...getMoveToListItems(),
         {
             label: 'Duplicar tarefa',
             icon: <Copy size={15} />,
@@ -141,18 +157,22 @@ export default function BoardCard({
             icon: <Trash2 size={15} />,
             danger: true,
             action: async () => {
-                const confirmed = await showConfirm({
+                const result = await showConfirm({
                     title: 'Deletar Tarefa',
                     message: `Tem certeza que deseja deletar "${card.title}"?`,
                     confirmLabel: 'Deletar',
                     type: 'danger',
+                    checkbox: DELETE_TASK_CONFIRM_CHECKBOX,
                 });
-                if (confirmed) {
-                    collabDispatch({
+                if (!result) return;
+                const permanent = isDeleteConfirmPermanent(result);
+                collabDispatch(
+                    {
                         type: 'DELETE_CARD',
                         payload: { boardId, listId, cardId: card.id },
-                    });
-                }
+                    },
+                    permanent ? { skipHistory: true } : undefined,
+                );
             },
         },
     ];
@@ -161,6 +181,10 @@ export default function BoardCard({
         const count = selectionCount;
         const allMyDay = selectedCards.every(({ card: c }) => c.myDay);
         const allImportant = selectedCards.every(({ card: c }) => c.priority === 'high');
+        const bulkMoveSubmenu = buildMoveToListMenuItems(boardLists, null, (destListId) => {
+            bulkMoveCardsToList(selectedCards, destListId, getActiveBoard, collabDispatch, getBoardSnapshot);
+            clearSelection();
+        });
         return [
             {
                 label: 'Limpar seleção',
@@ -189,21 +213,18 @@ export default function BoardCard({
                 action: () => bulkDuplicateCards(selectedCards, boardId, collabDispatch),
             },
             {
-                label: 'Mover para coluna',
+                label: 'Mover tarefa',
                 icon: <ArrowRight size={15} />,
-                disabled: true,
+                submenu: bulkMoveSubmenu,
+                disabled: bulkMoveSubmenu.length === 0,
             },
-            ...buildMoveToListMenuItems(boardLists, null, (destListId) => {
-                bulkMoveCardsToList(selectedCards, destListId, getActiveBoard, collabDispatch);
-                clearSelection();
-            }),
             { type: 'divider' },
             {
                 label: 'Deletar selecionados',
                 icon: <Trash2 size={15} />,
                 danger: true,
                 action: async () => {
-                    const ok = await bulkDeleteCards(selectedCards, boardId, collabDispatch, showConfirm);
+                    const ok = await bulkDeleteCards(selectedCards, boardId, collabDispatch, showConfirm, getBoardSnapshot);
                     if (ok) clearSelection();
                 },
             },
@@ -297,7 +318,7 @@ export default function BoardCard({
             {...longPressSelectTouch}
             style={{
               ...(effectiveColor ? { '--card-accent': effectiveColor } : {}),
-              ...((isBeingEdited || isRemoteHover || remoteSelectionPeer)
+              ...((isBeingEdited || isRemoteHover || remoteSelectionPeer || remoteDragPeer)
                 ? { '--presence-color': presenceColor }
                 : {}),
             }}
@@ -326,12 +347,8 @@ export default function BoardCard({
             )}
             {isBeingEdited && (
                 <div
-                    className={`board-card-presence-indicator${primaryEditor?.isSelf ? ' board-card-presence-indicator--self' : ''}`}
-                    aria-label={
-                        primaryEditor?.isSelf
-                            ? 'Você está nos detalhes desta tarefa'
-                            : `Sendo editado por ${primaryEditor?.name || 'alguém'}`
-                    }
+                    className="board-card-presence-indicator"
+                    aria-label={`Sendo editado por ${primaryEditor?.name || 'alguém'}`}
                 >
                     {primaryEditor?.photoUrl ? (
                         <img

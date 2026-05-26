@@ -1,0 +1,147 @@
+.header-cloud-sync {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.header-cloud-sync-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: default;
+    transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.header-cloud-sync-btn--synced {
+    cursor: pointer;
+    color: var(--accent-primary);
+}
+
+.header-cloud-sync-btn--synced:hover {
+    background: var(--bg-hover);
+}
+
+.header-cloud-sync--error .header-cloud-sync-btn,
+.header-cloud-sync--pending .header-cloud-sync-btn {
+    cursor: pointer;
+}
+
+.header-cloud-sync-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.header-cloud-sync--synced .header-cloud-sync-icon {
+    color: var(--accent-primary);
+}
+
+.header-cloud-sync--synced.header-cloud-sync--manual .header-cloud-sync-icon {
+    opacity: 0.45;
+}
+
+.header-cloud-sync--saving .header-cloud-sync-icon {
+    color: var(--accent-primary);
+    opacity: 0.35;
+}
+
+.header-cloud-sync--pending .header-cloud-sync-icon {
+    color: color-mix(in srgb, var(--accent-primary) 70%, var(--text-secondary));
+}
+
+.header-cloud-sync--error .header-cloud-sync-icon {
+    color: var(--text-secondary);
+}
+
+.header-cloud-sync-spinner {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-primary);
+    pointer-events: none;
+}
+
+.header-cloud-sync-dot {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 2px solid var(--bg-secondary);
+    box-sizing: content-box;
+}
+
+.header-cloud-sync-dot--error {
+    background: #ef4444;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #ef4444 35%, transparent);
+}
+
+.header-cloud-sync-dot--pending {
+    background: var(--accent-primary);
+}
+
+.header-cloud-sync-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: calc(var(--z-header) + 5);
+    min-width: 260px;
+    max-width: 320px;
+    padding: 12px 14px;
+    border-radius: var(--radius-lg);
+    background: var(--bg-elevated, var(--bg-card));
+    border: 1.5px solid var(--border-color);
+    box-shadow: var(--shadow-xl);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.header-cloud-sync-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--error, #f87171);
+    margin: 0;
+}
+
+.header-cloud-sync-panel-meta {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.header-cloud-sync-panel-msg {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.header-cloud-sync-panel-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.header-cloud-sync-revert {
+    color: var(--error, #f87171) !important;
+}
+
+.header-cloud-sync .spinning {
+    animation: header-cloud-spin 0.9s linear infinite;
+}
+
+@keyframes header-cloud-spin {
+    to { transform: rotate(360deg); }
+}

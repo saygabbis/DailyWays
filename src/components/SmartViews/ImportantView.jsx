@@ -2,6 +2,7 @@ import { useApp } from '../../context/AppContext';
 import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
 import { Sun, Star, AlertTriangle, TrendingUp } from 'lucide-react';
 import SmartTaskItem from './SmartTaskItem';
+import SmartRecentCompletions from './SmartRecentCompletions';
 import { isCardImportant, updatesToggleImportant } from '../../utils/cardImportant';
 import './SmartViews.css';
 
@@ -10,7 +11,6 @@ export default function ImportantView({ onCardClick }) {
     const { collabDispatch } = useBoardCollabDispatch();
     const cards = getImportantCards();
 
-    // Categorize cards
     const urgentCards = cards.filter(c => c.priority === 'urgent');
     const highCards = cards.filter(c => c.priority === 'high');
     const starredCards = cards.filter(c => c.important && c.priority !== 'high' && c.priority !== 'urgent');
@@ -96,23 +96,23 @@ export default function ImportantView({ onCardClick }) {
                                 </span>
                             </div>
                             <div className="smart-group-tasks">
-                                {group.cards.map((card, i) => (
-                                    <div key={card.id} className="animate-slide-up" style={{ animationDelay: `${i * 40}ms` }}>
-                                        <SmartTaskItem
-                                            card={card}
-                                            board={{ id: card.boardId, title: card.boardTitle, emoji: card.boardEmoji }}
-                                            list={{ id: card.listId, title: card.listTitle }}
-                                            onClick={() => onCardClick(card, card.boardId, card.listId)}
-                                            onToggleMyDay={() => toggleMyDay(card)}
-                                            onToggleImportant={() => toggleImportant(card)}
-                                            showLocation={true}
-                                        />
-                                    </div>
+                                {group.cards.map(card => (
+                                    <SmartTaskItem
+                                        key={card.id}
+                                        card={card}
+                                        board={{ id: card.boardId, title: card.boardTitle, emoji: card.boardEmoji }}
+                                        list={{ id: card.listId, title: card.listTitle, isCompletionList: card.isCompletionList }}
+                                        onClick={() => onCardClick(card, card.boardId, card.listId)}
+                                        onToggleMyDay={() => toggleMyDay(card)}
+                                        onToggleImportant={() => toggleImportant(card)}
+                                        showLocation={true}
+                                    />
                                 ))}
                             </div>
                         </div>
                     ))
                 )}
+                <SmartRecentCompletions onCardClick={onCardClick} />
             </div>
         </div>
     );

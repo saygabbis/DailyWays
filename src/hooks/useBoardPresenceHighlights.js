@@ -54,6 +54,7 @@ export function useBoardPresenceHighlights() {
     const remoteCursors = usePresenceStore.getState().remoteCursors;
     const hoverByCardId = {};
     const hoverByListId = {};
+    const hoverByUiKey = {};
     const remoteDrags = [];
     const remoteListDrags = [];
 
@@ -77,6 +78,10 @@ export function useBoardPresenceHighlights() {
         if (!hoverByListId[peer.hoverListId]) hoverByListId[peer.hoverListId] = [];
         hoverByListId[peer.hoverListId].push(meta);
       }
+      if (peer.hoverUiKey) {
+        if (!hoverByUiKey[peer.hoverUiKey]) hoverByUiKey[peer.hoverUiKey] = [];
+        hoverByUiKey[peer.hoverUiKey].push(meta);
+      }
       if (peer.draggingCardId) {
         const { x, y } = dragPosition(peer);
         const multiDragCardIds = getRemoteMultiDragIds(peer);
@@ -99,6 +104,6 @@ export function useBoardPresenceHighlights() {
       }
     }
 
-    return { hoverByCardId, hoverByListId, remoteDrags, remoteListDrags };
+    return { hoverByCardId, hoverByListId, hoverByUiKey, remoteDrags, remoteListDrags };
   }, [peers, dragCursors, myId]);
 }

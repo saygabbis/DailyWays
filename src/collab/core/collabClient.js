@@ -2,6 +2,7 @@ import { io } from 'socket.io-client';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@dailyways/collab-protocol';
 import { getCollabServerUrl } from './collabConfig.js';
 import { getBoardCollabMountGen, getGlobalJoinedBoardId } from '../board/sync/boardCollabSession.js';
+import { isBoardPrankFrozen, isBoardPrankHeld } from '../board/dev/boardDevPrank.js';
 let socketInstance = null;
 
 export function getCollabSocket() {
@@ -73,6 +74,10 @@ export function waitForSocketConnected(socket, timeoutMs = 10000) {
 
 export function joinRoom(socket, payload) {
   return new Promise((resolve, reject) => {
+    if (isBoardPrankFrozen()) {
+      reject(new Error('Board prank frozen'));
+      return;
+    }
     if (!socket?.connected) {
       reject(new Error('Socket not connected'));
       return;
@@ -130,6 +135,10 @@ export const leaveSpaceRoom = leaveRoom;
 
 export function submitOp(socket, op) {
   return new Promise((resolve, reject) => {
+    if (isBoardPrankFrozen()) {
+      reject(new Error('Board prank frozen'));
+      return;
+    }
     if (!socket?.connected) {
       reject(new Error('Socket not connected'));
       return;
@@ -143,6 +152,7 @@ export function submitOp(socket, op) {
 
 export function emitPresence(socket, payload) {
   if (!socket?.connected) return;
+  if (isBoardPrankFrozen() || isBoardPrankHeld()) return;
   const boardId = payload?.roomId;
   const joined = getGlobalJoinedBoardId();
   // Só bloqueia se já estamos em outra sala; null !== boardId bloqueava todo envio (assimétrico).

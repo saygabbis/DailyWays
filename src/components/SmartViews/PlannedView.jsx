@@ -1,6 +1,7 @@
 import { useApp } from '../../context/AppContext';
 import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
 import { CalendarDays, AlertTriangle, Sun } from 'lucide-react';
+import SmartRecentCompletions from './SmartRecentCompletions';
 import { format, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -143,24 +144,24 @@ export default function PlannedView({ onCardClick }) {
                                 </span>
                             </div>
                             <div className="smart-group-tasks">
-                                {group.cards.map((card, i) => (
-                                    <div key={card.id} className="animate-slide-up" style={{ animationDelay: `${i * 40}ms` }}>
-                                        <SmartTaskItem
-                                            card={card}
-                                            board={{ id: card.boardId, title: card.boardTitle, emoji: card.boardEmoji }}
-                                            list={{ id: card.listId, title: card.listTitle }}
-                                            onClick={() => onCardClick(card, card.boardId, card.listId)}
-                                            onToggleMyDay={() => toggleMyDay(card)}
-                                            onToggleImportant={() => toggleImportant(card)}
-                                            onRemoveFromPlanned={removeFromPlanned}
-                                            showLocation={true}
-                                        />
-                                    </div>
+                                {group.cards.map(card => (
+                                    <SmartTaskItem
+                                        key={card.id}
+                                        card={card}
+                                        board={{ id: card.boardId, title: card.boardTitle, emoji: card.boardEmoji }}
+                                        list={{ id: card.listId, title: card.listTitle, isCompletionList: card.isCompletionList }}
+                                        onClick={() => onCardClick(card, card.boardId, card.listId)}
+                                        onToggleMyDay={() => toggleMyDay(card)}
+                                        onToggleImportant={() => toggleImportant(card)}
+                                        onRemoveFromPlanned={removeFromPlanned}
+                                        showLocation={true}
+                                    />
                                 ))}
                             </div>
                         </div>
                     ))
                 )}
+                <SmartRecentCompletions onCardClick={onCardClick} />
             </div>
         </div>
     );

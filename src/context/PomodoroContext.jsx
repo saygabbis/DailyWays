@@ -1,4 +1,7 @@
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { useAuth } from './AuthContext';
+import { recordFocusSeconds } from '../services/dailyProgressService';
+import { DEFAULT_FOCUS_MINUTES, TIMEZONE_FALLBACK } from '../components/MyDay/hub/diaryHubConfig';
 
 const PomodoroContext = createContext();
 
@@ -13,22 +16,38 @@ const DEFAULT_TIMES = {
 };
 
 export function PomodoroProvider({ children }) {
-    const [mode, setMode] = useState('focus'); // focus, short, long
+    const { user } = useAuth();
+    const [mode, setMode] = useState('focus');
     const [isOpen, setIsOpen] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
+    const [linkedCardId, setLinkedCardId] = useState(null);
+    const [linkedCardTitle, setLinkedCardTitle] = useState(null);
 
-    // Independent state for each mode
+    const focusSessionRef = useRef({ duration: DEFAULT_TIMES.focus, recorded: false });
+
     const [timers, setTimers] = useState({
         focus: { timeLeft: DEFAULT_TIMES.focus, isActive: false },
         short: { timeLeft: DEFAULT_TIMES.short, isActive: false },
         long: { timeLeft: DEFAULT_TIMES.long, isActive: false }
     });
 
+    const timezone = user?.timezone || TIMEZONE_FALLBACK;
+    const userIdRef = useRef(user?.id);
+    userIdRef.current = user?.id;
+
+    const handleFocusSessionComplete = useCallback(async (durationSeconds) => {
+        if (focusSessionRef.current.recorded || !userIdRef.current) return;
+        focusSessionRef.current.recorded = true;
+        await recordFocusSeconds(userIdRef.current, durationSeconds, timezone);
+        window.dispatchEvent(new CustomEvent('diary-focus-complete'));
+    }, [timezone]);
+
     useEffect(() => {
         const interval = setInterval(() => {
             setTimers(prev => {
                 const next = { ...prev };
                 let changed = false;
+                let focusJustFinished = false;
 
                 Object.keys(next).forEach(m => {
                     if (next[m].isActive && next[m].timeLeft > 0) {
@@ -37,19 +56,22 @@ export function PomodoroProvider({ children }) {
                     } else if (next[m].isActive && next[m].timeLeft === 0) {
                         next[m] = { ...next[m], isActive: false };
                         changed = true;
-                        // Alarm sound (only for the current mode or all?)
-                        // Play sound only if it just hit zero
+                        if (m === 'focus') focusJustFinished = true;
                         const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-                        audio.play().catch(e => console.log('Audio play failed', e));
+                        audio.play().catch(() => {});
                     }
                 });
+
+                if (focusJustFinished) {
+                    handleFocusSessionComplete(focusSessionRef.current.duration);
+                }
 
                 return changed ? next : prev;
             });
         }, 1000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [handleFocusSessionComplete]);
 
     const toggleTimer = () => {
         setTimers(prev => ({
@@ -63,6 +85,9 @@ export function PomodoroProvider({ children }) {
             ...prev,
             [mode]: { timeLeft: DEFAULT_TIMES[mode], isActive: false }
         }));
+        if (mode === 'focus') {
+            focusSessionRef.current = { duration: DEFAULT_TIMES.focus, recorded: false };
+        }
     };
 
     const setTimerMode = (newMode) => {
@@ -74,21 +99,40 @@ export function PomodoroProvider({ children }) {
             ...prev,
             [mode]: { ...prev[mode], timeLeft: seconds }
         }));
+        if (mode === 'focus') {
+            focusSessionRef.current.duration = seconds;
+        }
+    };
+
+    const startFocusForCard = (card, minutes) => {
+        const mins = minutes ?? card?.estimatedMinutes ?? DEFAULT_FOCUS_MINUTES;
+        const seconds = Math.max(60, mins * 60);
+        setLinkedCardId(card?.id ?? null);
+        setLinkedCardTitle(card?.title ?? null);
+        setMode('focus');
+        focusSessionRef.current = { duration: seconds, recorded: false };
+        setTimers(prev => ({
+            ...prev,
+            focus: { timeLeft: seconds, isActive: true },
+        }));
+        setIsOpen(true);
+        setIsMinimized(false);
+    };
+
+    const clearLinkedCard = () => {
+        setLinkedCardId(null);
+        setLinkedCardTitle(null);
     };
 
     const toggleOpen = () => {
         if (!isOpen) {
-            // Was closed → open it
             setIsOpen(true);
             setIsMinimized(false);
         } else {
-            // Was open → check if any timer is actively running
             const anyRunning = Object.values(timers).some(t => t.isActive);
             if (anyRunning) {
-                // Timer running → minimize instead of closing
                 setIsMinimized(prev => !prev);
             } else {
-                // Nothing running → just close
                 setIsOpen(false);
                 setIsMinimized(false);
             }
@@ -104,8 +148,11 @@ export function PomodoroProvider({ children }) {
     };
 
     const progress = () => {
-        const total = DEFAULT_TIMES[mode];
-        return ((total - timers[mode].timeLeft) / total) * 100;
+        const total = focusSessionRef.current.duration || DEFAULT_TIMES[mode];
+        if (mode === 'focus' && linkedCardId) {
+            return ((total - timers.focus.timeLeft) / total) * 100;
+        }
+        return ((DEFAULT_TIMES[mode] - timers[mode].timeLeft) / DEFAULT_TIMES[mode]) * 100;
     };
 
     return (
@@ -115,6 +162,8 @@ export function PomodoroProvider({ children }) {
             mode,
             isOpen,
             isMinimized,
+            linkedCardId,
+            linkedCardTitle,
             toggleTimer,
             resetTimer,
             setTimerMode,
@@ -124,7 +173,9 @@ export function PomodoroProvider({ children }) {
             toggleMinimize,
             formatTime,
             progress,
-            setTimeLeft
+            setTimeLeft,
+            startFocusForCard,
+            clearLinkedCard,
         }}>
             {children}
         </PomodoroContext.Provider>

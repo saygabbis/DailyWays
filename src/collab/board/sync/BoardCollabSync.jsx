@@ -58,7 +58,21 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
   const boardCollab = useBoardCollabContext();
 
-  const { dispatch, setCollabActiveBoardId, setCollabConnectedForBoard, getActiveBoard } = useApp();
+  const {
+    dispatch,
+    setCollabActiveBoardId,
+    setCollabConnectedForBoard,
+    state,
+    pendingBoardIds,
+    savingBoardIds,
+  } = useApp();
+
+  const boardsRef = useRef(state.boards);
+  const pendingBoardIdsRef = useRef(pendingBoardIds);
+  const savingBoardIdsRef = useRef(savingBoardIds);
+  boardsRef.current = state.boards;
+  pendingBoardIdsRef.current = pendingBoardIds;
+  savingBoardIdsRef.current = savingBoardIds;
 
   const joinedRef = useRef(null);
 
@@ -183,14 +197,24 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
     const applyBoardSnapshot = (board) => {
       if (!board || cancelled) return;
-      const current = getActiveBoard();
-      if (current?.id === board.id && isStaleBoardSnapshot(current, board)) {
+      if (
+        pendingBoardIdsRef.current.includes(board.id)
+        || savingBoardIdsRef.current.includes(board.id)
+      ) {
         return;
       }
-      if (
-        current?.id === board.id
-        && boardStructuralFingerprint(current) === boardStructuralFingerprint(board)
-      ) {
+      const current = boardsRef.current.find((b) => b.id === board.id);
+      if (!current) {
+        dispatch({
+          type: 'UPDATE_BOARD',
+          payload: { id: board.id, updates: board },
+        });
+        return;
+      }
+      if (isStaleBoardSnapshot(current, board)) {
+        return;
+      }
+      if (boardStructuralFingerprint(current) === boardStructuralFingerprint(board)) {
         return;
       }
       dispatch({

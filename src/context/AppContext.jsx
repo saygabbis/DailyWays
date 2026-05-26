@@ -6,11 +6,17 @@ import { useAuth } from './AuthContext';
 import { supabase } from '../services/supabaseClient';
 import { uuidv4 } from '../utils/uuid';
 import ConfirmModal from '../components/Common/ConfirmModal';
-import FloatingSaveError from '../components/Common/FloatingSaveError';
 import FloatingInvitationToast from '../components/Common/FloatingInvitationToast';
 import { logger } from '../utils/logger';
 import { isCollabEnabled } from '../collab/core/collabConfig.js';
+import { isBoardPrankFrozen } from '../collab/board/dev/boardDevPrank.js';
 import { applyBoardAction } from '@dailyways/collab-protocol';
+import {
+    enrichCardForSmartView,
+    isCardActiveImportant,
+    isCardActiveMyDay,
+    isCardActivePlanned,
+} from '../utils/cardSmartView';
 
 const BOARD_APPLY_ACTION_TYPES = new Set([
   'UPDATE_BOARD',
@@ -54,6 +60,7 @@ function applyBoardActionToState(state, action) {
   };
 }
 import { persistLastBoardId } from '../utils/restoreNavigation.js';
+import { useSmartViewCompletionStore } from '../stores/smartViewCompletionStore.js';
 
 const AppContext = createContext(null);
 
@@ -111,7 +118,8 @@ const initialState = {
         onCancel: null,
         type: 'danger',
         confirmLabel: 'Confirmar',
-        cancelLabel: 'Cancelar'
+        cancelLabel: 'Cancelar',
+        checkbox: null,
     }
 };
 
@@ -549,10 +557,18 @@ export function AppProvider({ children }) {
     // que pode travar durante um token refresh (o Supabase client usa lock interno).
     const userIdRef = useRef(userId);
     useEffect(() => { userIdRef.current = userId; }, [userId]);
+
+    useEffect(() => {
+        useSmartViewCompletionStore.getState().initForUser(userId);
+    }, [userId]);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [recentlyAddedId, setRecentlyAddedId] = useState(null);
     const [lastReorderedIds, setLastReorderedIds] = useState([]);
-    const [state, dispatch] = useReducer(appReducer, initialState);
+    const [state, rawDispatch] = useReducer(appReducer, initialState);
+    const dispatch = useCallback((action) => {
+        if (isBoardPrankFrozen()) return;
+        rawDispatch(action);
+    }, []);
     const stateRef = useRef(state);
     const initialLoadDone = useRef(false);
     const saveTimeoutRef = useRef({});
@@ -566,6 +582,7 @@ export function AppProvider({ children }) {
     const activeSavesRef = useRef(0);
     const collabActiveBoardIdRef = useRef(null);
     const collabConnectedRef = useRef(false);
+    const collabBoardRoomLiveRef = useRef(false);
 
     const setCollabActiveBoardId = useCallback((boardId) => {
         collabActiveBoardIdRef.current = boardId || null;
@@ -573,6 +590,10 @@ export function AppProvider({ children }) {
 
     const setCollabConnectedForBoard = useCallback((connected) => {
         collabConnectedRef.current = !!connected;
+    }, []);
+
+    const setCollabBoardRoomLive = useCallback((live) => {
+        collabBoardRoomLiveRef.current = !!live;
     }, []);
     // Timestamp até quando aguardar antes de fazer HTTP (após TOKEN_REFRESHED).
     // O Supabase client tem um lock interno durante o refresh que trava requisições HTTP.
@@ -791,177 +812,154 @@ export function AppProvider({ children }) {
         return true;
     }, []);
 
+    const executeBoardPersistNow = useCallback(async (boardId) => {
+        if (!userId || !initialLoadDone.current || !boardId) return;
+
+        if (saveInProgressRef.current[boardId]) {
+            saveInProgressRef.current[boardId] = 'queued';
+            const start = Date.now();
+            while (saveInProgressRef.current[boardId] && Date.now() - start < 22000) {
+                await new Promise((r) => setTimeout(r, 40));
+            }
+            if (saveInProgressRef.current[boardId]) return;
+        }
+
+        dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: false } });
+        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: true } });
+        activeSavesRef.current += 1;
+        suppressRealtime(8000);
+
+        const safetyTimer = setTimeout(() => {
+            logger.warn('[AppContext] executeBoardPersistNow: safety timeout (20s) para board', boardId);
+            const stuckBoard = stateRef.current.boards.find((b) => b.id === boardId);
+            activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
+            if (activeSavesRef.current === 0) suppressRealtime(2000);
+            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
+            dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: false } });
+            delete saveTimeoutRef.current[boardId];
+            delete saveInProgressRef.current[boardId];
+            dispatch({
+                type: 'PUSH_SAVE_ERROR',
+                payload: {
+                    boardId,
+                    boardTitle: stuckBoard?.title,
+                    boardSnapshot: stuckBoard ? JSON.parse(JSON.stringify(stuckBoard)) : null,
+                    error: 'Timeout: save travou. Verifique sua conexão.',
+                },
+            });
+        }, 20000);
+
+        let saveAgain = true;
+        let lastError = null;
+        saveInProgressRef.current[boardId] = 'saving';
+
+        while (saveAgain) {
+            saveAgain = false;
+            saveInProgressRef.current[boardId] = 'saving';
+
+            try {
+                const board = stateRef.current.boards.find((b) => b.id === boardId);
+                if (!board) {
+                    logger.warn('[AppContext] executeBoardPersistNow: board não encontrado', boardId);
+                    break;
+                }
+
+                const freshUserId = await getFreshUserId();
+                if (!freshUserId) {
+                    logger.warn('[AppContext] executeBoardPersistNow: sem sessão válida', boardId);
+                    dispatch({
+                        type: 'PUSH_SAVE_ERROR',
+                        payload: { boardId, boardTitle: board?.title, boardSnapshot: null, error: 'Sessão expirada' },
+                    });
+                    break;
+                }
+
+                logger.debug(`[AppContext] executeBoardPersistNow: salvando "${board.title}"`);
+                const result = await updateBoardFull(freshUserId, board);
+                if (!result?.success) {
+                    throw new Error(result?.error || 'Falha ao salvar board');
+                }
+                lastError = null;
+            } catch (err) {
+                logger.error('[AppContext] executeBoardPersistNow error:', err);
+                lastError = err;
+            }
+
+            if (saveInProgressRef.current[boardId] === 'queued') {
+                saveAgain = true;
+                suppressRealtime(8000);
+            }
+        }
+
+        if (lastError) {
+            const board = stateRef.current.boards.find((b) => b.id === boardId);
+            dispatch({
+                type: 'PUSH_SAVE_ERROR',
+                payload: { boardId, boardTitle: board?.title, boardSnapshot: null, error: lastError?.message || 'Falha ao salvar' },
+            });
+        }
+
+        clearTimeout(safetyTimer);
+        activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
+        if (activeSavesRef.current === 0) suppressRealtime(2000);
+        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
+        delete saveTimeoutRef.current[boardId];
+        delete saveInProgressRef.current[boardId];
+    }, [userId, suppressRealtime, getFreshUserId, dispatch]);
+
+    const flushBoardPersist = useCallback(async (boardId) => {
+        if (!userId || !initialLoadDone.current || !boardId) return;
+        if (!shouldPersistBoard(boardId, { force: true })) return;
+
+        const timeouts = saveTimeoutRef.current || {};
+        if (timeouts[boardId]) {
+            clearTimeout(timeouts[boardId]);
+            delete timeouts[boardId];
+        }
+        dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: false } });
+        suppressRealtime(8000);
+        await executeBoardPersistNow(boardId);
+    }, [userId, shouldPersistBoard, suppressRealtime, dispatch, executeBoardPersistNow]);
+
     // Helper para salvar um board específico de forma eficiente
     const persistBoard = useCallback(async (boardId, options = {}) => {
+        if (isBoardPrankFrozen()) return;
         if (!userId || !initialLoadDone.current || !boardId) return;
         if (!options.ensureSave && !shouldPersistBoard(boardId, options)) return;
 
-        // Debounce por boardId: evita flood de updates caso o usuário faça várias
-        // alterações rápidas (drag, check/uncheck subtasks, etc.).
         const timeouts = saveTimeoutRef.current || {};
         if (timeouts[boardId]) {
             clearTimeout(timeouts[boardId]);
         }
 
-        // Mark local write start so the Realtime echo on this tab is suppressed
         suppressRealtime(2000);
-        // Mark board as pending (debounce agendado)
         dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: true } });
 
-        timeouts[boardId] = setTimeout(async () => {
-            // Se já tem um save rodando para este board, marca para re-salvar depois
-            if (saveInProgressRef.current[boardId]) {
-                saveInProgressRef.current[boardId] = 'queued';
-                return;
-            }
-
-            // Debounce disparou: sai do pending para saving
-            dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: false } });
-            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: true } });
-            activeSavesRef.current += 1;
-            suppressRealtime(8000);
-
-            // Safety timer de 20s
-            const safetyTimer = setTimeout(() => {
-                logger.warn('[AppContext] persistBoard: safety timeout (20s) para board', boardId);
-                const stuckBoard = stateRef.current.boards.find(b => b.id === boardId);
-                activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
-                if (activeSavesRef.current === 0) suppressRealtime(2000);
-                dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
-                dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: false } });
-                delete saveTimeoutRef.current[boardId];
-                delete saveInProgressRef.current[boardId];
-                dispatch({
-                    type: 'PUSH_SAVE_ERROR',
-                    payload: {
-                        boardId,
-                        boardTitle: stuckBoard?.title,
-                        boardSnapshot: stuckBoard ? JSON.parse(JSON.stringify(stuckBoard)) : null,
-                        error: 'Timeout: save travou. Verifique sua conexão.',
-                    },
-                });
-            }, 20000);
-
-            // Loop de save: re-salva se houve mudanças durante o save anterior
-            let saveAgain = true;
-            let lastError = null;
-            saveInProgressRef.current[boardId] = 'saving';
-
-            while (saveAgain) {
-                saveAgain = false;
-                saveInProgressRef.current[boardId] = 'saving';
-
-                try {
-                    const board = stateRef.current.boards.find(b => b.id === boardId);
-                    if (!board) {
-                        logger.warn('[AppContext] persistBoard: board não encontrado', boardId);
-                        break;
-                    }
-
-                    const freshUserId = await getFreshUserId();
-                    if (!freshUserId) {
-                        logger.warn('[AppContext] persistBoard: sem sessão válida, abortando save de', boardId);
-                        dispatch({
-                            type: 'PUSH_SAVE_ERROR',
-                            payload: { boardId, boardTitle: board?.title, boardSnapshot: null, error: 'Sessão expirada' }
-                        });
-                        break;
-                    }
-
-                    logger.debug(`[AppContext] persistBoard: salvando "${board.title}"`);
-                    const result = await updateBoardFull(freshUserId, board);
-
-                    if (!result?.success) {
-                        throw new Error(result?.error || 'Falha ao salvar board');
-                    }
-                    lastError = null;
-                } catch (err) {
-                    logger.error('[AppContext] persistBoard error:', err);
-                    lastError = err;
-                }
-
-                // Se houve mudanças durante o save, re-salva com o estado mais recente
-                if (saveInProgressRef.current[boardId] === 'queued') {
-                    saveAgain = true;
-                    suppressRealtime(8000);
-                }
-            }
-
-            // Se o último save falhou, mostra erro (sem rollback — dados podem estar parcialmente salvos)
-            if (lastError) {
-                const board = stateRef.current.boards.find(b => b.id === boardId);
-                dispatch({
-                    type: 'PUSH_SAVE_ERROR',
-                    payload: { boardId, boardTitle: board?.title, boardSnapshot: null, error: lastError?.message || 'Falha ao salvar' }
-                });
-            }
-
-            clearTimeout(safetyTimer);
-            activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
-            if (activeSavesRef.current === 0) suppressRealtime(2000);
-            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
-            delete saveTimeoutRef.current[boardId];
-            delete saveInProgressRef.current[boardId];
+        timeouts[boardId] = setTimeout(() => {
+            void executeBoardPersistNow(boardId);
         }, options.force ? 0 : 180);
 
         saveTimeoutRef.current = timeouts;
-    }, [userId, suppressRealtime, getFreshUserId, shouldPersistBoard]);
+    }, [userId, suppressRealtime, shouldPersistBoard, dispatch, executeBoardPersistNow]);
 
     // Salva todos os boards com debounce pendente imediatamente (usado pelo botão flutuante)
     const saveAllPending = useCallback(async () => {
-        const timeouts = saveTimeoutRef.current;
-        const pendingIds = Object.keys(timeouts);
-        if (!pendingIds.length) return;
+        const timeouts = saveTimeoutRef.current || {};
+        const timerIds = Object.keys(timeouts);
+        const flaggedIds = stateRef.current.pendingBoardIds || [];
+        const boardIds = [...new Set([...timerIds, ...flaggedIds])];
+        if (!boardIds.length) return;
 
-        // Obtém sessão fresca — garante que token refresh não interfira
-        const freshUserId = await getFreshUserId();
-        if (!freshUserId) {
-            dispatch({
-                type: 'PUSH_SAVE_ERROR',
-                payload: { boardId: '__session__', boardTitle: null, boardSnapshot: null, error: 'Sessão expirada' }
-            });
-            return;
-        }
-
-        // Cancelar todos os timers de debounce pendentes
-        pendingIds.forEach(id => clearTimeout(timeouts[id]));
+        timerIds.forEach((id) => clearTimeout(timeouts[id]));
         saveTimeoutRef.current = {};
         suppressRealtime(8000);
-        activeSavesRef.current += pendingIds.length;
 
-        // Salvar todos em paralelo
-        await Promise.all(pendingIds.map(async (boardId) => {
-            dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: false } });
-            const board = stateRef.current.boards.find(b => b.id === boardId);
-            if (!board) {
-                activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
-                if (activeSavesRef.current === 0) suppressRealtime(500);
-                dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
-                return;
-            }
-            const boardSnapshot = JSON.parse(JSON.stringify(board));
-            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: true } });
-            try {
-                logger.debug(`[AppContext] saveAllPending: ${board.title}`);
-                const result = await updateBoardFull(freshUserId, board);
-                if (!result?.success) throw new Error(result?.error || 'Falha ao salvar');
-            } catch (err) {
-                logger.error('[AppContext] saveAllPending error:', err);
-                dispatch({ type: 'SET_BOARDS', payload: stateRef.current.boards.map(b => b.id === boardId ? boardSnapshot : b) });
-                dispatch({
-                    type: 'PUSH_SAVE_ERROR',
-                    payload: { boardId, boardTitle: boardSnapshot.title, boardSnapshot, error: err?.message || 'Falha ao salvar' }
-                });
-            } finally {
-                activeSavesRef.current = Math.max(0, activeSavesRef.current - 1);
-                if (activeSavesRef.current === 0) suppressRealtime(500);
-                dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
-            }
-        }));
-    }, [suppressRealtime, getFreshUserId]);
+        await Promise.all(boardIds.map((boardId) => flushBoardPersist(boardId)));
+    }, [suppressRealtime, flushBoardPersist]);
 
     // Helper interno compartilhado para persistência imediata com rollback + token refresh
     const persistBoardImmediate = useCallback(async (boardId, updates, options = {}) => {
+        if (isBoardPrankFrozen()) return;
         if (!boardId) return;
         if (!shouldPersistBoard(boardId, options)) {
             dispatch({ type: 'UPDATE_BOARD', payload: { id: boardId, updates } });
@@ -1065,18 +1063,15 @@ export function AppProvider({ children }) {
 
             const handleChange = (payload) => {
                 const table = payload?.table;
+                const collabEchoOnLiveBoard =
+                    isCollabEnabled()
+                    && collabActiveBoardIdRef.current
+                    && collabConnectedRef.current
+                    && collabBoardRoomLiveRef.current;
+
                 if (
-                    isCollabEnabled() &&
-                    collabActiveBoardIdRef.current &&
-                    collabConnectedRef.current &&
-                    [
-                        'lists',
-                        'cards',
-                        'subtasks',
-                        'boards',
-                        'board_members',
-                        'board_invitations',
-                    ].includes(table)
+                    collabEchoOnLiveBoard
+                    && ['lists', 'cards', 'subtasks'].includes(table)
                 ) {
                     return;
                 }
@@ -1238,18 +1233,22 @@ export function AppProvider({ children }) {
         state.boards.forEach(board => {
             board.lists.forEach(list => {
                 list.cards.forEach(card => {
-                    cards.push({ ...card, boardId: board.id, listId: list.id, boardTitle: board.title, listTitle: list.title });
+                    cards.push(enrichCardForSmartView(card, board, list));
                 });
             });
         });
         return cards;
     };
 
-    const getMyDayCards = () => getAllCards().filter(c => c.myDay);
+    /** Pendentes no Meu Dia (badges, foco, sugestões). */
+    const getMyDayCards = () => getAllCards().filter(isCardActiveMyDay);
 
-    const getImportantCards = () => getAllCards().filter(c => c.important || c.priority === 'high' || c.priority === 'urgent');
+    /** Todas as missões do dia, inclusive concluídas (progresso no hub). */
+    const getMyDayCardsAll = () => getAllCards().filter(c => c.myDay);
 
-    const getPlannedCards = () => getAllCards().filter(c => c.dueDate || c.startDate);
+    const getImportantCards = () => getAllCards().filter(isCardActiveImportant);
+
+    const getPlannedCards = () => getAllCards().filter(isCardActivePlanned);
 
     const searchCards = (query) => {
         if (!query) return [];
@@ -1260,7 +1259,7 @@ export function AppProvider({ children }) {
     };
 
     // ── Unified Confirm Modal ──
-    const showConfirm = useCallback(({ title, message, type = 'danger', confirmLabel, cancelLabel }) => {
+    const showConfirm = useCallback(({ title, message, type = 'danger', confirmLabel, cancelLabel, checkbox }) => {
         return new Promise((resolve) => {
             dispatch({
                 type: 'SHOW_CONFIRM',
@@ -1270,9 +1269,14 @@ export function AppProvider({ children }) {
                     type,
                     confirmLabel,
                     cancelLabel,
-                    onConfirm: () => {
+                    checkbox: checkbox ?? null,
+                    onConfirm: (checkboxChecked) => {
                         dispatch({ type: 'HIDE_CONFIRM' });
-                        resolve(true);
+                        if (checkbox) {
+                            resolve({ permanent: !!checkboxChecked });
+                        } else {
+                            resolve(true);
+                        }
                     },
                     onCancel: () => {
                         dispatch({ type: 'HIDE_CONFIRM' });
@@ -1360,6 +1364,7 @@ export function AppProvider({ children }) {
             getActiveBoard,
             getAllCards,
             getMyDayCards,
+            getMyDayCardsAll,
             getImportantCards,
             getPlannedCards,
             searchCards,
@@ -1371,6 +1376,7 @@ export function AppProvider({ children }) {
             recentlyAddedId, setRecentlyAddedId,
             lastReorderedIds, setLastReorderedIds,
             persistBoard,
+            flushBoardPersist,
             saveAllPending,
             suppressRealtime,
             savingBoardIds: state.savingBoardIds,
@@ -1389,6 +1395,7 @@ export function AppProvider({ children }) {
             reloadBoards,
             setCollabActiveBoardId,
             setCollabConnectedForBoard,
+            setCollabBoardRoomLive,
             shouldPersistBoard,
         }}>
             {children}
@@ -1402,9 +1409,8 @@ export function AppProvider({ children }) {
                 type={state.confirmModal.type}
                 confirmLabel={state.confirmModal.confirmLabel}
                 cancelLabel={state.confirmModal.cancelLabel}
+                checkbox={state.confirmModal.checkbox}
             />
-            {/* Painel flutuante de erro de save */}
-            <FloatingSaveError />
             {/* Painel flutuante de convite */}
             <FloatingInvitationToast />
         </AppContext.Provider>

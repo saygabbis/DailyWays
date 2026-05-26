@@ -15,6 +15,7 @@ import { CollabProvider } from './CollabContext.jsx';
 import { applyRemoteOp } from '../whiteboard/applyOp.js';
 import { useToast } from '../../context/ToastContext.jsx';
 import { toastCollabError } from './collabToast.js';
+import { applyVictimPuppetCursor, useBoardDevPrankStore } from '../board/dev/boardDevPrank.js';
 
 function bindCollabSocket(sock, handlers) {
   sock.on('connect', handlers.onConnect);
@@ -23,6 +24,9 @@ function bindCollabSocket(sock, handlers) {
   sock.on(SERVER_EVENTS.APPLIED, handlers.onApplied);
   if (handlers.onRejected) sock.on(SERVER_EVENTS.REJECTED, handlers.onRejected);
   sock.on(SERVER_EVENTS.PRESENCE_SYNC, handlers.onPresenceSync);
+  if (handlers.onDevPrankFrozen) sock.on('dev:prank-frozen', handlers.onDevPrankFrozen);
+  if (handlers.onDevPrankHold) sock.on('dev:prank-hold', handlers.onDevPrankHold);
+  if (handlers.onDevPrankCursor) sock.on('dev:prank-cursor', handlers.onDevPrankCursor);
 }
 
 function unbindCollabSocket(sock) {
@@ -33,6 +37,9 @@ function unbindCollabSocket(sock) {
   sock.off(SERVER_EVENTS.APPLIED);
   sock.off(SERVER_EVENTS.REJECTED);
   sock.off(SERVER_EVENTS.PRESENCE_SYNC);
+  sock.off('dev:prank-frozen');
+  sock.off('dev:prank-hold');
+  sock.off('dev:prank-cursor');
 }
 
 export default function CollabProviderRoot({ children }) {
@@ -140,6 +147,31 @@ export default function CollabProviderRoot({ children }) {
         const syncBoardId = payload?.boardId;
         if (syncBoardId && joined && joined !== syncBoardId) return;
         flushPresenceSyncNow(peers);
+      },
+      onDevPrankFrozen: (payload) => {
+        if (!payload?.frozen) return;
+        useBoardDevPrankStore.getState().setHeld(false);
+        useBoardDevPrankStore.getState().clearVictimPuppetCursor();
+        useBoardDevPrankStore.getState().setFrozen(true);
+        disconnectCollabSocket();
+        addToast({
+          type: 'warning',
+          message: payload?.message || 'Você foi congelado (dev). Recarregue a página (F5).',
+          duration: 12000,
+        });
+      },
+      onDevPrankHold: (payload) => {
+        const held = Boolean(payload?.held);
+        useBoardDevPrankStore.getState().setHeld(held);
+        if (!held) {
+          useBoardDevPrankStore.getState().clearVictimPuppetCursor();
+        }
+      },
+      onDevPrankCursor: (payload) => {
+        const { boardId, x, y } = payload || {};
+        if (!boardId || typeof x !== 'number' || typeof y !== 'number') return;
+        if (!useBoardDevPrankStore.getState().held) return;
+        applyVictimPuppetCursor(boardId, x, y);
       },
     };
 

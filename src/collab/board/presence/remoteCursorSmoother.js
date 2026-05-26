@@ -34,6 +34,18 @@ export function createRemoteCursorSmoother(options = {}) {
     prev.ty = target.y;
   }
 
+  function snapTo(userId, target) {
+    if (!userId || !target || typeof target.x !== 'number' || typeof target.y !== 'number') {
+      return;
+    }
+    states.set(userId, {
+      x: target.x,
+      y: target.y,
+      tx: target.x,
+      ty: target.y,
+    });
+  }
+
   function remove(userId) {
     states.delete(userId);
   }
@@ -68,5 +80,5 @@ export function createRemoteCursorSmoother(options = {}) {
     return animating;
   }
 
-  return { updateTarget, remove, clear, getPosition, tick };
+  return { updateTarget, snapTo, remove, clear, getPosition, tick };
 }

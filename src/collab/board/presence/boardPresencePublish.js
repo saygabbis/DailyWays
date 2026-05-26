@@ -23,6 +23,7 @@ export function prepareBoardSurfacePresence(boardId) {
   f.onBoardSurface = true;
   f.hoverCardId = null;
   f.hoverListId = null;
+  f.hoverUiKey = null;
   f.draggingCardId = null;
   f.draggingListId = null;
 }
@@ -90,6 +91,7 @@ export function restoreBoardPresenceAfterModal(boardId) {
   f.liveDraft = null;
   f.hoverCardId = null;
   f.hoverListId = null;
+  f.hoverUiKey = null;
   f.cursorModal = null;
   if (!isBoardSpaceCursor(f.cursor)) {
     const seeded = getLastBoardPointer(boardId) || defaultBoardPointer(boardId);

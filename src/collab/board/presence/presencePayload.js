@@ -40,6 +40,7 @@ function presenceFieldsForEmit(boardId) {
     draggingListId: f.draggingListId ?? null,
     hoverCardId: f.hoverCardId ?? null,
     hoverListId: f.hoverListId ?? null,
+    hoverUiKey: f.hoverUiKey ?? null,
     hoverModalEl: f.hoverModalEl ?? null,
     liveDraft: f.liveDraft ?? null,
   };

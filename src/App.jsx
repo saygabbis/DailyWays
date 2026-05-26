@@ -11,6 +11,7 @@ import MyDayView from './components/MyDay/MyDayView';
 import ImportantView from './components/SmartViews/ImportantView';
 import PlannedView from './components/SmartViews/PlannedView';
 import DashboardView from './components/Dashboard/DashboardView';
+import ContactsView from './components/Contacts/ContactsView';
 import TaskDetailModal from './components/TaskDetail/TaskDetailModal';
 import SettingsModal from './components/Settings/SettingsView';
 import SearchOverlay from './components/Search/SearchOverlay';
@@ -33,8 +34,13 @@ import {
 
 import PomodoroTimer from './components/Pomodoro/PomodoroTimer';
 import RadioWidget from './components/Radio/RadioWidget';
+import AppBottomFabCluster from './components/Help/AppBottomFabCluster';
+import { useGlobalBoardUndoShortcuts } from './hooks/useGlobalBoardUndoShortcuts';
+import BoardPrankSiteLock from './collab/board/dev/BoardPrankSiteLock.jsx';
+import DevConfigSync from './dev/DevConfigSync.jsx';
+import DevConfigHotkey from './dev/DevConfigHotkey.jsx';
+import { setDevPrankSession } from './collab/board/dev/boardDevPrank.js';
 import PlannedDropPopover from './components/Common/PlannedDropPopover';
-import FloatingSaveButton from './components/Common/FloatingSaveButton';
 import { useContextMenu } from './components/Common/ContextMenu';
 import { DragDropContext } from '@hello-pangea/dnd';
 import { useBoardSelectionStore } from './stores/boardSelectionStore';
@@ -44,6 +50,10 @@ import './App.css';
 
 function AppContent() {
   const { user, profile } = useAuth();
+
+  useEffect(() => {
+    setDevPrankSession(user, profile);
+  }, [user, profile]);
   const {
     getActiveBoard,
     confirmConfig,
@@ -55,6 +65,7 @@ function AppContent() {
     updateWorkspaceOrder,
     boardsLoadError,
     profileMenuOpen,
+    saveAllPending,
   } = useApp();
   const { collabDispatch, updateBoardMeta } = useBoardCollabDispatch();
   const collab = useCollab();
@@ -323,6 +334,8 @@ function AppContent() {
 
   const activeBoard = getActiveBoard();
 
+  useGlobalBoardUndoShortcuts({ enabled: !selectedCard });
+
   const handleCardClick = (card, boardId, listId) => {
     setSelectedCard({ card, boardId, listId });
   };
@@ -332,10 +345,13 @@ function AppContent() {
   };
 
   // Handle view change — intercept "settings" to open modal instead
-  const handleViewChange = (view, boardIdOverride = null) => {
+  const handleViewChange = async (view, boardIdOverride = null) => {
     if (view === 'settings') {
       setShowSettings(true);
       return;
+    }
+    if (activeView === 'important' || activeView === 'planned' || activeView === 'myday') {
+      await saveAllPending();
     }
     viewRestoreDoneRef.current = true;
     navPersistReadyRef.current = true;
@@ -345,12 +361,22 @@ function AppContent() {
     persistNavigation(view, boardId);
   };
 
+  useEffect(() => {
+    const onNavigate = (e) => {
+      const view = e.detail?.view;
+      if (view) handleViewChange(view);
+    };
+    window.addEventListener('app-navigate-view', onNavigate);
+    return () => window.removeEventListener('app-navigate-view', onNavigate);
+  }, [handleViewChange]);
+
   const getTitle = () => {
     switch (activeView) {
       case 'dashboard': return 'Visão Geral';
       case 'myday': return 'Diário';
       case 'important': return 'Importante';
       case 'planned': return 'Planejado';
+      case 'contacts': return 'Contatos';
       case 'board': return activeBoard ? `${activeBoard.emoji} ${activeBoard.title}` : 'Board';
       case 'help': return 'Central de Ajuda';
       default:
@@ -433,7 +459,6 @@ function AppContent() {
   }, [activeView, activeBoard, sidebarOpen, showContextMenu, toggleSidebar]);
 
   return (
-    <BoardCollabProvider>
     <DragDropContext onDragStart={handleGlobalDragStart} onDragEnd={handleGlobalDragEnd}>
       <BoardCollabBridge />
       {navReady && keepBoardCollabSession && (
@@ -463,6 +488,7 @@ function AppContent() {
               setShowSettings(true);
             }}
             onOpenSearch={() => setShowSearch(true)}
+            onOpenDiary={() => handleViewChange('myday')}
             editableBoardTitle={activeView === 'board' && activeBoard ? { board: activeBoard, onSave: (newTitle) => updateBoardMeta({ title: newTitle }) } : null}
             editableSpaceTitle={activeView.startsWith('space-') && (() => {
               const spaceId = activeView.replace('space-', '');
@@ -496,6 +522,7 @@ function AppContent() {
             {navReady && activeView === 'myday' && <MyDayView key="myday" onCardClick={handleCardClick} />}
             {navReady && activeView === 'important' && <ImportantView key="important" onCardClick={handleCardClick} />}
             {navReady && activeView === 'planned' && <PlannedView key="planned" onCardClick={handleCardClick} />}
+            {navReady && activeView === 'contacts' && <ContactsView key="contacts" />}
             {navReady && activeView === 'board' && activeBoard && (
               <BoardView
                 key={`board-${activeBoard.id}`}
@@ -517,9 +544,12 @@ function AppContent() {
               return <SpaceView key={`space-${spaceId}`} spaceId={spaceId} />;
             })()}
             {activeView === 'help' && (
-              <div style={{ padding: 'var(--space-xl)', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '80px' }}>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🤝 Central de Ajuda</h2>
-                <p>Em breve! Estamos preparando dicas e tutoriais para você.</p>
+              <div className="help-view-placeholder">
+                <h2>Central de ajuda</h2>
+                <p>Use o botão <strong>?</strong> no canto inferior direito em qualquer tela.</p>
+                <button type="button" className="btn btn-primary" onClick={() => window.dispatchEvent(new CustomEvent('app-help-open'))}>
+                  Abrir agora
+                </button>
               </div>
             )}
           </div>
@@ -542,8 +572,14 @@ function AppContent() {
         {/* Radio Widget */}
         <RadioWidget />
 
-        {/* Floating save button — shown when there are unsaved local changes */}
-        <FloatingSaveButton />
+        {/* Undo/redo + ajuda (?) */}
+        {user && (
+          <AppBottomFabCluster
+            boardId={activeBoard?.id}
+            showBoardHistory={activeView === 'board' && !!activeBoard}
+            onNavigateView={handleViewChange}
+          />
+        )}
 
         {!isDesktop && (
           <MobileBottomNav
@@ -575,9 +611,12 @@ function AppContent() {
           />
         )}
 
+        <BoardPrankSiteLock />
+        <DevConfigSync />
+        <DevConfigHotkey />
+
       </div>
     </DragDropContext>
-    </BoardCollabProvider>
   );
 }
 
@@ -653,5 +692,9 @@ export default function App() {
 
   if (!user) return <AuthPage />;
 
-  return <AppContent />;
+  return (
+    <BoardCollabProvider>
+      <AppContent />
+    </BoardCollabProvider>
+  );
 }

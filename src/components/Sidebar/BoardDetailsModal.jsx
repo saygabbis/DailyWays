@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { fetchBoardMembers, inviteBoardMember, updateMemberRole, removeMember, isBoardOwnerClient, sortBoardMembersOwnerFirst } from '../../services/boardService';
 import './BoardDetailsModal.css';
 
-function RoleSelect({ value, onChange, options, className = '', disabled = false }) {
+export function RoleSelect({ value, onChange, options, className = '', disabled = false }) {
     const [open, setOpen] = useState(false);
     const wrapRef = useRef(null);
 
@@ -79,7 +79,7 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
     // Compartilhar
     const [members, setMembers] = useState([]);
     const [membersLoading, setMembersLoading] = useState(false);
-    const [inviteEmail, setInviteEmail] = useState('');
+    const [inviteIdentifier, setInviteIdentifier] = useState('');
     const [inviteRole, setInviteRole] = useState('editor');
     const [shareError, setShareError] = useState('');
     const [shareSuccess, setShareSuccess] = useState('');
@@ -144,15 +144,15 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
     const handleInvite = async (e) => {
         e.preventDefault();
         if (!canInvite) return;
-        if (!inviteEmail.trim()) return;
+        if (!inviteIdentifier.trim()) return;
         setShareError('');
         setShareSuccess('');
-        const result = await inviteBoardMember(board.id, inviteEmail.trim(), inviteRole);
+        const result = await inviteBoardMember(board.id, inviteIdentifier.trim(), inviteRole);
         if (!result.success) {
             setShareError(result.error || 'Erro ao enviar convite.');
         } else {
             setShareSuccess('Convite enviado com sucesso.');
-            setInviteEmail('');
+            setInviteIdentifier('');
             await loadMembers();
             setTimeout(() => setShareSuccess(''), 2500);
         }
@@ -349,16 +349,17 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
 
                             {canInvite && (
                             <div className="settings-field board-share-invite-section">
-                                <label>Convidar por e-mail</label>
+                                <label>Convidar por @username ou e-mail</label>
                                 <form className="board-share-invite-form" onSubmit={handleInvite}>
                                     <div className="board-share-invite-top">
                                         <div className="board-share-invite-input">
                                             <Mail size={14} />
                                             <input
-                                                type="email"
-                                                placeholder="email@pessoa.com"
-                                                value={inviteEmail}
-                                                onChange={e => setInviteEmail(e.target.value)}
+                                                type="text"
+                                                placeholder="@username ou email@pessoa.com"
+                                                value={inviteIdentifier}
+                                                onChange={e => setInviteIdentifier(e.target.value)}
+                                                autoComplete="off"
                                             />
                                         </div>
                                     </div>
@@ -376,7 +377,7 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
                                     </div>
                                 </form>
                                 <p className="settings-field-hint">
-                                    A pessoa precisará ter conta com este e-mail para acessar o board.
+                                    Só é possível convidar quem já tem conta no DailyWays (e-mail ou @username).
                                 </p>
                             </div>
                             )}

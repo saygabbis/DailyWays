@@ -66,7 +66,20 @@ export async function canAccessSpace(userId, spaceId, accessToken) {
     .maybeSingle();
   if (error || !space) return false;
   if (space.owner_id === userId) return { access: true, canWrite: true };
-  return { access: false, canWrite: false };
+
+  const { data: member, error: memberErr } = await db
+    .from('space_members')
+    .select('role')
+    .eq('space_id', spaceId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (memberErr || !member) {
+    return { access: false, canWrite: false };
+  }
+
+  const canWrite = member.role === 'editor';
+  return { access: true, canWrite };
 }
 
 export async function canAccessBoard(userId, boardId, accessToken) {

@@ -1,4 +1,18 @@
 import { uuidv4 } from '../../utils/uuid';
+import { applyCompletionListUpdates } from '../../utils/cardCompletion.js';
+
+/** Checkbox do modal global de exclusão de tarefas */
+export const DELETE_TASK_CONFIRM_CHECKBOX = {
+    label: 'Apagar permanentemente',
+    confirmLabelUnchecked: 'Deletar',
+    confirmLabelChecked: 'Eliminar para sempre',
+};
+
+export function isDeleteConfirmPermanent(result) {
+    if (!result) return false;
+    if (typeof result === 'object' && 'permanent' in result) return !!result.permanent;
+    return false;
+}
 
 export function serializeCardForClipboard(card) {
     return JSON.parse(JSON.stringify(card));
@@ -73,22 +87,35 @@ export function resolveSelectedCards(board, selectedCardIds) {
     );
 }
 
-export async function bulkDeleteCards(cards, boardId, collabDispatch, showConfirm) {
+export async function bulkDeleteCards(
+    cards,
+    boardId,
+    collabDispatch,
+    showConfirm,
+    getBoardSnapshot,
+    { defaultPermanentChecked = false } = {},
+) {
     if (!cards.length) return false;
-    const confirmed = await showConfirm({
+    const result = await showConfirm({
         title: cards.length === 1 ? 'Deletar Tarefa' : 'Deletar Tarefas',
         message: cards.length === 1
             ? `Tem certeza que deseja deletar "${cards[0].card.title}"?`
             : `Tem certeza que deseja deletar ${cards.length} tarefas selecionadas?`,
         confirmLabel: 'Deletar',
         type: 'danger',
+        checkbox: {
+            ...DELETE_TASK_CONFIRM_CHECKBOX,
+            defaultChecked: defaultPermanentChecked,
+        },
     });
-    if (!confirmed) return false;
+    if (!result) return false;
+    const permanent = isDeleteConfirmPermanent(result);
+    const dispatchOpts = permanent ? { skipHistory: true } : undefined;
     for (const { card, listId } of cards) {
         collabDispatch({
             type: 'DELETE_CARD',
             payload: { boardId, listId, cardId: card.id },
-        });
+        }, dispatchOpts);
     }
     return true;
 }
@@ -118,7 +145,7 @@ export function copyCardsToClipboard(cards, boardId, sourceListId, setClipboard)
     });
 }
 
-export async function cutCardsToClipboard(cards, boardId, sourceListId, setClipboard, collabDispatch) {
+export async function cutCardsToClipboard(cards, boardId, sourceListId, setClipboard, collabDispatch, getBoardSnapshot) {
     setClipboard({
         mode: 'cut',
         boardId,
@@ -140,30 +167,11 @@ export function pasteCardsFromClipboard(clipboard, targetListId, boardId, collab
     }
 }
 
-export function applyCompletionListUpdates(movedCard, destList, boardId, destListId, collabDispatch) {
-    if (!destList?.isCompletionList || !movedCard) return;
-    const allSubtasksDone = movedCard.subtasks?.every((st) => st.done);
-    if (!movedCard.completed || !allSubtasksDone) {
-        collabDispatch({
-            type: 'UPDATE_CARD',
-            payload: {
-                boardId,
-                listId: destListId,
-                cardId: movedCard.id,
-                updates: {
-                    completed: true,
-                    subtasks: (movedCard.subtasks || []).map((st) => ({ ...st, done: true })),
-                },
-            },
-        });
-    }
-}
-
 /**
  * Move cards to destList starting at dropIndex, preserving selection order.
  * primaryCardId lands at dropIndex; earlier items in the group go before it.
  */
-export function bulkMoveCardsToIndex(cards, destListId, dropIndex, primaryCardId, getBoard, collabDispatch) {
+export function bulkMoveCardsToIndex(cards, destListId, dropIndex, primaryCardId, getBoard, collabDispatch, getBoardSnapshot) {
     if (!destListId || !cards.length) return;
 
     const board = typeof getBoard === 'function' ? getBoard() : getBoard;
@@ -212,9 +220,11 @@ export function bulkMoveCardsToIndex(cards, destListId, dropIndex, primaryCardId
     }
 }
 
-export function bulkMoveCardsToList(cards, destListId, getBoard, collabDispatch) {
+export function bulkMoveCardsToList(cards, destListId, getBoard, collabDispatch, getBoardSnapshot) {
     if (!destListId) return;
     let destIndexOffset = 0;
+    const boardRef = typeof getBoard === 'function' ? getBoard() : getBoard;
+    if (!boardRef?.id) return;
 
     for (const { card, listId: sourceListId } of cards) {
         const board = typeof getBoard === 'function' ? getBoard() : getBoard;

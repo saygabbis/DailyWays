@@ -13,15 +13,29 @@ import {
 import { Chrome, Command, Github, Plus } from 'lucide-react';
 import { ENABLE_MICROSOFT_LOGIN } from '../../config';
 import pkg from '../../../package.json';
-import { fetchMyInvitations, acceptInvitation, declineInvitation } from '../../services/boardService';
+import {
+    fetchMyInvitations,
+    fetchMyInvitationHistory,
+    clearMyInvitationHistory,
+    acceptInvitation,
+    declineInvitation,
+} from '../../services/boardService';
 import logoWhite from '../../assets/Logo - Branco.png';
 import logoBlack from '../../assets/Logo - Preto.png';
 import CustomAccentPopover from './CustomAccentPopover';
 import { CUSTOM_ACCENT_ID } from '../../context/ThemeContext';
 import { PRESENCE_COLOR_PRESETS } from '../../utils/presenceColor';
+import { fetchContacts, fetchContactRequests, respondToContactRequest } from '../../services/contactsService';
+import { fetchPrivacySettings, updatePrivacySettings, fetchBlockedUsers, unblockUser } from '../../services/privacyService';
 import './Settings.css';
 import './AvatarCropper.css';
 const AvatarCropper = lazy(() => import('./AvatarCropper'));
+
+const PRIVACY_ALLOW_OPTIONS = [
+    { id: 'everyone', label: 'Todos' },
+    { id: 'contacts_only', label: 'Apenas contatos' },
+    { id: 'no_one', label: 'Ninguém' },
+];
 
 const PROVIDERS = [
     { id: 'google', label: 'Google', icon: Chrome },
@@ -710,40 +724,71 @@ const AppPanel = memo(function AppPanel({ t }) {
 // ─────────────────────────────────────────────
 // INVITATIONS PANEL
 // ─────────────────────────────────────────────
+function formatInviteDate(iso) {
+    if (!iso) return '—';
+    try {
+        return new Date(iso).toLocaleString('pt-BR', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    } catch {
+        return '—';
+    }
+}
+
 const InvitationsPanel = memo(function InvitationsPanel({ t }) {
     const { reloadBoards } = useApp();
-    const [loading, setLoading] = useState(true);
+    const [loadingPending, setLoadingPending] = useState(true);
+    const [loadingHistory, setLoadingHistory] = useState(true);
+    const [clearingHistory, setClearingHistory] = useState(false);
     const [error, setError] = useState('');
-    const [items, setItems] = useState([]);
+    const [pending, setPending] = useState([]);
+    const [history, setHistory] = useState([]);
 
     const load = useCallback(async () => {
-        setLoading(true);
         setError('');
-        const { data, error: err } = await fetchMyInvitations();
-        if (err) setError(err);
-        setItems(data || []);
-        setLoading(false);
+        setLoadingPending(true);
+        setLoadingHistory(true);
+
+        const [pendingRes, historyRes] = await Promise.all([
+            fetchMyInvitations(),
+            fetchMyInvitationHistory({ limit: 100 }),
+        ]);
+
+        if (pendingRes.error) setError(pendingRes.error);
+        else if (historyRes.error && !pendingRes.error) setError(historyRes.error);
+
+        setPending(pendingRes.data || []);
+        setHistory(historyRes.data || []);
+        setLoadingPending(false);
+        setLoadingHistory(false);
     }, []);
 
     useEffect(() => {
         load();
     }, [load]);
 
-    const handleAccept = async (id) => {
+    const handleAccept = async (inv) => {
         setError('');
-        const res = await acceptInvitation(id);
+        const res = await acceptInvitation(inv.id, inv.kind || 'board');
         if (!res.success) {
             setError(res.error || 'Erro ao aceitar convite.');
         } else {
             await load();
-            // Recarrega boards para o board compartilhado aparecer na sidebar
-            await reloadBoards();
+            if (inv.kind === 'space') {
+                window.location.reload();
+            } else {
+                await reloadBoards();
+            }
         }
     };
 
-    const handleDecline = async (id) => {
+    const handleDecline = async (inv) => {
         setError('');
-        const res = await declineInvitation(id);
+        const res = await declineInvitation(inv.id, inv.kind || 'board');
         if (!res.success) {
             setError(res.error || 'Erro ao recusar convite.');
         } else {
@@ -751,33 +796,56 @@ const InvitationsPanel = memo(function InvitationsPanel({ t }) {
         }
     };
 
+    const handleClearHistory = async () => {
+        if (!window.confirm('Limpar todo o histórico de convites? Esta ação não pode ser desfeita.')) {
+            return;
+        }
+        setError('');
+        setClearingHistory(true);
+        const res = await clearMyInvitationHistory();
+        setClearingHistory(false);
+        if (!res.success) {
+            setError(res.error || 'Erro ao limpar histórico.');
+            return;
+        }
+        await load();
+    };
+
     return (
         <div className="settings-panel animate-fade-in">
             <div className="settings-panel-header">
-                <h2>Convites de Boards</h2>
-                <p>Veja e gerencie convites para boards compartilhados com você.</p>
+                <h2>Convites</h2>
+                <p>Convites para boards e spaces compartilhados com você.</p>
             </div>
 
+            {error && <p className="settings-error">{error}</p>}
+
             <div className="settings-section">
-                {loading && <p className="settings-muted">Carregando convites...</p>}
-                {error && <p className="settings-error">{error}</p>}
-                {!loading && items.length === 0 && !error && (
-                    <p className="settings-muted">Você não tem convites pendentes.</p>
+                <h3 className="settings-section-title">Pendentes</h3>
+                <p className="settings-section-desc">
+                    Convites à espera da tua resposta.
+                </p>
+                {loadingPending && <p className="settings-muted">Carregando...</p>}
+                {!loadingPending && pending.length === 0 && (
+                    <p className="settings-muted">Não tens convites pendentes.</p>
                 )}
-                {!loading && items.length > 0 && (
+                {!loadingPending && pending.length > 0 && (
                     <div className="settings-invitations-list">
-                        {items.map(inv => (
+                        {pending.map((inv) => (
                             <div key={inv.id} className="settings-invitation-row">
                                 <div className="settings-invitation-main">
                                     <div className="settings-invitation-emoji">
-                                        {inv.boardEmoji || '📋'}
+                                        {inv.kind === 'space' ? (inv.spaceEmoji || '🌌') : (inv.boardEmoji || '📋')}
                                     </div>
-                                    <div>
+                                    <div className="settings-invitation-text">
                                         <div className="settings-invitation-title">
-                                            {inv.boardTitle}
+                                            {inv.kind === 'space' ? inv.spaceTitle : inv.boardTitle}
                                         </div>
                                         <div className="settings-invitation-meta">
-                                            Acesso como {inv.role === 'editor' ? 'editor' : 'leitor'} · convidado para {inv.inviteeEmail}
+                                            {inv.kind === 'space' ? 'Space' : 'Board'}
+                                            {' · '}
+                                            {inv.role === 'editor' ? 'Editor' : 'Leitor'}
+                                            {inv.inviterLabel ? ` · por ${inv.inviterLabel}` : ''}
                                         </div>
                                     </div>
                                 </div>
@@ -785,20 +853,77 @@ const InvitationsPanel = memo(function InvitationsPanel({ t }) {
                                     <button
                                         type="button"
                                         className="btn btn-ghost btn-sm"
-                                        onClick={() => handleDecline(inv.id)}
+                                        onClick={() => handleDecline(inv)}
                                     >
                                         Recusar
                                     </button>
                                     <button
                                         type="button"
                                         className="btn btn-primary btn-sm"
-                                        onClick={() => handleAccept(inv.id)}
+                                        onClick={() => handleAccept(inv)}
                                     >
                                         Aceitar
                                     </button>
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+            </div>
+
+            <div className="settings-section">
+                <div className="settings-section-head">
+                    <h3 className="settings-section-title">Histórico</h3>
+                    {!loadingHistory && history.length > 0 && (
+                        <button
+                            type="button"
+                            className="btn btn-ghost btn-sm settings-clear-history-btn"
+                            onClick={handleClearHistory}
+                            disabled={clearingHistory}
+                        >
+                            {clearingHistory ? 'A limpar...' : 'Limpar histórico'}
+                        </button>
+                    )}
+                </div>
+                <p className="settings-section-desc">
+                    Registo de convites que aceitaste ou recusaste.
+                </p>
+                {loadingHistory && <p className="settings-muted">Carregando histórico...</p>}
+                {!loadingHistory && history.length === 0 && (
+                    <p className="settings-muted">Ainda não há entradas no histórico.</p>
+                )}
+                {!loadingHistory && history.length > 0 && (
+                    <div className="settings-invitations-history-scroll">
+                        <ul className="settings-invitations-history">
+                            {history.map((inv) => (
+                                <li key={`${inv.kind}-${inv.id}`} className="settings-invitation-history-row">
+                                    <div className="settings-invitation-history-main">
+                                        <span className="settings-invitation-emoji" aria-hidden>
+                                            {inv.kind === 'space' ? (inv.spaceEmoji || '🌌') : (inv.boardEmoji || '📋')}
+                                        </span>
+                                        <div className="settings-invitation-text">
+                                            <div className="settings-invitation-title">
+                                                {inv.kind === 'space' ? inv.spaceTitle : inv.boardTitle}
+                                            </div>
+                                            <div className="settings-invitation-meta">
+                                                {inv.kind === 'space' ? 'Space' : 'Board'}
+                                                {' · '}
+                                                {inv.role === 'editor' ? 'Editor' : 'Leitor'}
+                                                {inv.inviterLabel ? ` · ${inv.inviterLabel}` : ''}
+                                            </div>
+                                            <div className="settings-invitation-date">
+                                                {formatInviteDate(inv.createdAt)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <span
+                                        className={`settings-invitation-status settings-invitation-status--${inv.status}`}
+                                    >
+                                        {inv.status === 'accepted' ? 'Aceite' : 'Recusado'}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
                     </div>
                 )}
             </div>
@@ -841,6 +966,279 @@ const LanguagePanel = memo(function LanguagePanel({ language, setLanguage, t }) 
 });
 
 // ─────────────────────────────────────────────
+// CONTACTS PANEL (settings)
+// ─────────────────────────────────────────────
+const ContactsPanel = memo(function ContactsPanel({ user, t }) {
+    const [loading, setLoading] = useState(true);
+    const [contactsCount, setContactsCount] = useState(0);
+    const [incoming, setIncoming] = useState([]);
+    const [outgoing, setOutgoing] = useState([]);
+    const [blocked, setBlocked] = useState([]);
+    const [err, setErr] = useState('');
+
+    const refresh = useCallback(async () => {
+        if (!user?.id) return;
+        setLoading(true);
+        setErr('');
+        const [{ data: contacts, error: cErr }, { data: reqs, error: rErr }, { data: blocks, error: bErr }] = await Promise.all([
+            fetchContacts(),
+            fetchContactRequests(),
+            fetchBlockedUsers(),
+        ]);
+        if (cErr || rErr || bErr) setErr(cErr || rErr || bErr || 'Erro ao carregar.');
+        setContactsCount((contacts || []).length);
+        const inReq = (reqs || []).filter((r) => r.to_user_id === user.id && r.status === 'pending');
+        const outReq = (reqs || []).filter((r) => r.from_user_id === user.id && r.status === 'pending');
+        setIncoming(inReq);
+        setOutgoing(outReq);
+        setBlocked(blocks || []);
+        setLoading(false);
+    }, [user?.id]);
+
+    useEffect(() => { refresh(); }, [refresh]);
+
+    const accept = async (id) => {
+        const { success, error } = await respondToContactRequest(id, 'accepted');
+        if (!success) setErr(error || 'Erro ao aceitar.');
+        refresh();
+    };
+    const decline = async (id) => {
+        const { success, error } = await respondToContactRequest(id, 'declined');
+        if (!success) setErr(error || 'Erro ao recusar.');
+        refresh();
+    };
+    const unblock = async (blockedUserId) => {
+        const { success, error } = await unblockUser(blockedUserId);
+        if (!success) setErr(error || 'Erro ao desbloquear.');
+        refresh();
+    };
+
+    return (
+        <div className="settings-panel animate-fade-in">
+            <div className="settings-panel-header">
+                <h2>Contatos</h2>
+                <p>Gerencie solicitações, bloqueios e sua lista de contatos.</p>
+            </div>
+
+            {err && <p className="settings-error">{err}</p>}
+
+            <div className="settings-section">
+                <h3 className="settings-section-title">Resumo</h3>
+                <div className="settings-info-row">
+                    <span>Total de contatos</span>
+                    <span className="settings-info-value">{loading ? '…' : contactsCount}</span>
+                </div>
+                <div className="settings-info-row">
+                    <span>Solicitações recebidas</span>
+                    <span className="settings-info-value">{loading ? '…' : incoming.length}</span>
+                </div>
+                <div className="settings-info-row">
+                    <span>Solicitações enviadas</span>
+                    <span className="settings-info-value">{loading ? '…' : outgoing.length}</span>
+                </div>
+                <div className="settings-info-row">
+                    <span>Bloqueados</span>
+                    <span className="settings-info-value">{loading ? '…' : blocked.length}</span>
+                </div>
+            </div>
+
+            <div className="settings-section">
+                <h3 className="settings-section-title">Solicitações recebidas</h3>
+                {incoming.length === 0 ? (
+                    <p className="settings-field-hint">Nenhuma solicitação no momento.</p>
+                ) : (
+                    incoming.map((r) => (
+                        <div key={r.id} className="settings-danger-card">
+                            <div>
+                                <strong>Solicitação</strong>
+                                <p>de {r.from_user_id.slice(0, 8)}…</p>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="btn btn-primary btn-sm" onClick={() => accept(r.id)}>Aceitar</button>
+                                <button className="btn btn-secondary btn-sm" onClick={() => decline(r.id)}>Recusar</button>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            <div className="settings-section">
+                <h3 className="settings-section-title">Bloqueados</h3>
+                {blocked.length === 0 ? (
+                    <p className="settings-field-hint">Você não bloqueou ninguém.</p>
+                ) : (
+                    blocked.map((b) => (
+                        <div key={b.blocked_user_id} className="settings-danger-card">
+                            <div>
+                                <strong>{b.blocked_user_id.slice(0, 8)}…</strong>
+                                <p>Bloqueado em {b.created_at ? new Date(b.created_at).toLocaleDateString('pt-BR') : ''}</p>
+                            </div>
+                            <button className="btn btn-secondary btn-sm" onClick={() => unblock(b.blocked_user_id)}>Desbloquear</button>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    );
+});
+
+// ─────────────────────────────────────────────
+// PRIVACY PANEL
+// ─────────────────────────────────────────────
+const PrivacyPanel = memo(function PrivacyPanel({ user }) {
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [err, setErr] = useState('');
+    const [saved, setSaved] = useState(false);
+
+    const [settings, setSettings] = useState({
+        allow_contact_requests: 'everyone',
+        discoverable_by_email: true,
+        discoverable_by_username: true,
+        allow_dm_from: 'everyone',
+        show_online_status: true,
+        read_receipts: true,
+    });
+
+    useEffect(() => {
+        if (!user?.id) return;
+        (async () => {
+            setLoading(true);
+            setErr('');
+            const { data, error } = await fetchPrivacySettings();
+            if (error) setErr(error);
+            setSettings((prev) => ({ ...prev, ...(data || {}) }));
+            setLoading(false);
+        })();
+    }, [user?.id]);
+
+    const toggle = (key) => setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
+
+    const save = async () => {
+        setSaving(true);
+        setErr('');
+        const { success, error } = await updatePrivacySettings(settings);
+        setSaving(false);
+        if (!success) {
+            setErr(error || 'Erro ao salvar.');
+            return;
+        }
+        setSaved(true);
+        setTimeout(() => setSaved(false), 1500);
+    };
+
+    return (
+        <div className="settings-panel animate-fade-in">
+            <div className="settings-panel-header">
+                <h2>Privacidade</h2>
+                <p>Controle quem pode te encontrar e quem pode te mandar DM.</p>
+            </div>
+
+            {err && <p className="settings-error">{err}</p>}
+
+            <div className="settings-section">
+                <h3 className="settings-section-title">Descoberta</h3>
+
+                <div className="settings-toggle-row">
+                    <div className="settings-toggle-info">
+                        <Shield size={18} />
+                        <div>
+                            <strong>Descobrir por email</strong>
+                            <p>Permite que encontrem você ao digitar seu email no autocomplete.</p>
+                        </div>
+                    </div>
+                    <div className={`settings-toggle ${settings.discoverable_by_email ? 'active' : ''}`} onClick={() => toggle('discoverable_by_email')}>
+                        <div className="settings-toggle-thumb" />
+                    </div>
+                </div>
+
+                <div className="settings-toggle-row">
+                    <div className="settings-toggle-info">
+                        <Shield size={18} />
+                        <div>
+                            <strong>Descobrir por @username</strong>
+                            <p>Permite aparecer em buscas por username.</p>
+                        </div>
+                    </div>
+                    <div className={`settings-toggle ${settings.discoverable_by_username ? 'active' : ''}`} onClick={() => toggle('discoverable_by_username')}>
+                        <div className="settings-toggle-thumb" />
+                    </div>
+                </div>
+            </div>
+
+            <div className="settings-section">
+                <h3 className="settings-section-title">Solicitações de contato</h3>
+                <div className="settings-field">
+                    <label>Quem pode mandar solicitação</label>
+                    <select
+                        value={settings.allow_contact_requests}
+                        onChange={(e) => setSettings((prev) => ({ ...prev, allow_contact_requests: e.target.value }))}
+                        disabled={loading}
+                        className="settings-select"
+                    >
+                        {PRIVACY_ALLOW_OPTIONS.map((o) => (
+                            <option key={o.id} value={o.id}>{o.label}</option>
+                        ))}
+                    </select>
+                    <p className="settings-field-hint">Se “Ninguém”, você só pode iniciar conversas buscando pessoas e elas precisam permitir DM.</p>
+                </div>
+            </div>
+
+            <div className="settings-section">
+                <h3 className="settings-section-title">Mensagens (DM)</h3>
+                <div className="settings-field">
+                    <label>Quem pode te mandar DM</label>
+                    <select
+                        value={settings.allow_dm_from}
+                        onChange={(e) => setSettings((prev) => ({ ...prev, allow_dm_from: e.target.value }))}
+                        disabled={loading}
+                        className="settings-select"
+                    >
+                        {PRIVACY_ALLOW_OPTIONS.filter((o) => o.id !== 'no_one').map((o) => (
+                            <option key={o.id} value={o.id}>{o.label}</option>
+                        ))}
+                    </select>
+                    <p className="settings-field-hint">“Apenas contatos” exige que a pessoa esteja na sua lista de contatos.</p>
+                </div>
+
+                <div className="settings-toggle-row">
+                    <div className="settings-toggle-info">
+                        <Bell size={18} />
+                        <div>
+                            <strong>Status online</strong>
+                            <p>Permite exibir/ocultar sua presença quando estiver usando o app.</p>
+                        </div>
+                    </div>
+                    <div className={`settings-toggle ${settings.show_online_status ? 'active' : ''}`} onClick={() => toggle('show_online_status')}>
+                        <div className="settings-toggle-thumb" />
+                    </div>
+                </div>
+
+                <div className="settings-toggle-row">
+                    <div className="settings-toggle-info">
+                        <ShieldCheck size={18} />
+                        <div>
+                            <strong>Confirmação de leitura</strong>
+                            <p>Quando desligado, o outro não vê confirmação de leitura (✓✓ azul).</p>
+                        </div>
+                    </div>
+                    <div className={`settings-toggle ${settings.read_receipts ? 'active' : ''}`} onClick={() => toggle('read_receipts')}>
+                        <div className="settings-toggle-thumb" />
+                    </div>
+                </div>
+            </div>
+
+            <div className="settings-actions">
+                <button className="btn btn-primary" onClick={save} disabled={saving || loading}>
+                    <Save size={16} />
+                    {saved ? 'Salvo' : (saving ? 'Salvando…' : 'Salvar')}
+                </button>
+            </div>
+        </div>
+    );
+});
+
+// ─────────────────────────────────────────────
 // SETTINGS MODAL (thin shell — only holds tab state)
 // ─────────────────────────────────────────────
 export default function SettingsModal({ onClose, initialTab = 'account' }) {
@@ -858,6 +1256,8 @@ export default function SettingsModal({ onClose, initialTab = 'account' }) {
         { id: 'account', label: t.stAccount, icon: User },
         { id: 'security', label: t.stSecurity, icon: Shield },
         { id: 'invitations', label: 'Convites', icon: Users },
+        { id: 'contacts', label: 'Contatos', icon: Users },
+        { id: 'privacy', label: 'Privacidade', icon: ShieldCheck },
         { id: 'appearance', label: t.stAppearance, icon: Palette },
         { id: 'app', label: t.stApp, icon: Smartphone },
         { id: 'language', label: t.stLanguage, icon: Globe },
@@ -923,6 +1323,8 @@ export default function SettingsModal({ onClose, initialTab = 'account' }) {
                                 t={t}
                             />
                         )}
+                        {activeTab === 'contacts' && <ContactsPanel user={user} t={t} />}
+                        {activeTab === 'privacy' && <PrivacyPanel user={user} />}
                         {activeTab === 'appearance' && (
                             <AppearancePanel
                                 theme={theme} toggleTheme={toggleTheme} setTheme={setTheme} THEME_PRESETS={THEME_PRESETS}

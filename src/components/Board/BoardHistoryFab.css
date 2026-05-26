@@ -1,0 +1,43 @@
+.board-history-fab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.board-history-fab-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    color: var(--text-tertiary);
+    cursor: not-allowed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.38;
+    transition:
+        opacity var(--transition-fast),
+        color var(--transition-fast),
+        transform var(--transition-fast),
+        box-shadow var(--transition-fast),
+        border-color var(--transition-fast);
+}
+
+.board-history-fab-btn.is-available {
+    opacity: 1;
+    color: var(--accent-primary);
+    cursor: pointer;
+    border-color: color-mix(in srgb, var(--accent-primary) 35%, var(--glass-border));
+}
+
+.board-history-fab-btn.is-available:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--accent-glow), var(--glass-shadow);
+}
+
+.board-history-fab-btn.is-available:active {
+    transform: translateY(0);
+}

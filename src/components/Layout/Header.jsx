@@ -3,22 +3,36 @@ import { Search, Menu, X, Bell, Settings, User, LogOut, ChevronDown, Layout, Sha
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { useI18n } from '../../context/ThemeContext';
+import { useNotifications } from '../../hooks/useNotifications';
+import { acceptInvitation, declineInvitation } from '../../services/boardService';
+import { respondToContactRequest } from '../../services/contactsService';
 import NotificationDropdown from '../Notifications/NotificationDropdown';
 import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
+import CloudSyncIndicator from './CloudSyncIndicator';
+import HeaderStreakButton from './HeaderStreakButton';
 import './Header.css';
-import { fetchMyInvitations } from '../../services/boardService';
 
-export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOpenSettings, onOpenSearch, editableBoardTitle, editableSpaceTitle, variant = 'default' }) {
+export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOpenSettings, onOpenSearch, onOpenDiary, editableBoardTitle, editableSpaceTitle, variant = 'default' }) {
     const { user, logout } = useAuth();
-    const { getActiveBoard, showBoardToolbar, dispatch, showConfirm } = useApp();
+    const { getActiveBoard, showBoardToolbar, dispatch, showConfirm, reloadBoards } = useApp();
     const t = useI18n();
+    const {
+        notifications,
+        unreadCount,
+        loading: notificationsLoading,
+        refresh: refreshNotifications,
+        markRead,
+        markAllRead,
+    } = useNotifications();
+
     const [showProfile, setShowProfile] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
-    const [unreadInvitesCount, setUnreadInvitesCount] = useState(0);
     const [showShareModal, setShowShareModal] = useState(false);
     const [editingBoardTitle, setEditingBoardTitle] = useState(false);
     const [editBoardTitleValue, setEditBoardTitleValue] = useState('');
     const profileRef = useRef(null);
+    const bellRef = useRef(null);
+    const notificationsRef = useRef(null);
 
     const activeBoard = getActiveBoard();
 
@@ -52,7 +66,6 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
         if (confirmed) logout();
     };
 
-    // Close profile dropdown on click outside
     useEffect(() => {
         if (!showProfile) return;
         const handleClick = (e) => {
@@ -65,36 +78,116 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
     }, [showProfile]);
 
     useEffect(() => {
+        if (!showNotifications) return;
+        const handleClick = (e) => {
+            const inProfile = profileRef.current?.contains(e.target);
+            const inNotif = notificationsRef.current?.contains(e.target);
+            const inDropdown = e.target.closest?.('.notification-dropdown, .notification-backdrop');
+            if (!inProfile && !inNotif && !inDropdown) {
+                setShowNotifications(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, [showNotifications]);
+
+    useEffect(() => {
         dispatch({ type: 'SET_PROFILE_MENU_OPEN', payload: showProfile });
     }, [showProfile, dispatch]);
 
-    useEffect(() => {
-        const loadUnread = async () => {
-            if (!user?.id) {
-                setUnreadInvitesCount(0);
-                return;
-            }
-            const readKey = `dailyways_invite_read_${user.id}`;
-            try {
-                const raw = window.localStorage.getItem(readKey);
-                const arr = raw ? JSON.parse(raw) : [];
-                const readSet = new Set(Array.isArray(arr) ? arr : []);
-                const { data, error } = await fetchMyInvitations();
-                if (error) {
-                    setUnreadInvitesCount(0);
-                    return;
-                }
-                const unread = (data || []).filter(inv => !readSet.has(inv.id)).length;
-                setUnreadInvitesCount(unread);
-            } catch (_) {
-                setUnreadInvitesCount(0);
-            }
-        };
-        if (!showNotifications) {
-            loadUnread();
+    const handleNotificationItemClick = (notification) => {
+        markRead(notification);
+        setShowNotifications(false);
+        if (notification?.type === 'contact_request') {
+            window.dispatchEvent(new CustomEvent('app-navigate-view', { detail: { view: 'contacts' } }));
+            onOpenSettings?.('contacts');
+        } else if (
+            notification?.type === 'contact_accepted'
+            || notification?.type === 'contact_declined'
+        ) {
+            window.dispatchEvent(new CustomEvent('app-navigate-view', { detail: { view: 'contacts' } }));
+            onOpenSettings?.('contacts');
+        } else if (notification?.type === 'chat_message') {
+            window.dispatchEvent(new CustomEvent('app-chat-open', {
+                detail: {
+                    conversationId: notification.conversationId,
+                    userId: notification.fromUserId,
+                },
+            }));
+        } else {
+            onOpenSettings?.('invitations');
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id, showNotifications]);
+    };
+
+    const handleAcceptNotification = async (notification) => {
+        if (!notification) return;
+        markRead(notification);
+
+        if (notification.type === 'contact_request') {
+            const { success, error } = await respondToContactRequest(notification.id, 'accepted');
+            if (success) {
+                await refreshNotifications();
+                window.dispatchEvent(new CustomEvent('contacts-updated'));
+            } else if (error) console.error('[Header] accept contact request', error);
+            return;
+        }
+
+        const kind = notification.kind || 'board';
+        const { success, error } = await acceptInvitation(notification.id, kind);
+        if (success) {
+            if (kind === 'space') {
+                window.location.reload();
+            } else {
+                await reloadBoards?.();
+            }
+            await refreshNotifications();
+        } else if (error) {
+            console.error('[Header] accept invitation', error);
+        }
+    };
+
+    const handleDeclineNotification = async (notification) => {
+        if (!notification) return;
+        markRead(notification);
+
+        if (notification.type === 'contact_request') {
+            const { success } = await respondToContactRequest(notification.id, 'declined');
+            if (success) {
+                await refreshNotifications();
+                window.dispatchEvent(new CustomEvent('contacts-updated'));
+            }
+            return;
+        }
+
+        const kind = notification.kind || 'board';
+        const { success } = await declineInvitation(notification.id, kind);
+        if (success) await refreshNotifications();
+    };
+
+    useEffect(() => {
+        const onOpen = (e) => {
+            const n = e.detail?.notification;
+            if (n) handleNotificationItemClick(n);
+        };
+        const onAccept = (e) => {
+            const n = e.detail?.notification;
+            if (n) void handleAcceptNotification(n);
+        };
+        const onDecline = (e) => {
+            const n = e.detail?.notification;
+            if (n) void handleDeclineNotification(n);
+        };
+        window.addEventListener('app-notification-open', onOpen);
+        window.addEventListener('app-notification-accept', onAccept);
+        window.addEventListener('app-notification-decline', onDecline);
+        return () => {
+            window.removeEventListener('app-notification-open', onOpen);
+            window.removeEventListener('app-notification-accept', onAccept);
+            window.removeEventListener('app-notification-decline', onDecline);
+        };
+    });
+
+    const hasUnread = unreadCount > 0;
 
     return (
         <header className={`header ${variant === 'workspace' ? 'header--workspace' : ''}`}>
@@ -132,6 +225,8 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
             </div>
 
             <div className="header-right">
+                <CloudSyncIndicator />
+
                 <button className="header-search-btn" onClick={onOpenSearch}>
                     <div className="header-search-btn-content">
                         <span>{t.search}</span>
@@ -145,47 +240,41 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                         <Share2 size={18} />
                     </button>
                 )}
-                <div className="header-icons">
+
+                <HeaderStreakButton onOpenDiary={onOpenDiary} />
+
+                <div className="header-notifications" ref={notificationsRef}>
                     <button
-                        className="btn-icon header-icon-btn"
-                        title="Notificações"
-                        onClick={() => setShowNotifications(!showNotifications)}
+                        ref={bellRef}
+                        type="button"
+                        className={`btn-icon header-icon-btn header-notifications-btn ${hasUnread ? 'has-unread' : ''}`}
+                        title={hasUnread ? `${unreadCount} notificação(ões)` : 'Notificações'}
+                        aria-label={hasUnread ? `${unreadCount} notificações não lidas` : 'Notificações'}
+                        aria-expanded={showNotifications}
+                        onClick={() => setShowNotifications((v) => !v)}
                     >
-                        <Bell size={18} />
+                        <Bell size={18} fill={hasUnread ? 'currentColor' : 'none'} />
+                        {hasUnread && (
+                            <span className="header-notifications-badge" aria-hidden>
+                                {unreadCount > 9 ? '9+' : unreadCount}
+                            </span>
+                        )}
                     </button>
-                    {unreadInvitesCount > 0 && (
-                        <div
-                            className="header-notification-dot"
-                            style={{ right: 12 }}
-                            role="button"
-                            tabIndex={0}
-                            aria-label={`${unreadInvitesCount} convite(s) pendente(s)`}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                setShowNotifications(v => !v);
-                            }}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    setShowNotifications(v => !v);
-                                }
-                            }}
-                        />
-                    )}
-                    {showNotifications && (
-                        <NotificationDropdown
-                            onClose={() => setShowNotifications(false)}
-                            onOpenInvitations={() => {
-                                setShowNotifications(false);
-                                onOpenSettings?.('invitations');
-                            }}
-                        />
-                    )}
+
+                    <NotificationDropdown
+                        anchorRef={bellRef}
+                        open={showNotifications}
+                        onClose={() => setShowNotifications(false)}
+                        notifications={notifications}
+                        loading={notificationsLoading}
+                        unreadCount={unreadCount}
+                        onMarkAllRead={markAllRead}
+                        onItemClick={handleNotificationItemClick}
+                        onAccept={handleAcceptNotification}
+                        onDecline={handleDeclineNotification}
+                    />
                 </div>
 
-                {/* User profile dropdown */}
                 <div className="header-user" ref={profileRef}>
                     <button className="header-user-btn" onClick={() => setShowProfile(!showProfile)}>
                         <div className="header-avatar">
@@ -202,7 +291,7 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                     </button>
 
                     {showProfile && (
-                        <div className="header-profile-dropdown animate-pop-in">
+                        <div className="header-profile-dropdown animate-pop-in" data-profile-menu-dropdown>
                             <div className="header-profile-header">
                                 <div className="header-profile-avatar">
                                     {user?.photo_url ? (
@@ -211,7 +300,7 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                                         user?.avatar || firstName[0]
                                     )}
                                 </div>
-                                <div>
+                                <div className="header-profile-text">
                                     <div className="header-profile-name">{user?.name}</div>
                                     <div className="header-profile-email">{user?.email}</div>
                                 </div>

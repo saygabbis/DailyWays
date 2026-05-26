@@ -1,5 +1,7 @@
 import { useApp } from '../../context/AppContext';
 import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
+import { useSmartViewCardCompletion } from '../../hooks/useSmartViewCardCompletion';
+import { isCardActive } from '../../utils/cardSmartView';
 import {
     Calendar, Star, Sun, CheckCircle2, Circle,
     ArrowRight, CheckSquare, CalendarOff,
@@ -14,19 +16,16 @@ export default function SmartTaskItem({
 }) {
     const { LABEL_COLORS } = useApp();
     const { collabDispatch } = useBoardCollabDispatch(board.id);
+    const { toggleCardCompletion } = useSmartViewCardCompletion();
 
     const handleToggleComplete = (e) => {
         e.stopPropagation();
-        collabDispatch({
-            type: 'UPDATE_CARD',
-            payload: {
-                boardId: board.id,
-                listId: list.id,
-                cardId: card.id,
-                updates: { completed: !card.completed }
-            }
-        });
+        void toggleCardCompletion(card, board, list, !card.completed);
     };
+
+    if (!isCardActive(card)) {
+        return null;
+    }
 
     const priorityColor = {
         urgent: 'var(--priority-urgent)',
@@ -44,7 +43,6 @@ export default function SmartTaskItem({
             className={`smart-task-item ${card.completed ? 'completed' : ''}`}
             onClick={onClick}
         >
-            {/* Selection / Completion Status */}
             <button
                 className={`smart-task-check ${card.priority === 'urgent' && !card.completed ? 'urgent-ring' : ''}`}
                 onClick={handleToggleComplete}

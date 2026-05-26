@@ -11,6 +11,7 @@ import BoardMultiDragStack from './BoardMultiDragStack';
 import ListDetailsModal from './ListDetailsModal';
 import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy, Settings2, CheckCircle } from 'lucide-react';
 import { uuidv4 } from '../../utils/uuid';
+import { BOARD_UI_HOVER, boardUiHoverProps } from '../../collab/board/presence/boardUiHover.js';
 
 export default function BoardList({
     list,
@@ -25,9 +26,11 @@ export default function BoardList({
     editingByCardId,
     hoverByCardId,
     hoverByListId,
+    hoverByUiKey,
     onCardHover,
     onCardHoverEnd,
     onListHover,
+    onUiHover,
     onPresenceHoverEnd,
     remoteDraggingCardIds,
     remoteDragByCardId = {},
@@ -171,6 +174,8 @@ export default function BoardList({
 
     const listHoverPeers = hoverByListId?.[list.id] || [];
     const listPresenceColor = listHoverPeers[0]?.color;
+    const addCardHoverKey = BOARD_UI_HOVER.addCard(list.id);
+    const addCardHover = boardUiHoverProps(hoverByUiKey, addCardHoverKey, 'board-add-card-btn');
 
     return (
         <div
@@ -334,7 +339,14 @@ export default function BoardList({
                             </div>
                         </form>
                     ) : (
-                        <button className="board-add-card-btn" onClick={() => setAddingCard(true)}>
+                        <button
+                            type="button"
+                            className={addCardHover.className}
+                            style={addCardHover.style}
+                            onMouseEnter={() => onUiHover?.(addCardHoverKey)}
+                            onMouseLeave={() => onListHover?.(list.id)}
+                            onClick={() => setAddingCard(true)}
+                        >
                             <Plus size={16} />
                             <span>Adicionar tarefa</span>
                         </button>

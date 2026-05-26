@@ -1,0 +1,39 @@
+.app-bottom-fab-cluster {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 8400;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.app-bottom-fab-cluster-chat {
+    order: 1;
+}
+
+.app-bottom-fab-cluster-help {
+    order: 2;
+}
+
+.app-bottom-fab-cluster .app-help-fab,
+.app-bottom-fab-cluster .app-help-minimized-pill {
+    position: static;
+    right: auto;
+    bottom: auto;
+}
+
+.app-bottom-fab-cluster .app-chat-fab,
+.app-bottom-fab-cluster .app-chat-minimized-pill {
+    position: static;
+    right: auto;
+    bottom: auto;
+}
+
+@media (max-width: 768px) {
+    .app-bottom-fab-cluster {
+        right: 16px;
+        bottom: calc(var(--mobile-bottom-nav-height, 64px) + 16px);
+    }
+}
