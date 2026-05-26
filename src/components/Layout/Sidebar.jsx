@@ -15,7 +15,7 @@ import {
     Sun, Star, CalendarDays, LayoutGrid, Plus, LogOut,
     ChevronLeft, Settings, HelpCircle,
     Edit3, Trash2, Copy, Palette, Focus, LayoutDashboard,
-    MoreHorizontal, Music, Box, FolderPlus, Check, Folder, Settings2
+    MoreHorizontal, Music, Box, FolderPlus, Check, Folder, Settings2, Users
 } from 'lucide-react';
 import { useContextMenu } from '../Common/ContextMenu';
 import logoWhite from '../../assets/Logo - Branco.png';
@@ -192,6 +192,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
     ];
 
     const othersItems = [
+        { id: 'contacts', label: 'Contatos', icon: Users },
         { id: 'settings', label: t.settings, icon: Settings },
         { id: 'help', label: t.help, icon: HelpCircle },
     ];

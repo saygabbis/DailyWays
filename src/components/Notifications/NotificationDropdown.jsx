@@ -3,6 +3,104 @@ import { createPortal } from 'react-dom';
 import { Bell, Check, X } from 'lucide-react';
 import './Notification.css';
 
+const PERSON_TYPES = new Set([
+    'contact_request',
+    'contact_accepted',
+    'contact_declined',
+    'chat_message',
+]);
+
+function NotificationItemAvatar({ n }) {
+    if (PERSON_TYPES.has(n.type)) {
+        if (n.senderPhotoUrl) {
+            return (
+                <img
+                    src={n.senderPhotoUrl}
+                    alt=""
+                    className="notification-avatar-img"
+                />
+            );
+        }
+        return (
+            <div className="notification-avatar notification-avatar--contact">
+                {n.senderAvatar || n.senderName?.[0] || '?'}
+            </div>
+        );
+    }
+    return (
+        <div className={`notification-avatar ${n.type}`}>
+            {n.kind === 'space' ? (n.spaceEmoji || '🌌') : (n.boardEmoji || '📋')}
+        </div>
+    );
+}
+
+function notificationHasActions(n) {
+    return n.type === 'contact_request' || n.type === 'invitation';
+}
+
+function NotificationItemText({ n }) {
+    const who = n.senderName || (n.senderUsername ? `@${n.senderUsername}` : 'Alguém');
+
+    if (n.type === 'contact_request') {
+        return (
+            <>
+                <p>
+                    <span className="notification-target">{who}</span>
+                    {' '}quer ser seu contato
+                </p>
+                <span className="notification-meta">Pedido de contato pendente</span>
+            </>
+        );
+    }
+    if (n.type === 'contact_accepted') {
+        return (
+            <>
+                <p>
+                    <span className="notification-target">{who}</span>
+                    {' '}aceitou seu pedido
+                </p>
+                <span className="notification-meta">Vocês agora são contatos</span>
+            </>
+        );
+    }
+    if (n.type === 'contact_declined') {
+        return (
+            <>
+                <p>
+                    <span className="notification-target">{who}</span>
+                    {' '}recusou seu pedido
+                </p>
+                <span className="notification-meta">Pedido de contato recusado</span>
+            </>
+        );
+    }
+    if (n.type === 'chat_message') {
+        const preview = (n.messagePreview || '').trim();
+        return (
+            <>
+                <p>
+                    <span className="notification-target">{who}</span>
+                    {preview ? `: ${preview}` : ' enviou uma mensagem'}
+                </p>
+                <span className="notification-meta">Nova mensagem no chat</span>
+            </>
+        );
+    }
+    return (
+        <>
+            <p>
+                Convite para {n.kind === 'space' ? 'o space' : 'o board'}{' '}
+                <span className="notification-target">
+                    {n.kind === 'space' ? n.spaceTitle : n.boardTitle}
+                </span>
+            </p>
+            <span className="notification-meta">
+                Acesso como {n.role === 'editor' ? 'Editor' : 'Leitor'}
+            </span>
+        </>
+    );
+}
+
 export default function NotificationDropdown({
     anchorRef,
     open,
@@ -93,51 +191,43 @@ export default function NotificationDropdown({
 
                     {!loading && notifications.map((n) => (
                         <div
-                            key={n.id}
+                            key={`${n.type}-${n.id}`}
                             className={`notification-item ${!n.read ? 'unread' : ''}`}
                         >
-                            <div className="notification-item-main" onClick={() => onItemClick?.(n.id)}>
-                                <div className={`notification-avatar ${n.type}`}>
-                                    {n.kind === 'space' ? (n.spaceEmoji || '🌌') : (n.boardEmoji || '📋')}
-                                </div>
+                            <div className="notification-item-main" onClick={() => onItemClick?.(n)}>
+                                <NotificationItemAvatar n={n} />
                                 <div className="notification-content">
-                                    <p>
-                                        Convite para {n.kind === 'space' ? 'o space' : 'o board'}{' '}
-                                        <span className="notification-target">
-                                            {n.kind === 'space' ? n.spaceTitle : n.boardTitle}
-                                        </span>
-                                    </p>
-                                    <span className="notification-meta">
-                                        Acesso como {n.role === 'editor' ? 'Editor' : 'Leitor'}
-                                    </span>
+                                    <NotificationItemText n={n} />
                                     <span className="notification-time">{n.time}</span>
                                 </div>
                                 {!n.read && <div className="notification-dot" />}
                             </div>
-                            <div className="notification-item-actions">
-                                <button
-                                    type="button"
-                                    className="notification-action-btn accept"
-                                    title="Aceitar"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onAccept?.(n);
-                                    }}
-                                >
-                                    <Check size={14} />
-                                </button>
-                                <button
-                                    type="button"
-                                    className="notification-action-btn decline"
-                                    title="Recusar"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onDecline?.(n);
-                                    }}
-                                >
-                                    <X size={14} />
-                                </button>
-                            </div>
+                            {notificationHasActions(n) && (
+                                <div className="notification-item-actions">
+                                    <button
+                                        type="button"
+                                        className="notification-action-btn accept"
+                                        title="Aceitar"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onAccept?.(n);
+                                        }}
+                                    >
+                                        <Check size={14} />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="notification-action-btn decline"
+                                        title="Recusar"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onDecline?.(n);
+                                        }}
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>

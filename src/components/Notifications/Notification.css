@@ -94,6 +94,21 @@
     flex-shrink: 0;
 }
 
+.notification-avatar--contact {
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+}
+
+.notification-avatar-img {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
 .notification-content {
     flex: 1;
     font-size: var(--font-size-sm);

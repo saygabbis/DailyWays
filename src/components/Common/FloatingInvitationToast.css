@@ -45,6 +45,86 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: default;
+}
+
+.floating-invitation-toast-body--clickable {
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: background 0.15s ease;
+}
+
+.floating-invitation-toast-body--clickable:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+}
+
+.floating-invitation-toast-body--clickable:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+.floating-invitation-toast-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.68rem;
+    color: var(--text-tertiary);
+}
+
+.floating-invitation-toast-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+}
+
+.floating-invitation-toast-btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 10px;
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.floating-invitation-toast-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.floating-invitation-toast-btn--accept {
+    background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+    color: var(--accent-primary);
+    border-color: color-mix(in srgb, var(--accent-primary) 35%, transparent);
+}
+
+.floating-invitation-toast-btn--accept:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent-primary) 28%, transparent);
+}
+
+.floating-invitation-toast-btn--decline {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border-color: var(--border-color);
+}
+
+.floating-invitation-toast-btn--decline:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger, #ef4444) 12%, var(--bg-tertiary));
+    color: var(--text-primary);
 }
 
 .floating-invitation-toast-board {
@@ -59,5 +139,50 @@
 .floating-invitation-toast-meta {
     font-size: 0.72rem;
     color: var(--text-secondary);
+}
+
+.floating-notification-toast-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.floating-notification-toast-text {
+    min-width: 0;
+    flex: 1;
+}
+
+.floating-notification-toast-emoji {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.floating-notification-toast-photo {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.floating-notification-toast-photo-fallback {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    flex-shrink: 0;
 }
 

@@ -5,6 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { useI18n } from '../../context/ThemeContext';
 import { useNotifications } from '../../hooks/useNotifications';
 import { acceptInvitation, declineInvitation } from '../../services/boardService';
+import { respondToContactRequest } from '../../services/contactsService';
 import NotificationDropdown from '../Notifications/NotificationDropdown';
 import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import CloudSyncIndicator from './CloudSyncIndicator';
@@ -94,17 +95,45 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
         dispatch({ type: 'SET_PROFILE_MENU_OPEN', payload: showProfile });
     }, [showProfile, dispatch]);
 
-    const handleNotificationItemClick = (id) => {
-        markRead(id);
+    const handleNotificationItemClick = (notification) => {
+        markRead(notification);
         setShowNotifications(false);
-        onOpenSettings?.('invitations');
+        if (notification?.type === 'contact_request') {
+            window.dispatchEvent(new CustomEvent('app-navigate-view', { detail: { view: 'contacts' } }));
+            onOpenSettings?.('contacts');
+        } else if (
+            notification?.type === 'contact_accepted'
+            || notification?.type === 'contact_declined'
+        ) {
+            window.dispatchEvent(new CustomEvent('app-navigate-view', { detail: { view: 'contacts' } }));
+            onOpenSettings?.('contacts');
+        } else if (notification?.type === 'chat_message') {
+            window.dispatchEvent(new CustomEvent('app-chat-open', {
+                detail: {
+                    conversationId: notification.conversationId,
+                    userId: notification.fromUserId,
+                },
+            }));
+        } else {
+            onOpenSettings?.('invitations');
+        }
     };
 
-    const handleAcceptInvite = async (notification) => {
-        const id = typeof notification === 'string' ? notification : notification?.id;
-        const kind = typeof notification === 'object' ? (notification?.kind || 'board') : 'board';
-        markRead(id);
-        const { success, error } = await acceptInvitation(id, kind);
+    const handleAcceptNotification = async (notification) => {
+        if (!notification) return;
+        markRead(notification);
+
+        if (notification.type === 'contact_request') {
+            const { success, error } = await respondToContactRequest(notification.id, 'accepted');
+            if (success) {
+                await refreshNotifications();
+                window.dispatchEvent(new CustomEvent('contacts-updated'));
+            } else if (error) console.error('[Header] accept contact request', error);
+            return;
+        }
+
+        const kind = notification.kind || 'board';
+        const { success, error } = await acceptInvitation(notification.id, kind);
         if (success) {
             if (kind === 'space') {
                 window.location.reload();
@@ -117,13 +146,46 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
         }
     };
 
-    const handleDeclineInvite = async (notification) => {
-        const id = typeof notification === 'string' ? notification : notification?.id;
-        const kind = typeof notification === 'object' ? (notification?.kind || 'board') : 'board';
-        markRead(id);
-        const { success } = await declineInvitation(id, kind);
+    const handleDeclineNotification = async (notification) => {
+        if (!notification) return;
+        markRead(notification);
+
+        if (notification.type === 'contact_request') {
+            const { success } = await respondToContactRequest(notification.id, 'declined');
+            if (success) {
+                await refreshNotifications();
+                window.dispatchEvent(new CustomEvent('contacts-updated'));
+            }
+            return;
+        }
+
+        const kind = notification.kind || 'board';
+        const { success } = await declineInvitation(notification.id, kind);
         if (success) await refreshNotifications();
     };
+
+    useEffect(() => {
+        const onOpen = (e) => {
+            const n = e.detail?.notification;
+            if (n) handleNotificationItemClick(n);
+        };
+        const onAccept = (e) => {
+            const n = e.detail?.notification;
+            if (n) void handleAcceptNotification(n);
+        };
+        const onDecline = (e) => {
+            const n = e.detail?.notification;
+            if (n) void handleDeclineNotification(n);
+        };
+        window.addEventListener('app-notification-open', onOpen);
+        window.addEventListener('app-notification-accept', onAccept);
+        window.addEventListener('app-notification-decline', onDecline);
+        return () => {
+            window.removeEventListener('app-notification-open', onOpen);
+            window.removeEventListener('app-notification-accept', onAccept);
+            window.removeEventListener('app-notification-decline', onDecline);
+        };
+    });
 
     const hasUnread = unreadCount > 0;
 
@@ -208,8 +270,8 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                         unreadCount={unreadCount}
                         onMarkAllRead={markAllRead}
                         onItemClick={handleNotificationItemClick}
-                        onAccept={handleAcceptInvite}
-                        onDecline={handleDeclineInvite}
+                        onAccept={handleAcceptNotification}
+                        onDecline={handleDeclineNotification}
                     />
                 </div>
 

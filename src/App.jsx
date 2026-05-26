@@ -11,6 +11,7 @@ import MyDayView from './components/MyDay/MyDayView';
 import ImportantView from './components/SmartViews/ImportantView';
 import PlannedView from './components/SmartViews/PlannedView';
 import DashboardView from './components/Dashboard/DashboardView';
+import ContactsView from './components/Contacts/ContactsView';
 import TaskDetailModal from './components/TaskDetail/TaskDetailModal';
 import SettingsModal from './components/Settings/SettingsView';
 import SearchOverlay from './components/Search/SearchOverlay';
@@ -360,12 +361,22 @@ function AppContent() {
     persistNavigation(view, boardId);
   };
 
+  useEffect(() => {
+    const onNavigate = (e) => {
+      const view = e.detail?.view;
+      if (view) handleViewChange(view);
+    };
+    window.addEventListener('app-navigate-view', onNavigate);
+    return () => window.removeEventListener('app-navigate-view', onNavigate);
+  }, [handleViewChange]);
+
   const getTitle = () => {
     switch (activeView) {
       case 'dashboard': return 'Visão Geral';
       case 'myday': return 'Diário';
       case 'important': return 'Importante';
       case 'planned': return 'Planejado';
+      case 'contacts': return 'Contatos';
       case 'board': return activeBoard ? `${activeBoard.emoji} ${activeBoard.title}` : 'Board';
       case 'help': return 'Central de Ajuda';
       default:
@@ -511,6 +522,7 @@ function AppContent() {
             {navReady && activeView === 'myday' && <MyDayView key="myday" onCardClick={handleCardClick} />}
             {navReady && activeView === 'important' && <ImportantView key="important" onCardClick={handleCardClick} />}
             {navReady && activeView === 'planned' && <PlannedView key="planned" onCardClick={handleCardClick} />}
+            {navReady && activeView === 'contacts' && <ContactsView key="contacts" />}
             {navReady && activeView === 'board' && activeBoard && (
               <BoardView
                 key={`board-${activeBoard.id}`}
