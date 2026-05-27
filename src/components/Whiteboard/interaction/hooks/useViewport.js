@@ -44,7 +44,7 @@ export function useViewport(initialPan = { x: 0, y: 0 }, initialZoom = 1, onView
 
     const handleWheel = useCallback(
         (e) => {
-            e.preventDefault();
+            if (e.cancelable) e.preventDefault();
             e.stopPropagation();
             applyWheelZoom(e.clientX, e.clientY, e.deltaY);
         },
@@ -57,7 +57,7 @@ export function useViewport(initialPan = { x: 0, y: 0 }, initialZoom = 1, onView
         if (!el) return undefined;
         const onWheelCapture = (e) => {
             if (!e.ctrlKey) return;
-            e.preventDefault();
+            if (e.cancelable) e.preventDefault();
             e.stopPropagation();
             applyWheelZoom(e.clientX, e.clientY, e.deltaY);
         };
