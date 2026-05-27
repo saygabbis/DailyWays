@@ -2,6 +2,20 @@ import { supabase } from './supabaseClient';
 
 const CHAT_BUCKET = 'chat-attachments';
 
+function isChannelTopicMatch(channel, topic) {
+  const channelTopic = channel?.topic || '';
+  return channelTopic === topic || channelTopic.endsWith(`:${topic}`);
+}
+
+function removeExistingTopicChannels(topic) {
+  const channels = typeof supabase.getChannels === 'function' ? supabase.getChannels() : [];
+  for (const ch of channels) {
+    if (isChannelTopicMatch(ch, topic)) {
+      void supabase.removeChannel(ch);
+    }
+  }
+}
+
 export async function openDmChannel(otherUserId) {
   if (!otherUserId) return { data: null, error: 'Usuário inválido.' };
   const { data, error } = await supabase.rpc('open_dm_channel', { p_other_user_id: otherUserId });
@@ -9,14 +23,29 @@ export async function openDmChannel(otherUserId) {
   return { data, error: null };
 }
 
-export async function fetchChatMessages(conversationId, limit = 120) {
+export async function fetchChatMessages(conversationId, options = 120) {
   if (!conversationId) return { data: [], error: null };
+  const parsed = typeof options === 'number'
+    ? { limit: options, beforeCreatedAt: null }
+    : { limit: options?.limit ?? 120, beforeCreatedAt: options?.beforeCreatedAt ?? null };
+
   const { data, error } = await supabase.rpc('list_chat_messages', {
     p_conversation_id: conversationId,
-    p_limit: limit,
+    p_limit: parsed.limit,
+    p_before_created_at: parsed.beforeCreatedAt,
   });
-  if (error) return { data: [], error: error.message || 'Erro ao carregar mensagens.' };
-  return { data: data || [], error: null };
+
+  if (!error) return { data: data || [], error: null, cursorSupported: true };
+
+  const missingCursorFn = (error.message || '').includes('list_chat_messages(uuid, integer, timestamp with time zone)');
+  if (!missingCursorFn) return { data: [], error: error.message || 'Erro ao carregar mensagens.' };
+
+  const fallback = await supabase.rpc('list_chat_messages', {
+    p_conversation_id: conversationId,
+    p_limit: parsed.limit,
+  });
+  if (fallback.error) return { data: [], error: fallback.error.message || 'Erro ao carregar mensagens.' };
+  return { data: fallback.data || [], error: null, cursorSupported: false };
 }
 
 export async function sendChatMessage(conversationId, { body, messageType = 'text', attachmentUrl, attachmentMeta }) {
@@ -166,8 +195,11 @@ export async function declineDmRequest(requestId) {
 
 export function subscribeToChatMessages(conversationId, handlers) {
   if (!conversationId) return () => {};
+  const topic = `chat-msgs:${conversationId}`;
+  // Keep exactly one active realtime subscription per conversation on this client.
+  removeExistingTopicChannels(topic);
   const channel = supabase
-    .channel(`chat-msgs:${conversationId}`)
+    .channel(topic)
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },

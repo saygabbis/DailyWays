@@ -46,6 +46,7 @@ export default function ChatConversation({
   const [menu, setMenu] = useState(null);
   const [pendingMessages, setPendingMessages] = useState([]);
   const [pendingLoading, setPendingLoading] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
 
@@ -59,11 +60,14 @@ export default function ChatConversation({
   const {
     messages,
     loading,
+    loadingOlder,
+    hasMore,
     error: msgError,
     setError: setMsgError,
     sendText,
     sendImage,
     setAtBottom,
+    loadOlder,
     refreshReceipts,
     reload,
   } = useChatMessages(conversationId, {
@@ -117,22 +121,29 @@ export default function ChatConversation({
   const displayTitle = contactRecord?.nickname
     || profile?.name
     || (profile?.username ? `@${profile.username}` : 'Conversa');
+  const composerFocusKey = `${isOpen ? 'open' : 'closed'}:${conversationId || channel?.requestId || channel?.otherUserId || 'none'}`;
 
   const handleSend = async () => {
+    if (sending) return;
     const body = draft.trim();
     if (!body) return;
     setDraft('');
-    if (isDirect) {
-      await sendText(body);
-      return;
-    }
-    if (isPending && channel?.otherUserId) {
-      const { success, error: e } = await sendDmMessage(channel.otherUserId, body);
-      if (!success) setError(e || 'Erro ao enviar');
-      else {
-        setInfo('Mensagem enviada — aguardando aceite.');
-        loadPending();
+    setSending(true);
+    try {
+      if (isDirect) {
+        await sendText(body);
+        return;
       }
+      if (isPending && channel?.otherUserId) {
+        const { success, error: e } = await sendDmMessage(channel.otherUserId, body);
+        if (!success) setError(e || 'Erro ao enviar');
+        else {
+          setInfo('Mensagem enviada — aguardando aceite.');
+          loadPending();
+        }
+      }
+    } finally {
+      setSending(false);
     }
   };
 
@@ -249,6 +260,9 @@ export default function ChatConversation({
         messages={listMessages}
         myId={myId}
         loading={isDirect ? loading : pendingLoading}
+        loadingOlder={isDirect ? loadingOlder : false}
+        hasMore={isDirect ? hasMore : false}
+        onLoadOlder={isDirect ? loadOlder : undefined}
         onContextMenu={handleContextMenu}
         onReactionClick={(m, emoji) => toggleMessageReaction(m.id, emoji).then(refreshReceipts)}
         onScrollState={setAtBottom}
@@ -260,8 +274,10 @@ export default function ChatConversation({
           onDraftChange={setDraft}
           onSend={handleSend}
           onImagePick={isDirect ? handleImage : undefined}
-          disabled={isPendingRecipient}
+          disabled={isPendingRecipient || sending}
+          sending={sending}
           placeholder={isPending ? 'Mensagem pendente…' : 'Mensagem'}
+          focusKey={composerFocusKey}
         />
       )}
 

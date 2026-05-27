@@ -7,6 +7,8 @@ import {
   subscribeToChatMessages,
 } from '../services/chatService';
 
+const CHAT_PAGE_SIZE = 40;
+
 function parseReactions(raw) {
   if (Array.isArray(raw)) return raw;
   if (typeof raw === 'string') {
@@ -29,12 +31,49 @@ function sortMessages(list) {
   return [...list].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 }
 
+function toMs(value) {
+  const parsed = Date.parse(value || '');
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function isLikelyOptimisticMatch(optimistic, incoming, myId) {
+  if (!optimistic?._tempId || !incoming?.id) return false;
+  if (incoming.sender_id !== myId || optimistic.sender_id !== myId) return false;
+  if ((optimistic.message_type || 'text') !== (incoming.message_type || 'text')) return false;
+  if ((optimistic.body || '').trim() !== (incoming.body || '').trim()) return false;
+  if ((optimistic.attachment_url || '') !== (incoming.attachment_url || '')) return false;
+
+  const optimisticMs = toMs(optimistic.created_at);
+  const incomingMs = toMs(incoming.created_at);
+  if (!optimisticMs || !incomingMs) return true;
+  return Math.abs(optimisticMs - incomingMs) <= 30_000;
+}
+
+function mergeServerMessage(prev, tempId, row) {
+  const normalized = normalizeRow({ ...row, _localStatus: 'sent' });
+  if (!normalized?.id) {
+    return prev.filter((m) => m._tempId !== tempId);
+  }
+
+  const withoutTemp = prev.filter((m) => m._tempId !== tempId);
+  const existingIndex = withoutTemp.findIndex((m) => m.id === normalized.id);
+  if (existingIndex >= 0) {
+    const next = [...withoutTemp];
+    next[existingIndex] = { ...next[existingIndex], ...normalized, _localStatus: 'sent' };
+    return sortMessages(next);
+  }
+  return sortMessages([...withoutTemp, normalized]);
+}
+
 export function useChatMessages(conversationId, { enabled = true, myId, onNewMessage } = {}) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState('');
   const atBottomRef = useRef(true);
   const messagesRef = useRef([]);
+  const cursorSupportedRef = useRef(true);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -44,14 +83,56 @@ export function useChatMessages(conversationId, { enabled = true, myId, onNewMes
     if (!conversationId || !enabled) return;
     setLoading(true);
     setError('');
-    const { data, error: e } = await fetchChatMessages(conversationId);
+    setHasMore(true);
+    const { data, error: e, cursorSupported } = await fetchChatMessages(conversationId, { limit: CHAT_PAGE_SIZE });
+    cursorSupportedRef.current = cursorSupported !== false;
     if (e) setError(e);
-    setMessages(sortMessages((data || []).map(normalizeRow)));
+    const normalized = sortMessages((data || []).map(normalizeRow));
+    setMessages(normalized);
+    setHasMore((data || []).length === CHAT_PAGE_SIZE && cursorSupportedRef.current);
     setLoading(false);
     await markConversationDelivered(conversationId);
     const last = data?.[data.length - 1];
     if (last?.id) await markMessagesRead(conversationId, last.id);
   }, [conversationId, enabled]);
+  const loadOlder = useCallback(async () => {
+    if (!conversationId || !enabled || loading || loadingOlder || !hasMore) return;
+    if (!cursorSupportedRef.current) return;
+    const oldest = messagesRef.current[0];
+    if (!oldest?.created_at) {
+      setHasMore(false);
+      return;
+    }
+
+    setLoadingOlder(true);
+    const { data, error: e, cursorSupported } = await fetchChatMessages(conversationId, {
+      limit: CHAT_PAGE_SIZE,
+      beforeCreatedAt: oldest.created_at,
+    });
+    if (cursorSupported === false) {
+      cursorSupportedRef.current = false;
+      setHasMore(false);
+      setLoadingOlder(false);
+      return;
+    }
+    if (e) {
+      setError(e);
+      setLoadingOlder(false);
+      return;
+    }
+
+    const older = sortMessages((data || []).map(normalizeRow));
+    setMessages((prev) => {
+      if (!older.length) return prev;
+      const existing = new Set(prev.map((m) => m.id));
+      const prepend = older.filter((m) => !existing.has(m.id));
+      if (!prepend.length) return prev;
+      return sortMessages([...prepend, ...prev]);
+    });
+    setHasMore((data || []).length === CHAT_PAGE_SIZE);
+    setLoadingOlder(false);
+  }, [conversationId, enabled, hasMore, loading, loadingOlder]);
+
 
   useEffect(() => {
     setMessages([]);
@@ -62,16 +143,28 @@ export function useChatMessages(conversationId, { enabled = true, myId, onNewMes
     const n = normalizeRow(row);
     if (!n?.id) return;
     setMessages((prev) => {
-      const idx = prev.findIndex((m) => m.id === n.id || m._tempId === n._tempId);
+      const idx = prev.findIndex((m) => {
+        if (m.id === n.id) return true;
+        if (!n._tempId) return false;
+        return m._tempId === n._tempId;
+      });
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = { ...next[idx], ...n, _localStatus: 'sent' };
         return sortMessages(next);
       }
+
+      const optimisticIdx = prev.findIndex((m) => isLikelyOptimisticMatch(m, n, myId));
+      if (optimisticIdx >= 0) {
+        const next = [...prev];
+        next[optimisticIdx] = { ...next[optimisticIdx], ...n, _localStatus: 'sent' };
+        return sortMessages(next);
+      }
+
       return sortMessages([...prev, n]);
     });
     if (atBottomRef.current) onNewMessage?.();
-  }, [onNewMessage]);
+  }, [myId, onNewMessage]);
 
   const refreshReceipts = useCallback(async () => {
     if (!conversationId) return;
@@ -133,10 +226,7 @@ export function useChatMessages(conversationId, { enabled = true, myId, onNewMes
       setError(e || 'Erro ao enviar');
       return { success: false, error: e };
     }
-    setMessages((prev) => {
-      const without = prev.filter((m) => m._tempId !== tempId);
-      return sortMessages([...without, normalizeRow({ ...data, _localStatus: 'sent' })]);
-    });
+    setMessages((prev) => mergeServerMessage(prev, tempId, data));
     return { success: true, data };
   }, [conversationId, myId, onNewMessage]);
 
@@ -170,10 +260,7 @@ export function useChatMessages(conversationId, { enabled = true, myId, onNewMes
       setError(e || 'Erro ao enviar imagem');
       return { success: false };
     }
-    setMessages((prev) => {
-      const without = prev.filter((m) => m._tempId !== tempId);
-      return sortMessages([...without, normalizeRow({ ...data, _localStatus: 'sent' })]);
-    });
+    setMessages((prev) => mergeServerMessage(prev, tempId, data));
     return { success: true };
   }, [conversationId, myId, onNewMessage]);
 
@@ -186,11 +273,14 @@ export function useChatMessages(conversationId, { enabled = true, myId, onNewMes
   return {
     messages,
     loading,
+    loadingOlder,
+    hasMore,
     error,
     setError,
     sendText,
     sendImage,
     reload: loadInitial,
+    loadOlder,
     refreshReceipts,
     markReadUpTo,
     setAtBottom: (v) => { atBottomRef.current = v; },

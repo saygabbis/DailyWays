@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Smile, SendHorizonal, X } from 'lucide-react';
 
 const EMOJI_QUICK = ['😀', '😂', '❤️', '👍', '🙏', '🔥', '😍', '🎉', '😢', '🤔', '👏', '💯'];
@@ -18,12 +18,37 @@ export default function ChatComposer({
   onSend,
   onImagePick,
   disabled,
+  sending = false,
   placeholder = 'Mensagem',
+  focusKey,
 }) {
   const fileRef = useRef(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [emojiQuery, setEmojiQuery] = useState('');
   const inputRef = useRef(null);
+  const wasSendingRef = useRef(false);
+
+  const keepComposerFocus = () => {
+    // Keep typing flow after send/upload actions.
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const triggerSend = () => {
+    if (sending || disabled) return;
+    onSend?.();
+    keepComposerFocus();
+  };
+
+  useEffect(() => {
+    if (wasSendingRef.current && !sending && !disabled) {
+      keepComposerFocus();
+    }
+    wasSendingRef.current = sending;
+  }, [disabled, sending]);
+
+  useEffect(() => {
+    if (!disabled) keepComposerFocus();
+  }, [disabled, focusKey]);
 
   const insertEmoji = (emoji) => {
     const el = inputRef.current;
@@ -96,10 +121,20 @@ export default function ChatComposer({
           placeholder={placeholder}
           disabled={disabled}
           onChange={(e) => onDraftChange(e.target.value)}
+          onPaste={(e) => {
+            if (!onImagePick) return;
+            const items = Array.from(e.clipboardData?.items || []);
+            const imageItem = items.find((item) => item.kind === 'file' && item.type.startsWith('image/'));
+            const imageFile = imageItem?.getAsFile?.();
+            if (!imageFile) return;
+            e.preventDefault();
+            onImagePick(imageFile);
+            keepComposerFocus();
+          }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !sending && !disabled) {
               e.preventDefault();
-              onSend?.();
+              triggerSend();
             }
           }}
         />
@@ -116,8 +151,9 @@ export default function ChatComposer({
       <button
         type="button"
         className="chat-composer-send"
-        onClick={onSend}
-        disabled={disabled || !(draft || '').trim()}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={triggerSend}
+        disabled={disabled || sending || !(draft || '').trim()}
         title="Enviar"
       >
         <SendHorizonal size={20} />
