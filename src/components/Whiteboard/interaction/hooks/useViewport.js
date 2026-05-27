@@ -12,6 +12,11 @@ export function useViewport(initialPan = { x: 0, y: 0 }, initialZoom = 1, onView
     const lastMousePos = useRef({ x: 0, y: 0 });
     const panRef = useRef(initialPan);
     const zoomRef = useRef(initialZoom);
+    const wheelFrameRef = useRef(null);
+    const wheelDeltaRef = useRef(0);
+    const wheelClientRef = useRef({ x: 0, y: 0 });
+    const panFrameRef = useRef(null);
+    const panDeltaRef = useRef({ dx: 0, dy: 0 });
 
     panRef.current = pan;
     zoomRef.current = zoom;
@@ -25,7 +30,7 @@ export function useViewport(initialPan = { x: 0, y: 0 }, initialZoom = 1, onView
 
     const applyWheelZoom = useCallback(
         (clientX, clientY, deltaY) => {
-            const zoomFactor = deltaY > 0 ? 0.9 : 1.1;
+            const zoomFactor = Math.exp(-deltaY * 0.0015);
             const rect = containerRef?.current?.getBoundingClientRect?.() ?? null;
             const { pan: newPan, zoom: newZoom } = zoomViewportAtClient(
                 panRef.current,
@@ -35,6 +40,13 @@ export function useViewport(initialPan = { x: 0, y: 0 }, initialZoom = 1, onView
                 rect,
                 zoomFactor
             );
+            if (
+                newZoom === zoomRef.current &&
+                newPan.x === panRef.current.x &&
+                newPan.y === panRef.current.y
+            ) {
+                return;
+            }
             setPan(newPan);
             setZoom(newZoom);
             persist(newPan, newZoom);
@@ -42,13 +54,31 @@ export function useViewport(initialPan = { x: 0, y: 0 }, initialZoom = 1, onView
         [persist, containerRef]
     );
 
+    const flushWheelZoom = useCallback(() => {
+        wheelFrameRef.current = null;
+        const deltaY = wheelDeltaRef.current;
+        if (!deltaY) return;
+        wheelDeltaRef.current = 0;
+        applyWheelZoom(wheelClientRef.current.x, wheelClientRef.current.y, deltaY);
+    }, [applyWheelZoom]);
+
+    const scheduleWheelZoom = useCallback(
+        (clientX, clientY, deltaY) => {
+            wheelClientRef.current = { x: clientX, y: clientY };
+            wheelDeltaRef.current += deltaY;
+            if (wheelFrameRef.current) return;
+            wheelFrameRef.current = requestAnimationFrame(flushWheelZoom);
+        },
+        [flushWheelZoom]
+    );
+
     const handleWheel = useCallback(
         (e) => {
             if (e.cancelable) e.preventDefault();
             e.stopPropagation();
-            applyWheelZoom(e.clientX, e.clientY, e.deltaY);
+            scheduleWheelZoom(e.clientX, e.clientY, e.deltaY);
         },
-        [applyWheelZoom]
+        [scheduleWheelZoom]
     );
 
     /** Bloqueia zoom do navegador (Ctrl+scroll) enquanto o cursor está no canvas. */
@@ -59,11 +89,16 @@ export function useViewport(initialPan = { x: 0, y: 0 }, initialZoom = 1, onView
             if (!e.ctrlKey) return;
             if (e.cancelable) e.preventDefault();
             e.stopPropagation();
-            applyWheelZoom(e.clientX, e.clientY, e.deltaY);
+            scheduleWheelZoom(e.clientX, e.clientY, e.deltaY);
         };
         el.addEventListener('wheel', onWheelCapture, { passive: false, capture: true });
         return () => el.removeEventListener('wheel', onWheelCapture, { capture: true });
-    }, [containerRef, applyWheelZoom]);
+    }, [containerRef, scheduleWheelZoom]);
+
+    useEffect(() => () => {
+        if (wheelFrameRef.current) cancelAnimationFrame(wheelFrameRef.current);
+        if (panFrameRef.current) cancelAnimationFrame(panFrameRef.current);
+    }, []);
 
     const zoomAtClient = useCallback(
         (clientX, clientY, zoomFactor) => {
@@ -85,7 +120,7 @@ export function useViewport(initialPan = { x: 0, y: 0 }, initialZoom = 1, onView
 
     const handleMouseDown = useCallback(
         (e, isSpacePressed) => {
-            const startPan = e.button === 1 || (e.button === 0 && isSpacePressed);
+            const startPan = e.button === 1 || e.button === 2 || (e.button === 0 && isSpacePressed);
             if (startPan) {
                 e.preventDefault();
                 setIsPanning(true);
@@ -100,20 +135,43 @@ export function useViewport(initialPan = { x: 0, y: 0 }, initialZoom = 1, onView
             if (!isPanning) return;
             const deltaX = e.clientX - lastMousePos.current.x;
             const deltaY = e.clientY - lastMousePos.current.y;
-            const newPan = {
-                x: panRef.current.x + deltaX,
-                y: panRef.current.y + deltaY,
-            };
-            setPan(newPan);
             lastMousePos.current = { x: e.clientX, y: e.clientY };
-            persist(newPan, zoomRef.current);
+            panDeltaRef.current.dx += deltaX;
+            panDeltaRef.current.dy += deltaY;
+            if (panFrameRef.current) return;
+            panFrameRef.current = requestAnimationFrame(() => {
+                panFrameRef.current = null;
+                const { dx, dy } = panDeltaRef.current;
+                panDeltaRef.current = { dx: 0, dy: 0 };
+                if (!dx && !dy) return;
+                const newPan = {
+                    x: panRef.current.x + dx,
+                    y: panRef.current.y + dy,
+                };
+                setPan(newPan);
+                persist(newPan, zoomRef.current);
+            });
         },
         [isPanning, persist]
     );
 
     const handleMouseUp = useCallback(() => {
+        if (panFrameRef.current) {
+            cancelAnimationFrame(panFrameRef.current);
+            panFrameRef.current = null;
+        }
+        const { dx, dy } = panDeltaRef.current;
+        panDeltaRef.current = { dx: 0, dy: 0 };
+        if (dx || dy) {
+            const newPan = {
+                x: panRef.current.x + dx,
+                y: panRef.current.y + dy,
+            };
+            setPan(newPan);
+            persist(newPan, zoomRef.current);
+        }
         setIsPanning(false);
-    }, []);
+    }, [persist]);
 
     const setViewport = useCallback(
         (newPan, newZoom) => {

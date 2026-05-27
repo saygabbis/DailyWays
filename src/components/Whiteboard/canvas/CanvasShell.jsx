@@ -110,6 +110,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     const openFilePickerRef = useRef(null);
     const nodeDragRef = useRef(null);
     const createDragRef = useRef(null);
+    const rightMousePanRef = useRef(false);
     /** Ctrl/Cmd mantido ao soltar o ponteiro → conserva a ferramenta de criação ativa. */
     const keepCreationToolRef = useRef(false);
     const viewportRef = useRef(null);
@@ -571,11 +572,12 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
 
     const handlePointerDown = useCallback(
         (e) => {
-            if (e.button !== 0 && e.button !== 1) return;
+            if (e.button !== 0 && e.button !== 1 && e.button !== 2) return;
             const isBg = isCanvasBackground(e);
-            if (e.button === 1 || (e.button === 0 && isSpacePressed)) {
+            if (e.button === 2 || e.button === 1 || (e.button === 0 && isSpacePressed)) {
                 e.preventDefault();
                 e.stopPropagation();
+                rightMousePanRef.current = e.button === 2;
                 viewportState.handleMouseDown(e, isSpacePressed);
                 if (e.currentTarget?.setPointerCapture) {
                     e.currentTarget.setPointerCapture(e.pointerId);
@@ -1105,6 +1107,54 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             if (e.button !== 0) return;
             if (e.target?.closest?.('.whiteboard-resize-handle, .whiteboard-rotate-handle')) return;
             if (resizeActiveRef.current) return;
+            if (isCreationTool(activeTool) && activeTool !== 'connector') {
+                e.stopPropagation();
+                e.preventDefault();
+                const rect = containerRef.current?.getBoundingClientRect();
+                if (!rect || !viewportForChildren) return;
+                if (isDragCreationTool(activeTool)) {
+                    const anchorWorld = screenToWorldWithContainer(
+                        e.clientX,
+                        e.clientY,
+                        rect,
+                        viewportForChildren
+                    );
+                    const nodeType = creationToolToNodeType(activeTool);
+                    const defaultKey =
+                        nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType;
+                    const defaults = getDefaultNodePayload(defaultKey, anchorWorld.x, anchorWorld.y);
+                    const aspectRatio =
+                        defaults.width && defaults.height ? defaults.width / defaults.height : 1;
+                    createDragRef.current = {
+                        tool: activeTool,
+                        anchorWorld,
+                        startScreen: { x: e.clientX, y: e.clientY },
+                        nodeId: null,
+                        creating: false,
+                        aspectRatio,
+                    };
+                    setCreatePreview({
+                        anchorWorld,
+                        currentWorld: anchorWorld,
+                        shiftKey: e.shiftKey,
+                        altKey: e.altKey,
+                        aspectRatio,
+                    });
+                } else if (NODE_TYPES_ALLOWED.includes(creationToolToNodeType(activeTool))) {
+                    createDragRef.current = {
+                        tool: activeTool,
+                        clickOnly: true,
+                        startScreen: { x: e.clientX, y: e.clientY },
+                    };
+                }
+                const captureEl = e.currentTarget ?? e.target;
+                if (captureEl?.setPointerCapture) {
+                    try {
+                        captureEl.setPointerCapture(e.pointerId);
+                    } catch (_) {}
+                }
+                return;
+            }
             const editingId = useWhiteboardStore.getState().editingNodeId;
             if (editingId === nodeId && e.target.closest('textarea, input')) {
                 return;
@@ -1393,6 +1443,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             if (e.currentTarget && typeof e.currentTarget.releasePointerCapture === 'function') {
                 try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
             }
+            if ((e.buttons & 2) === 0) rightMousePanRef.current = false;
             if (e.button === 0) {
                 keepCreationToolRef.current = e.ctrlKey || e.metaKey;
                 const rect = containerRef.current?.getBoundingClientRect();
@@ -1539,6 +1590,10 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
 
     const handleContextMenu = useCallback(
         (e) => {
+            if (rightMousePanRef.current) {
+                e.preventDefault();
+                return;
+            }
             const el = e.target;
             if (el?.closest?.('.whiteboard-node-wrapper') || el?.closest?.('.whiteboard-viewport-controls')) return;
             e.preventDefault();

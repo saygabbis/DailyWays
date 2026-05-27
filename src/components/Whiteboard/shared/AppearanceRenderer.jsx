@@ -148,6 +148,7 @@ export default memo(function AppearanceRenderer({
             width={width}
             height={height}
             viewBox={viewBox}
+            preserveAspectRatio="none"
             overflow="visible"
             style={{ display: 'block', opacity, overflow: 'visible' }}
             aria-hidden

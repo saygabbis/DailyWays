@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from 'react';
-import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
+import { useWhiteboardStore, isCreationTool } from '../../../../stores/whiteboardStore';
 import { useWhiteboardSelectionStore } from '../../../../stores/whiteboardSelectionStore';
 import { getNodeTransformStyle } from '../../core/nodeTransform';
 import { resolveNodeClickSelection } from '../../core/layers/whiteboardGroupOps';
@@ -10,6 +10,7 @@ export default function BaseNode({ node, children, onNodePointerDown, onNodeCont
     const ref = useRef(null);
     const setSelection = useWhiteboardSelectionStore((s) => s.setSelection);
     const setEditingNodeId = useWhiteboardSelectionStore((s) => s.setEditingNodeId);
+    const activeTool = useWhiteboardSelectionStore((s) => s.activeTool);
     const isSelected = useWhiteboardSelectionStore((s) => s.selectedNodeIds.includes(node.id));
     const dragTranslate = useNodeDragTranslate(node.id);
     const { remoteSelectionByNodeId } = useWhiteboardRemoteSelection();
@@ -21,6 +22,10 @@ export default function BaseNode({ node, children, onNodePointerDown, onNodeCont
             if (e.button === 1) return;
             e.stopPropagation();
             if (e.button !== 0) return;
+            if (isCreationTool(activeTool) && activeTool !== 'connector') {
+                onNodePointerDown?.(e, node.id);
+                return;
+            }
             const { nodes, selectedNodeIds } = useWhiteboardStore.getState();
             const next = resolveNodeClickSelection(node.id, nodes, selectedNodeIds, {
                 shiftKey: e.shiftKey,
@@ -29,7 +34,7 @@ export default function BaseNode({ node, children, onNodePointerDown, onNodeCont
             setSelection(next);
             onNodePointerDown?.(e, node.id);
         },
-        [node.id, setSelection, onNodePointerDown]
+        [activeTool, node.id, setSelection, onNodePointerDown]
     );
 
     const handleContextMenu = useCallback(
