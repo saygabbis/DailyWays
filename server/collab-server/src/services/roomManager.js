@@ -1,15 +1,11 @@
-import {
-  parseSpaceIdFromRoom,
-  parseBoardIdFromRoom,
-  parseRoomKind,
-} from '@dailyways/collab-protocol';
-import { loadRoomFromDb } from './loadRoom.js';
-import { loadBoardFromDb } from './loadBoard.js';
-import { applyOpToRoom } from './applyOp.js';
-import { applyBoardOpToRoom } from './applyBoardOp.js';
-import { flushRoom } from '../db/persistence.js';
-import { flushBoard } from './flushBoard.js';
 import { createOpIdTracker } from './opIdTracker.js';
+import {
+  applyRoomOp,
+  flushRoomState,
+  getRoomState as getRuntimeRoomState,
+  hasPendingFlush,
+  loadRoomState,
+} from './shared/roomRuntime.js';
 
 const FLUSH_MS = Number(process.env.COLLAB_FLUSH_MS || 600);
 // Aumentado de 2min para 10min — boards idle recarregavam do banco ao reentrar rapidamente
@@ -18,68 +14,6 @@ const MAX_FLUSH_ERRORS = 5;
 // GC centralizado: um único setInterval varre todas as salas vazias, em vez de
 // criar um setTimeout por sala fechada (evita acumular N timers em sequência).
 const GC_INTERVAL_MS = 60_000;
-
-function hasSpacePendingFlush(room) {
-  return (
-    room?.dirty?.nodes?.size > 0
-    || room?.dirty?.connectors?.size > 0
-    || room?.dirty?.comments?.size > 0
-    || room?.deleted?.nodes?.size > 0
-    || room?.deleted?.connectors?.size > 0
-    || room?.deleted?.comments?.size > 0
-  );
-}
-
-function hasPendingFlush(room) {
-  if (!room) return false;
-  if (room.kind === 'board') return Boolean(room.dirty);
-  return hasSpacePendingFlush(room);
-}
-
-function createSpaceRoom() {
-  return {
-    kind: 'space',
-    nodes: [],
-    connectors: [],
-    comments: [],
-    revision: 0,
-    dirty: {
-      nodes: new Set(),
-      connectors: new Set(),
-      comments: new Set(),
-    },
-    deleted: {
-      nodes: new Set(),
-      connectors: new Set(),
-      comments: new Set(),
-    },
-    presence: new Map(),
-    presenceSockets: new Map(),
-    clientCount: 0,
-    flushTimer: null,
-    flushInFlight: false,
-    flushRequested: false,
-    flushErrorCount: 0,
-    lastActivity: Date.now(),
-  };
-}
-
-function createBoardRoom() {
-  return {
-    kind: 'board',
-    board: null,
-    revision: 0,
-    dirty: false,
-    presence: new Map(),
-    presenceSockets: new Map(),
-    clientCount: 0,
-    flushTimer: null,
-    flushInFlight: false,
-    flushRequested: false,
-    flushErrorCount: 0,
-    lastActivity: Date.now(),
-  };
-}
 
 function recordFlushError(room, roomId, err) {
   room.flushErrorCount = (room.flushErrorCount || 0) + 1;
@@ -128,7 +62,7 @@ export class RoomManager {
     const now = Date.now();
     for (const [roomId, room] of this.rooms.entries()) {
       if (room.clientCount === 0 && now - room.lastActivity > IDLE_EVICT_MS) {
-        if (room.flushInFlight || hasPendingFlush(room)) continue;
+        if (room.flushInFlight || hasPendingFlush(roomId, room)) continue;
         if (room.flushTimer) clearTimeout(room.flushTimer);
         this.rooms.delete(roomId);
       }
@@ -146,12 +80,10 @@ export class RoomManager {
     if (this.rooms.has(roomId)) {
       const room = this.rooms.get(roomId);
       room.lastActivity = Date.now();
-      if (parseRoomKind(roomId) === 'board' && !room.board && accessToken) {
-        const boardId = parseBoardIdFromRoom(roomId);
-        const data = boardId
-          ? await loadBoardFromDb(boardId, accessToken)
-          : { board: null };
-        if (data.board) {
+      // Runtime loader já trata rehidratação de board quando necessário.
+      if (room.kind === 'board' && !room.board && accessToken) {
+        const data = await loadRoomState(roomId, { accessToken });
+        if (data?.board) {
           room.board = data.board;
           room.revision = data.revision ?? 0;
         }
@@ -163,22 +95,8 @@ export class RoomManager {
       return this.rooms.get(roomId);
     }
 
-    const kind = parseRoomKind(roomId);
     const promise = (async () => {
-      let room;
-      if (kind === 'space') {
-        const spaceId = parseSpaceIdFromRoom(roomId);
-        const data = spaceId ? await loadRoomFromDb(spaceId) : {};
-        room = { ...createSpaceRoom(), ...data };
-      } else if (kind === 'board') {
-        const boardId = parseBoardIdFromRoom(roomId);
-        const data = boardId
-          ? await loadBoardFromDb(boardId, accessToken)
-          : { board: null };
-        room = { ...createBoardRoom(), board: data.board, revision: data.revision ?? 0 };
-      } else {
-        room = createSpaceRoom();
-      }
+      const room = await loadRoomState(roomId, { accessToken });
       this.rooms.set(roomId, room);
       this.loading.delete(roomId);
     })();
@@ -196,26 +114,20 @@ export class RoomManager {
       room.flushTimer = null;
     }
     if (room.flushInFlight) {
-      room.flushRequested = room.flushRequested || force || hasPendingFlush(room);
+      room.flushRequested = room.flushRequested || force || hasPendingFlush(roomId, room);
       return;
     }
 
-    if (!force && !hasPendingFlush(room)) return;
+    if (!force && !hasPendingFlush(roomId, room)) return;
 
     room.flushInFlight = true;
     try {
       // Coalesce: se novo flush for pedido durante um flush em andamento,
       // rodamos mais um ciclo ao final para não perder dirty recém-chegado.
-      while (force || hasPendingFlush(room) || room.flushRequested) {
+      while (force || hasPendingFlush(roomId, room) || room.flushRequested) {
         force = false;
         room.flushRequested = false;
-
-        if (room.kind === 'space') {
-          const spaceId = parseSpaceIdFromRoom(roomId);
-          if (spaceId) await flushRoom(room, spaceId);
-        } else if (room.kind === 'board') {
-          await flushBoard(room);
-        }
+        await flushRoomState(roomId, room);
         room.flushErrorCount = 0;
       }
     } catch (err) {
@@ -267,10 +179,7 @@ export class RoomManager {
     }
     seen.add(op.opId);
 
-    const result =
-      room.kind === 'board'
-        ? applyBoardOpToRoom(room, op)
-        : applyOpToRoom(room, op);
+    const result = applyRoomOp(roomId, room, op);
 
     if (result.ok) {
       if (room.kind === 'board' && this.shouldFlushBoardOpImmediately(op)) {
@@ -424,18 +333,7 @@ export class RoomManager {
   }
 
   getRoomState(room) {
-    if (room.kind === 'board') {
-      return {
-        board: room.board,
-        revision: room.revision,
-      };
-    }
-    return {
-      nodes: room.nodes,
-      connectors: room.connectors,
-      comments: room.comments,
-      revision: room.revision,
-    };
+    return getRuntimeRoomState(room?.kind || 'space', room);
   }
 }
 

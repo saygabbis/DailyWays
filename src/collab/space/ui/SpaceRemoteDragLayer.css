@@ -1,0 +1,13 @@
+.space-remote-drag-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 58;
+}
+
+.space-remote-drag-ghost {
+  position: absolute;
+  border: 2px solid;
+  border-radius: 10px;
+  background: rgba(124, 58, 237, 0.08);
+}

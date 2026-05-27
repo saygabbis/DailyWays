@@ -132,6 +132,11 @@ export function useNotifications() {
             )
             .on(
                 'postgres_changes',
+                { event: '*', schema: 'public', table: 'space_invitations' },
+                () => refresh()
+            )
+            .on(
+                'postgres_changes',
                 {
                     event: 'INSERT',
                     schema: 'public',

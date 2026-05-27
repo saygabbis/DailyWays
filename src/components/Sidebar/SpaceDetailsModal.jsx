@@ -16,15 +16,20 @@ import { RoleSelect } from './BoardDetailsModal';
 import './BoardDetailsModal.css';
 
 export default function SpaceDetailsModal({ space, onClose, initialTab = 'details' }) {
-    const { dispatch, showConfirm } = useApp();
+    const { state, dispatch, showConfirm } = useApp();
     const { user } = useAuth();
-    const ownerId = space.ownerId || user?.id;
+    const currentSpace = useMemo(
+        () => state.spaces.find((s) => s.id === space?.id) || space,
+        [state.spaces, space]
+    );
+    const spaceId = currentSpace?.id;
+    const ownerId = currentSpace?.ownerId ?? null;
     const isSpaceOwner = isSpaceOwnerClient({ ownerId }, user?.id);
 
     const [activeTab, setActiveTab] = useState(initialTab);
-    const [title, setTitle] = useState(space.title);
-    const [emoji, setEmoji] = useState(space.emoji || '🌌');
-    const [color, setColor] = useState(space.color);
+    const [title, setTitle] = useState(currentSpace?.title || '');
+    const [emoji, setEmoji] = useState(currentSpace?.emoji || '🌌');
+    const [color, setColor] = useState(currentSpace?.color || null);
     const [saved, setSaved] = useState(false);
 
     const [members, setMembers] = useState([]);
@@ -34,10 +39,17 @@ export default function SpaceDetailsModal({ space, onClose, initialTab = 'detail
     const [shareError, setShareError] = useState('');
     const [shareSuccess, setShareSuccess] = useState('');
 
+    useEffect(() => {
+        setTitle(currentSpace?.title || '');
+        setEmoji(currentSpace?.emoji || '🌌');
+        setColor(currentSpace?.color || null);
+    }, [spaceId, currentSpace?.title, currentSpace?.emoji, currentSpace?.color]);
+
     const loadMembers = async () => {
+        if (!spaceId) return;
         setMembersLoading(true);
         setShareError('');
-        const { data, error } = await fetchSpaceMembers(space.id);
+        const { data, error } = await fetchSpaceMembers(spaceId);
         if (error) setShareError(error);
         else setMembers(data || []);
         setMembersLoading(false);
@@ -45,7 +57,7 @@ export default function SpaceDetailsModal({ space, onClose, initialTab = 'detail
 
     useEffect(() => {
         if (activeTab === 'share') loadMembers();
-    }, [activeTab, space.id]);
+    }, [activeTab, spaceId]);
 
     useEffect(() => {
         const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -75,9 +87,9 @@ export default function SpaceDetailsModal({ space, onClose, initialTab = 'detail
     const handleSave = async () => {
         dispatch({
             type: 'UPDATE_SPACE',
-            payload: { id: space.id, updates: { title, emoji, color } },
+            payload: { id: spaceId, updates: { title, emoji, color } },
         });
-        await updateSpace(space.id, { title, emoji, color });
+        await updateSpace(spaceId, { title, emoji, color });
         setSaved(true);
         setTimeout(() => {
             setSaved(false);
@@ -87,10 +99,10 @@ export default function SpaceDetailsModal({ space, onClose, initialTab = 'detail
 
     const handleInvite = async (e) => {
         e.preventDefault();
-        if (!canInvite || !inviteIdentifier.trim()) return;
+        if (!canInvite || !spaceId || !inviteIdentifier.trim()) return;
         setShareError('');
         setShareSuccess('');
-        const result = await inviteSpaceMember(space.id, inviteIdentifier.trim(), inviteRole);
+        const result = await inviteSpaceMember(spaceId, inviteIdentifier.trim(), inviteRole);
         if (!result.success) {
             setShareError(result.error || 'Erro ao enviar convite.');
         } else {
@@ -103,7 +115,7 @@ export default function SpaceDetailsModal({ space, onClose, initialTab = 'detail
 
     const handleRoleChange = async (memberUserId, role) => {
         if (!isSpaceOwner) return;
-        const result = await updateSpaceMemberRole(space.id, memberUserId, role);
+        const result = await updateSpaceMemberRole(spaceId, memberUserId, role);
         if (!result.success) setShareError(result.error || 'Erro ao atualizar permissão.');
         else {
             setShareError('');
@@ -113,7 +125,7 @@ export default function SpaceDetailsModal({ space, onClose, initialTab = 'detail
 
     const handleRemoveMember = async (memberUserId) => {
         if (!isSpaceOwner) return;
-        const result = await removeSpaceMember(space.id, memberUserId);
+        const result = await removeSpaceMember(spaceId, memberUserId);
         if (!result.success) setShareError(result.error || 'Erro ao remover membro.');
         else await loadMembers();
     };
@@ -126,12 +138,12 @@ export default function SpaceDetailsModal({ space, onClose, initialTab = 'detail
             type: 'danger',
         });
         if (!confirmed) return;
-        const result = await leaveSpace(space.id, user.id);
+        const result = await leaveSpace(spaceId, user.id);
         if (!result.success) {
             setShareError(result.error || 'Erro ao sair do space.');
             return;
         }
-        dispatch({ type: 'DELETE_SPACE', payload: space.id });
+        dispatch({ type: 'DELETE_SPACE', payload: spaceId });
         onClose();
     };
 
@@ -143,6 +155,8 @@ export default function SpaceDetailsModal({ space, onClose, initialTab = 'detail
             default: return role || '—';
         }
     };
+
+    if (!currentSpace?.id) return null;
 
     return createPortal(
         <>

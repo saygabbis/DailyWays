@@ -20,8 +20,9 @@ import {
 } from '../interaction/hooks/useCreateTool';
 import { useResizeRotateState } from '../interaction/hooks/useResizeRotate';
 import PresenceLayer from '../../../collab/board/ui/PresenceLayer.jsx';
-import { useCollabPatch } from '../../../collab/whiteboard/ops/CollabOpsContext.jsx';
+import { useCollabPatch } from '../../../collab/space/ops/SpaceCollabOpsContext.jsx';
 import { useCollabPresence } from '../../../collab/board/presence/useCollabPresence.js';
+import SpaceRemoteDragLayer from '../../../collab/space/ui/SpaceRemoteDragLayer.jsx';
 import { screenToWorldWithContainer, worldToScreenWithContainer, rectIntersects, findContainerAt } from '../interaction/viewport/viewportUtils';
 import { computeResizeBounds } from '../interaction/transform/resizeBounds';
 import { computeSkewResizeBounds } from '../interaction/transform/resizeSkew';
@@ -58,6 +59,7 @@ import {
     ungroupSelectedNodes,
     getSelectionContextFlags,
 } from '../core/layers/whiteboardGroupOps';
+import { getCornerRadii } from '../shared/appearanceStyle';
 import {
     SELECTION_TRANSFORM_ID,
     getTransformTargetIds,
@@ -76,6 +78,15 @@ import { Grid3X3, ZoomIn, ZoomOut, Ruler, Magnet, HelpCircle, Focus } from 'luci
 import { uuidv4 } from '../../../utils/uuid';
 import { applyPostCreateActions } from '../core/creation/postCreateActions';
 import './CanvasShell.css';
+
+const DEFAULT_NODE_RADIUS = {
+    sticky_note: 8,
+    comment: 8,
+    todo_list: 8,
+    link: 8,
+    file_card: 8,
+    frame: 8,
+};
 
 export default function CanvasEngine({ spaceId, space, onViewportChange, onRegisterViewportControl }) {
     const containerRef = useRef(null);
@@ -116,13 +127,15 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         collabDeleteNodes,
         connected: collabConnected,
     } = useCollabPatch();
+    const { updateCursor, updateSelection, updateDragPreview } = useCollabPresence(spaceId, { scope: 'space' });
     const collabPatchNodeRef = useRef(collabPatchNode);
     const collabPatchNodesRef = useRef(collabPatchNodes);
+    const updateDragPreviewRef = useRef(updateDragPreview);
     const setSnapGuidesIfChangedRef = useRef(setSnapGuidesIfChanged);
     collabPatchNodeRef.current = collabPatchNode;
     collabPatchNodesRef.current = collabPatchNodes;
+    updateDragPreviewRef.current = updateDragPreview;
     setSnapGuidesIfChangedRef.current = setSnapGuidesIfChanged;
-    const { updateCursor, updateSelection } = useCollabPresence(spaceId);
     const {
         setSelection,
         setActiveTool,
@@ -142,8 +155,25 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     } = useWhiteboardSelectionStore();
 
     const NODE_TYPES_ALLOWED = ['sticky_note', 'text', 'shape', 'frame', 'image', 'comment', 'link', 'todo_list', 'file_card', 'drawing', 'table'];
-
     const isDragCreationTool = (tool) => checkDragCreationTool(tool, NODE_TYPES_ALLOWED);
+
+    const dragPreviewBorderFromNode = useCallback((node) => {
+        if (!node) return {};
+        if (node.type === 'shape' && node.data?.shape === 'ellipse') {
+            return { radiusShape: 'ellipse' };
+        }
+        const appearance = node.style?.appearance;
+        if (appearance) {
+            const corners = getCornerRadii(appearance);
+            return { cornerRadii: corners };
+        }
+        if (typeof node.style?.borderRadius === 'number') {
+            return { borderRadius: node.style.borderRadius };
+        }
+        const fallback = DEFAULT_NODE_RADIUS[node.type];
+        if (typeof fallback === 'number') return { borderRadius: fallback };
+        return {};
+    }, []);
 
     const createNodeAt = useCallback(
         async (type, worldX, worldY, extraData = {}, dims) => {
@@ -526,6 +556,10 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     useEffect(() => {
         updateSelection(selectedNodeIds);
     }, [selectedNodeIds, updateSelection]);
+
+    useEffect(() => () => {
+        updateDragPreview({ draggingNodeIds: [], dragPreviewRects: [] });
+    }, [updateDragPreview]);
 
     const isCanvasBackground = (e) =>
         !e.target?.closest?.('.whiteboard-node-wrapper') &&
@@ -1164,6 +1198,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     })
                     .filter(Boolean);
                 if (patches.length) collabPatchNodesRef.current(patches);
+                updateDragPreviewRef.current({ draggingNodeIds: [], dragPreviewRects: [] });
 
                 useWhiteboardSelectionStore.getState().clearNodeDragPreview();
 
@@ -1205,6 +1240,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 }
             }
             nodeDragRef.current = null;
+            updateDragPreviewRef.current({ draggingNodeIds: [], dragPreviewRects: [] });
             useWhiteboardSelectionStore.getState().clearNodeDragPreview();
         };
 
@@ -1242,6 +1278,25 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 ids,
                 dx: snap.dx,
                 dy: snap.dy,
+            });
+            const dragPreviewRects = (ref.beforeSnapshots || [])
+                .slice(0, 24)
+                .map((entry) => {
+                    const node = entry?.node;
+                    if (!node) return null;
+                    return {
+                        id: entry.id,
+                        x: (node.x ?? 0) + snap.dx,
+                        y: (node.y ?? 0) + snap.dy,
+                        width: node.width ?? 0,
+                        height: node.height ?? 0,
+                        ...dragPreviewBorderFromNode(node),
+                    };
+                })
+                .filter(Boolean);
+            updateDragPreviewRef.current({
+                draggingNodeIds: ids,
+                dragPreviewRects,
             });
         };
 
@@ -1474,7 +1529,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 viewportState.handleMouseMove(e);
             }
             const rect = containerRef.current?.getBoundingClientRect();
-            if (rect && viewportRef.current && isCanvasBackground(e)) {
+            if (rect && viewportRef.current) {
                 const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
                 updateCursor({ x: world.x, y: world.y });
             }
@@ -1696,7 +1751,8 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     viewport={viewportForChildren}
                     containerRef={containerRef}
                 />
-                <PresenceLayer viewport={viewportForChildren} />
+                <PresenceLayer viewport={viewportForChildren} worldContainerRef={containerRef} />
+                <SpaceRemoteDragLayer viewport={viewportForChildren} worldContainerRef={containerRef} />
                 {rulersVisible && (
                     <RulersOverlay viewport={viewportForChildren} containerRef={containerRef} />
                 )}

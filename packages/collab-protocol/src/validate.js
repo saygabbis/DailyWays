@@ -66,6 +66,23 @@ export function validatePresence(payload) {
   if (payload.selectedNodeIds != null && !Array.isArray(payload.selectedNodeIds)) {
     return 'Invalid selectedNodeIds';
   }
+  if (payload.draggingNodeIds != null && !Array.isArray(payload.draggingNodeIds)) {
+    return 'Invalid draggingNodeIds';
+  }
+  if (payload.dragPreviewRects != null) {
+    if (!Array.isArray(payload.dragPreviewRects)) return 'Invalid dragPreviewRects';
+    for (const rect of payload.dragPreviewRects) {
+      if (!rect || typeof rect !== 'object') return 'Invalid dragPreviewRect';
+      if (
+        typeof rect.x !== 'number'
+        || typeof rect.y !== 'number'
+        || typeof rect.width !== 'number'
+        || typeof rect.height !== 'number'
+      ) {
+        return 'Invalid dragPreviewRect';
+      }
+    }
+  }
   if (payload.selectedCardIds != null && !Array.isArray(payload.selectedCardIds)) {
     return 'Invalid selectedCardIds';
   }

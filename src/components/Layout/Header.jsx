@@ -8,6 +8,7 @@ import { acceptInvitation, declineInvitation } from '../../services/boardService
 import { respondToContactRequest } from '../../services/contactsService';
 import NotificationDropdown from '../Notifications/NotificationDropdown';
 import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
+import SpaceDetailsModal from '../Sidebar/SpaceDetailsModal';
 import CloudSyncIndicator from './CloudSyncIndicator';
 import HeaderStreakButton from './HeaderStreakButton';
 import './Header.css';
@@ -35,6 +36,7 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
     const notificationsRef = useRef(null);
 
     const activeBoard = getActiveBoard();
+    const activeSpace = editableSpaceTitle?.space ?? null;
 
     const editableTitle = editableBoardTitle || editableSpaceTitle;
     const currentEditableValue = editableBoardTitle?.board?.title ?? editableSpaceTitle?.space?.title ?? '';
@@ -340,7 +342,14 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                 </div>
             </div>
 
-            {showShareModal && activeBoard && (
+            {showShareModal && activeSpace && (
+                <SpaceDetailsModal
+                    space={activeSpace}
+                    onClose={() => setShowShareModal(false)}
+                    initialTab="share"
+                />
+            )}
+            {showShareModal && !activeSpace && activeBoard && (
                 <BoardDetailsModal
                     board={activeBoard}
                     onClose={() => setShowShareModal(false)}

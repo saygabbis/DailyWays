@@ -22,7 +22,7 @@ Arquitetura em camadas para o canvas dos Spaces.
 
 ## Collab
 
-- `WhiteboardCollabSync` montado em `SpaceView` (fora do canvas)
+- `SpaceCollabSync` montado em `SpaceView` (fora do canvas)
 - `useCollabNodeApi()` — ramo único online/offline para mutações
 - Presença reutiliza `useCollabPresence` do Board
 

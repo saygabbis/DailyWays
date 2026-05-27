@@ -4,6 +4,7 @@ import {
   roomIdForSpace,
   roomIdForBoard,
   parseBoardIdFromRoom,
+  parseSpaceIdFromRoom,
   validateOp,
   validatePresence,
 } from '@dailyways/collab-protocol';
@@ -12,6 +13,7 @@ import { roomManager } from '../services/roomManager.js';
 import { enrichPresenceFromProfile } from '../services/presenceProfile.js';
 import { isDevPrankAttacker } from '../auth/devAccess.js';
 import { devLog } from '../devLog.js';
+import { createPresenceSyncPayload } from '../services/shared/presencePayload.js';
 
 const MAX_OPS_PER_SEC = 120;
 const MAX_POSITION_OPS_PER_SEC = 300;
@@ -20,19 +22,15 @@ const POSITION_FIELDS = new Set(['x', 'y']);
 // Evita que o cursor some prematuramente durante F5 ou reconexão lenta.
 const PRESENCE_LEAVE_GRACE_MS = 500;
 
-function boardIdMatchesRoom(reqBoardId, roomId) {
-  if (!reqBoardId || !roomId) return true;
-  if (reqBoardId === roomId) return true;
-  if (roomId === roomIdForBoard(reqBoardId)) return true;
-  return parseBoardIdFromRoom(roomId) === reqBoardId;
-}
-
-function presenceSyncPayload(roomId, peers) {
-  return {
-    peers,
-    boardId: parseBoardIdFromRoom(roomId) || null,
-    roomId,
-  };
+function payloadRoomMatchesSocketRoom(requestedRoomId, socketRoomId) {
+  if (!requestedRoomId || !socketRoomId) return true;
+  if (requestedRoomId === socketRoomId) return true;
+  if (socketRoomId === roomIdForBoard(requestedRoomId)) return true;
+  if (socketRoomId === roomIdForSpace(requestedRoomId)) return true;
+  return (
+    parseBoardIdFromRoom(socketRoomId) === requestedRoomId
+    || parseSpaceIdFromRoom(socketRoomId) === requestedRoomId
+  );
 }
 
 /** Outro socket do mesmo usuário ainda na sala Socket.IO (multi-tab no mesmo board). */
@@ -65,7 +63,7 @@ function finalizeLeavePresence(io, roomId, userId, socketId) {
     if (userHasAnotherSocketInRoom(io, roomId, userId, socketId)) return;
     const peers = roomManager.finalizePresenceAfterGrace(roomId, userId);
     if (roomManager.rooms.has(roomId)) {
-      io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, presenceSyncPayload(roomId, peers));
+      io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, createPresenceSyncPayload(roomId, peers));
     }
   }, PRESENCE_LEAVE_GRACE_MS);
   return roomManager.getPresenceList(room);
@@ -179,7 +177,7 @@ export function registerSocketHandlers(io) {
         );
         roomManager.setPresence(roomId, socket.data.userId, stub, socket.id);
         const peers = roomManager.getPresenceList(room);
-        const syncPayload = presenceSyncPayload(roomId, peers);
+        const syncPayload = createPresenceSyncPayload(roomId, peers);
         ack?.({ ok: true, ...state, peers });
         socket.emit(SERVER_EVENTS.STATE, { ...state, peers });
         socket.emit(SERVER_EVENTS.PRESENCE_SYNC, syncPayload);
@@ -197,7 +195,7 @@ export function registerSocketHandlers(io) {
         ack?.({ ok: true, peers: [] });
         return;
       }
-      if (payload?.boardId && !boardIdMatchesRoom(payload.boardId, roomId)) {
+      if (payload?.boardId && !payloadRoomMatchesSocketRoom(payload.boardId, roomId)) {
         ack?.({ ok: true, skipped: true, peers: [] });
         return;
       }
@@ -267,14 +265,25 @@ export function registerSocketHandlers(io) {
     socket.on(CLIENT_EVENTS.PRESENCE, async (payload) => {
       let roomId = socket.data.roomId;
       if (!roomId && payload?.roomId) {
-        const reqBoardId = payload.roomId;
-        const access = await canAccessBoard(
+        const requestedRoomEntityId = payload.roomId;
+        const boardAccess = await canAccessBoard(
           socket.data.userId,
-          reqBoardId,
+          requestedRoomEntityId,
           socket.data.accessToken,
         );
-        if (access?.access) {
-          const targetRoom = roomIdForBoard(reqBoardId);
+        const spaceAccess = boardAccess?.access
+          ? null
+          : await canAccessSpace(
+            socket.data.userId,
+            requestedRoomEntityId,
+            socket.data.accessToken,
+          );
+        if (boardAccess?.access || spaceAccess?.access) {
+          const isBoardRoom = Boolean(boardAccess?.access);
+          const targetRoom = isBoardRoom
+            ? roomIdForBoard(requestedRoomEntityId)
+            : roomIdForSpace(requestedRoomEntityId);
+          const access = isBoardRoom ? boardAccess : spaceAccess;
           const prev = socket.data.roomId;
           if (prev && prev !== targetRoom) {
             socket.leave(prev);
@@ -283,9 +292,12 @@ export function registerSocketHandlers(io) {
           const presenceRoom = await roomManager.getOrLoad(targetRoom, {
             accessToken: socket.data.accessToken,
           });
-          if (!presenceRoom.board) return;
+          if (isBoardRoom && !presenceRoom.board) return;
+          if (!isBoardRoom && !presenceRoom.space) return;
           socket.data.roomId = targetRoom;
           socket.data.canWrite = access.canWrite;
+          socket.data.boardId = isBoardRoom ? requestedRoomEntityId : null;
+          socket.data.spaceId = isBoardRoom ? null : requestedRoomEntityId;
           socket.join(targetRoom);
           roomManager.clientJoined(targetRoom);
           roomId = targetRoom;
@@ -296,7 +308,7 @@ export function registerSocketHandlers(io) {
       if (!roomId) {
         return;
       }
-      if (payload?.roomId && !boardIdMatchesRoom(payload.roomId, roomId)) {
+      if (payload?.roomId && !payloadRoomMatchesSocketRoom(payload.roomId, roomId)) {
         return;
       }
       const err = validatePresence(payload);
@@ -309,7 +321,7 @@ export function registerSocketHandlers(io) {
         socket.data.userEmail,
       );
       const peers = roomManager.setPresence(roomId, socket.data.userId, full, socket.id) || [];
-      io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, presenceSyncPayload(roomId, peers));
+      io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, createPresenceSyncPayload(roomId, peers));
     });
 
     /** DEV ONLY — prank no board (somente contas DEV). */
@@ -357,7 +369,7 @@ export function registerSocketHandlers(io) {
           io.sockets.sockets.get(sid)?.emit('dev:prank-cursor', { boardId, x, y });
         }
         const peers = roomManager.setPresence(roomId, targetUserId, cursorPayload) || [];
-        io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, presenceSyncPayload(roomId, peers));
+        io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, createPresenceSyncPayload(roomId, peers));
         ack?.({ ok: true });
         return;
       }

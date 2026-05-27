@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
-import { useCollabPatch } from '../../../collab/whiteboard/ops/CollabOpsContext.jsx';
+import { useCollabPatch } from '../../../collab/space/ops/SpaceCollabOpsContext.jsx';
 import { alignSelectedNodes } from '../core/align/whiteboardAlign';
 import { nodeToWorld, buildNodesById } from '../core/ops/whiteboardNodeOps';
 import { patchNodeWithHistory } from '../core/history/whiteboardHistory';

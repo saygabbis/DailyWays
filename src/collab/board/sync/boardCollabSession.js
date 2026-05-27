@@ -1,26 +1,29 @@
-/** Qual board o socket está na sala collab (compartilhado entre mounts do BoardCollabSync). */
-let globalJoinedBoardId = null;
+import {
+  getJoinedRoomId,
+  setJoinedRoomId,
+  clearJoinedRoomId,
+  nextMountGeneration,
+  getMountGeneration,
+} from '../../shared/session/scopeSessionState.js';
 
-/** Incrementa a cada mount/efeito do BoardCollabSync; invalida leaveRoom atrasado do cleanup. */
-let boardCollabMountGen = 0;
+const BOARD_SCOPE = 'board';
 
 export function getGlobalJoinedBoardId() {
-  return globalJoinedBoardId;
+  return getJoinedRoomId(BOARD_SCOPE);
 }
 
 export function setGlobalJoinedBoardId(boardId) {
-  globalJoinedBoardId = boardId || null;
+  setJoinedRoomId(BOARD_SCOPE, boardId || null);
 }
 
 export function clearGlobalJoinedBoardId() {
-  globalJoinedBoardId = null;
+  clearJoinedRoomId(BOARD_SCOPE);
 }
 
 export function nextBoardCollabMountGen() {
-  boardCollabMountGen += 1;
-  return boardCollabMountGen;
+  return nextMountGeneration(BOARD_SCOPE);
 }
 
 export function getBoardCollabMountGen() {
-  return boardCollabMountGen;
+  return getMountGeneration(BOARD_SCOPE);
 }

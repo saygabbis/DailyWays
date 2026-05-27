@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { useCollabPatch } from '../../../../collab/whiteboard/ops/CollabOpsContext.jsx';
+import { useCollabPatch } from '../../../../collab/space/ops/SpaceCollabOpsContext.jsx';
 import { useCollab } from '../../../../collab/core/CollabContext.jsx';
 import { insertNode, deleteNode as deleteNodeService } from '../../../../services/whiteboardService';
 import { useWhiteboardDocumentStore } from '../../../../stores/whiteboardDocumentStore';

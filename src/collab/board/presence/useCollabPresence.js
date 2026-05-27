@@ -13,14 +13,14 @@ import {
   registerPresenceSender,
   pushPresenceFields as pushFields,
 } from './presenceBridge.js';
-import { getGlobalJoinedBoardId } from '../sync/boardCollabSession.js';
+import { getJoinedRoomId } from '../../shared/session/scopeSessionState.js';
 import { isBoardPrankFrozen, isBoardPrankHeld } from '../dev/boardDevPrank.js';
 import { boardScreenPointFromContent } from '../coords/scrollContentCoords.js';
 
 const CURSOR_EMIT_MS = 16;
 const META_EMIT_MS = 80;
 
-export function useCollabPresence(roomId, { mode = 'world' } = {}) {
+export function useCollabPresence(roomId, { mode = 'world', scope = 'board' } = {}) {
   const collab = useCollab();
   const { user, profile } = useAuth();
   const metaTimerRef = useRef(null);
@@ -54,12 +54,12 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
   }, [roomId, user?.id, profile?.name, profile?.photo_url, profile?.presence_color]);
 
   const canEmitPresence = useCallback(() => {
-    if (isBoardPrankFrozen() || isBoardPrankHeld()) return false;
+    if (scope === 'board' && (isBoardPrankFrozen() || isBoardPrankHeld())) return false;
     if (!roomId || !collab?.socket?.connected) return false;
-    const joined = getGlobalJoinedBoardId();
+    const joined = getJoinedRoomId(scope);
     if (joined && joined !== roomId) return false;
     return true;
-  }, [roomId, collab?.socket, collab?.connected]);
+  }, [roomId, scope, collab?.socket, collab?.connected]);
 
   const flushPresence = useCallback(() => {
     const socket = collab?.socket;
@@ -71,7 +71,9 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
     const socket = collab?.socket;
     if (!canEmitPresence()) return;
     const payload = buildCursorPresencePayload(roomId, authRef.current);
-    if (payload.cursor?.space === 'board') emitPresence(socket, payload);
+    if (payload.cursor && typeof payload.cursor.x === 'number' && typeof payload.cursor.y === 'number') {
+      emitPresence(socket, payload);
+    }
   }, [collab?.socket, roomId, canEmitPresence]);
 
   const scheduleMetaSend = useCallback(() => {
@@ -186,7 +188,16 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
 
   const updateSelection = useCallback((selectedNodeIds) => {
     mergeFields({ selectedNodeIds: selectedNodeIds || [] });
-  }, [mergeFields]);
+    scheduleMetaSend();
+  }, [mergeFields, scheduleMetaSend]);
+
+  const updateDragPreview = useCallback(({ draggingNodeIds = [], dragPreviewRects = [] } = {}) => {
+    mergeFields({
+      draggingNodeIds: draggingNodeIds || [],
+      dragPreviewRects: dragPreviewRects || [],
+    });
+    scheduleCursorSend();
+  }, [mergeFields, scheduleCursorSend]);
 
   const setHoverTarget = useCallback(({ cardId = null, listId = null, uiKey = null } = {}) => {
     mergeFields({
@@ -233,6 +244,7 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
   return {
     updateCursor,
     updateSelection,
+    updateDragPreview,
     setHoverTarget,
     clearHoverTarget,
     setDragTarget,

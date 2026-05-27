@@ -22,9 +22,14 @@ const POINTER_PATH = 'M2 2 L2 17 L7 12 L10.5 21 L13 19.5 L9.5 11.5 L16 11.5 Z';
 const HAND_POINTER_PATH = 'M7 3 C7 3 5 5 5 8 L5 11 L3 11 C3 11 2 12 2 14 C2 16 4 17 4 17 L4 20 C4 22 6 23 8 23 L11 23 L11 20 L14 20 L14 17 L17 17 L17 14 L20 14 L20 11 L17 11 L17 8 C17 6 15 4 13 4 L11 4 L11 3 Z';
 const GRAB_PATH = 'M8 4 C6 4 5 6 5 8 L5 12 L3 12 C2 12 1 13 1 15 C1 17 3 18 5 18 L5 21 C5 23 7 24 9 24 L12 24 L12 21 L15 21 L15 18 L18 18 L18 15 L21 15 L21 12 L18 12 L18 9 L15 9 L15 6 C15 4 13 4 11 4 L9 4 Z';
 
-function toWorldScreen(cursor, panX, panY, zoom) {
-  if (!cursor) return null;
-  return { x: cursor.x * zoom + panX, y: cursor.y * zoom + panY };
+function toWorldScreen(cursor, panX, panY, zoom, layerRect = null) {
+  if (!cursor || typeof cursor.x !== 'number' || typeof cursor.y !== 'number') return null;
+  const centerX = layerRect ? layerRect.width / 2 : 0;
+  const centerY = layerRect ? layerRect.height / 2 : 0;
+  return {
+    x: centerX + cursor.x * zoom + panX,
+    y: centerY + cursor.y * zoom + panY,
+  };
 }
 
 function isPeerOnBoardContent(peer) {
@@ -39,6 +44,7 @@ function resolveViewportPosition(
   panX,
   panY,
   zoom,
+  layerRect,
   modalRoot,
   overlayScrollSelector,
   boardScroller,
@@ -66,7 +72,7 @@ function resolveViewportPosition(
     }
     return null;
   }
-  return toWorldScreen(cur, panX, panY, zoom);
+  return toWorldScreen(cur, panX, panY, zoom, layerRect);
 }
 
 function resolvePeerCursorTarget(
@@ -77,6 +83,7 @@ function resolvePeerCursorTarget(
     panX,
     panY,
     zoom,
+    layerRect,
     modalRoot,
     overlayScrollSelector,
     boardScroller,
@@ -93,6 +100,7 @@ function resolvePeerCursorTarget(
     panX,
     panY,
     zoom,
+    layerRect,
     modalRoot,
     overlayScrollSelector,
     boardScroller,
@@ -119,6 +127,8 @@ export default function CollabPresenceLayer({
   layoutRepaint = 0,
   /** DEV: board ativo (dev prank freeze). */
   boardId = null,
+  /** Ref opcional do container real do canvas (melhor centro para world coords). */
+  worldContainerRef = null,
 }) {
   const useBoardContentCoords = Boolean(boardScrollerRef);
   const peers = usePresenceStore((s) => s.peers);
@@ -317,6 +327,9 @@ export default function CollabPresenceLayer({
       const { panX: px = 0, panY: py = 0, zoom: z = 1 } = viewportRef.current || {};
       const modalRoot = modalRootRef?.current ?? null;
       const boardScroller = boardScrollerRef?.current ?? null;
+      const layerRect = worldContainerRef?.current?.getBoundingClientRect?.()
+        ?? layerRef.current?.getBoundingClientRect?.()
+        ?? null;
       const peerById = new Map((storePeers || []).map((p) => [p.userId, p]));
       const ctx = {
         remoteCursors,
@@ -324,6 +337,7 @@ export default function CollabPresenceLayer({
         panX: px,
         panY: py,
         zoom: z,
+        layerRect,
         modalRoot,
         overlayScrollSelector,
         boardScroller,
@@ -349,6 +363,9 @@ export default function CollabPresenceLayer({
         }
 
         if (overridePos && isDragged) {
+          smoother.snapTo(peer.userId, targetPos);
+        } else if (mode === 'world') {
+          // Space/whiteboard: prioriza precisão 1:1 do cursor remoto (sem lag visual).
           smoother.snapTo(peer.userId, targetPos);
         } else {
           smoother.updateTarget(peer.userId, targetPos);

@@ -1,8 +1,10 @@
 import { io } from 'socket.io-client';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@dailyways/collab-protocol';
 import { getCollabServerUrl, isLocalOrLanHost } from './collabConfig.js';
-import { getBoardCollabMountGen, getGlobalJoinedBoardId } from '../board/sync/boardCollabSession.js';
+import { getBoardCollabMountGen } from '../board/sync/boardCollabSession.js';
 import { isBoardPrankFrozen, isBoardPrankHeld } from '../board/dev/boardDevPrank.js';
+import { shouldEmitPresenceForRoom } from '../shared/session/presenceGuards.js';
+import { getJoinedRoomId } from '../shared/session/scopeSessionState.js';
 let socketInstance = null;
 
 export function getCollabSocket() {
@@ -151,10 +153,18 @@ export function submitOp(socket, op) {
 export function emitPresence(socket, payload) {
   if (!socket?.connected) return;
   if (isBoardPrankFrozen() || isBoardPrankHeld()) return;
-  const boardId = payload?.roomId;
-  const joined = getGlobalJoinedBoardId();
-  // Só bloqueia se já estamos em outra sala; null !== boardId bloqueava todo envio (assimétrico).
-  if (boardId && joined && joined !== boardId) return;
+  const requestedRoomId = payload?.roomId;
+  const joinedBoardRoomId = getJoinedRoomId('board');
+  const joinedSpaceRoomId = getJoinedRoomId('space');
+  const boardMatches = shouldEmitPresenceForRoom({
+    requestedRoomId,
+    joinedRoomId: joinedBoardRoomId,
+  });
+  const spaceMatches = shouldEmitPresenceForRoom({
+    requestedRoomId,
+    joinedRoomId: joinedSpaceRoomId,
+  });
+  if (!boardMatches && !spaceMatches) return;
   socket.emit(CLIENT_EVENTS.PRESENCE, payload);
 }
 

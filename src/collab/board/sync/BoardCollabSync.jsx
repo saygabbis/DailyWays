@@ -12,7 +12,7 @@ import { useAuth } from '../../../context/AuthContext';
 
 import { usePresenceStore } from '../presence/presenceStore';
 
-import { queuePresenceSync, flushPresenceSyncNow } from '../presence/queuePresenceSync.js';
+import { queuePresenceSync, flushPresenceSyncNow } from '../../shared/presence/queuePresenceSync.js';
 
 import { useCollab } from '../../core/CollabContext.jsx';
 

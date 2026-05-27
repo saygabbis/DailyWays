@@ -26,7 +26,7 @@ function snapshotEntity(entity, id, state) {
   return null;
 }
 
-export function useCollabOps() {
+export function useSpaceCollabOps() {
   const collab = useCollab();
   const { addToast } = useToast();
   const throttleTimers = useRef(new Map());
@@ -61,7 +61,7 @@ export function useCollabOps() {
       useWhiteboardStore.getState().rollbackPendingOp(opId);
       const msg = err.message?.includes('Rate limit')
         ? 'Muitas alterações ao mesmo tempo. Aguarde um instante.'
-        : 'Alteração no quadro não foi salva. Tente novamente.';
+        : 'Alteração no space não foi salva. Tente novamente.';
       toastCollabError(addToast, msg);
     }
   }, [collab?.socket, addToast]);
@@ -166,3 +166,5 @@ export function useCollabOps() {
     connected: collab?.connected ?? false,
   };
 }
+
+export default useSpaceCollabOps;

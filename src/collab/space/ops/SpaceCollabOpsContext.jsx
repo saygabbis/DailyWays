@@ -1,29 +1,29 @@
 import { createContext, useContext } from 'react';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
-import { useCollabOps } from './useCollabOps.js';
+import { useSpaceCollabOps } from './useSpaceCollabOps.js';
 
-const CollabOpsContext = createContext(null);
+const SpaceCollabOpsContext = createContext(null);
 
-export function CollabOpsProvider({ children }) {
-  const ops = useCollabOps();
+export function SpaceCollabOpsProvider({ children }) {
+  const ops = useSpaceCollabOps();
   return (
-    <CollabOpsContext.Provider value={ops}>
+    <SpaceCollabOpsContext.Provider value={ops}>
       {children}
-    </CollabOpsContext.Provider>
+    </SpaceCollabOpsContext.Provider>
   );
 }
 
-export function useCollabOpsContext() {
-  const ctx = useContext(CollabOpsContext);
+export function useSpaceCollabOpsContext() {
+  const ctx = useContext(SpaceCollabOpsContext);
   if (!ctx) {
-    throw new Error('useCollabOpsContext must be used within CollabOpsProvider');
+    throw new Error('useSpaceCollabOpsContext must be used within SpaceCollabOpsProvider');
   }
   return ctx;
 }
 
 /** Safe fallback when collab is disabled — uses local store only. */
 export function useCollabPatch() {
-  const ctx = useContext(CollabOpsContext);
+  const ctx = useContext(SpaceCollabOpsContext);
   const store = useWhiteboardStore();
   if (ctx) return ctx;
   return {

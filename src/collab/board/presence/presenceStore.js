@@ -6,6 +6,10 @@ function normalizePeers(peers) {
     cursor: p.cursor ? { ...p.cursor } : p.cursor,
     cursorScreen: p.cursorScreen ? { ...p.cursorScreen } : p.cursorScreen,
     cursorModal: p.cursorModal ? { ...p.cursorModal } : p.cursorModal,
+    draggingNodeIds: Array.isArray(p.draggingNodeIds) ? [...p.draggingNodeIds] : [],
+    dragPreviewRects: Array.isArray(p.dragPreviewRects)
+      ? p.dragPreviewRects.map((rect) => ({ ...rect }))
+      : [],
   }));
 }
 
@@ -26,7 +30,9 @@ function metaSignature(peers) {
       `${p.userId}:${p.name || ''}:${p.color || ''}:${p.draggingCardId || ''}:`
       + `${p.draggingListId || ''}:${p.hoverCardId || ''}:${p.hoverListId || ''}:${p.hoverUiKey || ''}:`
       + `${p.selectedCardId || ''}:${(p.selectedCardIds || []).join(',')}:${p.onBoardSurface === false ? 0 : 1}:`
-      + `${p.hoverModalEl || ''}:${JSON.stringify(p.liveDraft ?? null)}`
+      + `${p.hoverModalEl || ''}:${JSON.stringify(p.liveDraft ?? null)}:`
+      + `${(p.selectedNodeIds || []).join(',')}:${(p.draggingNodeIds || []).join(',')}:`
+      + `${JSON.stringify(p.dragPreviewRects || null)}`
     ))
     .sort()
     .join('|');

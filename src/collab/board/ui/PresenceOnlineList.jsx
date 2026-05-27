@@ -17,7 +17,7 @@ export default function PresenceOnlineList() {
   if (!others.length || !collab?.connected) return null;
 
   return (
-    <div className="collab-presence-online-list" title="Online no board">
+    <div className="collab-presence-online-list" title="Online agora">
       {others.map((peer) => {
         const color = peer.color || '#7c3aed';
         const label = displayName(peer);

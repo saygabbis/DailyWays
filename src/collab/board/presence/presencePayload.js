@@ -13,7 +13,7 @@ export function resolvePresenceDisplayName({ user, profile }) {
   );
 }
 
-function buildIdentity(boardId, auth) {
+function buildIdentity(roomId, auth) {
   const { user, profile } = auth || {};
   const name = resolvePresenceDisplayName({ user, profile });
   return {
@@ -26,12 +26,12 @@ function buildIdentity(boardId, auth) {
       presenceColorAuto: profile?.presence_color_auto !== false,
       photoUrl: profile?.photo_url,
     }),
-    roomId: boardId,
+    roomId,
   };
 }
 
-function presenceFieldsForEmit(boardId) {
-  const f = getPresenceFields(boardId);
+function presenceFieldsForEmit(roomId) {
+  const f = getPresenceFields(roomId);
   const out = {
     selectedCardId: f.selectedCardId ?? null,
     selectedCardIds: f.selectedCardIds ?? [],
@@ -45,9 +45,11 @@ function presenceFieldsForEmit(boardId) {
     liveDraft: f.liveDraft ?? null,
   };
   if (f.selectedNodeIds != null) out.selectedNodeIds = f.selectedNodeIds;
-  if (f.cursor?.space === 'board' && typeof f.cursor.x === 'number' && typeof f.cursor.y === 'number') {
+  if (typeof f.cursor?.x === 'number' && typeof f.cursor?.y === 'number') {
     out.cursor = f.cursor;
   }
+  if (Array.isArray(f.draggingNodeIds)) out.draggingNodeIds = f.draggingNodeIds;
+  if (Array.isArray(f.dragPreviewRects)) out.dragPreviewRects = f.dragPreviewRects;
   if (f.cursorModal && typeof f.cursorModal.x === 'number' && typeof f.cursorModal.y === 'number') {
     out.cursorModal = f.cursorModal;
   } else if (!f.selectedCardId) {
@@ -58,17 +60,17 @@ function presenceFieldsForEmit(boardId) {
   return out;
 }
 
-export function buildBoardPresencePayload(boardId, auth) {
+export function buildBoardPresencePayload(roomId, auth) {
   return {
-    ...buildIdentity(boardId, auth),
-    ...presenceFieldsForEmit(boardId),
+    ...buildIdentity(roomId, auth),
+    ...presenceFieldsForEmit(roomId),
   };
 }
 
 /** Cursor + meta de contexto (selectedCardId, etc.) em cada movimento. */
-export function buildCursorPresencePayload(boardId, auth) {
+export function buildCursorPresencePayload(roomId, auth) {
   return {
-    ...buildIdentity(boardId, auth),
-    ...presenceFieldsForEmit(boardId),
+    ...buildIdentity(roomId, auth),
+    ...presenceFieldsForEmit(roomId),
   };
 }
