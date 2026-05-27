@@ -86,15 +86,57 @@ export const CONTAINER_NODE_TYPES = ['frame', 'table'];
 
 /** Find topmost container node that contains (worldX, worldY). Uses world coords for roots. */
 export function findContainerAt(nodes, worldX, worldY) {
-    const containers = nodes
-        .filter((n) => CONTAINER_NODE_TYPES.includes(n.type) && !n.parentId)
-        .sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0));
-    for (const c of containers) {
-        const x = c.x ?? 0;
-        const y = c.y ?? 0;
-        const width = c.width ?? 0;
-        const height = c.height ?? 0;
-        if (worldX >= x && worldX <= x + width && worldY >= y && worldY <= y + height) return c;
+    const byId = new Map((nodes ?? []).map((n) => [n.id, n]));
+    const worldPosCache = new Map();
+    const depthCache = new Map();
+
+    const getWorldPos = (node) => {
+        if (!node) return { x: 0, y: 0 };
+        if (worldPosCache.has(node.id)) return worldPosCache.get(node.id);
+        if (!node.parentId) {
+            const pos = { x: node.x ?? 0, y: node.y ?? 0 };
+            worldPosCache.set(node.id, pos);
+            return pos;
+        }
+        const parent = byId.get(node.parentId);
+        const parentPos = getWorldPos(parent);
+        const pos = {
+            x: parentPos.x + (node.x ?? 0),
+            y: parentPos.y + (node.y ?? 0),
+        };
+        worldPosCache.set(node.id, pos);
+        return pos;
+    };
+
+    const getDepth = (node) => {
+        if (!node) return 0;
+        if (depthCache.has(node.id)) return depthCache.get(node.id);
+        const parent = node.parentId ? byId.get(node.parentId) : null;
+        const depth = parent ? getDepth(parent) + 1 : 0;
+        depthCache.set(node.id, depth);
+        return depth;
+    };
+
+    const containers = (nodes ?? [])
+        .filter((n) => CONTAINER_NODE_TYPES.includes(n.type))
+        .map((node) => ({ node, world: getWorldPos(node), depth: getDepth(node) }))
+        .sort((a, b) => {
+            if (a.depth !== b.depth) return b.depth - a.depth;
+            return (b.node.zIndex ?? 0) - (a.node.zIndex ?? 0);
+        });
+
+    for (const entry of containers) {
+        const { node, world } = entry;
+        const width = node.width ?? 0;
+        const height = node.height ?? 0;
+        if (
+            worldX >= world.x &&
+            worldX <= world.x + width &&
+            worldY >= world.y &&
+            worldY <= world.y + height
+        ) {
+            return node;
+        }
     }
     return null;
 }

@@ -25,7 +25,7 @@ export function getDefaultNodePayload(type, x, y) {
             type: 'frame',
             width: 300,
             height: 200,
-            data: { title: 'Frame' },
+            data: { title: 'Frame', clipContent: true },
             style: { appearance: getDefaultAppearanceStyle('frame') },
         },
         link: { type: 'link', width: 240, height: 80, data: { url: '', title: '' }, style: { fontSize: 14, color: 'var(--text-primary)' } },

@@ -3,7 +3,7 @@ import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 import { useCollabPatch } from '../../../collab/space/ops/SpaceCollabOpsContext.jsx';
 import { alignSelectedNodes } from '../core/align/whiteboardAlign';
 import { nodeToWorld, buildNodesById } from '../core/ops/whiteboardNodeOps';
-import { patchNodeWithHistory } from '../core/history/whiteboardHistory';
+import { patchNodeWithHistory, patchNodesWithHistory } from '../core/history/whiteboardHistory';
 import LayersTab from './LayersTab';
 import {
     PanelRightClose,
@@ -33,6 +33,7 @@ import AppearanceCornersSection from './inspector/AppearanceCornersSection.jsx';
 import AppearanceFillSection from './inspector/AppearanceFillSection.jsx';
 import AppearanceStrokeSection from './inspector/AppearanceStrokeSection.jsx';
 import InspectorSection from './inspector/InspectorSection.jsx';
+import { getNodeFrameConstraints, normalizeFrameConstraints } from '../core/frame/frameConstraints.js';
 import '../styles/InspectorPanel.css';
 
 const TYPE_LABELS = {
@@ -77,6 +78,22 @@ const TEXT_ALIGN_ICONS = {
     right: AlignRight,
     justify: AlignJustify,
 };
+
+const FRAME_HORIZONTAL_OPTIONS = [
+    { value: 'left', label: 'Esquerda' },
+    { value: 'right', label: 'Direita' },
+    { value: 'left-right', label: 'Esq + Dir' },
+    { value: 'center', label: 'Centro' },
+    { value: 'scale', label: 'Escala' },
+];
+
+const FRAME_VERTICAL_OPTIONS = [
+    { value: 'top', label: 'Topo' },
+    { value: 'bottom', label: 'Base' },
+    { value: 'top-bottom', label: 'Topo + Base' },
+    { value: 'center', label: 'Centro' },
+    { value: 'scale', label: 'Escala' },
+];
 
 function TextDesignSection({ node }) {
     const { collabPatchNode } = useCollabPatch();
@@ -189,6 +206,103 @@ function TextDesignSection({ node }) {
             </div>
             
         </InspectorSection>
+    );
+}
+
+function FrameBehaviorSection({ single, selectedNodes, nodes }) {
+    const { collabPatchNode, collabPatchNodes } = useCollabPatch();
+    const nodesById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+    const selectedChildrenInFrame = useMemo(
+        () =>
+            selectedNodes.filter((node) => {
+                if (!node.parentId) return false;
+                const parent = nodesById.get(node.parentId);
+                return parent?.type === 'frame';
+            }),
+        [selectedNodes, nodesById]
+    );
+    const hasOnlyFrameChildren =
+        selectedNodes.length > 0 && selectedChildrenInFrame.length === selectedNodes.length;
+    const constraintsTargets = hasOnlyFrameChildren ? selectedChildrenInFrame : [];
+    const horizontalValues = constraintsTargets.map((n) => getNodeFrameConstraints(n).horizontal);
+    const verticalValues = constraintsTargets.map((n) => getNodeFrameConstraints(n).vertical);
+    const horizontalMixed =
+        horizontalValues.length > 1 && horizontalValues.some((v) => v !== horizontalValues[0]);
+    const verticalMixed =
+        verticalValues.length > 1 && verticalValues.some((v) => v !== verticalValues[0]);
+
+    const applyConstraints = (partial) => {
+        if (!constraintsTargets.length) return;
+        const patches = constraintsTargets.map((node) => {
+            const current = getNodeFrameConstraints(node);
+            const next = normalizeFrameConstraints({ ...current, ...partial });
+            return {
+                id: node.id,
+                patch: {
+                    data: {
+                        ...(node.data || {}),
+                        constraints: next,
+                    },
+                },
+            };
+        });
+        patchNodesWithHistory(useWhiteboardStore, collabPatchNodes, patches);
+    };
+
+    return (
+        <>
+            {single?.type === 'frame' && (
+                <InspectorSection title="Frame" defaultExpanded={false}>
+                    <label className="space-inspector-switch-row">
+                        <span>Clip Content</span>
+                        <input
+                            type="checkbox"
+                            checked={single.data?.clipContent !== false}
+                            onChange={(e) =>
+                                patchNodeWithHistory(useWhiteboardStore, collabPatchNode, single.id, {
+                                    data: { ...(single.data || {}), clipContent: e.target.checked },
+                                })
+                            }
+                        />
+                    </label>
+                </InspectorSection>
+            )}
+
+            {constraintsTargets.length > 0 && (
+                <InspectorSection title="Constraints (Frame)" defaultExpanded={false}>
+                    <div className="space-inspector-grid">
+                        <label className="space-inspector-field">
+                            <span>Horizontal</span>
+                            <select
+                                value={horizontalMixed ? '__mixed__' : (horizontalValues[0] || 'left')}
+                                onChange={(e) => applyConstraints({ horizontal: e.target.value })}
+                            >
+                                {horizontalMixed && <option value="__mixed__">Misto</option>}
+                                {FRAME_HORIZONTAL_OPTIONS.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="space-inspector-field">
+                            <span>Vertical</span>
+                            <select
+                                value={verticalMixed ? '__mixed__' : (verticalValues[0] || 'top')}
+                                onChange={(e) => applyConstraints({ vertical: e.target.value })}
+                            >
+                                {verticalMixed && <option value="__mixed__">Misto</option>}
+                                {FRAME_VERTICAL_OPTIONS.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </div>
+                </InspectorSection>
+            )}
+        </>
     );
 }
 
@@ -310,6 +424,8 @@ function DesignTab({ selectedNodes, single, nodes, spaceId }) {
             )}
 
             {single?.type === 'shape' && <ShapeVariantSection node={single} />}
+
+            <FrameBehaviorSection single={single} selectedNodes={selectedNodes} nodes={nodes} />
 
             {single && APPEARANCE_NODE_TYPES.has(single.type) && (
                 <>

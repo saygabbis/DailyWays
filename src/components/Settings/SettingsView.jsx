@@ -27,6 +27,7 @@ import { CUSTOM_ACCENT_ID } from '../../context/ThemeContext';
 import { PRESENCE_COLOR_PRESETS } from '../../utils/presenceColor';
 import { fetchContacts, fetchContactRequests, respondToContactRequest } from '../../services/contactsService';
 import { fetchPrivacySettings, updatePrivacySettings, fetchBlockedUsers, unblockUser } from '../../services/privacyService';
+import { getNotificationPrefs, setNotificationPrefs } from '../../services/notificationPrefs';
 import './Settings.css';
 import './AvatarCropper.css';
 const AvatarCropper = lazy(() => import('./AvatarCropper'));
@@ -684,9 +685,17 @@ const AppearancePanel = memo(function AppearancePanel({
 // APP PANEL
 // ─────────────────────────────────────────────
 const AppPanel = memo(function AppPanel({ t }) {
-    const [notifications, setNotifications] = useState(true);
-    const [sounds, setSounds] = useState(true);
+    const [notifications, setNotifications] = useState(() => getNotificationPrefs().pushEnabled);
+    const [sounds, setSounds] = useState(() => getNotificationPrefs().soundEnabled);
     const [autoSave, setAutoSave] = useState(true);
+
+    useEffect(() => {
+        setNotificationPrefs({ pushEnabled: notifications });
+    }, [notifications]);
+
+    useEffect(() => {
+        setNotificationPrefs({ soundEnabled: sounds });
+    }, [sounds]);
 
     return (
         <div className="settings-panel animate-fade-in">

@@ -4,6 +4,7 @@ import { buildImageNodePayload, topLeftFromAnchor, formatFileSizeBytes } from '.
 import { findContainerAt } from '../../interaction/viewport/viewportUtils';
 import { pushNodesAddBatch } from '../history/whiteboardHistory';
 import { filterNodesByPage } from '../pages/whiteboardPages';
+import { buildNodesById, nodeToWorld } from './whiteboardNodeOps';
 
 const URL_PATTERN = /^https?:\/\/[^\s]+$/i;
 const WWW_PATTERN = /^www\.[^\s]+$/i;
@@ -177,13 +178,15 @@ async function assignParentAndPage(payload, ctx) {
     payload.data = { ...(payload.data || {}), pageId };
 
     const pageNodes = filterNodesByPage(state.nodes, pageId);
+    const byId = buildNodesById(pageNodes);
     const centerX = payload.x + (payload.width ?? 0) / 2;
     const centerY = payload.y + (payload.height ?? 0) / 2;
     const container = findContainerAt(pageNodes, centerX, centerY);
     if (container) {
+        const containerWorld = nodeToWorld(container, byId);
         payload.parentId = container.id;
-        payload.x = payload.x - container.x;
-        payload.y = payload.y - container.y;
+        payload.x = payload.x - containerWorld.x;
+        payload.y = payload.y - containerWorld.y;
     }
     return payload;
 }

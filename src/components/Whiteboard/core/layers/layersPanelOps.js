@@ -6,6 +6,7 @@ import { recordNodesMutation, patchNodesWithHistory, pushNodesAddBatch } from '.
 import { CONTAINER_NODE_TYPES } from '../../interaction/viewport/viewportUtils';
 import { getNodePageId, filterNodesByPage } from '../pages/whiteboardPages';
 import { collectDescendantIds, isDescendantOf } from '../layers/layerTreeUtils';
+import { normalizeFrameConstraints } from '../frame/frameConstraints.js';
 
 const PASTE_STEP = 20;
 
@@ -31,10 +32,19 @@ export function nestNodeInContainer(store, collabPatchNode, childId, parentId) {
     const ids = [childId, ...collectDescendantIds(childId, nodes)];
 
     recordNodesMutation(store, ids, () => {
-        collabPatchNode(childId, {
+        const patch = {
             parentId: parent.id,
             x: childWorld.x - parentWorld.x,
             y: childWorld.y - parentWorld.y,
+        };
+        if (parent.type === 'frame') {
+            patch.data = {
+                ...(child.data || {}),
+                constraints: normalizeFrameConstraints(child.data?.constraints),
+            };
+        }
+        collabPatchNode(childId, {
+            ...patch,
         });
     });
     return true;

@@ -13,6 +13,7 @@ import {
     notificationEventKey,
     contactRequestRowToNotification,
 } from '../services/notificationService';
+import { getNotificationPrefs } from '../services/notificationPrefs';
 
 function formatNotificationTime(createdAt) {
     if (!createdAt) return '';
@@ -24,6 +25,13 @@ function formatNotificationTime(createdAt) {
     });
 }
 
+function getPrimaryFaviconLink() {
+    if (typeof document === 'undefined') return null;
+    return document.querySelector('link[rel="icon"]')
+        || document.querySelector('link[rel="shortcut icon"]')
+        || document.querySelector('link[rel*="icon"]');
+}
+
 export function useNotifications() {
     const { user } = useAuth();
     const [items, setItems] = useState([]);
@@ -32,18 +40,113 @@ export function useNotifications() {
     const prevIdsRef = useRef(new Set());
     const notificationsReadyRef = useRef(false);
     const activeChatConvRef = useRef(null);
+    const baseTitleRef = useRef(typeof document !== 'undefined' ? document.title : 'DailyWays');
+    const faviconLinkRef = useRef(null);
+    const baseFaviconHrefRef = useRef('');
+    const badgedFaviconCacheRef = useRef(new Map());
+    const audioCtxRef = useRef(null);
+
+    const playNotificationSound = useCallback(() => {
+        const prefs = getNotificationPrefs();
+        if (!prefs.soundEnabled) return;
+        if (typeof window === 'undefined') return;
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+
+        try {
+            if (!audioCtxRef.current) audioCtxRef.current = new Ctx();
+            const ctx = audioCtxRef.current;
+            const startAt = ctx.currentTime + 0.01;
+
+            const makeBeep = (offset, frequency, gainValue, duration) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = frequency;
+                gain.gain.setValueAtTime(0.0001, startAt + offset);
+                gain.gain.exponentialRampToValueAtTime(gainValue, startAt + offset + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.0001, startAt + offset + duration);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(startAt + offset);
+                osc.stop(startAt + offset + duration + 0.02);
+            };
+
+            makeBeep(0, 880, 0.04, 0.09);
+            makeBeep(0.11, 660, 0.03, 0.1);
+        } catch {
+            // browser may block audio without prior user interaction
+        }
+    }, []);
+
+    const ensureBadgedFavicon = useCallback(async (count) => {
+        const link = faviconLinkRef.current || getPrimaryFaviconLink();
+        if (!link) return;
+        faviconLinkRef.current = link;
+        if (!baseFaviconHrefRef.current) {
+            baseFaviconHrefRef.current = link.href || link.getAttribute('href') || '';
+        }
+        if (!baseFaviconHrefRef.current || count <= 0) return;
+
+        const cacheKey = count > 99 ? '99+' : String(count);
+        const cached = badgedFaviconCacheRef.current.get(cacheKey);
+        if (cached) {
+            link.href = cached;
+            return;
+        }
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        const loaded = await new Promise((resolve) => {
+            img.onload = () => resolve(true);
+            img.onerror = () => resolve(false);
+            img.src = baseFaviconHrefRef.current;
+        });
+        if (!loaded) return;
+
+        const size = 64;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        ctx.clearRect(0, 0, size, size);
+        ctx.drawImage(img, 0, 0, size, size);
+
+        const radius = 20;
+        const cx = size - 18;
+        const cy = 18;
+        ctx.fillStyle = '#ff3b30';
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius - 1, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 23px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(cacheKey, cx, cy + 1);
+
+        const dataUrl = canvas.toDataURL('image/png');
+        badgedFaviconCacheRef.current.set(cacheKey, dataUrl);
+        link.href = dataUrl;
+    }, []);
 
     const dispatchPopup = useCallback((list) => {
+        const prefs = getNotificationPrefs();
+        if (!prefs.pushEnabled) return [];
         const popupOnes = (list || []).filter((n) => {
             if (n.type === 'chat_message' && n.conversationId === activeChatConvRef.current) {
                 return false;
             }
             return true;
         });
-        if (!popupOnes.length) return;
+        if (!popupOnes.length) return [];
         window.dispatchEvent(new CustomEvent('notifications-new', {
             detail: { notifications: popupOnes },
         }));
+        return popupOnes;
     }, []);
 
     const refresh = useCallback(async () => {
@@ -77,7 +180,8 @@ export function useNotifications() {
             const newOnes = merged.filter((n) => !prevIdsRef.current.has(notificationEventKey(n)));
 
             if (newOnes.length > 0 && notificationsReadyRef.current) {
-                dispatchPopup(newOnes);
+                const popupOnes = dispatchPopup(newOnes);
+                if (popupOnes.length > 0) playNotificationSound();
             }
 
             prevIdsRef.current = nextKeys;
@@ -88,7 +192,7 @@ export function useNotifications() {
         setLoading(false);
         window.dispatchEvent(new CustomEvent('notifications-updated'));
         window.dispatchEvent(new CustomEvent('contacts-updated'));
-    }, [dispatchPopup, user?.id]);
+    }, [dispatchPopup, user?.id, playNotificationSound]);
 
     const handleIncomingContactRequestRow = useCallback(async (row) => {
         if (!user?.id || !row) return;
@@ -108,10 +212,11 @@ export function useNotifications() {
 
         prevIdsRef.current.add(key);
         if (notificationsReadyRef.current) {
-            dispatchPopup([notification]);
+            const popupOnes = dispatchPopup([notification]);
+            if (popupOnes.length > 0) playNotificationSound();
         }
         refresh();
-    }, [dispatchPopup, refresh, user?.id]);
+    }, [dispatchPopup, refresh, user?.id, playNotificationSound]);
 
     useEffect(() => {
         setReadIds(loadReadIds(user?.id));
@@ -229,6 +334,44 @@ export function useNotifications() {
     }, [handleIncomingContactRequestRow, refresh, user?.id]);
 
     const unreadCount = items.filter((n) => !readIds.has(notificationReadKey(n))).length;
+
+    useEffect(() => {
+        if (typeof document === 'undefined') return;
+        const baseTitle = baseTitleRef.current || document.title || 'DailyWays';
+        document.title = unreadCount > 0
+            ? `(${unreadCount > 99 ? '99+' : unreadCount}) ${baseTitle}`
+            : baseTitle;
+
+        const link = getPrimaryFaviconLink();
+        if (link) {
+            faviconLinkRef.current = link;
+            if (!baseFaviconHrefRef.current) {
+                baseFaviconHrefRef.current = link.href || link.getAttribute('href') || '';
+            }
+            if (unreadCount > 0) {
+                void ensureBadgedFavicon(unreadCount);
+            } else if (baseFaviconHrefRef.current) {
+                link.href = baseFaviconHrefRef.current;
+            }
+        }
+    }, [unreadCount, ensureBadgedFavicon]);
+
+    useEffect(() => () => {
+        if (typeof document !== 'undefined') {
+            document.title = baseTitleRef.current || document.title;
+        }
+        const link = faviconLinkRef.current || getPrimaryFaviconLink();
+        if (link && baseFaviconHrefRef.current) {
+            link.href = baseFaviconHrefRef.current;
+        }
+        if (audioCtxRef.current) {
+            try {
+                audioCtxRef.current.close();
+            } catch {
+                // noop
+            }
+        }
+    }, []);
 
     const markRead = useCallback((idOrNotification) => {
         if (!user?.id) return;

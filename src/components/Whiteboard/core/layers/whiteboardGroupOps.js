@@ -3,6 +3,8 @@ import { recordNodesMutation } from '../history/whiteboardHistory';
 import { buildLayerTree, collectDescendantIds, isDescendantOf, pruneHierarchyIds } from '../layers/layerTreeUtils';
 import { CONTAINER_NODE_TYPES } from '../../interaction/viewport/viewportUtils';
 import { getNodePageId } from '../pages/whiteboardPages';
+import { buildNodesById, nodeToWorld } from '../ops/whiteboardNodeOps';
+import { normalizeFrameConstraints } from '../frame/frameConstraints.js';
 
 /** ID lógico de grupo no canvas (não cria nó container). */
 export const NODE_GROUP_KEY = 'nodeGroupId';
@@ -55,6 +57,30 @@ export function getGroupMemberIds(nodes, groupId) {
     return getNodesInGroup(nodes, groupId).map((n) => n.id);
 }
 
+function getChildGroupIdsFor(nodes, parentGroupId) {
+    const allGroupIds = [...new Set((nodes || []).map((n) => getNodeGroupId(n)).filter(Boolean))];
+    return allGroupIds.filter((gid) =>
+        getNodesInGroup(nodes, gid).some((n) => getNodeGroupParentId(n) === parentGroupId)
+    );
+}
+
+export function getGroupMemberIdsDeep(nodes, groupId) {
+    if (!groupId) return [];
+    const visited = new Set();
+    const queue = [groupId];
+    const memberIds = new Set();
+    while (queue.length > 0) {
+        const gid = queue.shift();
+        if (!gid || visited.has(gid)) continue;
+        visited.add(gid);
+        getGroupMemberIds(nodes, gid).forEach((id) => memberIds.add(id));
+        getChildGroupIdsFor(nodes, gid).forEach((childGroupId) => {
+            if (!visited.has(childGroupId)) queue.push(childGroupId);
+        });
+    }
+    return [...memberIds];
+}
+
 export function getGroupDisplayName(nodes, groupId) {
     const first = getNodesInGroup(nodes, groupId)[0];
     return first ? getNodeGroupName(first) : 'Grupo';
@@ -66,13 +92,13 @@ export function expandIdsToNodeGroups(nodes, ids) {
     for (const id of ids) {
         if (isVirtualGroupRow(id)) {
             const gid = parseVirtualGroupId(id);
-            if (gid) getGroupMemberIds(nodes, gid).forEach((mid) => expanded.add(mid));
+            if (gid) getGroupMemberIdsDeep(nodes, gid).forEach((mid) => expanded.add(mid));
             continue;
         }
         const node = nodes.find((n) => n.id === id);
         const gid = getNodeGroupId(node);
         if (gid) {
-            getGroupMemberIds(nodes, gid).forEach((mid) => expanded.add(mid));
+            getGroupMemberIdsDeep(nodes, gid).forEach((mid) => expanded.add(mid));
         }
     }
     return [...expanded];
@@ -123,7 +149,7 @@ export function resolveNodeClickSelection(nodeId, nodes, selectedIds, modifiers 
 
     const isSelected = selectedIds.includes(nodeId);
     const groupId = getNodeGroupId(node);
-    const memberIds = groupId ? getGroupMemberIds(nodes, groupId) : [nodeId];
+    const memberIds = groupId ? getGroupMemberIdsDeep(nodes, groupId) : [nodeId];
 
     if (ctrlKey) {
         if (isSelected) return selectedIds.filter((id) => id !== nodeId);
@@ -160,7 +186,7 @@ export function resolveLayerClickSelection(rowId, nodes, selectedIds, modifiers 
     }
 
     const groupId = parseVirtualGroupId(rowId);
-    const memberIds = getGroupMemberIds(nodes, groupId);
+    const memberIds = getGroupMemberIdsDeep(nodes, groupId);
     const { shiftKey = false, ctrlKey = false } = modifiers;
 
     if (ctrlKey) {
@@ -203,10 +229,27 @@ export function groupSelectedNodes(store, collabPatchNodes) {
 
     const newGroupId = uuidv4();
     const groupName = 'Grupo';
-    const patches = toPatch.map((n) => ({
-        id: n.id,
-        patch: patchDataGroup(n, newGroupId, groupName, { clearParent: true }),
-    }));
+    const selectedGroupIds = new Set();
+    for (const id of state.selectedNodeIds ?? []) {
+        const n = state.nodes.find((node) => node.id === id);
+        const gid = getNodeGroupId(n);
+        if (gid) selectedGroupIds.add(gid);
+    }
+    const patches = toPatch.map((n) => {
+        const currentGroupId = getNodeGroupId(n);
+        if (currentGroupId && selectedGroupIds.has(currentGroupId)) {
+            return {
+                id: n.id,
+                patch: patchDataGroup(n, currentGroupId, getNodeGroupName(n), {
+                    parentGroupId: newGroupId,
+                }),
+            };
+        }
+        return {
+            id: n.id,
+            patch: patchDataGroup(n, newGroupId, groupName, { clearParent: true }),
+        };
+    });
 
     recordNodesMutation(store, patches.map((p) => p.id), () => {
         collabPatchNodes(patches);
@@ -353,8 +396,67 @@ export function canNestLayerTarget(dragId, targetId, nodes) {
     }
     const target = nodes.find((n) => n.id === targetId);
     if (!target || !CONTAINER_NODE_TYPES.includes(target.type)) return false;
-    if (isVirtualGroupRow(dragId)) return false;
+    if (isVirtualGroupRow(dragId)) return true;
     return !isDescendantOf(dragId, targetId, nodes);
+}
+
+export function nestLogicalGroupInContainer(store, collabPatchNodes, groupId, containerId) {
+    const state = store.getState();
+    const container = state.nodes.find((n) => n.id === containerId);
+    const memberIdSet = new Set(getGroupMemberIdsDeep(state.nodes, groupId));
+    const members = state.nodes.filter((n) => memberIdSet.has(n.id));
+    if (!container || !CONTAINER_NODE_TYPES.includes(container.type) || !members.length) return false;
+    const byId = buildNodesById(state.nodes);
+    const containerWorld = nodeToWorld(container, byId);
+    const blocked = members.some((n) => isDescendantOf(containerId, n.id, state.nodes));
+    if (blocked) return false;
+    const patches = members.map((member) => {
+        const world = nodeToWorld(member, byId);
+        const patch = {
+            parentId: containerId,
+            x: world.x - containerWorld.x,
+            y: world.y - containerWorld.y,
+        };
+        if (container.type === 'frame') {
+            patch.data = {
+                ...(member.data || {}),
+                constraints: normalizeFrameConstraints(member.data?.constraints),
+            };
+        }
+        return {
+            id: member.id,
+            patch,
+        };
+    });
+    recordNodesMutation(store, patches.map((p) => p.id), () => {
+        collabPatchNodes(patches);
+    });
+    return true;
+}
+
+export function unnestLogicalGroupToRoot(store, collabPatchNodes, groupId) {
+    const state = store.getState();
+    const memberIdSet = new Set(getGroupMemberIdsDeep(state.nodes, groupId));
+    const members = state.nodes
+        .filter((n) => memberIdSet.has(n.id))
+        .filter((n) => n.parentId);
+    if (!members.length) return false;
+    const byId = buildNodesById(state.nodes);
+    const patches = members.map((member) => {
+        const world = nodeToWorld(member, byId);
+        return {
+            id: member.id,
+            patch: {
+                parentId: null,
+                x: world.x,
+                y: world.y,
+            },
+        };
+    });
+    recordNodesMutation(store, patches.map((p) => p.id), () => {
+        collabPatchNodes(patches);
+    });
+    return true;
 }
 
 export function ungroupByGroupId(store, collabPatchNodes, groupId) {

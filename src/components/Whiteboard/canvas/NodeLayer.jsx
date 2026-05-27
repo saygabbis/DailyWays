@@ -27,6 +27,8 @@ function FrameGroupShell({ root, children, onNodePointerDown, onNodeContextMenu 
     const FrameComp = NODE_COMPONENTS[root.type] ?? NODE_COMPONENTS.frame;
     const rootAtZero = { ...root, x: 0, y: 0 };
 
+    const clipContent = root?.data?.clipContent !== false;
+
     return (
         <div
             className="whiteboard-frame-group"
@@ -40,7 +42,7 @@ function FrameGroupShell({ root, children, onNodePointerDown, onNodeContextMenu 
                 transform: dragTranslateStyle(dragTranslate),
             }}
         >
-            <div style={{ pointerEvents: 'auto' }}>
+            <div style={{ pointerEvents: 'auto', position: 'relative', zIndex: 0 }}>
                 <FrameComp
                     node={rootAtZero}
                     onNodePointerDown={onNodePointerDown}
@@ -55,7 +57,9 @@ function FrameGroupShell({ root, children, onNodePointerDown, onNodeContextMenu 
                     top: 0,
                     width: '100%',
                     height: '100%',
+                    overflow: clipContent ? 'hidden' : 'visible',
                     pointerEvents: 'none',
+                    zIndex: 1,
                 }}
             >
                 {children}
@@ -147,14 +151,7 @@ export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, onResi
                             onNodePointerDown={onNodePointerDown}
                             onNodeContextMenu={onNodeContextMenu}
                         >
-                            {children.map((child) => (
-                                <div
-                                    key={child.id}
-                                    style={{ position: 'absolute', left: child.x, top: child.y, pointerEvents: 'auto' }}
-                                >
-                                    {renderNode(child)}
-                                </div>
-                            ))}
+                            {children.map((child) => renderNode(child))}
                         </FrameGroupShell>
                     );
                 }

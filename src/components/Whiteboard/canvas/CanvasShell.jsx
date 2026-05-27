@@ -77,6 +77,11 @@ import WhiteboardContextMenu from '../panels/WhiteboardContextMenu';
 import { Grid3X3, ZoomIn, ZoomOut, Ruler, Magnet, HelpCircle, Focus } from 'lucide-react';
 import { uuidv4 } from '../../../utils/uuid';
 import { applyPostCreateActions } from '../core/creation/postCreateActions';
+import {
+    FRAME_CONSTRAINT_DEFAULT,
+    normalizeFrameConstraints,
+    applyFrameResizeToChildren,
+} from '../core/frame/frameConstraints.js';
 import './CanvasShell.css';
 
 const DEFAULT_NODE_RADIUS = {
@@ -87,6 +92,12 @@ const DEFAULT_NODE_RADIUS = {
     file_card: 8,
     frame: 8,
 };
+
+function getNextTopLevelZIndex(nodes) {
+    const topLevel = (nodes || []).filter((n) => !n.parentId);
+    if (!topLevel.length) return 0;
+    return Math.max(...topLevel.map((n) => n.zIndex ?? 0)) + 1;
+}
 
 export default function CanvasEngine({ spaceId, space, onViewportChange, onRegisterViewportControl }) {
     const containerRef = useRef(null);
@@ -194,13 +205,24 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             }
             const allNodes = useWhiteboardStore.getState().nodes;
             const pageNodes = filterNodesByPage(allNodes, pageId);
+            const byId = buildNodesById(pageNodes);
             const centerX = worldX + (payload.width ?? 0) / 2;
             const centerY = worldY + (payload.height ?? 0) / 2;
             const container = findContainerAt(pageNodes, centerX, centerY);
             if (container) {
+                const containerWorld = nodeToWorld(container, byId);
                 payload.parentId = container.id;
-                payload.x = worldX - container.x;
-                payload.y = worldY - container.y;
+                payload.x = worldX - containerWorld.x;
+                payload.y = worldY - containerWorld.y;
+                if (container.type === 'frame') {
+                    payload.data = {
+                        ...(payload.data || {}),
+                        constraints: normalizeFrameConstraints(payload.data?.constraints || FRAME_CONSTRAINT_DEFAULT),
+                    };
+                }
+            } else if (type === 'shape') {
+                // New standalone shapes should appear above every top-level layer.
+                payload.zIndex = getNextTopLevelZIndex(pageNodes);
             }
             if (collabConnected) {
                 collabCreateNode({ ...payload, createdBy: user?.id ?? null });
@@ -243,12 +265,24 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 await drag._initPromise;
             }
             if (drag.nodeId) {
-                collabPatchNode(drag.nodeId, {
+                const state = useWhiteboardStore.getState();
+                const node = state.nodes.find((n) => n.id === drag.nodeId);
+                const patch = {
                     x: box.x,
                     y: box.y,
                     width: box.width,
                     height: box.height,
-                });
+                };
+                if (node?.parentId) {
+                    const byId = buildNodesById(state.nodes);
+                    const parent = byId.get(node.parentId);
+                    if (parent) {
+                        const parentWorld = nodeToWorld(parent, byId);
+                        patch.x = box.x - parentWorld.x;
+                        patch.y = box.y - parentWorld.y;
+                    }
+                }
+                collabPatchNode(drag.nodeId, patch);
             }
         },
         [createNodeAt, collabPatchNode]
@@ -689,11 +723,16 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
 
         const node = state.nodes.find((n) => n.id === nodeId);
         if (!node) return;
+        const childIds = node.type === 'frame'
+            ? state.nodes.filter((n) => n.parentId === nodeId).map((n) => n.id)
+            : [];
+        const trackedIds = [nodeId, ...childIds];
         setResizeState({
             nodeId,
             corner,
             mode: e.ctrlKey ? 'skew' : 'resize',
             beforeNode: cloneNode(node),
+            beforeSnapshots: captureNodesSnapshot(useWhiteboardStore, trackedIds),
             snapExcludeIds: buildSnapExcludeIds([nodeId], state.nodes),
             origin: {
                 x: node.x,
@@ -836,6 +875,20 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 width: snappedBox.width,
                 height: snappedBox.height,
             });
+            if (node.type === 'frame') {
+                const nextFrame = {
+                    x: finalPatch.x ?? node.x ?? 0,
+                    y: finalPatch.y ?? node.y ?? 0,
+                    width: finalPatch.width ?? node.width ?? 0,
+                    height: finalPatch.height ?? node.height ?? 0,
+                };
+                const children = state.nodes.filter((n) => n.parentId === nodeId);
+                const childPatches = applyFrameResizeToChildren(children, origin, nextFrame);
+                if (childPatches.length > 0) {
+                    collabPatchNodesRef.current([{ id: nodeId, patch: finalPatch }, ...childPatches]);
+                    return;
+                }
+            }
             collabPatchNodeRef.current(nodeId, finalPatch);
         };
         const onMove = (e) => {
@@ -846,14 +899,24 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         const finishResize = () => {
             if (rafId) cancelAnimationFrame(rafId);
             setSnapGuidesIfChangedRef.current([]);
-            const before = resizeState.beforeNode;
-            const afterSnap = captureNodesSnapshot(useWhiteboardStore, [nodeId])[0];
-            if (before && afterSnap?.node && JSON.stringify(before) !== JSON.stringify(afterSnap.node)) {
+            const before = resizeState.beforeSnapshots?.length
+                ? resizeState.beforeSnapshots
+                : (resizeState.beforeNode ? [{ id: nodeId, node: resizeState.beforeNode }] : []);
+            const trackedIds = before.map((b) => b.id);
+            const after = captureNodesSnapshot(useWhiteboardStore, trackedIds);
+            const changed =
+                before.length > 0 &&
+                before.some((b, i) => {
+                    const a = after[i];
+                    if (!a) return true;
+                    return JSON.stringify(b.node) !== JSON.stringify(a.node);
+                });
+            if (changed) {
                 useWhiteboardStore.getState().pushHistory({
                     type: 'nodes_replace',
                     payload: {
-                        before: [{ id: nodeId, node: before }],
-                        after: [{ id: nodeId, node: afterSnap.node }],
+                        before,
+                        after,
                     },
                 });
             }
@@ -1258,6 +1321,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     if (!node?.parentId) return;
                     const parent = state.nodes.find((n) => n.id === node.parentId);
                     if (!parent) return;
+                    if (parent.type === 'frame') return;
                     const px = node.x ?? 0;
                     const py = node.y ?? 0;
                     const pw = parent.width ?? 0;
@@ -1692,6 +1756,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             const files = e.dataTransfer.files;
             if (!files?.length) return;
             const nodes = useWhiteboardStore.getState().nodes;
+            const byId = buildNodesById(nodes);
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 let wx = world.x - 100 + i * 20;
@@ -1717,9 +1782,10 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         const centerY = payload.y + payload.height / 2;
                         const container = findContainerAt(nodes, centerX, centerY);
                         if (container) {
+                            const containerWorld = nodeToWorld(container, byId);
                             payload.parentId = container.id;
-                            payload.x = payload.x - container.x;
-                            payload.y = payload.y - container.y;
+                            payload.x = payload.x - containerWorld.x;
+                            payload.y = payload.y - containerWorld.y;
                         }
                         if (collabConnected) {
                             collabCreateNode({ ...payload, createdBy: user?.id ?? null });
@@ -1735,9 +1801,10 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         const payload = getDefaultNodePayload('file', wx, wy);
                         Object.assign(payload.data, { url: result.url, filename: file.name, size: sizeStr });
                         if (container) {
+                            const containerWorld = nodeToWorld(container, byId);
                             payload.parentId = container.id;
-                            payload.x = wx - container.x;
-                            payload.y = wy - container.y;
+                            payload.x = wx - containerWorld.x;
+                            payload.y = wy - containerWorld.y;
                         }
                         if (collabConnected) {
                             collabCreateNode({ ...payload, createdBy: user?.id ?? null });

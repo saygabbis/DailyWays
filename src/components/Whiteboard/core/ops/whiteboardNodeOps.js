@@ -60,6 +60,7 @@ export function setClipboardFromNodes(store, nodes) {
 export async function insertClonedNodes(nodes, offset, ctx) {
     const { spaceId, userId, collabCreateNode, collabConnected, addNode, store, allNodes } = ctx;
     if (!spaceId || !nodes?.length) return [];
+    const byId = buildNodesById(allNodes || []);
 
     const createdIds = [];
     const createdNodes = [];
@@ -72,9 +73,10 @@ export async function insertClonedNodes(nodes, offset, ctx) {
 
         const newNode = cloneNodeForInsert(node, offset.x, offset.y, userId);
         if (container) {
+            const containerWorld = nodeToWorld(container, byId);
             newNode.parentId = container.id;
-            newNode.x = worldX - container.x;
-            newNode.y = worldY - container.y;
+            newNode.x = worldX - containerWorld.x;
+            newNode.y = worldY - containerWorld.y;
         } else {
             newNode.parentId = null;
             newNode.x = worldX;

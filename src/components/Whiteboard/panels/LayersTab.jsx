@@ -11,9 +11,12 @@ import {
     nestGroupInParent,
     assignNodeToLogicalGroup,
     canNestLayerTarget,
+    nestLogicalGroupInContainer,
+    unnestLogicalGroupToRoot,
     isVirtualGroupRow,
     parseVirtualGroupId,
     getGroupMemberIds,
+    getGroupMemberIdsDeep,
     getGroupDisplayName,
 } from '../core/layers/whiteboardGroupOps';
 import { CONTAINER_NODE_TYPES } from '../interaction/viewport/viewportUtils';
@@ -95,7 +98,7 @@ function LayerRow({
     const isVirtualGroup = !!node._isVirtualGroup;
     const Icon = isVirtualGroup ? Group : TYPE_ICONS[node.type] || Square;
     const memberIds = isVirtualGroup
-        ? getGroupMemberIds(allNodes, parseVirtualGroupId(node.id))
+        ? getGroupMemberIdsDeep(allNodes, parseVirtualGroupId(node.id))
         : [node.id];
     const isSelected = isVirtualGroup
         ? memberIds.length > 0 && memberIds.every((id) => selectedSet.has(id))
@@ -123,7 +126,7 @@ function LayerRow({
                     isDragOver && dropMode === 'after' ? 'drop-after' : '',
                 ].filter(Boolean).join(' ')}
                 style={{ paddingLeft: 4 + depth * 14 }}
-                draggable={!isRenaming && !isVirtualGroup}
+                draggable={!isRenaming}
                 onDragStart={(e) => onDragStart(e, node.id)}
                 onDragOver={(e) => onDragOver(e, node.id, isContainer)}
                 onDragEnd={onDragEnd}
@@ -391,6 +394,13 @@ export default function LayersTab({ spaceId, spaceTitle }) {
                     parseVirtualGroupId(dragged),
                     parseVirtualGroupId(targetId)
                 );
+            } else if (isVirtualGroupRow(dragged) && !isVirtualGroupRow(targetId)) {
+                nestLogicalGroupInContainer(
+                    useWhiteboardStore,
+                    collabPatchNodes,
+                    parseVirtualGroupId(dragged),
+                    targetId
+                );
             } else if (isVirtualGroupRow(targetId) && !isVirtualGroupRow(dragged)) {
                 assignNodeToLogicalGroup(
                     useWhiteboardStore,
@@ -411,7 +421,12 @@ export default function LayersTab({ spaceId, spaceTitle }) {
         const dragged = dragId;
         setDragId(null);
         setDropHint(null);
-        if (dragged) unnestNodeToRoot(useWhiteboardStore, collabPatchNode, dragged);
+        if (!dragged) return;
+        if (isVirtualGroupRow(dragged)) {
+            unnestLogicalGroupToRoot(useWhiteboardStore, collabPatchNodes, parseVirtualGroupId(dragged));
+            return;
+        }
+        unnestNodeToRoot(useWhiteboardStore, collabPatchNode, dragged);
     };
 
     const handleAddPage = () => addSpacePage();
@@ -587,7 +602,7 @@ export default function LayersTab({ spaceId, spaceTitle }) {
                                         deleteLayerSubtree(
                                             useWhiteboardStore,
                                             collabDeleteNodes,
-                                            getGroupMemberIds(nodes, gid)
+                                            getGroupMemberIdsDeep(nodes, gid)
                                         );
                                     } else {
                                         deleteLayerSubtree(useWhiteboardStore, collabDeleteNodes, [id]);
