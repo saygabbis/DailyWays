@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
 import { SERVER_EVENTS } from '@dailyways/collab-protocol';
-import { flushPresenceSyncNow } from '../board/presence/queuePresenceSync.js';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../services/supabaseClient';
 import { useWhiteboardStore } from '../../stores/whiteboardStore';
@@ -10,36 +9,35 @@ import {
   disconnectCollabSocket,
   getCollabSocket,
 } from './collabClient.js';
-import { getGlobalJoinedBoardId } from '../board/sync/boardCollabSession.js';
 import { CollabProvider } from './CollabContext.jsx';
-import { applyRemoteOp } from '../whiteboard/applyOp.js';
+import { applyRemoteOp } from '../whiteboard/ops/applyOp.js';
 import { useToast } from '../../context/ToastContext.jsx';
 import { toastCollabError } from './collabToast.js';
 import { applyVictimPuppetCursor, useBoardDevPrankStore } from '../board/dev/boardDevPrank.js';
 
 function bindCollabSocket(sock, handlers) {
-  sock.on('connect', handlers.onConnect);
-  sock.on('disconnect', handlers.onDisconnect);
-  sock.on('connect_error', handlers.onConnectError);
-  sock.on(SERVER_EVENTS.APPLIED, handlers.onApplied);
-  if (handlers.onRejected) sock.on(SERVER_EVENTS.REJECTED, handlers.onRejected);
-  sock.on(SERVER_EVENTS.PRESENCE_SYNC, handlers.onPresenceSync);
-  if (handlers.onDevPrankFrozen) sock.on('dev:prank-frozen', handlers.onDevPrankFrozen);
-  if (handlers.onDevPrankHold) sock.on('dev:prank-hold', handlers.onDevPrankHold);
-  if (handlers.onDevPrankCursor) sock.on('dev:prank-cursor', handlers.onDevPrankCursor);
+  const bindings = [
+    ['connect', handlers.onConnect],
+    ['disconnect', handlers.onDisconnect],
+    ['connect_error', handlers.onConnectError],
+    [SERVER_EVENTS.APPLIED, handlers.onApplied],
+    [SERVER_EVENTS.REJECTED, handlers.onRejected],
+    ['dev:prank-frozen', handlers.onDevPrankFrozen],
+    ['dev:prank-hold', handlers.onDevPrankHold],
+    ['dev:prank-cursor', handlers.onDevPrankCursor],
+  ].filter(([, handler]) => typeof handler === 'function');
+
+  for (const [event, handler] of bindings) {
+    sock.on(event, handler);
+  }
+  return bindings;
 }
 
-function unbindCollabSocket(sock) {
-  if (!sock) return;
-  sock.off('connect');
-  sock.off('disconnect');
-  sock.off('connect_error');
-  sock.off(SERVER_EVENTS.APPLIED);
-  sock.off(SERVER_EVENTS.REJECTED);
-  sock.off(SERVER_EVENTS.PRESENCE_SYNC);
-  sock.off('dev:prank-frozen');
-  sock.off('dev:prank-hold');
-  sock.off('dev:prank-cursor');
+function unbindCollabSocket(sock, bindings = []) {
+  if (!sock || !Array.isArray(bindings)) return;
+  for (const [event, handler] of bindings) {
+    sock.off(event, handler);
+  }
 }
 
 export default function CollabProviderRoot({ children }) {
@@ -65,6 +63,7 @@ export default function CollabProviderRoot({ children }) {
 
     let cancelled = false;
     let sock = null;
+    let bindings = [];
     let authSub = null;
     let consecutiveConnectErrors = 0;
 
@@ -140,14 +139,6 @@ export default function CollabProviderRoot({ children }) {
           userIdRef.current,
         );
       },
-      onPresenceSync: (payload) => {
-        const peers = payload?.peers;
-        if (!peers) return;
-        const joined = getGlobalJoinedBoardId();
-        const syncBoardId = payload?.boardId;
-        if (syncBoardId && joined && joined !== syncBoardId) return;
-        flushPresenceSyncNow(peers);
-      },
       onDevPrankFrozen: (payload) => {
         if (!payload?.frozen) return;
         useBoardDevPrankStore.getState().setHeld(false);
@@ -177,11 +168,11 @@ export default function CollabProviderRoot({ children }) {
 
     const reconnectWithToken = (token) => {
       if (cancelled || !token) return;
-      unbindCollabSocket(sock);
+      unbindCollabSocket(sock, bindings);
       disconnectCollabSocket();
       sock = connectCollabSocket(token);
       if (!sock || cancelled) return;
-      bindCollabSocket(sock, handlers);
+      bindings = bindCollabSocket(sock, handlers);
       setSocket(sock);
       if (sock.connected) setConnected(true);
       if (typeof window !== 'undefined') {
@@ -197,7 +188,7 @@ export default function CollabProviderRoot({ children }) {
       sock = connectCollabSocket(token);
       if (!sock || cancelled) return;
 
-      bindCollabSocket(sock, handlers);
+      bindings = bindCollabSocket(sock, handlers);
       setSocket(sock);
       if (sock.connected) setConnected(true);
 
@@ -217,7 +208,7 @@ export default function CollabProviderRoot({ children }) {
     return () => {
       cancelled = true;
       authSub?.subscription?.unsubscribe();
-      unbindCollabSocket(sock);
+      unbindCollabSocket(sock, bindings);
       disconnectCollabSocket();
       setSocket(null);
       setConnected(false);

@@ -1,11 +1,11 @@
 import { useCallback, useRef } from 'react';
 import { patchToOps, THROTTLE_FIELDS, DEBOUNCE_FIELDS } from '@dailyways/collab-protocol';
-import { uuidv4 } from '../../utils/uuid';
-import { useWhiteboardStore } from '../../stores/whiteboardStore';
-import { useCollab } from '../core/CollabContext.jsx';
-import { submitOp } from '../core/collabClient.js';
-import { useToast } from '../../context/ToastContext.jsx';
-import { toastCollabError } from '../core/collabToast.js';
+import { uuidv4 } from '../../../utils/uuid';
+import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { useCollab } from '../../core/CollabContext.jsx';
+import { submitOp } from '../../core/collabClient.js';
+import { useToast } from '../../../context/ToastContext.jsx';
+import { toastCollabError } from '../../core/collabToast.js';
 
 const THROTTLE_MS = 40;
 const DEBOUNCE_MS = 400;

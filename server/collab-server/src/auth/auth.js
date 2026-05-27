@@ -1,51 +1,19 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { getDbClient, supabaseAdmin } from './supabase.js';
+import { getDbClient, supabaseAdmin } from '../db/supabase.js';
+import { devLog } from '../devLog.js';
 import { verifyUserJwt } from './verifyJwt.js';
-
-const DEBUG_LOG = path.resolve(
-  fileURLToPath(import.meta.url),
-  '../../../debug-64ad20.log',
-);
-
-function agentLog(payload) {
-  try {
-    fs.appendFileSync(
-      DEBUG_LOG,
-      `${JSON.stringify({ sessionId: '64ad20', timestamp: Date.now(), ...payload })}\n`,
-    );
-  } catch {
-    /* ignore */
-  }
-}
 
 export async function verifyToken(token) {
   if (!token) {
-    // #region agent log
-    agentLog({
-      hypothesisId: 'H2',
-      location: 'auth.js:verifyToken',
-      message: 'verifyToken no token',
-      data: { hasToken: false },
-    });
-    // #endregion
+    devLog('auth.verifyToken sem token');
     return null;
   }
 
   const user = await verifyUserJwt(token);
-  // #region agent log
-  agentLog({
-    hypothesisId: user ? 'H3-fixed' : 'H3',
-    location: 'auth.js:verifyToken',
-    message: 'verifyToken JWKS result',
-    data: {
-      hasUser: Boolean(user),
-      tokenLen: token.length,
-      viaAdmin: Boolean(supabaseAdmin),
-    },
+  devLog('auth.verifyToken resultado JWKS', {
+    hasUser: Boolean(user),
+    tokenLen: token.length,
+    viaAdmin: Boolean(supabaseAdmin),
   });
-  // #endregion
 
   if (user) return user;
 
@@ -94,20 +62,13 @@ export async function canAccessBoard(userId, boardId, accessToken) {
     .maybeSingle();
 
   if (error || !board) {
-    // #region agent log
-    agentLog({
-      hypothesisId: 'H7',
-      location: 'auth.js:canAccessBoard',
-      message: 'board lookup failed',
-      data: {
-        boardIdPrefix: boardId?.slice(0, 8),
-        userIdPrefix: userId?.slice(0, 8),
-        errCode: error?.code ?? null,
-        errMsg: error?.message?.slice(0, 80) ?? null,
-        viaAdmin: Boolean(supabaseAdmin),
-      },
+    devLog('auth.canAccessBoard board lookup falhou', {
+      boardIdPrefix: boardId?.slice(0, 8),
+      userIdPrefix: userId?.slice(0, 8),
+      errCode: error?.code ?? null,
+      errMsg: error?.message?.slice(0, 80) ?? null,
+      viaAdmin: Boolean(supabaseAdmin),
     });
-    // #endregion
     return { access: false, canWrite: false };
   }
 
@@ -123,17 +84,10 @@ export async function canAccessBoard(userId, boardId, accessToken) {
     .maybeSingle();
 
   if (memberErr || !member) {
-    // #region agent log
-    agentLog({
-      hypothesisId: 'H7',
-      location: 'auth.js:canAccessBoard',
-      message: 'member lookup',
-      data: {
-        hasMember: Boolean(member),
-        memberErr: memberErr?.message?.slice(0, 80) ?? null,
-      },
+    devLog('auth.canAccessBoard member lookup', {
+      hasMember: Boolean(member),
+      memberErr: memberErr?.message?.slice(0, 80) ?? null,
     });
-    // #endregion
     return { access: false, canWrite: false };
   }
 

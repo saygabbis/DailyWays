@@ -1,4 +1,5 @@
-import { getDbClient } from './supabase.js';
+import { getDbClient } from '../db/supabase.js';
+import { devLog } from '../devLog.js';
 
 function mapBoard(row, lists, cardsByList, subtasksByCard) {
   return {
@@ -60,35 +61,12 @@ export async function loadBoardFromDb(boardId, accessToken) {
     .eq('id', boardId)
     .maybeSingle();
 
-  // #region agent log
-  try {
-    const fs = await import('fs');
-    const path = await import('path');
-    const { fileURLToPath } = await import('url');
-    const logPath = path.resolve(
-      fileURLToPath(import.meta.url),
-      '../../../debug-64ad20.log',
-    );
-    fs.appendFileSync(
-      logPath,
-      `${JSON.stringify({
-        sessionId: '64ad20',
-        timestamp: Date.now(),
-        hypothesisId: 'H6',
-        location: 'loadBoard.js:loadBoardFromDb',
-        message: 'board query',
-        data: {
-          boardIdPrefix: boardId?.slice(0, 8),
-          hasRow: Boolean(boardRow),
-          errCode: boardErr?.code ?? null,
-          errMsg: boardErr?.message?.slice(0, 80) ?? null,
-        },
-      })}\n`,
-    );
-  } catch {
-    /* ignore */
-  }
-  // #endregion
+  devLog('loadBoard.board query', {
+    boardIdPrefix: boardId?.slice(0, 8),
+    hasRow: Boolean(boardRow),
+    errCode: boardErr?.code ?? null,
+    errMsg: boardErr?.message?.slice(0, 80) ?? null,
+  });
 
   if (boardErr || !boardRow) {
     return { board: null, revision: 0 };

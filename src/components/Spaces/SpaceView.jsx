@@ -2,7 +2,7 @@ import React, { useRef, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { getInspectorInsetPx, CanvasEngine } from '../Whiteboard';
-import { CollabOpsProvider } from '../../collab/whiteboard/CollabOpsContext.jsx';
+import { CollabOpsProvider } from '../../collab/whiteboard/ops/CollabOpsContext.jsx';
 import WhiteboardCollabSync from '../../collab/whiteboard/sync/WhiteboardCollabSync.jsx';
 import WhiteboardCollabStatusBanner from '../../collab/whiteboard/ui/WhiteboardCollabStatusBanner.jsx';
 import PresenceOnlineList from '../../collab/board/ui/PresenceOnlineList.jsx';

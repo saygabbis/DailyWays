@@ -4,8 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const collabEnv = path.resolve(__dirname, '../.env');
-const rootEnvLocal = path.resolve(__dirname, '../../../.env.local');
+const collabEnv = path.resolve(__dirname, '../../.env');
+const rootEnvLocal = path.resolve(__dirname, '../../../../.env.local');
 
 dotenv.config({ path: collabEnv });
 

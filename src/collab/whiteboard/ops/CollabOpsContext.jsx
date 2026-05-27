@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import { useWhiteboardStore } from '../../stores/whiteboardStore';
+import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 import { useCollabOps } from './useCollabOps.js';
 
 const CollabOpsContext = createContext(null);

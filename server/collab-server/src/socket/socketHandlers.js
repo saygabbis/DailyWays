@@ -7,15 +7,18 @@ import {
   validateOp,
   validatePresence,
 } from '@dailyways/collab-protocol';
-import { verifyToken, canAccessSpace, canAccessBoard } from './auth.js';
-import { roomManager } from './roomManager.js';
-import { enrichPresenceFromProfile } from './presenceProfile.js';
-import { isDevPrankAttacker } from './devAccess.js';
+import { verifyToken, canAccessSpace, canAccessBoard } from '../auth/auth.js';
+import { roomManager } from '../services/roomManager.js';
+import { enrichPresenceFromProfile } from '../services/presenceProfile.js';
+import { isDevPrankAttacker } from '../auth/devAccess.js';
+import { devLog } from '../devLog.js';
 
 const MAX_OPS_PER_SEC = 120;
 const MAX_POSITION_OPS_PER_SEC = 300;
 const POSITION_FIELDS = new Set(['x', 'y']);
-const PRESENCE_LEAVE_GRACE_MS = 150;
+// Alinhado com reconnectionDelay (500ms) do socket em modo polling (produção).
+// Evita que o cursor some prematuramente durante F5 ou reconexão lenta.
+const PRESENCE_LEAVE_GRACE_MS = 500;
 
 function boardIdMatchesRoom(reqBoardId, roomId) {
   if (!reqBoardId || !roomId) return true;
@@ -72,34 +75,11 @@ export function registerSocketHandlers(io) {
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
-      // #region agent log
-      try {
-        const fs = await import('fs');
-        const path = await import('path');
-        const { fileURLToPath } = await import('url');
-        const logPath = path.resolve(
-          fileURLToPath(import.meta.url),
-          '../../../debug-64ad20.log',
-        );
-        fs.appendFileSync(
-          logPath,
-          `${JSON.stringify({
-            sessionId: '64ad20',
-            timestamp: Date.now(),
-            hypothesisId: 'H2',
-            location: 'socketHandlers.js:middleware',
-            message: 'handshake auth',
-            data: {
-              hasToken: Boolean(token),
-              tokenLen: token?.length ?? 0,
-              origin: socket.handshake.headers?.origin ?? null,
-            },
-          })}\n`,
-        );
-      } catch {
-        /* ignore */
-      }
-      // #endregion
+      devLog('socket.handshake auth', {
+        hasToken: Boolean(token),
+        tokenLen: token?.length ?? 0,
+        origin: socket.handshake.headers?.origin ?? null,
+      });
       const user = await verifyToken(token);
       if (!user) return next(new Error('Unauthorized'));
       socket.data.userId = user.id;
@@ -177,30 +157,9 @@ export function registerSocketHandlers(io) {
           });
         }
         if (boardId && !room.board) {
-          // #region agent log
-          try {
-            const fs = await import('fs');
-            const path = await import('path');
-            const { fileURLToPath } = await import('url');
-            const logPath = path.resolve(
-              fileURLToPath(import.meta.url),
-              '../../../debug-64ad20.log',
-            );
-            fs.appendFileSync(
-              logPath,
-              `${JSON.stringify({
-                sessionId: '64ad20',
-                timestamp: Date.now(),
-                hypothesisId: 'H6',
-                location: 'socketHandlers.js:JOIN',
-                message: 'board not found after reload',
-                data: { boardIdPrefix: boardId?.slice(0, 8) },
-              })}\n`,
-            );
-          } catch {
-            /* ignore */
-          }
-          // #endregion
+          devLog('socket.join board not found após reload', {
+            boardIdPrefix: boardId?.slice(0, 8),
+          });
           ack?.({ ok: false, error: 'Board not found' });
           return;
         }

@@ -1,10 +1,10 @@
-import './loadEnv.js';
-import { validateCollabEnv } from './validateEnv.js';
+import './config/loadEnv.js';
+import { validateCollabEnv } from './config/validateEnv.js';
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { registerSocketHandlers } from './socketHandlers.js';
+import { registerSocketHandlers } from './socket/socketHandlers.js';
 
 const PORT = Number(process.env.PORT || 3001);
 const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5174';

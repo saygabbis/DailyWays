@@ -1,4 +1,4 @@
-import { supabaseAdmin } from './supabase.js';
+import { supabaseAdmin } from '../db/supabase.js';
 
 function rowToNode(row) {
   if (!row) return null;

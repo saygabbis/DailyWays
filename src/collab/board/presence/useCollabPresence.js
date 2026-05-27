@@ -125,12 +125,18 @@ export function useCollabPresence(roomId, { mode = 'world' } = {}) {
     if (presenceColor) scheduleMetaSend();
   }, [presenceColor, scheduleMetaSend]);
 
+  // Ref estável: mantém sempre o flushPresence mais recente sem recriar o intervalo
+  // a cada render de profile (cor, foto, nome). O intervalo só recria se a sala
+  // ou a conexão mudarem de verdade.
+  const flushPresenceRef = useRef(flushPresence);
+  useEffect(() => { flushPresenceRef.current = flushPresence; }, [flushPresence]);
+
   useEffect(() => {
     if (!roomId || !collab?.connected) return undefined;
-    flushPresence();
-    const intervalId = setInterval(flushPresence, 2500);
+    flushPresenceRef.current();
+    const intervalId = setInterval(() => flushPresenceRef.current(), 2500);
     return () => clearInterval(intervalId);
-  }, [roomId, collab?.connected, flushPresence]);
+  }, [roomId, collab?.connected]);
 
   const mergeFields = useCallback((partial) => {
     if (!roomId) return;

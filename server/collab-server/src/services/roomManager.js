@@ -7,7 +7,7 @@ import { loadRoomFromDb } from './loadRoom.js';
 import { loadBoardFromDb } from './loadBoard.js';
 import { applyOpToRoom } from './applyOp.js';
 import { applyBoardOpToRoom } from './applyBoardOp.js';
-import { flushRoom } from './persistence.js';
+import { flushRoom } from '../db/persistence.js';
 import { flushBoard } from './flushBoard.js';
 import { createOpIdTracker } from './opIdTracker.js';
 
@@ -15,6 +15,26 @@ const FLUSH_MS = Number(process.env.COLLAB_FLUSH_MS || 600);
 // Aumentado de 2min para 10min — boards idle recarregavam do banco ao reentrar rapidamente
 const IDLE_EVICT_MS = Number(process.env.COLLAB_IDLE_EVICT_MS || 600000);
 const MAX_FLUSH_ERRORS = 5;
+// GC centralizado: um único setInterval varre todas as salas vazias, em vez de
+// criar um setTimeout por sala fechada (evita acumular N timers em sequência).
+const GC_INTERVAL_MS = 60_000;
+
+function hasSpacePendingFlush(room) {
+  return (
+    room?.dirty?.nodes?.size > 0
+    || room?.dirty?.connectors?.size > 0
+    || room?.dirty?.comments?.size > 0
+    || room?.deleted?.nodes?.size > 0
+    || room?.deleted?.connectors?.size > 0
+    || room?.deleted?.comments?.size > 0
+  );
+}
+
+function hasPendingFlush(room) {
+  if (!room) return false;
+  if (room.kind === 'board') return Boolean(room.dirty);
+  return hasSpacePendingFlush(room);
+}
 
 function createSpaceRoom() {
   return {
@@ -37,6 +57,8 @@ function createSpaceRoom() {
     presenceSockets: new Map(),
     clientCount: 0,
     flushTimer: null,
+    flushInFlight: false,
+    flushRequested: false,
     flushErrorCount: 0,
     lastActivity: Date.now(),
   };
@@ -52,6 +74,8 @@ function createBoardRoom() {
     presenceSockets: new Map(),
     clientCount: 0,
     flushTimer: null,
+    flushInFlight: false,
+    flushRequested: false,
     flushErrorCount: 0,
     lastActivity: Date.now(),
   };
@@ -95,6 +119,20 @@ export class RoomManager {
   constructor() {
     this.rooms = new Map();
     this.loading = new Map();
+    // GC único: varre salas vazias e idle sem acumular um timer por sala fechada.
+    this._gcTimer = setInterval(() => this._collectIdleRooms(), GC_INTERVAL_MS);
+    if (this._gcTimer.unref) this._gcTimer.unref(); // não impéde o processo de fechar
+  }
+
+  _collectIdleRooms() {
+    const now = Date.now();
+    for (const [roomId, room] of this.rooms.entries()) {
+      if (room.clientCount === 0 && now - room.lastActivity > IDLE_EVICT_MS) {
+        if (room.flushInFlight || hasPendingFlush(room)) continue;
+        if (room.flushTimer) clearTimeout(room.flushTimer);
+        this.rooms.delete(roomId);
+      }
+    }
   }
 
   evictRoom(roomId) {
@@ -150,29 +188,47 @@ export class RoomManager {
     return this.rooms.get(roomId);
   }
 
-  async flushNow(roomId) {
+  async flushNow(roomId, { force = false } = {}) {
     const room = this.rooms.get(roomId);
-    if (!room?.dirty) return;
+    if (!room) return;
     if (room.flushTimer) {
       clearTimeout(room.flushTimer);
       room.flushTimer = null;
     }
+    if (room.flushInFlight) {
+      room.flushRequested = room.flushRequested || force || hasPendingFlush(room);
+      return;
+    }
+
+    if (!force && !hasPendingFlush(room)) return;
+
+    room.flushInFlight = true;
     try {
-      if (room.kind === 'space') {
-        const spaceId = parseSpaceIdFromRoom(roomId);
-        if (spaceId) await flushRoom(room, spaceId);
-      } else if (room.kind === 'board') {
-        await flushBoard(room);
+      // Coalesce: se novo flush for pedido durante um flush em andamento,
+      // rodamos mais um ciclo ao final para não perder dirty recém-chegado.
+      while (force || hasPendingFlush(room) || room.flushRequested) {
+        force = false;
+        room.flushRequested = false;
+
+        if (room.kind === 'space') {
+          const spaceId = parseSpaceIdFromRoom(roomId);
+          if (spaceId) await flushRoom(room, spaceId);
+        } else if (room.kind === 'board') {
+          await flushBoard(room);
+        }
+        room.flushErrorCount = 0;
       }
-      room.flushErrorCount = 0;
     } catch (err) {
       recordFlushError(room, roomId, err);
+    } finally {
+      room.flushInFlight = false;
     }
   }
 
   scheduleFlush(roomId) {
     const room = this.rooms.get(roomId);
     if (!room) return;
+    room.flushRequested = true;
     if (room.flushTimer) clearTimeout(room.flushTimer);
     room.flushTimer = setTimeout(async () => {
       room.flushTimer = null;
@@ -359,22 +415,11 @@ export class RoomManager {
     room.clientCount = Math.max(0, room.clientCount - 1);
     if (room.clientCount === 0) {
       try {
-        if (room.kind === 'space') {
-          const spaceId = parseSpaceIdFromRoom(roomId);
-          if (spaceId) await flushRoom(room, spaceId);
-        } else if (room.kind === 'board') {
-          await flushBoard(room);
-        }
+        await this.flushNow(roomId, { force: true });
       } catch (err) {
         recordFlushError(room, roomId, err);
       }
-      setTimeout(() => {
-        const r = this.rooms.get(roomId);
-        if (r && r.clientCount === 0 && Date.now() - r.lastActivity > IDLE_EVICT_MS) {
-          if (r.flushTimer) clearTimeout(r.flushTimer);
-          this.rooms.delete(roomId);
-        }
-      }, 30000);
+      // Não cria setTimeout individual — o GC centralizado cuidará do evict.
     }
   }
 

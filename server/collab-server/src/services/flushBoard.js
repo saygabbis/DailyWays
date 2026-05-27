@@ -1,4 +1,4 @@
-import { supabaseAdmin } from './supabase.js';
+import { supabaseAdmin } from '../db/supabase.js';
 
 export async function flushBoard(room) {
   if (!supabaseAdmin || !room?.board || !room.dirty) return;

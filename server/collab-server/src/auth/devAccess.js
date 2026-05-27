@@ -1,4 +1,4 @@
-import { supabaseAdmin } from './supabase.js';
+import { supabaseAdmin } from '../db/supabase.js';
 
 export const PRIMARY_DEV_EMAIL = 'gaffonsoxx@gmail.com';
 export const PRIMARY_DEV_USERNAME = 'gabbis';

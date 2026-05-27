@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@dailyways/collab-protocol';
-import { getCollabServerUrl } from './collabConfig.js';
+import { getCollabServerUrl, isLocalOrLanHost } from './collabConfig.js';
 import { getBoardCollabMountGen, getGlobalJoinedBoardId } from '../board/sync/boardCollabSession.js';
 import { isBoardPrankFrozen, isBoardPrankHeld } from '../board/dev/boardDevPrank.js';
 let socketInstance = null;
@@ -23,11 +23,9 @@ export function connectCollabSocket(token) {
     socketInstance = null;
   }
 
-  // Em produção (nginx/VPS) só polling — o upgrade WS falha e gera ruído/instabilidade.
-  const pollingOnly =
-    import.meta.env.PROD
-    || (typeof window !== 'undefined'
-      && !/localhost|127\.0\.0\.1/.test(window.location.hostname));
+  // Usa WebSocket para localhost E para IPs de rede local (amigo via 192.168.x.x).
+  // Apenas produção com domínio público continua em polling (nginx não faz proxy WS por padrão).
+  const pollingOnly = import.meta.env.PROD && !isLocalOrLanHost();
   socketInstance = io(url, {
     auth: { token },
     path: '/socket.io',

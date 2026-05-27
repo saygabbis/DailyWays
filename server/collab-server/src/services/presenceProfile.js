@@ -1,4 +1,4 @@
-import { supabaseAdmin } from './supabase.js';
+import { supabaseAdmin } from '../db/supabase.js';
 
 const cache = new Map();
 const CACHE_MS = 60_000;

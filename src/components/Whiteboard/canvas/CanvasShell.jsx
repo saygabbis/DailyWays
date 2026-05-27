@@ -20,7 +20,7 @@ import {
 } from '../interaction/hooks/useCreateTool';
 import { useResizeRotateState } from '../interaction/hooks/useResizeRotate';
 import PresenceLayer from '../../../collab/board/ui/PresenceLayer.jsx';
-import { useCollabPatch } from '../../../collab/whiteboard/CollabOpsContext.jsx';
+import { useCollabPatch } from '../../../collab/whiteboard/ops/CollabOpsContext.jsx';
 import { useCollabPresence } from '../../../collab/board/presence/useCollabPresence.js';
 import { screenToWorldWithContainer, worldToScreenWithContainer, rectIntersects, findContainerAt } from '../interaction/viewport/viewportUtils';
 import { computeResizeBounds } from '../interaction/transform/resizeBounds';

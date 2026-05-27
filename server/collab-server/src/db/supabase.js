@@ -1,7 +1,5 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
+import { devLog } from '../devLog.js';
 
 const url = process.env.SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -49,31 +47,11 @@ export function getDbClient(accessToken) {
   return createUserScopedClient(accessToken);
 }
 
-// #region agent log
-try {
-  const logPath = path.resolve(
-    fileURLToPath(import.meta.url),
-    '../../../debug-64ad20.log',
-  );
-  fs.appendFileSync(
-    logPath,
-    `${JSON.stringify({
-      sessionId: '64ad20',
-      timestamp: Date.now(),
-      hypothesisId: 'H1',
-      location: 'supabase.js:init',
-      message: 'supabaseAdmin init',
-      data: {
-        hasUrl: Boolean(url),
-        hasServiceKey: Boolean(serviceKey),
-        serviceKeyLen: serviceKey?.length ?? 0,
-        serviceKeyLikelyValid: isServiceKeyLikelyValid(),
-        hasSupabaseAdmin: Boolean(supabaseAdmin),
-        hasAnonKey: Boolean(process.env.SUPABASE_ANON_KEY),
-      },
-    })}\n`,
-  );
-} catch {
-  /* ignore */
-}
-// #endregion
+devLog('supabase.init', {
+  hasUrl: Boolean(url),
+  hasServiceKey: Boolean(serviceKey),
+  serviceKeyLen: serviceKey?.length ?? 0,
+  serviceKeyLikelyValid: isServiceKeyLikelyValid(),
+  hasSupabaseAdmin: Boolean(supabaseAdmin),
+  hasAnonKey: Boolean(process.env.SUPABASE_ANON_KEY),
+});

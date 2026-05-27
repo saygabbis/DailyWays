@@ -12,7 +12,7 @@ import { useAuth } from '../../../context/AuthContext';
 
 import { usePresenceStore } from '../presence/presenceStore';
 
-import { flushPresenceSyncNow } from '../presence/queuePresenceSync.js';
+import { queuePresenceSync, flushPresenceSyncNow } from '../presence/queuePresenceSync.js';
 
 import { useCollab } from '../../core/CollabContext.jsx';
 
@@ -32,7 +32,7 @@ import { isCollabEnabled } from '../../core/collabConfig.js';
 
 import { collabDebugLog } from '../../core/collabDebug.js';
 
-import { pulseRemoteCard, pulseRemoteList } from '../boardRemoteAnim.js';
+import { pulseRemoteCard, pulseRemoteList } from '../ui/boardRemoteAnim.js';
 
 import {
 
@@ -286,7 +286,7 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
       }
 
-      flushPresenceSyncNow(peers);
+      queuePresenceSync(peers);
 
     };
 
