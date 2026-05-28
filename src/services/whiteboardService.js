@@ -250,6 +250,81 @@ export async function fetchReplies(commentId) {
     return { data: (data || []).map(rowToComment), error: null };
 }
 
+// ── RULER GUIDES ──────────────────────────────────────────────────
+
+function guideToRow(guide, spaceId) {
+    return {
+        id: guide.id,
+        space_id: spaceId,
+        page_id: guide.pageId ?? 'page-main',
+        axis: guide.axis,
+        position: guide.position,
+    };
+}
+
+function rowToGuide(row) {
+    if (!row) return null;
+    return {
+        id: row.id,
+        spaceId: row.space_id,
+        pageId: row.page_id,
+        axis: row.axis,
+        position: row.position,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+    };
+}
+
+export async function fetchRulerGuides(spaceId) {
+    if (!spaceId) return { data: [], error: null };
+    const { data, error } = await supabase
+        .from('space_ruler_guides')
+        .select('*')
+        .eq('space_id', spaceId)
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        console.error('[whiteboardService] fetchRulerGuides error', error);
+        return { data: [], error: error.message };
+    }
+    return { data: (data || []).map(rowToGuide), error: null };
+}
+
+export async function insertRulerGuide(spaceId, guide) {
+    if (!spaceId || !guide?.id || !['x', 'y'].includes(guide.axis))
+        return { success: false, error: 'Invalid guide' };
+    const row = guideToRow(guide, spaceId);
+    const { error } = await supabase.from('space_ruler_guides').insert(row);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+}
+
+export async function updateRulerGuide(guideId, patch) {
+    if (!guideId) return { success: false, error: 'Missing guideId' };
+    const dbUpdates = {};
+    if (patch.position !== undefined) dbUpdates.position = patch.position;
+    if (patch.pageId !== undefined) dbUpdates.page_id = patch.pageId;
+    if (patch.axis !== undefined) dbUpdates.axis = patch.axis;
+    if (Object.keys(dbUpdates).length === 0) return { success: true };
+    const { error } = await supabase.from('space_ruler_guides').update(dbUpdates).eq('id', guideId);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+}
+
+export async function deleteRulerGuide(guideId) {
+    if (!guideId) return { success: false, error: 'Missing guideId' };
+    const { error } = await supabase.from('space_ruler_guides').delete().eq('id', guideId);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+}
+
+export async function deleteRulerGuides(guideIds) {
+    if (!guideIds?.length) return { success: true };
+    const { error } = await supabase.from('space_ruler_guides').delete().in('id', guideIds);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+}
+
 // ── ASSETS (Storage) ─────────────────────────────────────────────
 
 const BUCKET = 'space-assets';

@@ -20,6 +20,13 @@ function worldBounds(node, nodesById) {
     };
 }
 
+function collectRulerGuideTargets(guides, pageId, guidesVisible = true) {
+    if (!guidesVisible) return [];
+    return (guides ?? [])
+        .filter((g) => (g.pageId ?? 'page-main') === (pageId ?? 'page-main'))
+        .map((g) => ({ axis: g.axis, value: g.position, kind: 'guide' }));
+}
+
 function collectSnapTargets(otherNodes, nodesById, excludeIds) {
     const targets = [];
     for (const n of otherNodes) {
@@ -69,6 +76,57 @@ export function buildSnapExcludeIds(movingIds, nodes) {
     return excludeIds;
 }
 
+/**
+ * Snap de uma linha guia de régua (criação ou arraste) a nós e outras guias.
+ * @param {'x'|'y'} axis — eixo da guia (x = vertical em position, y = horizontal)
+ * @param {string|null} excludeGuideId — guia em movimento (excluir dos alvos)
+ */
+export function computeSnapForRulerGuidePosition({
+    axis,
+    position,
+    nodes,
+    rulerGuides = [],
+    pageId,
+    zoom = 1,
+    snapEnabled = true,
+    guidesVisible = true,
+    excludeGuideId = null,
+}) {
+    if (!snapEnabled && !guidesVisible) {
+        return { position, guides: [] };
+    }
+
+    const threshold = 8 / Math.max(zoom, 0.15);
+    const byId = buildNodesById(nodes);
+    const targets = [];
+
+    if (snapEnabled) {
+        const others = (nodes ?? []).filter(
+            (n) =>
+                getNodePageId(n) === pageId &&
+                (n.width ?? 0) > 0 &&
+                (n.height ?? 0) > 0
+        );
+        targets.push(...collectSnapTargets(others, byId, new Set()));
+    }
+
+    if (guidesVisible) {
+        for (const g of rulerGuides ?? []) {
+            if ((g.pageId ?? 'page-main') !== (pageId ?? 'page-main')) continue;
+            if (excludeGuideId && g.id === excludeGuideId) continue;
+            targets.push({ axis: g.axis, value: g.position, kind: 'guide' });
+        }
+    }
+
+    if (!targets.length) {
+        return { position, guides: [] };
+    }
+
+    const snap = snapScalar([{ axis, value: position }], targets, threshold);
+    const guides = snap.guide ? [snap.guide] : [];
+    return { position: position + snap.delta, guides };
+}
+
 export function snapGuidesEqual(a, b) {
     const prev = a ?? [];
     const next = b ?? [];
@@ -90,6 +148,8 @@ export function computeSnapForDrag({
     zoom = 1,
     pageId,
     enabled = true,
+    guidesVisible = true,
+    rulerGuides = null,
     excludeIds: excludeIdsInput = null,
 }) {
     if (!enabled) {
@@ -129,7 +189,12 @@ export function computeSnapForDrag({
             (n.height ?? 0) > 0
     );
 
-    const targets = collectSnapTargets(others, byId, excludeIds);
+    const targets = [
+        ...collectSnapTargets(others, byId, excludeIds),
+        ...(enabled && guidesVisible
+            ? collectRulerGuideTargets(rulerGuides, pageId, guidesVisible)
+            : []),
+    ];
     const guides = [];
 
     const xSnap = snapScalar(
@@ -228,6 +293,8 @@ export function computeSnapForResize({
     /** Caixa inicial do resize (mesmo espaço que `box`); com Shift reaplica proporção após snap */
     originForAspect = null,
     enabled = true,
+    guidesVisible = true,
+    rulerGuides = null,
     excludeIds: excludeIdsInput = null,
 }) {
     const prunedIds = new Set(movingIds);
@@ -248,7 +315,12 @@ export function computeSnapForResize({
             (n.height ?? 0) > 0
     );
 
-    const targets = collectSnapTargets(others, byId, excludeIds);
+    const targets = [
+        ...collectSnapTargets(others, byId, excludeIds),
+        ...(enabled && guidesVisible
+            ? collectRulerGuideTargets(rulerGuides, pageId, guidesVisible)
+            : []),
+    ];
     const { edgesX, edgesY } = getResizeMovingEdges(handle, box, fromCenter);
 
     const xSnap = snapScalar(edgesX, targets, threshold);

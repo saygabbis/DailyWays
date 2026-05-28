@@ -13,6 +13,8 @@ import {
     BringToFront,
     SendToBack,
     Download,
+    Lock,
+    Unlock,
 } from 'lucide-react';
 import { getNodeCreateOffset } from '../core/whiteboardCreateOffsets';
 import '../styles/WhiteboardContextMenu.css';
@@ -40,8 +42,10 @@ export default function WhiteboardContextMenu({
     onDelete,
     onColorChange,
     onDownloadImage,
+    onToggleGuideLock,
     showColorPicker,
     showDownloadImage,
+    guideAllLocked,
 }) {
     useEffect(() => {
         const onGlobalClick = (e) => {
@@ -66,6 +70,41 @@ export default function WhiteboardContextMenu({
         onCreateNode?.(type, worldX - ox, worldY - oy);
         onClose?.();
     };
+
+    if (mode === 'guide') {
+        return (
+            <div
+                className="whiteboard-context-menu"
+                style={{ position: 'fixed', left, top, zIndex: 10001 }}
+                onContextMenu={(e) => e.preventDefault()}
+            >
+                <div className="whiteboard-context-menu-title">Guia</div>
+                <button
+                    type="button"
+                    className="whiteboard-context-menu-item"
+                    onClick={() => {
+                        onToggleGuideLock?.();
+                        onClose?.();
+                    }}
+                >
+                    {guideAllLocked ? <Unlock size={16} /> : <Lock size={16} />}
+                    <span>{guideAllLocked ? 'Destravar guia' : 'Travar guia'}</span>
+                </button>
+                <div className="whiteboard-context-menu-sep" />
+                <button
+                    type="button"
+                    className="whiteboard-context-menu-item whiteboard-context-menu-item--danger"
+                    onClick={() => {
+                        onDelete?.();
+                        onClose?.();
+                    }}
+                >
+                    <Trash2 size={16} />
+                    <span>Excluir guia</span>
+                </button>
+            </div>
+        );
+    }
 
     if (mode === 'selection') {
         return (

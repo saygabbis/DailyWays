@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
+import { useWhiteboardSelectionStore } from '../../../../stores/whiteboardSelectionStore';
 import { computeViewportToFitNodes } from '../viewport/viewportFit';
 import {
     copyNodesToClipboard,
@@ -26,6 +27,8 @@ export function useCanvasShortcuts({
     handleDuplicate,
     setRulersVisible,
     setGridVisible,
+    handleDeleteSelectedGuides,
+    handleToggleGuideLock,
     setActiveTool,
     setConnectorFromNodeId,
     viewportState,
@@ -83,6 +86,11 @@ export function useCanvasShortcuts({
                     return;
                 }
                 if (shouldHandleCanvasShortcut()) {
+                    if (keyLower === 'l' && e.shiftKey) {
+                        e.preventDefault();
+                        handleToggleGuideLock?.();
+                        return;
+                    }
                     if (keyLower === 'g') {
                         e.preventDefault();
                         if (e.shiftKey) {
@@ -204,9 +212,14 @@ export function useCanvasShortcuts({
                     st.setConnectorFromNodeId(null);
                     return;
                 }
-                if (st.selectedNodeIds.length || st.activeTool !== 'select') {
+                if (
+                    st.selectedNodeIds.length ||
+                    useWhiteboardSelectionStore.getState().selectedGuideIds.length ||
+                    st.activeTool !== 'select'
+                ) {
                     e.preventDefault();
                     st.setSelection([]);
+                    useWhiteboardSelectionStore.getState().clearGuideSelection();
                     st.setActiveTool('select');
                     setContextMenuPosition(null);
                 }
@@ -243,6 +256,11 @@ export function useCanvasShortcuts({
                 if (isSpaceUiTextFocus()) return;
                 const state = useWhiteboardStore.getState();
                 if (state.editingNodeId) return;
+                if (useWhiteboardSelectionStore.getState().selectedGuideIds.length) {
+                    e.preventDefault();
+                    void handleDeleteSelectedGuides?.();
+                    return;
+                }
                 if (!state.selectedNodeIds.length) return;
                 e.preventDefault();
                 const selectedNodes = state.nodes.filter((n) => state.selectedNodeIds.includes(n.id));
@@ -326,6 +344,8 @@ export function useCanvasShortcuts({
         handleDuplicate,
         setRulersVisible,
         setGridVisible,
+        handleDeleteSelectedGuides,
+        handleToggleGuideLock,
         setActiveTool,
         setConnectorFromNodeId,
         viewportState,

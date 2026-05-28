@@ -35,8 +35,16 @@ const SECTIONS = [
         title: 'Alinhamento',
         items: [
             ['Arrastar / redimensionar', 'Imã — alinha a outros elementos'],
-            ['Barra do canvas', 'Ícone imã — ativar/desativar alinhamento'],
             ['G', 'Mostrar/ocultar grade'],
+        ],
+    },
+    {
+        title: 'Linhas guia',
+        items: [
+            ['Arrastar da régua', 'Criar guia no canvas'],
+            ['Ctrl+Shift+L', 'Travar guia (só neste navegador)'],
+            ['Guias ocultas', 'Imã não encaixa em guias invisíveis'],
+            ['Por página', 'Guias independentes em cada página'],
         ],
     },
     {

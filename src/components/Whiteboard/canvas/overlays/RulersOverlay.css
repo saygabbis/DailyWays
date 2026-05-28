@@ -5,6 +5,17 @@
     z-index: 12;
 }
 
+.whiteboard-rulers--interactive .whiteboard-rulers-horizontal,
+.whiteboard-rulers--interactive .whiteboard-rulers-vertical {
+    pointer-events: auto;
+    cursor: crosshair;
+}
+
+.whiteboard-rulers--interactive .whiteboard-ruler-tick-h,
+.whiteboard-rulers--interactive .whiteboard-ruler-tick-v {
+    pointer-events: none;
+}
+
 .whiteboard-rulers-corner {
     position: absolute;
     top: 0;

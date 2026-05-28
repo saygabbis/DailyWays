@@ -8,6 +8,8 @@ import {
     filterNodesByPage,
 } from '../components/Whiteboard/core/pages/whiteboardPages';
 import { normalizeNodes } from '../components/Whiteboard/core/nodeNormalize.js';
+import { pruneLockedGuideIds } from '../components/Whiteboard/core/guides/rulerGuideLocks';
+import { cloneGuide } from '../components/Whiteboard/core/guides/rulerGuides';
 import { useWhiteboardSelectionStore } from './whiteboardSelectionStore';
 
 const MAX_HISTORY = 600;
@@ -22,11 +24,86 @@ function applyNodesReplace(nodes, items) {
     return nodes.map((n) => (byId.has(n.id) ? { ...byId.get(n.id) } : n));
 }
 
+function applyGuideUndo(guides, entry) {
+    let next = [...(guides ?? [])];
+    switch (entry.type) {
+        case 'guide_create':
+            if (entry.payload.guide?.id) {
+                next = next.filter((g) => g.id !== entry.payload.guide.id);
+            }
+            break;
+        case 'guide_create_batch': {
+            const batch = entry.payload.guides ?? [];
+            const ids = new Set(batch.map((g) => g.id));
+            next = next.filter((g) => !ids.has(g.id));
+            break;
+        }
+        case 'guide_delete': {
+            const restored = entry.payload.guides ?? [];
+            const existing = new Set(next.map((g) => g.id));
+            for (const g of restored) {
+                if (!existing.has(g.id)) next.push(cloneGuide(g));
+            }
+            break;
+        }
+        case 'guide_move':
+            if (entry.payload.id && entry.payload.before) {
+                next = next.map((g) =>
+                    g.id === entry.payload.id
+                        ? { ...g, position: entry.payload.before.position }
+                        : g
+                );
+            }
+            break;
+        default:
+            break;
+    }
+    return next;
+}
+
+function applyGuideRedo(guides, entry) {
+    let next = [...(guides ?? [])];
+    switch (entry.type) {
+        case 'guide_create':
+            if (entry.payload.guide?.id && !next.some((g) => g.id === entry.payload.guide.id)) {
+                next.push(cloneGuide(entry.payload.guide));
+            }
+            break;
+        case 'guide_create_batch': {
+            const batch = entry.payload.guides ?? [];
+            const existing = new Set(next.map((g) => g.id));
+            for (const g of batch) {
+                if (!existing.has(g.id)) next.push(cloneGuide(g));
+            }
+            break;
+        }
+        case 'guide_delete': {
+            const removed = entry.payload.guides ?? [];
+            const ids = new Set(removed.map((g) => g.id));
+            next = next.filter((g) => !ids.has(g.id));
+            break;
+        }
+        case 'guide_move':
+            if (entry.payload.id && entry.payload.after) {
+                next = next.map((g) =>
+                    g.id === entry.payload.id
+                        ? { ...g, position: entry.payload.after.position }
+                        : g
+                );
+            }
+            break;
+        default:
+            break;
+    }
+    return next;
+}
+
 export const useWhiteboardDocumentStore = create((set, get) => ({
     spaceId: null,
     nodes: [],
     connectors: [],
     comments: [],
+    rulerGuides: [],
     spacePages: [{ id: DEFAULT_PAGE_ID, name: 'Canvas principal' }],
     activePageId: DEFAULT_PAGE_ID,
     dirtyNodeIds: [],
@@ -38,7 +115,7 @@ export const useWhiteboardDocumentStore = create((set, get) => ({
 
     setSpaceId: (spaceId) => {
         const pages = spaceId ? loadSpacePages(spaceId) : [{ id: DEFAULT_PAGE_ID, name: 'Canvas principal' }];
-        useWhiteboardSelectionStore.getState().resetForSpace();
+        useWhiteboardSelectionStore.getState().resetForSpace(spaceId);
         set({
             spaceId,
             spacePages: pages,
@@ -46,6 +123,7 @@ export const useWhiteboardDocumentStore = create((set, get) => ({
             nodes: [],
             connectors: [],
             comments: [],
+            rulerGuides: [],
             dirtyNodeIds: [],
             history: [],
             historyIndex: -1,
@@ -107,6 +185,52 @@ export const useWhiteboardDocumentStore = create((set, get) => ({
     setNodes: (nodes) => set({ nodes: normalizeNodes(nodes ?? []) }),
     setConnectors: (connectors) => set({ connectors: connectors ?? [] }),
     setComments: (comments) => set({ comments: comments ?? [] }),
+    setRulerGuides: (rulerGuides) => set({ rulerGuides: rulerGuides ?? [] }),
+
+    addRulerGuide: (guide, options = {}) => set((state) => {
+        if (!guide?.id || state.rulerGuides.some((g) => g.id === guide.id)) return state;
+        if (!options.skipHistory) {
+            get().pushHistory({
+                type: 'guide_create',
+                payload: { guide: cloneGuide(guide) },
+            });
+        }
+        return { rulerGuides: [...state.rulerGuides, guide] };
+    }),
+
+    patchRulerGuide: (guideId, patch, options = {}) => set((state) => {
+        const idx = state.rulerGuides.findIndex((g) => g.id === guideId);
+        if (idx < 0) return state;
+        const before = cloneGuide(state.rulerGuides[idx]);
+        const next = [...state.rulerGuides];
+        next[idx] = { ...next[idx], ...patch };
+        if (!options.skipHistory && patch.position !== undefined && before.position !== patch.position) {
+            get().pushHistory({
+                type: 'guide_move',
+                payload: {
+                    id: guideId,
+                    before: { position: before.position },
+                    after: { position: patch.position },
+                },
+            });
+        }
+        return { rulerGuides: next };
+    }),
+
+    removeRulerGuides: (ids, options = {}) => set((state) => {
+        const remove = new Set(ids);
+        const removed = state.rulerGuides.filter((g) => remove.has(g.id));
+        if (!removed.length) return state;
+        if (!options.skipHistory) {
+            get().pushHistory({
+                type: 'guide_delete',
+                payload: { guides: removed.map(cloneGuide) },
+            });
+        }
+        if (state.spaceId) pruneLockedGuideIds(state.spaceId, ids);
+        useWhiteboardSelectionStore.getState().pruneGuideSelection(ids);
+        return { rulerGuides: state.rulerGuides.filter((g) => !remove.has(g.id)) };
+    }),
 
     addNode: (node) => set((state) => ({
         nodes: [...state.nodes, node],
@@ -248,7 +372,8 @@ export const useWhiteboardDocumentStore = create((set, get) => ({
                 break;
         }
 
-        return { nodes, historyIndex: nextIndex };
+        let rulerGuides = applyGuideUndo(state.rulerGuides, entry);
+        return { nodes, rulerGuides, historyIndex: nextIndex };
     }),
 
     redo: () => set((state) => {
@@ -304,7 +429,8 @@ export const useWhiteboardDocumentStore = create((set, get) => ({
                 break;
         }
 
-        return { nodes, historyIndex: nextIndex };
+        let rulerGuides = applyGuideRedo(state.rulerGuides, entry);
+        return { nodes, rulerGuides, historyIndex: nextIndex };
     }),
 
     canUndo: () => get().historyIndex >= 0,
@@ -337,16 +463,21 @@ export const useWhiteboardDocumentStore = create((set, get) => ({
 
     setRevision: (revision) => set({ revision: revision ?? 0 }),
 
-    hydrateRoom: ({ nodes, connectors, comments, revision }) => {
+    hydrateRoom: ({ nodes, connectors, comments, rulerGuides, revision }) => {
         useWhiteboardSelectionStore.getState().setSelection([]);
-        set({
+        useWhiteboardSelectionStore.getState().clearGuideSelection();
+        const patch = {
             nodes: normalizeNodes(nodes ?? []),
             connectors: connectors ?? [],
             comments: comments ?? [],
             revision: revision ?? 0,
             dirtyNodeIds: [],
             pendingOps: {},
-        });
+        };
+        if (rulerGuides !== undefined) {
+            patch.rulerGuides = rulerGuides ?? [];
+        }
+        set(patch);
     },
 
     registerPendingOp: (opId, entity, snapshot) => set((state) => ({

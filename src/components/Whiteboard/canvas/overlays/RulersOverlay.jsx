@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { screenToWorldWithContainer } from '../../interaction/viewport/viewportUtils';
 import './RulersOverlay.css';
 
@@ -22,7 +22,12 @@ function buildTicks(minWorld, maxWorld, step) {
     return ticks;
 }
 
-export default function RulersOverlay({ viewport, containerRef }) {
+export default function RulersOverlay({
+    viewport,
+    containerRef,
+    interactive = false,
+    onRulerPointerDown,
+}) {
     const layout = useMemo(() => {
         const rect = containerRef?.current?.getBoundingClientRect();
         if (!rect || !viewport) return null;
@@ -44,13 +49,40 @@ export default function RulersOverlay({ viewport, containerRef }) {
         return { rect, hTicks, vTicks, step };
     }, [viewport?.panX, viewport?.panY, viewport?.zoom, containerRef]);
 
+    const stopBubble = useCallback((e) => {
+        e.stopPropagation();
+    }, []);
+
+    const handleHDown = useCallback(
+        (e) => {
+            if (!interactive || e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            onRulerPointerDown?.('y', e);
+        },
+        [interactive, onRulerPointerDown]
+    );
+
+    const handleVDown = useCallback(
+        (e) => {
+            if (!interactive || e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            onRulerPointerDown?.('x', e);
+        },
+        [interactive, onRulerPointerDown]
+    );
+
     if (!layout) return null;
     const { rect, hTicks, vTicks } = layout;
 
     return (
-        <div className="whiteboard-rulers" aria-hidden>
-            <div className="whiteboard-rulers-corner" />
-            <div className="whiteboard-rulers-horizontal">
+        <div className={`whiteboard-rulers ${interactive ? 'whiteboard-rulers--interactive' : ''}`} aria-hidden={!interactive}>
+            <div className="whiteboard-rulers-corner" onPointerDown={stopBubble} />
+            <div
+                className="whiteboard-rulers-horizontal"
+                onPointerDown={handleHDown}
+            >
                 {hTicks.map((t) => {
                     const left = t.px - rect.left;
                     if (left < RULER_SIZE || left > rect.width) return null;
@@ -67,7 +99,10 @@ export default function RulersOverlay({ viewport, containerRef }) {
                     );
                 })}
             </div>
-            <div className="whiteboard-rulers-vertical">
+            <div
+                className="whiteboard-rulers-vertical"
+                onPointerDown={handleVDown}
+            >
                 {vTicks.map((t) => {
                     const top = t.px - rect.top;
                     if (top < RULER_SIZE || top > rect.height) return null;

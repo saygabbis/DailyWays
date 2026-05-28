@@ -8,7 +8,13 @@ import { getDefaultNodePayload, isCreationTool } from '../../../stores/whiteboar
 import { applyToolVariantToPayload } from '../core/creation/applyToolVariant.js';
 import { buildImageNodePayload } from '../core/creation/imageNodePayload.js';
 import { TOOL_VARIANT_MIME } from '../panels/toolbar/toolMenuRegistry.js';
-import { insertNode, insertConnector, uploadSpaceAsset, deleteNode as deleteNodeService } from '../../../services/whiteboardService';
+import {
+    insertNode,
+    insertConnector,
+    uploadSpaceAsset,
+    deleteNode as deleteNodeService,
+    fetchRulerGuides,
+} from '../../../services/whiteboardService';
 import { useWhiteboardUndo } from '../interaction/hooks/useWhiteboardUndo';
 import { useCanvasShortcuts } from '../interaction/hooks/useCanvasShortcuts';
 import {
@@ -33,6 +39,9 @@ import ConnectorLayer from './ConnectorLayer';
 import SelectionManager from './overlays/SelectionManager';
 import ResizeHandles from './overlays/ResizeHandles';
 import RulersOverlay from './overlays/RulersOverlay';
+import RulerGuidesOverlay from './overlays/RulerGuidesOverlay';
+import { useRulerGuideInteraction } from '../interaction/hooks/useRulerGuideInteraction';
+import { pickGuideAt } from '../interaction/guides/guideInteraction';
 import { captureNodesSnapshot, cloneNode } from '../core/history/whiteboardHistory';
 import { filterNodesByPage } from '../core/pages/whiteboardPages';
 import { getInspectorInsetPx } from '../shared/inspectorLayout';
@@ -82,7 +91,7 @@ import { recordNodesMutation } from '../core/history/whiteboardHistory';
 import LeftToolbar from '../panels/LeftToolbar';
 import DraggablePanel from '../panels/DraggablePanel';
 import WhiteboardContextMenu from '../panels/WhiteboardContextMenu';
-import { Grid3X3, ZoomIn, ZoomOut, Ruler, Magnet, HelpCircle, Focus } from 'lucide-react';
+import { Grid3X3, ZoomIn, ZoomOut, Ruler, Magnet, HelpCircle, Focus, Crosshair } from 'lucide-react';
 import { uuidv4 } from '../../../utils/uuid';
 import { applyPostCreateActions } from '../core/creation/postCreateActions';
 import {
@@ -167,12 +176,36 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         setGridVisible,
         rulersVisible,
         setRulersVisible,
+        guidesVisible,
+        setGuidesVisible,
         snapEnabled,
         setSnapEnabled,
         inspectorPanelOpen,
         setInspectorPanelOpen,
         setViewport: setStoreViewport,
+        clearGuideSelection,
     } = useWhiteboardSelectionStore();
+
+    const {
+        guideCreatePreview,
+        guideSnapGuides,
+        pageGuides,
+        selectedGuideIds,
+        lockedGuideIds,
+        handleRulerPointerDown,
+        handleGuidePointerDown,
+        handleToggleGuideLock,
+        handleDeleteSelectedGuides,
+        handleCopyGuides,
+        handleCutGuides,
+        handlePasteGuides,
+        tryPickGuideOnBackground,
+    } = useRulerGuideInteraction({
+        containerRef,
+        viewportRef,
+        collabConnected,
+        spaceId,
+    });
 
     const NODE_TYPES_ALLOWED = ['sticky_note', 'text', 'shape', 'frame', 'image', 'comment', 'link', 'todo_list', 'file_card', 'drawing', 'table'];
     const isDragCreationTool = (tool) => checkDragCreationTool(tool, NODE_TYPES_ALLOWED);
@@ -457,8 +490,12 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     );
 
     const handleCopy = useCallback(() => {
+        if (useWhiteboardSelectionStore.getState().selectedGuideIds.length) {
+            handleCopyGuides();
+            return;
+        }
         copyNodesToClipboard(useWhiteboardStore);
-    }, []);
+    }, [handleCopyGuides]);
 
     const getPastePlacement = useCallback(() => {
         const rect = containerRef.current?.getBoundingClientRect();
@@ -473,11 +510,16 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
 
     const handlePaste = useCallback(
         async (clipboardData = null) => {
+            const clipGuides = useWhiteboardSelectionStore.getState().clipboardGuides;
+            if (clipGuides?.length && !clipboardData) {
+                await handlePasteGuides();
+                return;
+            }
             const ctx = nodeOpsCtx();
             const placement = getPastePlacement();
             await pasteClipboardContent(ctx, placement, clipboardData, () => pasteFromClipboard(ctx));
         },
-        [nodeOpsCtx, getPastePlacement]
+        [nodeOpsCtx, getPastePlacement, handlePasteGuides]
     );
 
     const handlePasteInPlace = useCallback(
@@ -514,7 +556,11 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         await duplicateSelectedNodes(nodeOpsCtx());
     }, [nodeOpsCtx]);
 
-    const handleCut = useCallback(() => {
+    const handleCut = useCallback(async () => {
+        if (useWhiteboardSelectionStore.getState().selectedGuideIds.length) {
+            await handleCutGuides();
+            return;
+        }
         const state = useWhiteboardStore.getState();
         if (!state.selectedNodeIds.length) return;
         const selectedNodes = state.nodes.filter((n) => state.selectedNodeIds.includes(n.id));
@@ -530,7 +576,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         }
         collabDeleteNodes(state.selectedNodeIds);
         setSelection([]);
-    }, [collabConnected, collabDeleteNodes, setSelection]);
+    }, [collabConnected, collabDeleteNodes, setSelection, handleCutGuides]);
 
     const commitTextEdit = useCallback(() => {
         const el = document.activeElement;
@@ -557,6 +603,8 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         handleDuplicate,
         setRulersVisible,
         setGridVisible,
+        handleDeleteSelectedGuides,
+        handleToggleGuideLock,
         setActiveTool,
         setConnectorFromNodeId,
         viewportState,
@@ -582,6 +630,9 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         useWhiteboardDocumentStore.getState().setSpaceId(spaceId);
         viewportState.setViewport(initialPan, initialZoom);
         setStoreViewport({ panX: initialPan.x, panY: initialPan.y, zoom: initialZoom });
+        fetchRulerGuides(spaceId).then(({ data }) => {
+            useWhiteboardDocumentStore.getState().setRulerGuides(data || []);
+        });
         // eslint-disable-next-line react-hooks/exhaustive-deps -- só ao trocar de space
     }, [spaceId]);
 
@@ -610,7 +661,10 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         !e.target?.closest?.('.whiteboard-resize-handles') &&
         !e.target?.closest?.('.whiteboard-resize-handle') &&
         !e.target?.closest?.('.whiteboard-rotate-handle') &&
-        !e.target?.closest?.('.whiteboard-viewport-controls');
+        !e.target?.closest?.('.whiteboard-viewport-controls') &&
+        !e.target?.closest?.('.whiteboard-ruler-guide') &&
+        !e.target?.closest?.('.whiteboard-rulers-horizontal') &&
+        !e.target?.closest?.('.whiteboard-rulers-vertical');
 
     const handlePointerDown = useCallback(
         (e) => {
@@ -630,7 +684,11 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 e.preventDefault();
                 containerRef.current?.focus?.({ preventScroll: true });
                 commitTextEdit();
+                if (activeTool === 'select' && tryPickGuideOnBackground(e)) {
+                    return;
+                }
                 if (activeTool === 'select') {
+                    clearGuideSelection();
                     setSelectionBox({
                         start: { x: e.clientX, y: e.clientY },
                         current: { x: e.clientX, y: e.clientY },
@@ -688,7 +746,15 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 }
             }
         },
-        [viewportState, isSpacePressed, activeTool, commitTextEdit, viewportForChildren]
+        [
+            viewportState,
+            isSpacePressed,
+            activeTool,
+            commitTextEdit,
+            viewportForChildren,
+            tryPickGuideOnBackground,
+            clearGuideSelection,
+        ]
     );
 
     const handleResizeStart = useCallback((nodeId, corner, e) => {
@@ -783,6 +849,8 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     fromCenter: modifiers.altKey,
                     originForAspect: modifiers.shiftKey ? origin : null,
                     enabled: state.snapEnabled,
+                    guidesVisible: state.guidesVisible,
+                    rulerGuides: state.rulerGuides,
                     excludeIds: snapExcludeIds,
                 });
                 setSnapGuidesIfChangedRef.current(guides);
@@ -887,6 +955,8 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 fromCenter: modifiers.altKey,
                 originForAspect: modifiers.shiftKey ? worldOrigin : null,
                 enabled: state.snapEnabled,
+                guidesVisible: state.guidesVisible,
+                rulerGuides: state.rulerGuides,
                 excludeIds: snapExcludeIds,
             });
             setSnapGuidesIfChangedRef.current(guides);
@@ -1143,7 +1213,11 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         }
     }, []);
 
-    const handleDeleteSelection = useCallback(() => {
+    const handleDeleteSelection = useCallback(async () => {
+        if (useWhiteboardSelectionStore.getState().selectedGuideIds.length) {
+            await handleDeleteSelectedGuides();
+            return;
+        }
         const state = useWhiteboardStore.getState();
         const ids = resolveDragNodeIds(state.selectedNodeIds, state.nodes, {
             groupDrill: state.groupDrill,
@@ -1162,7 +1236,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         }
         collabDeleteNodes(ids);
         setSelection([]);
-    }, [collabConnected, collabDeleteNodes, setSelection]);
+    }, [collabConnected, collabDeleteNodes, setSelection, handleDeleteSelectedGuides]);
 
     const handleSelectionColor = useCallback(
         (color) => {
@@ -1432,6 +1506,8 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 zoom: vp?.zoom ?? 1,
                 pageId: state.activePageId,
                 enabled: state.snapEnabled,
+                guidesVisible: state.guidesVisible,
+                rulerGuides: state.rulerGuides,
                 excludeIds: ref.snapExcludeIds,
             });
             setSnapGuidesIfChangedRef.current(snap.guides);
@@ -1629,6 +1705,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         );
                         if (isClick && activeTool === 'select') {
                             setSelection([]);
+                            clearGuideSelection();
                         } else if (!isClick) {
                             const w2 = screenToWorldWithContainer(
                                 selectionBox.current.x,
@@ -1643,6 +1720,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                                 height: Math.abs(w2.y - w1.y),
                             };
                             const { nodes, activePageId } = useWhiteboardStore.getState();
+                            clearGuideSelection();
                             setSelection(resolveMarqueeSelectionIds(nodes, box, activePageId));
                         }
                     }
@@ -1651,7 +1729,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             }
             viewportState.handleMouseUp();
         },
-        [selectionBox, viewportForChildren, setSelection, activeTool, createNodeAt, finalizeCreateDrag]
+        [selectionBox, viewportForChildren, setSelection, clearGuideSelection, activeTool, createNodeAt, finalizeCreateDrag]
     );
 
     const handlePointerMove = useCallback(
@@ -1710,6 +1788,41 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             if (el?.closest?.('.whiteboard-node-wrapper') || el?.closest?.('.whiteboard-viewport-controls')) return;
             e.preventDefault();
             const st = useWhiteboardStore.getState();
+            const selStore = useWhiteboardSelectionStore.getState();
+            if (selStore.selectedGuideIds.length > 0 && activeTool === 'select') {
+                const locked = selStore.lockedGuideIds;
+                const ids = selStore.selectedGuideIds;
+                setContextMenuPosition({
+                    left: e.clientX,
+                    top: e.clientY,
+                    mode: 'guide',
+                    guideAllLocked: ids.every((id) => locked.includes(id)),
+                });
+                return;
+            }
+            const rectPick = containerRef.current?.getBoundingClientRect();
+            const vpPick = viewportRef.current;
+            if (rectPick && vpPick && activeTool === 'select' && guidesVisible) {
+                const picked = pickGuideAt(
+                    st.rulerGuides,
+                    st.activePageId,
+                    e.clientX,
+                    e.clientY,
+                    rectPick,
+                    vpPick,
+                    selStore.lockedGuideIds
+                );
+                if (picked) {
+                    selStore.setSelectedGuideIds([picked]);
+                    setContextMenuPosition({
+                        left: e.clientX,
+                        top: e.clientY,
+                        mode: 'guide',
+                        guideAllLocked: selStore.lockedGuideIds.includes(picked),
+                    });
+                    return;
+                }
+            }
             if (st.selectedNodeIds.length > 0 && activeTool === 'select') {
                 openSelectionContextMenu(e.clientX, e.clientY);
                 return;
@@ -1725,7 +1838,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 mode: 'create',
             });
         },
-        [viewportForChildren, activeTool, openSelectionContextMenu]
+        [viewportForChildren, activeTool, openSelectionContextMenu, guidesVisible]
     );
 
     const handleContextMenuCreate = useCallback(
@@ -1900,7 +2013,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     style={viewportState.transformStyle}
                 >
                     <ConnectorLayer />
-                    <SnapGuidesOverlay guides={snapGuides} />
+                    <SnapGuidesOverlay
+                        guides={
+                            guideSnapGuides.length
+                                ? [...snapGuides, ...guideSnapGuides]
+                                : snapGuides
+                        }
+                    />
                     <div className="whiteboard-nodes-container">
                         <NodeLayer
                             onNodePointerDown={handleNodePointerDown}
@@ -1914,6 +2033,15 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         onResizeStart={handleResizeStart}
                         onRotateStart={handleRotateStart}
                     />
+                    {(guidesVisible || guideCreatePreview) && (
+                        <RulerGuidesOverlay
+                            guides={pageGuides}
+                            selectedGuideIds={selectedGuideIds}
+                            lockedGuideIds={lockedGuideIds}
+                            preview={guideCreatePreview}
+                            onGuidePointerDown={handleGuidePointerDown}
+                        />
+                    )}
                 </div>
                 <SelectionManager
                     selectionBox={selectionBox}
@@ -1924,7 +2052,12 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 <PresenceLayer viewport={viewportForChildren} worldContainerRef={containerRef} />
                 <SpaceRemoteDragLayer viewport={viewportForChildren} worldContainerRef={containerRef} />
                 {rulersVisible && (
-                    <RulersOverlay viewport={viewportForChildren} containerRef={containerRef} />
+                    <RulersOverlay
+                        viewport={viewportForChildren}
+                        containerRef={containerRef}
+                        interactive
+                        onRulerPointerDown={handleRulerPointerDown}
+                    />
                 )}
                 <div
                     className="whiteboard-viewport-controls"
@@ -1955,6 +2088,14 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         onClick={() => setRulersVisible(!rulersVisible)}
                     >
                         <Ruler size={18} />
+                    </button>
+                    <button
+                        type="button"
+                        title={guidesVisible ? 'Ocultar guias de régua' : 'Mostrar guias de régua'}
+                        className={guidesVisible ? 'active' : ''}
+                        onClick={() => setGuidesVisible(!guidesVisible)}
+                    >
+                        <Crosshair size={18} />
                     </button>
                     <button
                         type="button"
@@ -2034,8 +2175,10 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 onDelete={handleDeleteSelection}
                 onColorChange={handleSelectionColor}
                 onDownloadImage={handleDownloadSelectedImages}
+                onToggleGuideLock={handleToggleGuideLock}
                 showColorPicker={contextMenuPosition?.showColorPicker}
                 showDownloadImage={contextMenuPosition?.showDownloadImage}
+                guideAllLocked={contextMenuPosition?.guideAllLocked}
             />
         </>
     );

@@ -1,0 +1,58 @@
+.whiteboard-ruler-guides-layer {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform-origin: 0 0;
+    z-index: 10000;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.whiteboard-ruler-guide {
+    position: absolute;
+    pointer-events: auto;
+    background: #0ea5e9;
+    opacity: 0.75;
+}
+
+.whiteboard-ruler-guide--v {
+    width: 1px;
+    transform: translateX(-0.5px);
+    cursor: ew-resize;
+}
+
+.whiteboard-ruler-guide--h {
+    height: 1px;
+    transform: translateY(-0.5px);
+    cursor: ns-resize;
+}
+
+.whiteboard-ruler-guide--selected {
+    background: #0284c7;
+    opacity: 1;
+    box-shadow: 0 0 0 1px rgba(2, 132, 199, 0.35);
+}
+
+.whiteboard-ruler-guide--locked {
+    background: transparent;
+    border-left: 1px dashed #64748b;
+    border-top: none;
+    opacity: 0.65;
+    pointer-events: none;
+    cursor: default;
+}
+
+.whiteboard-ruler-guide--h.whiteboard-ruler-guide--locked {
+    border-left: none;
+    border-top: 1px dashed #64748b;
+}
+
+.whiteboard-ruler-guide--preview {
+    background: #38bdf8;
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.whiteboard-ruler-guide--locked.whiteboard-ruler-guide--v {
+    border-left-style: dashed;
+}

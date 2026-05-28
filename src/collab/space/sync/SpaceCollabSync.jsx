@@ -5,7 +5,12 @@ import { queuePresenceSync, flushPresenceSyncNow } from '../../shared/presence/q
 import { useCollab } from '../../core/CollabContext.jsx';
 import { joinSpaceRoom, leaveRoom } from '../../core/collabClient.js';
 import { isCollabEnabled } from '../../core/collabConfig.js';
-import { fetchNodes, fetchConnectors, fetchComments } from '../../../services/whiteboardService';
+import {
+    fetchNodes,
+    fetchConnectors,
+    fetchComments,
+    fetchRulerGuides,
+} from '../../../services/whiteboardService';
 import { isStaleSpaceSnapshot } from './spaceFingerprint.js';
 import {
   getGlobalJoinedSpaceId,
@@ -31,16 +36,18 @@ export default function SpaceCollabSync({ spaceId }) {
     let cancelled = false;
 
     const hydrateFromFetch = async () => {
-      const [nodesRes, connRes, commentsRes] = await Promise.all([
+      const [nodesRes, connRes, commentsRes, guidesRes] = await Promise.all([
         fetchNodes(spaceId),
         fetchConnectors(spaceId),
         fetchComments(spaceId),
+        fetchRulerGuides(spaceId),
       ]);
       if (cancelled || effectGenRef.current !== gen) return;
       useWhiteboardDocumentStore.getState().hydrateRoom({
         nodes: nodesRes.data || [],
         connectors: connRes.data || [],
         comments: commentsRes.data || [],
+        rulerGuides: guidesRes.data || [],
         revision: 0,
       });
     };
@@ -58,7 +65,10 @@ export default function SpaceCollabSync({ spaceId }) {
         if (joinedRef.current && joinedRef.current !== spaceId) {
           await leaveRoom(socket);
         }
-        const res = await joinSpaceRoom(socket, spaceId);
+        const [res, guidesRes] = await Promise.all([
+          joinSpaceRoom(socket, spaceId),
+          fetchRulerGuides(spaceId),
+        ]);
         if (cancelled || effectGenRef.current !== gen || joinGenRef.current !== joinGen) return;
         joinedRef.current = spaceId;
         setGlobalJoinedSpaceId(spaceId);
@@ -72,8 +82,11 @@ export default function SpaceCollabSync({ spaceId }) {
         if (!isStaleSpaceSnapshot(local, incoming)) {
           useWhiteboardDocumentStore.getState().hydrateRoom({
             ...incoming,
+            rulerGuides: guidesRes.data || [],
             revision: res.revision ?? 0,
           });
+        } else if (guidesRes.data?.length) {
+          useWhiteboardDocumentStore.getState().setRulerGuides(guidesRes.data);
         }
         if (res.peers) flushPresenceSyncNow(res.peers);
       } catch (err) {
@@ -91,7 +104,7 @@ export default function SpaceCollabSync({ spaceId }) {
       if (!cancelled && socket.connected) performJoin();
     };
 
-    const onState = (payload) => {
+    const onState = async (payload) => {
       if (cancelled || effectGenRef.current !== gen) return;
       const local = useWhiteboardDocumentStore.getState();
       const incoming = {
@@ -99,11 +112,16 @@ export default function SpaceCollabSync({ spaceId }) {
         connectors: payload.connectors || [],
         comments: payload.comments || [],
       };
+      const guidesRes = await fetchRulerGuides(spaceId);
+      if (cancelled || effectGenRef.current !== gen) return;
       if (!isStaleSpaceSnapshot(local, incoming)) {
         useWhiteboardDocumentStore.getState().hydrateRoom({
           ...incoming,
+          rulerGuides: guidesRes.data || [],
           revision: payload.revision ?? 0,
         });
+      } else if (guidesRes.data?.length) {
+        useWhiteboardDocumentStore.getState().setRulerGuides(guidesRes.data);
       }
       if (payload.peers) flushPresenceSyncNow(payload.peers);
     };

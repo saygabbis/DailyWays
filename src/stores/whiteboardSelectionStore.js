@@ -1,7 +1,9 @@
 import { create } from 'zustand';
+import { loadLockedGuideIds, saveLockedGuideIds } from '../components/Whiteboard/core/guides/rulerGuideLocks';
 
 const GRID_STORAGE_KEY = 'dailyways_grid_visible';
 const RULERS_STORAGE_KEY = 'dailyways_rulers_visible';
+const GUIDES_VISIBLE_STORAGE_KEY = 'dailyways_guides_visible';
 const SNAP_STORAGE_KEY = 'dailyways_snap_enabled';
 const INSPECTOR_PANEL_KEY = 'dailyways_inspector_panel_open';
 const PROPS_PANEL_KEY = 'dailyways_props_panel_open';
@@ -17,6 +19,14 @@ function loadRulersVisible() {
     } catch {
         return false;
     }
+}
+
+function loadGuidesVisible() {
+    try {
+        const v = localStorage.getItem(GUIDES_VISIBLE_STORAGE_KEY);
+        if (v !== null) return v === 'true';
+    } catch {}
+    return true;
 }
 
 function loadSnapEnabled() {
@@ -58,7 +68,11 @@ export const useWhiteboardSelectionStore = create((set, get) => ({
     inspectorTab: loadInspectorTab(),
     gridVisible: loadGridVisible(),
     rulersVisible: loadRulersVisible(),
+    guidesVisible: loadGuidesVisible(),
     snapEnabled: loadSnapEnabled(),
+    selectedGuideIds: [],
+    clipboardGuides: [],
+    lockedGuideIds: [],
     viewport: { panX: 0, panY: 0, zoom: 1 },
     lastCreatedNodeId: null,
     /** toolId → variantId para ferramentas com submenu (ex.: shape → rectangle) */
@@ -76,8 +90,11 @@ export const useWhiteboardSelectionStore = create((set, get) => ({
     /** Ctrl+clique: não expandir para o grupo lógico em drag/resize */
     isolateSelection: false,
 
-    resetForSpace: () => set({
+    resetForSpace: (spaceId = null) => set({
         selectedNodeIds: [],
+        selectedGuideIds: [],
+        clipboardGuides: [],
+        lockedGuideIds: [...loadLockedGuideIds(spaceId)],
         activeTool: 'select',
         connectorFromNodeId: null,
         editingNodeId: null,
@@ -117,6 +134,13 @@ export const useWhiteboardSelectionStore = create((set, get) => ({
         set({ rulersVisible });
     },
 
+    setGuidesVisible: (guidesVisible) => {
+        try {
+            localStorage.setItem(GUIDES_VISIBLE_STORAGE_KEY, guidesVisible ? 'true' : 'false');
+        } catch {}
+        set({ guidesVisible });
+    },
+
     setSnapEnabled: (snapEnabled) => {
         try {
             localStorage.setItem(SNAP_STORAGE_KEY, snapEnabled ? 'true' : 'false');
@@ -148,15 +172,55 @@ export const useWhiteboardSelectionStore = create((set, get) => ({
 
     setSelection: (selectedNodeIds) => set({
         selectedNodeIds: Array.isArray(selectedNodeIds) ? selectedNodeIds : [],
+        selectedGuideIds: [],
         groupDrill: null,
         isolateSelection: false,
     }),
 
     setSelectionWithDrill: (selectedNodeIds, groupDrill = null, isolateSelection = false) => set({
         selectedNodeIds: Array.isArray(selectedNodeIds) ? selectedNodeIds : [],
+        selectedGuideIds: [],
         groupDrill: groupDrill ?? null,
         isolateSelection: Boolean(isolateSelection),
     }),
+
+    setSelectedGuideIds: (selectedGuideIds) => set({
+        selectedGuideIds: Array.isArray(selectedGuideIds) ? selectedGuideIds : [],
+        selectedNodeIds: [],
+        groupDrill: null,
+        isolateSelection: false,
+    }),
+
+    clearGuideSelection: () => set({ selectedGuideIds: [] }),
+
+    setClipboardGuides: (clipboardGuides) => set({
+        clipboardGuides: Array.isArray(clipboardGuides) ? clipboardGuides : [],
+    }),
+
+    isGuideLocked: (guideId) => get().lockedGuideIds.includes(guideId),
+
+    toggleGuideLock: (guideIds, spaceId) => {
+        const ids = Array.isArray(guideIds) ? guideIds : [guideIds];
+        if (!ids.length || !spaceId) return;
+        set((state) => {
+            const locked = new Set(state.lockedGuideIds);
+            for (const id of ids) {
+                if (locked.has(id)) locked.delete(id);
+                else locked.add(id);
+            }
+            const list = [...locked];
+            saveLockedGuideIds(spaceId, list);
+            const selectedGuideIds = state.selectedGuideIds.filter((id) => !locked.has(id));
+            return { lockedGuideIds: list, selectedGuideIds };
+        });
+    },
+
+    pruneGuideSelection: (ids) => {
+        const remove = new Set(ids);
+        set((state) => ({
+            selectedGuideIds: state.selectedGuideIds.filter((id) => !remove.has(id)),
+        }));
+    },
 
     pruneSelection: (ids) => {
         const remove = new Set(ids);
