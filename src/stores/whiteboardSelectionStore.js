@@ -70,6 +70,12 @@ export const useWhiteboardSelectionStore = create((set, get) => ({
     /** Preview visual do arraste — evita patchNodes a cada frame */
     nodeDragPreview: null,
 
+    /** Drill-down de grupos aninhados: { nodeId, index } */
+    groupDrill: null,
+
+    /** Ctrl+clique: não expandir para o grupo lógico em drag/resize */
+    isolateSelection: false,
+
     resetForSpace: () => set({
         selectedNodeIds: [],
         activeTool: 'select',
@@ -79,6 +85,8 @@ export const useWhiteboardSelectionStore = create((set, get) => ({
         toolVariants: { shape: 'rectangle' },
         inspectorSectionState: {},
         nodeDragPreview: null,
+        groupDrill: null,
+        isolateSelection: false,
     }),
 
     setActiveTool: (activeTool) => set({ activeTool }),
@@ -140,6 +148,14 @@ export const useWhiteboardSelectionStore = create((set, get) => ({
 
     setSelection: (selectedNodeIds) => set({
         selectedNodeIds: Array.isArray(selectedNodeIds) ? selectedNodeIds : [],
+        groupDrill: null,
+        isolateSelection: false,
+    }),
+
+    setSelectionWithDrill: (selectedNodeIds, groupDrill = null, isolateSelection = false) => set({
+        selectedNodeIds: Array.isArray(selectedNodeIds) ? selectedNodeIds : [],
+        groupDrill: groupDrill ?? null,
+        isolateSelection: Boolean(isolateSelection),
     }),
 
     pruneSelection: (ids) => {

@@ -4,9 +4,13 @@ import { resolveDragNodeIds } from '../../core/selection/whiteboardSelectionUtil
 
 export const SELECTION_TRANSFORM_ID = '__selection_transform__';
 
-export function getTransformTargetIds(selectedNodeIds, nodes) {
+export function getTransformTargetIds(
+    selectedNodeIds,
+    nodes,
+    { groupDrill = null, isolateSelection = false } = {}
+) {
     if (!selectedNodeIds?.length) return [];
-    return resolveDragNodeIds(selectedNodeIds, nodes);
+    return resolveDragNodeIds(selectedNodeIds, nodes, { groupDrill, isolateSelection });
 }
 
 /** Caixa mínima 1×1 para handles de resize/rotação unificados. */
@@ -26,8 +30,12 @@ export function getUnifiedSelectionBox(nodes, transformIds) {
     };
 }
 
-export function shouldUseUnifiedTransform(selectedNodeIds, nodes) {
-    return getTransformTargetIds(selectedNodeIds, nodes).length > 1;
+export function shouldUseUnifiedTransform(
+    selectedNodeIds,
+    nodes,
+    selectionContext = {}
+) {
+    return getTransformTargetIds(selectedNodeIds, nodes, selectionContext).length > 1;
 }
 
 export function buildPseudoNodeForSelection(nodes, transformIds) {

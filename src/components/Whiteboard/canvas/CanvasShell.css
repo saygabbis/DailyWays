@@ -137,6 +137,10 @@
     pointer-events: auto;
 }
 
+.whiteboard-frame-children > .whiteboard-node-wrapper {
+    pointer-events: auto;
+}
+
 .whiteboard-transform-overlay {
     position: absolute;
     left: 0;
@@ -173,6 +177,10 @@
     overflow: visible;
 }
 
+.frame-node--select-title-only {
+    pointer-events: none;
+}
+
 .frame-title {
     position: absolute;
     top: 0;
@@ -187,6 +195,7 @@
     background: color-mix(in srgb, var(--bg-primary) 86%, transparent);
     backdrop-filter: blur(2px);
     pointer-events: auto;
+    z-index: 2;
 }
 
 .frame-title-text {

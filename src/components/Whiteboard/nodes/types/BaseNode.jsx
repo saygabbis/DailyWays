@@ -1,18 +1,29 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import { useWhiteboardStore, isCreationTool } from '../../../../stores/whiteboardStore';
 import { useWhiteboardSelectionStore } from '../../../../stores/whiteboardSelectionStore';
 import { getNodeTransformStyle } from '../../core/nodeTransform';
-import { resolveNodeClickSelection } from '../../core/layers/whiteboardGroupOps';
+import { pointerDownUpdateSelection } from '../../interaction/selection/nodeSelectionPointer';
 import { useWhiteboardRemoteSelection } from '../../../../hooks/useWhiteboardRemoteSelection';
 import { useNodeDragTranslate, dragTranslateStyle } from '../../interaction/hooks/useNodeDragTranslate';
 
-export default function BaseNode({ node, children, onNodePointerDown, onNodeContextMenu }) {
+export default function BaseNode({
+    node,
+    children,
+    onNodePointerDown,
+    onNodeContextMenu,
+    disableDragPreview = false,
+    embedded = false,
+    selectViaTitleOnly = false,
+}) {
     const ref = useRef(null);
-    const setSelection = useWhiteboardSelectionStore((s) => s.setSelection);
+    const selectionListenersCleanupRef = useRef(null);
     const setEditingNodeId = useWhiteboardSelectionStore((s) => s.setEditingNodeId);
+
+    useEffect(() => () => selectionListenersCleanupRef.current?.(), []);
     const activeTool = useWhiteboardSelectionStore((s) => s.activeTool);
     const isSelected = useWhiteboardSelectionStore((s) => s.selectedNodeIds.includes(node.id));
-    const dragTranslate = useNodeDragTranslate(node.id);
+    const dragPreview = useNodeDragTranslate(node.id);
+    const dragTranslate = disableDragPreview ? null : dragPreview;
     const { remoteSelectionByNodeId } = useWhiteboardRemoteSelection();
     const remotePeers = remoteSelectionByNodeId[node.id];
     const isRemoteSelected = Boolean(remotePeers?.length);
@@ -26,15 +37,11 @@ export default function BaseNode({ node, children, onNodePointerDown, onNodeCont
                 onNodePointerDown?.(e, node.id);
                 return;
             }
-            const { nodes, selectedNodeIds } = useWhiteboardStore.getState();
-            const next = resolveNodeClickSelection(node.id, nodes, selectedNodeIds, {
-                shiftKey: e.shiftKey,
-                ctrlKey: e.ctrlKey || e.metaKey,
-            });
-            setSelection(next);
+            selectionListenersCleanupRef.current?.();
+            selectionListenersCleanupRef.current = pointerDownUpdateSelection(e, node.id);
             onNodePointerDown?.(e, node.id);
         },
-        [activeTool, node.id, setSelection, onNodePointerDown]
+        [activeTool, node.id, onNodePointerDown]
     );
 
     const handleContextMenu = useCallback(
@@ -60,17 +67,18 @@ export default function BaseNode({ node, children, onNodePointerDown, onNodeCont
             data-node-id={node.id}
             className={`whiteboard-node-wrapper ${isSelected ? 'selected' : ''} ${isRemoteSelected ? 'whiteboard-node--remote-selected' : ''}${dragTranslate ? ' is-drag-preview' : ''}`}
             style={{
-                position: 'absolute',
-                left: node.x,
-                top: node.y,
-                width: node.width,
-                height: node.height,
+                position: embedded ? 'relative' : 'absolute',
+                left: embedded ? undefined : node.x,
+                top: embedded ? undefined : node.y,
+                width: embedded ? '100%' : node.width,
+                height: embedded ? '100%' : node.height,
                 transform: dragTranslateStyle(dragTranslate),
+                pointerEvents: selectViaTitleOnly ? 'none' : undefined,
                 ...(isRemoteSelected && remotePeers[0]?.color
                     ? { '--remote-selection-color': remotePeers[0].color }
                     : {}),
             }}
-            onPointerDown={handlePointerDown}
+            onPointerDown={selectViaTitleOnly ? undefined : handlePointerDown}
             onContextMenu={handleContextMenu}
             onDoubleClick={handleDoubleClick}
             onDragStart={(e) => e.preventDefault()}

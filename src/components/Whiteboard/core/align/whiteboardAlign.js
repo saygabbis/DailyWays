@@ -40,7 +40,10 @@ export function getSelectionWorldBounds(selectedNodes, allNodes) {
  */
 export function alignSelectedNodes(store, collabPatchNodes, mode) {
     const state = store.getState();
-    const prunedIds = resolveDragNodeIds(state.selectedNodeIds, state.nodes);
+    const prunedIds = resolveDragNodeIds(state.selectedNodeIds, state.nodes, {
+        groupDrill: state.groupDrill,
+        isolateSelection: state.isolateSelection,
+    });
     const selected = state.nodes.filter((n) => prunedIds.includes(n.id));
     if (!selected.length) return;
 

@@ -3,7 +3,7 @@ import { getDefaultNodePayload } from '../../../../stores/whiteboardStore';
 import { insertNode } from '../../../../services/whiteboardService';
 import { buildNodesById, nodeToWorld } from '../ops/whiteboardNodeOps';
 import { recordNodesMutation, patchNodesWithHistory, pushNodesAddBatch } from '../history/whiteboardHistory';
-import { CONTAINER_NODE_TYPES } from '../../interaction/viewport/viewportUtils';
+import { CONTAINER_NODE_TYPES, findContainerAt } from '../../interaction/viewport/viewportUtils';
 import { getNodePageId, filterNodesByPage } from '../pages/whiteboardPages';
 import { collectDescendantIds, isDescendantOf } from '../layers/layerTreeUtils';
 import { normalizeFrameConstraints } from '../frame/frameConstraints.js';
@@ -17,6 +17,50 @@ export function getSiblings(nodes, parentId, pageId) {
         .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
 }
 
+/** Patch para aninhar nó em container mantendo posição visual (mundo → local). */
+export function buildNestInContainerPatch(node, container, nodes) {
+    const byId = buildNodesById(nodes);
+    const childWorld = nodeToWorld(node, byId);
+    const parentWorld = nodeToWorld(container, byId);
+    const patch = {
+        parentId: container.id,
+        x: childWorld.x - parentWorld.x,
+        y: childWorld.y - parentWorld.y,
+    };
+    if (container.type === 'frame') {
+        patch.data = {
+            ...(node.data || {}),
+            constraints: normalizeFrameConstraints(node.data?.constraints),
+        };
+    }
+    return patch;
+}
+
+/**
+ * Frame/container sob o centro do nó (exclui nós em arraste e ancestrais inválidos).
+ * @param {{ excludeIds?: string[], frameOnly?: boolean, pageId?: string }} options
+ */
+export function findDropContainerForNode(node, nodes, options = {}) {
+    const { frameOnly = false, pageId } = options;
+    const pid = pageId ?? getNodePageId(node);
+    const pageNodes = filterNodesByPage(nodes, pid);
+
+    const pool = pageNodes.filter((n) => {
+        if (!CONTAINER_NODE_TYPES.includes(n.type)) return false;
+        if (frameOnly && n.type !== 'frame') return false;
+        if (n.id === node.id) return false;
+        if (isDescendantOf(node.id, n.id, pageNodes)) return false;
+        return true;
+    });
+
+    const byId = buildNodesById(pageNodes);
+    const world = nodeToWorld(node, byId);
+    const centerX = world.x + (node.width ?? 0) / 2;
+    const centerY = world.y + (node.height ?? 0) / 2;
+
+    return findContainerAt(pool, centerX, centerY);
+}
+
 /** Aninha filho dentro de um frame/coluna/tabela (coords locais). */
 export function nestNodeInContainer(store, collabPatchNode, childId, parentId) {
     const state = store.getState();
@@ -26,26 +70,10 @@ export function nestNodeInContainer(store, collabPatchNode, childId, parentId) {
     if (!child || !parent || !CONTAINER_NODE_TYPES.includes(parent.type)) return false;
     if (isDescendantOf(childId, parentId, nodes)) return false;
 
-    const byId = buildNodesById(nodes);
-    const childWorld = nodeToWorld(child, byId);
-    const parentWorld = nodeToWorld(parent, byId);
     const ids = [childId, ...collectDescendantIds(childId, nodes)];
 
     recordNodesMutation(store, ids, () => {
-        const patch = {
-            parentId: parent.id,
-            x: childWorld.x - parentWorld.x,
-            y: childWorld.y - parentWorld.y,
-        };
-        if (parent.type === 'frame') {
-            patch.data = {
-                ...(child.data || {}),
-                constraints: normalizeFrameConstraints(child.data?.constraints),
-            };
-        }
-        collabPatchNode(childId, {
-            ...patch,
-        });
+        collabPatchNode(childId, buildNestInContainerPatch(child, parent, nodes));
     });
     return true;
 }

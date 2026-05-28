@@ -86,6 +86,32 @@ export function getGroupDisplayName(nodes, groupId) {
     return first ? getNodeGroupName(first) : 'Grupo';
 }
 
+function getParentGroupId(groupId, nodes) {
+    const member = nodes.find((n) => getNodeGroupId(n) === groupId);
+    return member ? getNodeGroupParentId(member) : null;
+}
+
+/**
+ * Cadeia de seleção para drill-down: [grupo raiz, …, subgrupos, nó].
+ * Cada entrada é a lista de ids selecionados naquele nível.
+ */
+export function getGroupDrillSteps(nodeId, nodes) {
+    const node = nodes.find((n) => n.id === nodeId);
+    if (!node) return [[nodeId]];
+
+    const groupIdsBottomUp = [];
+    let gid = getNodeGroupId(node);
+    while (gid) {
+        groupIdsBottomUp.push(gid);
+        gid = getParentGroupId(gid, nodes);
+    }
+    groupIdsBottomUp.reverse();
+
+    const steps = groupIdsBottomUp.map((groupId) => getGroupMemberIdsDeep(nodes, groupId));
+    steps.push([nodeId]);
+    return steps;
+}
+
 /** Inclui todos os membros dos grupos representados em ids. */
 export function expandIdsToNodeGroups(nodes, ids) {
     const expanded = new Set(ids);
@@ -138,51 +164,82 @@ export function wouldCreateGroupCycle(nodes, childGroupId, parentGroupId) {
 
 /**
  * Clique no canvas:
- * - Normal → grupo inteiro
+ * - Normal → drill-down em grupos aninhados (1º clique = grupo raiz, depois desce)
  * - Shift → adiciona/remove o grupo da seleção (multi-select)
  * - Ctrl → só este item (dentro do grupo)
+ * @returns {{ selection: string[], drill: { nodeId: string, index: number } | null, isolate?: boolean }}
  */
-export function resolveNodeClickSelection(nodeId, nodes, selectedIds, modifiers = {}) {
+export function resolveNodeClickSelection(
+    nodeId,
+    nodes,
+    selectedIds,
+    modifiers = {},
+    drillState = null
+) {
     const { shiftKey = false, ctrlKey = false } = modifiers;
     const node = nodes.find((n) => n.id === nodeId);
-    if (!node) return selectedIds;
+    if (!node) return { selection: selectedIds, drill: null, isolate: false };
 
-    const isSelected = selectedIds.includes(nodeId);
     const groupId = getNodeGroupId(node);
     const memberIds = groupId ? getGroupMemberIdsDeep(nodes, groupId) : [nodeId];
 
     if (ctrlKey) {
-        if (isSelected) return selectedIds.filter((id) => id !== nodeId);
-        return [...selectedIds, nodeId];
+        const isSelected = selectedIds.includes(nodeId);
+        let next;
+        if (isSelected) {
+            next = selectedIds.filter((id) => id !== nodeId);
+        } else if (shiftKey) {
+            next = [...selectedIds, nodeId];
+        } else {
+            next = [nodeId];
+        }
+        return {
+            selection: next,
+            drill: null,
+            isolate: next.length > 0,
+        };
     }
 
     if (shiftKey) {
         const toggleIds = groupId ? memberIds : [nodeId];
         const allIn = toggleIds.every((id) => selectedIds.includes(id));
-        if (allIn) {
-            return selectedIds.filter((id) => !toggleIds.includes(id));
-        }
-        return [...new Set([...selectedIds, ...toggleIds])];
+        const next = allIn
+            ? selectedIds.filter((id) => !toggleIds.includes(id))
+            : [...new Set([...selectedIds, ...toggleIds])];
+        return { selection: next, drill: null, isolate: false };
     }
 
     if (!groupId) {
-        return isSelected ? selectedIds : [nodeId];
+        return { selection: [nodeId], drill: null, isolate: false };
     }
 
-    const allMembersSelected =
-        memberIds.length > 0 && memberIds.every((id) => selectedIds.includes(id));
-
-    if (isSelected && allMembersSelected) {
-        return selectedIds;
+    const steps = getGroupDrillSteps(nodeId, nodes);
+    if (steps.length <= 1) {
+        return { selection: [nodeId], drill: null, isolate: false };
     }
 
-    return memberIds;
+    let index = 0;
+    if (drillState?.nodeId === nodeId) {
+        index = Math.min((drillState.index ?? 0) + 1, steps.length - 1);
+    }
+
+    return {
+        selection: steps[index],
+        drill: { nodeId, index },
+        isolate: false,
+    };
 }
 
 /** Seleção na lista de camadas (inclui linha virtual do grupo). */
-export function resolveLayerClickSelection(rowId, nodes, selectedIds, modifiers = {}) {
+export function resolveLayerClickSelection(
+    rowId,
+    nodes,
+    selectedIds,
+    modifiers = {},
+    drillState = null
+) {
     if (!isVirtualGroupRow(rowId)) {
-        return resolveNodeClickSelection(rowId, nodes, selectedIds, modifiers);
+        return resolveNodeClickSelection(rowId, nodes, selectedIds, modifiers, drillState);
     }
 
     const groupId = parseVirtualGroupId(rowId);
@@ -190,18 +247,26 @@ export function resolveLayerClickSelection(rowId, nodes, selectedIds, modifiers 
     const { shiftKey = false, ctrlKey = false } = modifiers;
 
     if (ctrlKey) {
-        return memberIds.length ? [memberIds[0]] : selectedIds;
+        const firstId = memberIds[0];
+        if (!firstId) return { selection: selectedIds, drill: null, isolate: false };
+        const isSelected = memberIds.every((id) => selectedIds.includes(id));
+        const next = isSelected && !shiftKey
+            ? selectedIds.filter((id) => !memberIds.includes(id))
+            : shiftKey
+              ? [...new Set([...selectedIds, ...memberIds])]
+              : [firstId];
+        return { selection: next, drill: null, isolate: next.length > 0 };
     }
 
     if (shiftKey) {
         const allIn = memberIds.every((id) => selectedIds.includes(id));
-        if (allIn) {
-            return selectedIds.filter((id) => !memberIds.includes(id));
-        }
-        return [...new Set([...selectedIds, ...memberIds])];
+        const next = allIn
+            ? selectedIds.filter((id) => !memberIds.includes(id))
+            : [...new Set([...selectedIds, ...memberIds])];
+        return { selection: next, drill: null, isolate: false };
     }
 
-    return memberIds;
+    return { selection: memberIds, drill: null, isolate: false };
 }
 
 /**

@@ -138,7 +138,10 @@ export async function pasteFromClipboard(ctx, options = {}) {
 export function nudgeSelectedNodes(store, collabPatchNodes, dx, dy) {
     const state = store.getState();
     if (!state.selectedNodeIds.length) return;
-    const ids = resolveDragNodeIds(state.selectedNodeIds, state.nodes);
+    const ids = resolveDragNodeIds(state.selectedNodeIds, state.nodes, {
+        groupDrill: state.groupDrill,
+        isolateSelection: state.isolateSelection,
+    });
     const patches = ids
         .map((id) => {
             const n = state.nodes.find((node) => node.id === id);
@@ -190,7 +193,10 @@ function reorderPageNodesByZ(pageNodes, selectedIds, mode) {
 /** @param {'forward'|'backward'|'front'|'back'} mode — front/back = extremo; forward/backward = um nível */
 export function patchZIndexSelected(store, collabPatchNodes, mode) {
     const state = store.getState();
-    const prunedIds = resolveDragNodeIds(state.selectedNodeIds, state.nodes);
+    const prunedIds = resolveDragNodeIds(state.selectedNodeIds, state.nodes, {
+        groupDrill: state.groupDrill,
+        isolateSelection: state.isolateSelection,
+    });
     if (!prunedIds.length) return;
 
     const pageId = state.activePageId;

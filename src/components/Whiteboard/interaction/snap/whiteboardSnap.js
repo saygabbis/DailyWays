@@ -106,11 +106,15 @@ export function computeSnapForDrag({
     }
 
     const byId = buildNodesById(nodes);
-    const simulated = movingNodes.map((n) => ({
-        ...n,
-        x: (n.x ?? 0) + totalDx,
-        y: (n.y ?? 0) + totalDy,
-    }));
+    const simulated = movingNodes.map((n) => {
+        const world = nodeToWorld(n, byId);
+        return {
+            ...n,
+            parentId: null,
+            x: world.x + totalDx,
+            y: world.y + totalDy,
+        };
+    });
 
     const bbox = getSelectionWorldBounds(simulated, nodes);
     const threshold = 8 / Math.max(zoom, 0.15);

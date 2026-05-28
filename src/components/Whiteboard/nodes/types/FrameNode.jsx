@@ -1,11 +1,13 @@
-import React, { memo } from 'react';
+import React, { memo, useCallback, useRef, useEffect } from 'react';
 import BaseNode from './BaseNode';
 import AppearanceRenderer from '../../shared/AppearanceRenderer.jsx';
 import { sameNodeVisual } from '../../shared/appearanceStyle.js';
-import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
+import { useWhiteboardStore, isCreationTool } from '../../../../stores/whiteboardStore';
+import { useWhiteboardSelectionStore } from '../../../../stores/whiteboardSelectionStore';
+import { pointerDownUpdateSelection } from '../../interaction/selection/nodeSelectionPointer';
 import { useEditableNodeField } from '../../interaction/hooks/useEditableNodeField';
 
-const FrameNodeVisual = memo(function FrameNodeVisual({ node }) {
+const FrameNodeVisual = memo(function FrameNodeVisual({ node, onTitlePointerDown, onTitleContextMenu }) {
     const title = node.data?.title ?? 'Frame';
     const clipEnabled = node.data?.clipContent !== false;
     const { setEditingNodeId, setEditTypingSeed } = useWhiteboardStore();
@@ -34,7 +36,7 @@ const FrameNodeVisual = memo(function FrameNodeVisual({ node }) {
 
     return (
         <div
-            className="whiteboard-node frame-node"
+            className="whiteboard-node frame-node frame-node--select-title-only"
             style={{
                 width: node.width,
                 height: node.height,
@@ -51,9 +53,13 @@ const FrameNodeVisual = memo(function FrameNodeVisual({ node }) {
             <div
                 className="frame-title"
                 onDoubleClick={startEditingTitle}
+                onContextMenu={onTitleContextMenu}
                 onPointerDown={(e) => {
-                    if (!isEditing) return;
-                    e.stopPropagation();
+                    if (isEditing) {
+                        e.stopPropagation();
+                        return;
+                    }
+                    onTitlePointerDown?.(e);
                 }}
             >
                 {isEditing ? (
@@ -86,10 +92,51 @@ const FrameNodeVisual = memo(function FrameNodeVisual({ node }) {
     );
 }, (prev, next) => sameNodeVisual(prev.node, next.node));
 
-export default function FrameNode({ node, onNodePointerDown, onNodeContextMenu }) {
+export default function FrameNode({
+    node,
+    onNodePointerDown,
+    onNodeContextMenu,
+    disableDragPreview = false,
+    embedded = false,
+}) {
+    const activeTool = useWhiteboardSelectionStore((s) => s.activeTool);
+    const selectionListenersCleanupRef = useRef(null);
+
+    useEffect(() => () => selectionListenersCleanupRef.current?.(), []);
+
+    const handleTitlePointerDown = useCallback(
+        (e) => {
+            if (e.button === 1) return;
+            e.stopPropagation();
+            if (e.button !== 0) return;
+            if (isCreationTool(activeTool) && activeTool !== 'connector') {
+                onNodePointerDown?.(e, node.id);
+                return;
+            }
+            selectionListenersCleanupRef.current?.();
+            selectionListenersCleanupRef.current = pointerDownUpdateSelection(e, node.id);
+            onNodePointerDown?.(e, node.id);
+        },
+        [activeTool, node.id, onNodePointerDown]
+    );
+
     return (
-        <BaseNode node={node} onNodePointerDown={onNodePointerDown} onNodeContextMenu={onNodeContextMenu}>
-            <FrameNodeVisual node={node} />
+        <BaseNode
+            node={node}
+            onNodePointerDown={onNodePointerDown}
+            onNodeContextMenu={onNodeContextMenu}
+            disableDragPreview={disableDragPreview}
+            embedded={embedded}
+            selectViaTitleOnly={embedded}
+        >
+            <FrameNodeVisual
+                node={node}
+                onTitlePointerDown={handleTitlePointerDown}
+                onTitleContextMenu={(e) => {
+                    e.stopPropagation();
+                    onNodeContextMenu?.(e, node.id);
+                }}
+            />
         </BaseNode>
     );
 }

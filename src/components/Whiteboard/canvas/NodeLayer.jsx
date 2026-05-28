@@ -42,9 +42,11 @@ function FrameGroupShell({ root, children, onNodePointerDown, onNodeContextMenu 
                 transform: dragTranslateStyle(dragTranslate),
             }}
         >
-            <div style={{ pointerEvents: 'auto', position: 'relative', zIndex: 0 }}>
+            <div style={{ pointerEvents: 'none', position: 'relative', zIndex: 0 }}>
                 <FrameComp
                     node={rootAtZero}
+                    disableDragPreview
+                    embedded
                     onNodePointerDown={onNodePointerDown}
                     onNodeContextMenu={onNodeContextMenu}
                 />
@@ -80,6 +82,8 @@ export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, onResi
     const nodes = useWhiteboardDocumentStore((s) => s.nodes);
     const activePageId = useWhiteboardDocumentStore((s) => s.activePageId);
     const selectedNodeIds = useWhiteboardSelectionStore((s) => s.selectedNodeIds);
+    const groupDrill = useWhiteboardSelectionStore((s) => s.groupDrill);
+    const isolateSelection = useWhiteboardSelectionStore((s) => s.isolateSelection);
     const viewport = useWhiteboardSelectionStore((s) => s.viewport);
     const pageNodes = useMemo(
         () => nodes.filter((n) => getNodePageId(n) === activePageId),
@@ -121,9 +125,13 @@ export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, onResi
         }).sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
     }, [pageNodes, roots, vp]);
 
+    const selectionContext = useMemo(
+        () => ({ groupDrill, isolateSelection }),
+        [groupDrill, isolateSelection]
+    );
     const transformIds = useMemo(
-        () => getTransformTargetIds(selectedNodeIds, nodes),
-        [selectedNodeIds, nodes]
+        () => getTransformTargetIds(selectedNodeIds, nodes, selectionContext),
+        [selectedNodeIds, nodes, selectionContext]
     );
     const useUnifiedTransform = transformIds.length > 1;
     const transformIdSet = useMemo(() => new Set(transformIds), [transformIds]);
@@ -141,9 +149,10 @@ export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, onResi
         <>
             {visibleRoots.map((root) => {
                 const children = getChildren(pageNodes, root.id);
-                const isContainerWithChildren =
-                    CONTAINER_NODE_TYPES.includes(root.type) && children.length > 0;
-                if (isContainerWithChildren) {
+                const useContainerShell =
+                    root.type === 'frame' ||
+                    (CONTAINER_NODE_TYPES.includes(root.type) && root.type !== 'frame' && children.length > 0);
+                if (useContainerShell) {
                     return (
                         <FrameGroupShell
                             key={root.id}

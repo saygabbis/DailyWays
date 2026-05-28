@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { useWhiteboardSelectionStore } from '../../../stores/whiteboardSelectionStore';
 import { useCollabPatch } from '../../../collab/space/ops/SpaceCollabOpsContext.jsx';
 import { useAuth } from '../../../context/AuthContext';
 import { layerDisplayName, renamePatchForNode } from '../core/layers/layerTreeUtils';
@@ -301,12 +302,12 @@ export default function LayersTab({ spaceId, spaceTitle }) {
     );
 
     const handleSelect = (id, shiftKey, ctrlKey) => {
-        setSelection(
-            resolveLayerClickSelection(id, nodes, selectedNodeIds, {
-                shiftKey,
-                ctrlKey: ctrlKey || false,
-            })
-        );
+        const { groupDrill, setSelectionWithDrill } = useWhiteboardSelectionStore.getState();
+        const { selection, drill, isolate } = resolveLayerClickSelection(id, nodes, selectedNodeIds, {
+            shiftKey,
+            ctrlKey: ctrlKey || false,
+        }, groupDrill);
+        setSelectionWithDrill(selection, drill, isolate);
     };
 
     const handleStartRename = (id) => {
