@@ -1,4 +1,4 @@
-import { getDbClient, supabaseAdmin } from '../db/supabase.js';
+import { getUserDbClient } from '../db/supabase.js';
 import { devLog } from '../devLog.js';
 import { verifyUserJwt } from './verifyJwt.js';
 
@@ -12,20 +12,14 @@ export async function verifyToken(token) {
   devLog('auth.verifyToken resultado JWKS', {
     hasUser: Boolean(user),
     tokenLen: token.length,
-    viaAdmin: Boolean(supabaseAdmin),
   });
 
-  if (user) return user;
-
-  if (!supabaseAdmin) return null;
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !data?.user) return null;
-  return data.user;
+  return user ?? null;
 }
 
 export async function canAccessSpace(userId, spaceId, accessToken) {
   if (!userId || !spaceId) return false;
-  const db = getDbClient(accessToken);
+  const db = getUserDbClient(accessToken);
   if (!db) return false;
   const { data: space, error } = await db
     .from('spaces')
@@ -52,7 +46,7 @@ export async function canAccessSpace(userId, spaceId, accessToken) {
 
 export async function canAccessBoard(userId, boardId, accessToken) {
   if (!userId || !boardId) return false;
-  const db = getDbClient(accessToken);
+  const db = getUserDbClient(accessToken);
   if (!db) return false;
 
   const { data: board, error } = await db
@@ -67,7 +61,6 @@ export async function canAccessBoard(userId, boardId, accessToken) {
       userIdPrefix: userId?.slice(0, 8),
       errCode: error?.code ?? null,
       errMsg: error?.message?.slice(0, 80) ?? null,
-      viaAdmin: Boolean(supabaseAdmin),
     });
     return { access: false, canWrite: false };
   }

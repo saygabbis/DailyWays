@@ -1,4 +1,4 @@
-import { getDbClient } from '../db/supabase.js';
+import { getUserDbClient } from '../db/supabase.js';
 import { devLog } from '../devLog.js';
 
 function mapBoard(row, lists, cardsByList, subtasksByCard) {
@@ -50,7 +50,7 @@ function mapBoard(row, lists, cardsByList, subtasksByCard) {
 }
 
 export async function loadBoardFromDb(boardId, accessToken) {
-  const db = getDbClient(accessToken);
+  const db = getUserDbClient(accessToken);
   if (!db || !boardId) {
     return { board: null, revision: 0 };
   }

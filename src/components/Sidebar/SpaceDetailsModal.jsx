@@ -12,6 +12,7 @@ import {
     isSpaceOwnerClient,
     updateSpace,
 } from '../../services/workspaceService';
+import { TEXT } from '@dailyways/limits';
 import { RoleSelect } from './BoardDetailsModal';
 import './BoardDetailsModal.css';
 
@@ -190,7 +191,7 @@ export default function SpaceDetailsModal({ space, onClose, initialTab = 'detail
                     <div className="modal-body">
                         <div className="settings-field">
                             <label>Título</label>
-                            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nome do space" />
+                            <input type="text" value={title} maxLength={TEXT.spaceTitle} onChange={(e) => setTitle(e.target.value)} placeholder="Nome do space" />
                         </div>
                         <div className="settings-field">
                             <label>Emoji</label>

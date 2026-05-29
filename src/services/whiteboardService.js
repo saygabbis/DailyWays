@@ -327,33 +327,37 @@ export async function deleteRulerGuides(guideIds) {
 
 // ── ASSETS (Storage) ─────────────────────────────────────────────
 
-const BUCKET = 'space-assets';
+import { validateFile, isImageFile } from '@dailyways/limits';
+import { resolveLimitError } from '../limits/messages.js';
+import { SPACE_ASSETS_BUCKET, resolveSpaceAssetUrl } from './spaceAssetService';
 
 export async function uploadSpaceAsset(spaceId, file, userId = null) {
     if (!spaceId || !file) return { success: false, error: 'Missing spaceId or file' };
+    const image = isImageFile(file);
+    const fileCheck = validateFile(file, image ? 'whiteboardImage' : 'whiteboardFile');
+    if (!fileCheck.ok) return { success: false, error: resolveLimitError(fileCheck) };
     const ext = file.name.split('.').pop() || 'bin';
     const path = `${spaceId}/${uuidv4()}.${ext}`;
-    const { data, error } = await supabase.storage.from(BUCKET).upload(path, file, {
+    const { data, error } = await supabase.storage.from(SPACE_ASSETS_BUCKET).upload(path, file, {
         cacheControl: '3600',
         upsert: false,
     });
     if (error) return { success: false, error: error.message };
-    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
-    const url = urlData?.publicUrl ?? null;
+    const url = await resolveSpaceAssetUrl(path);
     const { error: insertErr } = await supabase.from('space_assets').insert({
         space_id: spaceId,
-        storage_path: data.path,
-        url,
+        storage_path: path,
+        url: null,
         filename: file.name,
         created_by: userId,
     });
     if (insertErr) console.warn('[whiteboardService] space_assets insert failed', insertErr);
-    return { success: true, url, path: data.path };
+    return { success: true, url, path, storagePath: path };
 }
 
 export async function deleteSpaceAsset(spaceId, storagePath) {
     if (!spaceId || !storagePath) return { success: false, error: 'Missing params' };
-    await supabase.storage.from(BUCKET).remove([storagePath]);
+    await supabase.storage.from(SPACE_ASSETS_BUCKET).remove([storagePath]);
     await supabase.from('space_assets').delete().eq('space_id', spaceId).eq('storage_path', storagePath);
     return { success: true };
 }

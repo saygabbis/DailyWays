@@ -45,7 +45,7 @@ export function topLeftFromAnchor(anchor, width, height, anchorMode = 'center') 
  * Monta payload de nó image com dimensões nativas do arquivo.
  * @param {{ x: number, y: number, anchor?: 'center'|'topleft' }} placement
  */
-export async function buildImageNodePayload(file, url, placement) {
+export async function buildImageNodePayload(file, urlOrPath, placement, storagePath = null) {
     let width = 200;
     let height = 150;
     try {
@@ -61,9 +61,11 @@ export async function buildImageNodePayload(file, url, placement) {
     const payload = getDefaultNodePayload('image', x, y);
     payload.width = width;
     payload.height = height;
+    const path = storagePath ?? (urlOrPath && !String(urlOrPath).startsWith('http') ? urlOrPath : null);
     payload.data = {
         ...(payload.data || {}),
-        url,
+        storagePath: path,
+        url: path ? null : urlOrPath,
         filename: file.name,
         size: formatFileSizeBytes(file.size),
     };

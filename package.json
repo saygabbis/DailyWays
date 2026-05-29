@@ -19,6 +19,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dailyways/limits": "file:packages/limits",
     "@dailyways/collab-protocol": "file:packages/collab-protocol",
     "@hello-pangea/dnd": "^18.0.1",
     "@supabase/supabase-js": "^2.47.0",

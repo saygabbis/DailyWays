@@ -1,4 +1,5 @@
 import { uploadSpaceAsset, insertNode } from '../../../../services/whiteboardService';
+import { isImageFile } from '@dailyways/limits';
 import { getDefaultNodePayload } from '../nodeDefaults.js';
 import { buildImageNodePayload, topLeftFromAnchor, formatFileSizeBytes } from '../creation/imageNodePayload.js';
 import { findContainerAt } from '../../interaction/viewport/viewportUtils';
@@ -58,7 +59,7 @@ function collectFilesFromDataTransfer(clipboardData) {
 
 function resolveFilePayload(files) {
     if (!files.length) return null;
-    const image = files.find((f) => f.type?.startsWith('image/'));
+    const image = files.find((f) => isImageFile(f));
     if (image) return { kind: 'image', file: image };
     return { kind: 'file', file: files[0] };
 }
@@ -112,7 +113,7 @@ async function resolveFromClipboardItems(items) {
             const ext = fileType.split('/').pop() || 'bin';
             const name = `pasted-${Date.now()}.${ext}`;
             const file = new File([blob], name, { type: blob.type || fileType });
-            if (file.type?.startsWith('image/')) return { kind: 'image', file };
+            if (isImageFile(file)) return { kind: 'image', file };
             return { kind: 'file', file };
         } catch {
             /* try next */
@@ -265,7 +266,10 @@ export async function pasteClipboardContent(ctx, placement, clipboardData, paste
     let payload;
     if (resolved.kind === 'image' || resolved.kind === 'file') {
         const result = await uploadSpaceAsset(spaceId, resolved.file, ctx.userId);
-        if (!result?.url) return false;
+        if (!result?.url) {
+            ctx.onUploadError?.(result?.error || 'Falha ao enviar arquivo.');
+            return false;
+        }
         payload =
             resolved.kind === 'image'
                 ? await buildImageNodePayload(resolved.file, result.url, placement)

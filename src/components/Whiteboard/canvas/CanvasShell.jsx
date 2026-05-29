@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
+import { validateWhiteboardNodeCount, isImageFile } from '@dailyways/limits';
+import { resolveLimitError } from '../../../limits/messages.js';
+import { useToast } from '../../../context/ToastContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useViewport } from '../interaction/hooks/useViewport';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
@@ -148,6 +151,16 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
 
     const { user } = useAuth();
+    const { addToast } = useToast();
+    const guardNodeLimit = useCallback((adding = 1) => {
+        const count = useWhiteboardDocumentStore.getState().nodes?.length ?? 0;
+        const err = validateWhiteboardNodeCount(count, adding);
+        if (err) {
+            addToast(resolveLimitError(err), 'error');
+            return false;
+        }
+        return true;
+    }, [addToast]);
     const {
         collabPatchNode,
         collabPatchNodes,
@@ -373,14 +386,16 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     const handleUploadImage = useCallback(
         async (file) => {
             if (!spaceId || !file) return;
-            if (!file.type?.startsWith('image/')) {
+            if (!guardNodeLimit(1)) return;
+            if (!guardNodeLimit(1)) return;
+            if (!isImageFile(file)) {
                 console.warn('[CanvasEngine] handleUploadImage: not an image file', file.name);
                 return;
             }
             try {
                 const result = await uploadSpaceAsset(spaceId, file, user?.id);
                 if (!result.url) {
-                    console.error('[CanvasEngine] upload image failed', result.error);
+                    addToast(result.error || 'Falha ao enviar imagem.', 'error');
                     return;
                 }
                 let placement;
@@ -403,16 +418,17 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 console.error('[CanvasEngine] handleUploadImage error', err);
             }
         },
-        [spaceId, user?.id, collabCreateNode, collabConnected, getViewportCenterWorld]
+        [spaceId, user?.id, collabCreateNode, collabConnected, getViewportCenterWorld, guardNodeLimit, addToast]
     );
 
     const handleUploadFile = useCallback(
         async (file) => {
             if (!spaceId || !file) return;
+            if (!guardNodeLimit(1)) return;
             try {
                 const result = await uploadSpaceAsset(spaceId, file, user?.id);
                 if (!result.url) {
-                    console.error('[CanvasEngine] upload file failed', result.error);
+                    addToast(result.error || 'Falha ao enviar arquivo.', 'error');
                     return;
                 }
                 let placement;
@@ -455,7 +471,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 console.error('[CanvasEngine] handleUploadFile error', err);
             }
         },
-        [spaceId, user?.id, collabCreateNode, collabConnected, getViewportCenterWorld]
+        [spaceId, user?.id, collabCreateNode, collabConnected, getViewportCenterWorld, guardNodeLimit, addToast]
     );
 
     const persistViewport = useCallback(
@@ -485,8 +501,9 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             collabCreateNode,
             collabConnected,
             store: useWhiteboardStore,
+            onUploadError: (message) => addToast(message || 'Falha ao enviar arquivo.', 'error'),
         }),
-        [spaceId, user?.id, collabCreateNode, collabConnected]
+        [spaceId, user?.id, collabCreateNode, collabConnected, addToast]
     );
 
     const handleCopy = useCallback(() => {
@@ -1919,65 +1936,64 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             const nodes = useWhiteboardStore.getState().nodes;
             const byId = buildNodesById(nodes);
             for (let i = 0; i < files.length; i++) {
+                if (!guardNodeLimit(1)) break;
                 const file = files[i];
+                const asImage = isImageFile(file);
                 let wx = world.x - 100 + i * 20;
                 let wy = world.y - 75 + i * 20;
-                let type = 'image';
-                if (!file.type.startsWith('image/')) {
+                if (!asImage) {
                     wx = world.x - 110 + i * 20;
                     wy = world.y - 40 + i * 20;
-                    type = 'file_card';
                 }
-                const centerX = wx + (type === 'image' ? 100 : 110);
-                const centerY = wy + (type === 'image' ? 75 : 40);
+                const centerX = wx + (asImage ? 100 : 110);
+                const centerY = wy + (asImage ? 75 : 40);
                 const container = findContainerAt(nodes, centerX, centerY);
-                if (file.type.startsWith('image/')) {
-                    const result = await uploadSpaceAsset(spaceId, file, user?.id);
-                    if (result?.url) {
-                        const payload = await buildImageNodePayload(file, result.url, {
-                            x: world.x + i * 20,
-                            y: world.y + i * 20,
-                            anchor: 'center',
-                        });
-                        const centerX = payload.x + payload.width / 2;
-                        const centerY = payload.y + payload.height / 2;
-                        const container = findContainerAt(nodes, centerX, centerY);
-                        if (container) {
-                            const containerWorld = nodeToWorld(container, byId);
-                            payload.parentId = container.id;
-                            payload.x = payload.x - containerWorld.x;
-                            payload.y = payload.y - containerWorld.y;
-                        }
-                        if (collabConnected) {
-                            collabCreateNode({ ...payload, createdBy: user?.id ?? null });
-                        } else {
-                            const res = await insertNode(spaceId, payload, user?.id);
-                            if (res.success) useWhiteboardStore.getState().addNode(payload);
-                        }
+                const result = await uploadSpaceAsset(spaceId, file, user?.id);
+                if (!result?.url) {
+                    addToast(result?.error || 'Falha ao enviar arquivo.', 'error');
+                    continue;
+                }
+                if (asImage) {
+                    const payload = await buildImageNodePayload(file, result.url, {
+                        x: world.x + i * 20,
+                        y: world.y + i * 20,
+                        anchor: 'center',
+                    });
+                    const imgCenterX = payload.x + payload.width / 2;
+                    const imgCenterY = payload.y + payload.height / 2;
+                    const imgContainer = findContainerAt(nodes, imgCenterX, imgCenterY);
+                    if (imgContainer) {
+                        const containerWorld = nodeToWorld(imgContainer, byId);
+                        payload.parentId = imgContainer.id;
+                        payload.x = payload.x - containerWorld.x;
+                        payload.y = payload.y - containerWorld.y;
+                    }
+                    if (collabConnected) {
+                        collabCreateNode({ ...payload, createdBy: user?.id ?? null });
+                    } else {
+                        const res = await insertNode(spaceId, payload, user?.id);
+                        if (res.success) useWhiteboardStore.getState().addNode(payload);
                     }
                 } else {
-                    const result = await uploadSpaceAsset(spaceId, file, user?.id);
-                    if (result?.url) {
-                        const sizeStr = file.size != null ? (file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`) : '';
-                        const payload = getDefaultNodePayload('file', wx, wy);
-                        Object.assign(payload.data, { url: result.url, filename: file.name, size: sizeStr });
-                        if (container) {
-                            const containerWorld = nodeToWorld(container, byId);
-                            payload.parentId = container.id;
-                            payload.x = wx - containerWorld.x;
-                            payload.y = wy - containerWorld.y;
-                        }
-                        if (collabConnected) {
-                            collabCreateNode({ ...payload, createdBy: user?.id ?? null });
-                        } else {
-                            const res = await insertNode(spaceId, payload, user?.id);
-                            if (res.success) useWhiteboardStore.getState().addNode(payload);
-                        }
+                    const sizeStr = file.size != null ? (file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`) : '';
+                    const payload = getDefaultNodePayload('file', wx, wy);
+                    Object.assign(payload.data, { url: result.url, filename: file.name, size: sizeStr });
+                    if (container) {
+                        const containerWorld = nodeToWorld(container, byId);
+                        payload.parentId = container.id;
+                        payload.x = wx - containerWorld.x;
+                        payload.y = wy - containerWorld.y;
+                    }
+                    if (collabConnected) {
+                        collabCreateNode({ ...payload, createdBy: user?.id ?? null });
+                    } else {
+                        const res = await insertNode(spaceId, payload, user?.id);
+                        if (res.success) useWhiteboardStore.getState().addNode(payload);
                     }
                 }
             }
         },
-        [viewportForChildren, spaceId, user?.id, createNodeAt, collabCreateNode, collabConnected]
+        [viewportForChildren, spaceId, user?.id, createNodeAt, collabCreateNode, collabConnected, guardNodeLimit, addToast]
     );
 
     return (

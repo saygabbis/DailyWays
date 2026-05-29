@@ -11,6 +11,7 @@ import { logger } from '../utils/logger';
 import { isCollabEnabled } from '../collab/core/collabConfig.js';
 import { isBoardPrankFrozen } from '../collab/board/dev/boardDevPrank.js';
 import { applyBoardAction } from '@dailyways/collab-protocol';
+import { COUNT } from '@dailyways/limits';
 import {
     enrichCardForSmartView,
     isCardActiveImportant,
@@ -459,6 +460,7 @@ function appReducer(state, action) {
 
         // ── Labels ──
         case 'ADD_LABEL':
+            if (state.labels.length >= COUNT.labelsPerBoard) return state;
             return { ...state, labels: [...state.labels, action.payload] };
 
         case 'DELETE_LABEL':

@@ -11,15 +11,17 @@ import {
 import { verifyToken, canAccessSpace, canAccessBoard } from '../auth/auth.js';
 import { roomManager } from '../services/roomManager.js';
 import { enrichPresenceFromProfile } from '../services/presenceProfile.js';
-import { isDevPrankAttacker } from '../auth/devAccess.js';
+import { isDevPrankAttacker, isDevPrankHandlerEnabled } from '../auth/devAccess.js';
 import { devLog } from '../devLog.js';
 import { createPresenceSyncPayload } from '../services/shared/presencePayload.js';
+import {
+  checkOpRateLimit,
+  checkAuthFailRateLimit,
+  registerUserConnection,
+  releaseUserConnection,
+} from './rateLimit.js';
 
-const MAX_OPS_PER_SEC = 120;
-const MAX_POSITION_OPS_PER_SEC = 300;
 const POSITION_FIELDS = new Set(['x', 'y']);
-// Alinhado com reconnectionDelay (500ms) do socket em modo polling (produção).
-// Evita que o cursor some prematuramente durante F5 ou reconexão lenta.
 const PRESENCE_LEAVE_GRACE_MS = 500;
 
 function payloadRoomMatchesSocketRoom(requestedRoomId, socketRoomId) {
@@ -33,7 +35,6 @@ function payloadRoomMatchesSocketRoom(requestedRoomId, socketRoomId) {
   );
 }
 
-/** Outro socket do mesmo usuário ainda na sala Socket.IO (multi-tab no mesmo board). */
 function userHasAnotherSocketInRoom(io, roomId, userId, exceptSocketId) {
   const adapterRoom = io.sockets.adapter.rooms.get(roomId);
   if (!adapterRoom) return false;
@@ -69,6 +70,75 @@ function finalizeLeavePresence(io, roomId, userId, socketId) {
   return roomManager.getPresenceList(room);
 }
 
+function registerDevPrankHandler(io, socket) {
+  socket.on('dev:prank', async (payload, ack) => {
+    if (!(await isDevPrankAttacker(socket))) {
+      ack?.({ ok: false, error: 'forbidden' });
+      return;
+    }
+    const { boardId, targetUserId, action } = payload || {};
+    if (!boardId || !targetUserId || !['freeze', 'hold', 'release', 'drag'].includes(action)) {
+      ack?.({ ok: false, error: 'invalid' });
+      return;
+    }
+    const roomId = roomIdForBoard(boardId);
+    const room = roomManager.rooms.get(roomId);
+    if (!room) {
+      ack?.({ ok: false, error: 'room not loaded' });
+      return;
+    }
+    const socketIds = room.presenceSockets?.get(targetUserId);
+    if (!socketIds?.size) {
+      ack?.({ ok: false, error: 'user not in room' });
+      return;
+    }
+    if (action === 'hold' || action === 'release') {
+      const held = action === 'hold';
+      for (const sid of [...socketIds]) {
+        io.sockets.sockets.get(sid)?.emit('dev:prank-hold', { held, boardId });
+      }
+      ack?.({ ok: true });
+      return;
+    }
+    if (action === 'drag') {
+      const { x, y } = payload || {};
+      if (typeof x !== 'number' || typeof y !== 'number') {
+        ack?.({ ok: false, error: 'invalid cursor' });
+        return;
+      }
+      const cursorPayload = {
+        cursor: { x, y, space: 'board' },
+        onBoardSurface: true,
+        cursorModal: null,
+      };
+      for (const sid of [...socketIds]) {
+        io.sockets.sockets.get(sid)?.emit('dev:prank-cursor', { boardId, x, y });
+      }
+      const peers = roomManager.setPresence(roomId, targetUserId, cursorPayload) || [];
+      io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, createPresenceSyncPayload(roomId, peers));
+      ack?.({ ok: true });
+      return;
+    }
+    for (const sid of [...socketIds]) {
+      const targetSock = io.sockets.sockets.get(sid);
+      if (!targetSock) continue;
+      targetSock.emit('dev:prank-frozen', {
+        frozen: true,
+        message: 'Mouse congelado (dev prank). F5 para voltar.',
+      });
+      const prevRoom = targetSock.data.roomId;
+      if (prevRoom) {
+        targetSock.leave(prevRoom);
+        roomManager.untrackSocket(prevRoom, targetUserId, sid);
+        finalizeLeavePresence(io, prevRoom, targetUserId, sid);
+      }
+      targetSock.data.roomId = null;
+      targetSock.data.canWrite = false;
+    }
+    ack?.({ ok: true });
+  });
+}
+
 export function registerSocketHandlers(io) {
   io.use(async (socket, next) => {
     try {
@@ -78,8 +148,23 @@ export function registerSocketHandlers(io) {
         tokenLen: token?.length ?? 0,
         origin: socket.handshake.headers?.origin ?? null,
       });
+      if (!token) {
+        if (!checkAuthFailRateLimit(socket.handshake)) {
+          return next(new Error('Too many auth attempts'));
+        }
+        return next(new Error('Unauthorized'));
+      }
       const user = await verifyToken(token);
-      if (!user) return next(new Error('Unauthorized'));
+      if (!user) {
+        if (!checkAuthFailRateLimit(socket.handshake)) {
+          return next(new Error('Too many auth attempts'));
+        }
+        return next(new Error('Unauthorized'));
+      }
+      const conn = registerUserConnection(user.id);
+      if (!conn.ok) {
+        return next(new Error(conn.reason || 'Too many connections'));
+      }
       socket.data.userId = user.id;
       socket.data.userEmail = user.email;
       socket.data.accessToken = token;
@@ -92,9 +177,10 @@ export function registerSocketHandlers(io) {
   io.on('connection', (socket) => {
     socket.data.roomId = null;
     socket.data.canWrite = false;
-    socket.data.opCount = 0;
-    socket.data.positionOpCount = 0;
-    socket.data.opWindowStart = Date.now();
+
+    if (isDevPrankHandlerEnabled()) {
+      registerDevPrankHandler(io, socket);
+    }
 
     socket.on(CLIENT_EVENTS.JOIN, async (payload, ack) => {
       try {
@@ -217,27 +303,12 @@ export function registerSocketHandlers(io) {
         ack?.({ ok: false, error: 'Read-only' });
         return;
       }
-      const now = Date.now();
-      if (now - socket.data.opWindowStart > 1000) {
-        socket.data.opWindowStart = now;
-        socket.data.opCount = 0;
-        socket.data.positionOpCount = 0;
-      }
       const isPositionOp = op?.entity === 'node' && POSITION_FIELDS.has(op?.field);
-      if (isPositionOp) {
-        socket.data.positionOpCount += 1;
-        if (socket.data.positionOpCount > MAX_POSITION_OPS_PER_SEC) {
-          socket.emit(SERVER_EVENTS.REJECTED, { opId: op?.opId, reason: 'Rate limit' });
-          ack?.({ ok: false, error: 'Rate limit' });
-          return;
-        }
-      } else {
-        socket.data.opCount += 1;
-        if (socket.data.opCount > MAX_OPS_PER_SEC) {
-          socket.emit(SERVER_EVENTS.REJECTED, { opId: op?.opId, reason: 'Rate limit' });
-          ack?.({ ok: false, error: 'Rate limit' });
-          return;
-        }
+      const rate = checkOpRateLimit(socket.data.userId, isPositionOp);
+      if (!rate.ok) {
+        socket.emit(SERVER_EVENTS.REJECTED, { opId: op?.opId, reason: rate.reason });
+        ack?.({ ok: false, error: rate.reason });
+        return;
       }
       const err = validateOp(op);
       if (err) {
@@ -324,75 +395,8 @@ export function registerSocketHandlers(io) {
       io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, createPresenceSyncPayload(roomId, peers));
     });
 
-    /** DEV ONLY — prank no board (somente contas DEV). */
-    socket.on('dev:prank', async (payload, ack) => {
-      if (!(await isDevPrankAttacker(socket))) {
-        ack?.({ ok: false, error: 'forbidden' });
-        return;
-      }
-      const { boardId, targetUserId, action } = payload || {};
-      if (!boardId || !targetUserId || !['freeze', 'hold', 'release', 'drag'].includes(action)) {
-        ack?.({ ok: false, error: 'invalid' });
-        return;
-      }
-      const roomId = roomIdForBoard(boardId);
-      const room = roomManager.rooms.get(roomId);
-      if (!room) {
-        ack?.({ ok: false, error: 'room not loaded' });
-        return;
-      }
-      const socketIds = room.presenceSockets?.get(targetUserId);
-      if (!socketIds?.size) {
-        ack?.({ ok: false, error: 'user not in room' });
-        return;
-      }
-      if (action === 'hold' || action === 'release') {
-        const held = action === 'hold';
-        for (const sid of [...socketIds]) {
-          io.sockets.sockets.get(sid)?.emit('dev:prank-hold', { held, boardId });
-        }
-        ack?.({ ok: true });
-        return;
-      }
-      if (action === 'drag') {
-        const { x, y } = payload || {};
-        if (typeof x !== 'number' || typeof y !== 'number') {
-          ack?.({ ok: false, error: 'invalid cursor' });
-          return;
-        }
-        const cursorPayload = {
-          cursor: { x, y, space: 'board' },
-          onBoardSurface: true,
-          cursorModal: null,
-        };
-        for (const sid of [...socketIds]) {
-          io.sockets.sockets.get(sid)?.emit('dev:prank-cursor', { boardId, x, y });
-        }
-        const peers = roomManager.setPresence(roomId, targetUserId, cursorPayload) || [];
-        io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, createPresenceSyncPayload(roomId, peers));
-        ack?.({ ok: true });
-        return;
-      }
-      for (const sid of [...socketIds]) {
-        const targetSock = io.sockets.sockets.get(sid);
-        if (!targetSock) continue;
-        targetSock.emit('dev:prank-frozen', {
-          frozen: true,
-          message: 'Mouse congelado (dev prank). F5 para voltar.',
-        });
-        const prevRoom = targetSock.data.roomId;
-        if (prevRoom) {
-          targetSock.leave(prevRoom);
-          roomManager.untrackSocket(prevRoom, targetUserId, sid);
-          finalizeLeavePresence(io, prevRoom, targetUserId, sid);
-        }
-        targetSock.data.roomId = null;
-        targetSock.data.canWrite = false;
-      }
-      ack?.({ ok: true });
-    });
-
     socket.on('disconnect', async () => {
+      releaseUserConnection(socket.data.userId);
       const roomId = socket.data.roomId;
       if (!roomId) return;
       socket.data.roomId = null;

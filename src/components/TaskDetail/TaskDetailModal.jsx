@@ -62,6 +62,9 @@ import {
     renameAttachment,
 } from '../../services/attachmentService';
 import { fetchComments, createComment, softDeleteComment, subscribeToComments } from '../../services/commentService';
+import { TEXT, COUNT } from '@dailyways/limits';
+import { LIMIT_MSG } from '../../limits/messages.js';
+import { useToast } from '../../context/ToastContext';
 import { fetchActivity, createActivity, formatActivityText, subscribeToActivity } from '../../services/activityService';
 import { fetchAssignees, fetchBoardCandidates, assignUser, removeUser, subscribeToAssignees } from '../../services/assigneeService';
 import TaskDateTimeField from '../Common/TaskDateTimeField';
@@ -77,6 +80,7 @@ const RECURRENCE_OPTIONS = [
 
 export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const { dispatch, LABEL_COLORS, state, showConfirm } = useApp();
+    const { addToast } = useToast();
     const { collabDispatch } = useBoardCollabDispatch(boardId);
     const { undo: boardUndo, redo: boardRedo } = useBoardUndo(boardId);
     const {
@@ -474,6 +478,10 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     }, [showConfirm, card.title, boardId, listId, card.id, collabDispatch, onClose]);
 
     const toggleLabel = (labelId) => {
+        if (!labels.includes(labelId) && labels.length >= COUNT.labelsPerCard) {
+            addToast(LIMIT_MSG.labelsCard, 'error');
+            return;
+        }
         const newLabels = labels.includes(labelId)
             ? labels.filter((l) => l !== labelId)
             : [...labels, labelId];
@@ -483,6 +491,14 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const handleAddLabel = (e) => {
         e.preventDefault();
         if (!newLabelName.trim()) return;
+        if (state.labels.length >= COUNT.labelsPerBoard) {
+            addToast(LIMIT_MSG.labelsBoard, 'error');
+            return;
+        }
+        if (labels.length >= COUNT.labelsPerCard) {
+            addToast(LIMIT_MSG.labelsCard, 'error');
+            return;
+        }
         const newLabel = {
             id: uuidv4(),
             name: newLabelName.trim(),
@@ -497,6 +513,10 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const handleAddSubtask = (e) => {
         e.preventDefault();
         if (!newSubtask.trim()) return;
+        if ((liveCard.subtasks?.length ?? 0) >= COUNT.subtasksPerCard) {
+            addToast(LIMIT_MSG.subtasks, 'error');
+            return;
+        }
         collabDispatch({
             type: 'ADD_SUBTASK',
             payload: { boardId, listId, cardId: card.id, title: newSubtask.trim() },
@@ -823,6 +843,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                             type="text"
                             {...ph(hoverByEl, 'title', 'task-detail-title')}
                             value={title}
+                            maxLength={TEXT.cardTitle}
                             onChange={e => setTitle(e.target.value)}
                             onFocus={() => setTitleFocused(true)}
                             onBlur={() => {
@@ -835,6 +856,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                         <textarea
                             {...ph(hoverByEl, 'description', 'task-detail-desc')}
                             value={description}
+                            maxLength={TEXT.cardDescription}
                             onChange={e => setDescription(e.target.value)}
                             onFocus={() => setDescFocused(true)}
                             onBlur={() => {
@@ -1091,6 +1113,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                         type="text"
                                         placeholder="Nome da etiqueta..."
                                         value={newLabelName}
+                                        maxLength={TEXT.labelName}
                                         onChange={e => setNewLabelName(e.target.value)}
                                         autoFocus
                                     />
@@ -1133,8 +1156,8 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
 
                             {showLinkForm && (
                                 <form className="task-detail-link-form" onSubmit={handleAddLink}>
-                                    <input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://..." />
-                                    <input value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Nome opcional" />
+                                    <input value={linkUrl} maxLength={TEXT.linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://..." />
+                                    <input value={linkLabel} maxLength={TEXT.linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Nome opcional" />
                                     <button className="btn btn-primary btn-sm" type="submit">Salvar link</button>
                                 </form>
                             )}
@@ -1281,6 +1304,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                     {...ph(hoverByEl, 'subtask-add', '')}
                                     placeholder="Adicionar subtarefa..."
                                     value={newSubtask}
+                                    maxLength={TEXT.subtaskTitle}
                                     onChange={e => setNewSubtask(e.target.value)}
                                 />
                             </form>
@@ -1384,6 +1408,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                     <textarea
                                         {...ph(hoverByEl, 'comment-composer', '')}
                                         value={commentBody}
+                                        maxLength={TEXT.cardComment}
                                         onChange={(e) => setCommentBody(e.target.value)}
                                         onFocus={() => setCommentFocused(true)}
                                         onBlur={() => setCommentFocused(false)}

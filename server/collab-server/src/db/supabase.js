@@ -20,6 +20,7 @@ if (!url || !serviceKey) {
   );
 }
 
+/** Service role — apenas persistência/flush e tarefas administrativas do servidor. */
 export const supabaseAdmin =
   url && serviceKey && isServiceKeyLikelyValid()
     ? createClient(url, serviceKey, {
@@ -41,9 +42,8 @@ export function createUserScopedClient(accessToken) {
   });
 }
 
-/** Cliente DB: service_role se válida; senão RLS com JWT do usuário. */
-export function getDbClient(accessToken) {
-  if (supabaseAdmin) return supabaseAdmin;
+/** Cliente com RLS do usuário (auth, canAccess*, load de dados). Nunca usa service_role. */
+export function getUserDbClient(accessToken) {
   return createUserScopedClient(accessToken);
 }
 

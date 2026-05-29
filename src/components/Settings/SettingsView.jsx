@@ -28,6 +28,7 @@ import { PRESENCE_COLOR_PRESETS } from '../../utils/presenceColor';
 import { fetchContacts, fetchContactRequests, respondToContactRequest } from '../../services/contactsService';
 import { fetchPrivacySettings, updatePrivacySettings, fetchBlockedUsers, unblockUser } from '../../services/privacyService';
 import { getNotificationPrefs, setNotificationPrefs } from '../../services/notificationPrefs';
+import { TEXT } from '@dailyways/limits';
 import './Settings.css';
 import './AvatarCropper.css';
 const AvatarCropper = lazy(() => import('./AvatarCropper'));
@@ -174,13 +175,14 @@ const AccountPanel = memo(function AccountPanel({ user, updateProfile, confirmLo
                 <h3 className="settings-section-title">{t.acPersonalInfo}</h3>
                 <div className="settings-field">
                     <label>{t.acName}</label>
-                    <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t.acNamePh} />
+                    <input type="text" value={name} maxLength={TEXT.profileName} onChange={e => setName(e.target.value)} placeholder={t.acNamePh} />
                 </div>
                 <div className="settings-field">
                     <label>Username</label>
                     <input
                         type="text"
                         value={username}
+                        maxLength={TEXT.usernameMax}
                         onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
                         placeholder="username"
                     />
@@ -192,7 +194,7 @@ const AccountPanel = memo(function AccountPanel({ user, updateProfile, confirmLo
                 </div>
                 <div className="settings-field">
                     <label>{t.acBio}</label>
-                    <textarea value={bio} onChange={e => setBio(e.target.value)} placeholder={t.acBioPh} rows={2} className="settings-bio" />
+                    <textarea value={bio} maxLength={TEXT.profileBio} onChange={e => setBio(e.target.value)} placeholder={t.acBioPh} rows={2} className="settings-bio" />
                 </div>
                 {saveError && <p className="settings-error">{saveError}</p>}
                 <div className="settings-actions">

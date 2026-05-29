@@ -10,7 +10,9 @@ const PORT = Number(process.env.PORT || 3001);
 const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5174';
 const allowedOrigins = corsOrigin.split(',').map((s) => s.trim()).filter(Boolean);
 
-/** localhost + rede local (amigo no http://192.168.x.x:5174) — sempre permitido. */
+const isProduction = process.env.NODE_ENV === 'production';
+
+/** localhost + rede local — permitido só fora de produção. */
 function isPrivateLanOrigin(origin) {
   return /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/i.test(
     origin || '',
@@ -20,8 +22,10 @@ function isPrivateLanOrigin(origin) {
 function isAllowedOrigin(origin) {
   if (!origin) return true;
   if (allowedOrigins.includes(origin)) return true;
-  if (isPrivateLanOrigin(origin)) return true;
-  if (process.env.NODE_ENV !== 'production') return true;
+  if (!isProduction) {
+    if (isPrivateLanOrigin(origin)) return true;
+    return true;
+  }
   return false;
 }
 

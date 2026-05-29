@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { TEXT } from '@dailyways/limits';
 import BaseNode from './BaseNode';
 import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
 import { useCollabPatch } from '../../../../collab/space/ops/SpaceCollabOpsContext.jsx';
@@ -49,6 +50,7 @@ export default function StickyNoteNode({ node, onNodePointerDown, onNodeContextM
                 <textarea
                     className="sticky-note-text"
                     value={isEditing ? editValue : text}
+                    maxLength={TEXT.whiteboardNodeText}
                     readOnly={!isEditing}
                     onChange={isEditing ? (e) => setEditValue(e.target.value) : undefined}
                     onBlur={isEditing ? handleBlur : undefined}

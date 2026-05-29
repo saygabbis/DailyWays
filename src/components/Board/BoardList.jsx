@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { TEXT } from '@dailyways/limits';
 import { useRemoteListAnim } from '../../hooks/useBoardRemoteAnim';
 import ReactDOM from 'react-dom';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
@@ -199,6 +200,7 @@ export default function BoardList({
                         <form onSubmit={handleRenameList} className="board-list-rename">
                             <input
                                 value={editTitle}
+                                maxLength={TEXT.listTitle}
                                 onChange={e => setEditTitle(e.target.value)}
                                 autoFocus
                                 onBlur={handleRenameList}
@@ -329,6 +331,7 @@ export default function BoardList({
                                 type="text"
                                 placeholder="Título da tarefa..."
                                 value={newCardTitle}
+                                maxLength={TEXT.cardTitle}
                                 onChange={e => setNewCardTitle(e.target.value)}
                                 autoFocus
                                 onBlur={() => { if (!newCardTitle.trim()) setAddingCard(false); }}

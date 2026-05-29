@@ -1,3 +1,5 @@
+import { validateCardComment } from '@dailyways/limits';
+import { resolveLimitError } from '../limits/messages.js';
 import { supabase } from './supabaseClient';
 
 export async function fetchComments(cardId) {
@@ -26,6 +28,8 @@ export async function fetchComments(cardId) {
 }
 
 export async function createComment(cardId, body, authorId) {
+  const textCheck = validateCardComment(body ?? '');
+  if (!textCheck.ok) return { success: false, error: resolveLimitError(textCheck) };
   const { data, error } = await supabase
     .from('card_comments')
     .insert({
@@ -42,6 +46,8 @@ export async function createComment(cardId, body, authorId) {
 }
 
 export async function updateComment(commentId, body) {
+  const textCheck = validateCardComment(body ?? '');
+  if (!textCheck.ok) return { success: false, error: resolveLimitError(textCheck) };
   const { data, error } = await supabase
     .from('card_comments')
     .update({ body, updated_at: new Date().toISOString() })

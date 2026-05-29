@@ -5,8 +5,16 @@ import {
   UPDATE_FIELDS,
   BOARD_ACTION_TYPES,
 } from './constants.js';
+import {
+  COLLAB_MAX_JSON_BYTES,
+  TEXT,
+  LIVE_DRAFT_MAX,
+  validateLiveDraftField,
+  validateCardTitle,
+  validateWhiteboardNodeText,
+} from '@dailyways/limits';
 
-const MAX_JSON_BYTES = 64 * 1024;
+const MAX_JSON_BYTES = COLLAB_MAX_JSON_BYTES;
 
 function jsonSize(obj) {
   try {
@@ -14,6 +22,60 @@ function jsonSize(obj) {
   } catch {
     return MAX_JSON_BYTES + 1;
   }
+}
+
+function validateBoardAction(action) {
+  if (!action?.type || !BOARD_ACTION_TYPES.has(action.type)) return 'Invalid board action';
+  const p = action.payload || {};
+
+  switch (action.type) {
+    case 'ADD_CARD':
+    case 'UPDATE_CARD': {
+      const title = p.title ?? p.updates?.title;
+      if (title != null) {
+        const r = validateCardTitle(title);
+        if (!r.ok) return 'Card title too large';
+      }
+      const desc = p.updates?.description;
+      if (desc != null && desc.length > TEXT.cardDescription) return 'Card description too large';
+      if (p.updates?.labels != null && Array.isArray(p.updates.labels) && p.updates.labels.length > 15) {
+        return 'Too many card labels';
+      }
+      break;
+    }
+    case 'ADD_LIST':
+    case 'UPDATE_LIST': {
+      const title = p.title ?? p.updates?.title;
+      if (title != null && title.length > TEXT.listTitle) return 'List title too large';
+      break;
+    }
+    case 'UPDATE_BOARD': {
+      const title = p.updates?.title;
+      if (title != null && title.length > TEXT.boardTitle) return 'Board title too large';
+      break;
+    }
+    case 'ADD_SUBTASK':
+    case 'UPDATE_SUBTASK': {
+      const title = p.title ?? p.updates?.title;
+      if (title != null && title.length > TEXT.subtaskTitle) return 'Subtask title too large';
+      break;
+    }
+    default:
+      break;
+  }
+  return null;
+}
+
+function validateNodeValue(value) {
+  if (!value?.type) return null;
+  const text = value.data?.text ?? value.data?.label;
+  if (text != null && typeof text === 'string') {
+    const r = validateWhiteboardNodeText(text);
+    if (!r.ok) return 'Node text too large';
+  }
+  const filename = value.data?.filename;
+  if (filename != null && filename.length > 255) return 'Filename too large';
+  return null;
 }
 
 export function validateOp(op) {
@@ -29,6 +91,14 @@ export function validateOp(op) {
     if (op.entity === 'node' && op.value.type && !NODE_TYPES.includes(op.value.type)) {
       return 'Invalid node type';
     }
+    if (op.entity === 'node') {
+      const err = validateNodeValue(op.value);
+      if (err) return err;
+    }
+    if (op.entity === 'comment') {
+      const msg = op.value.message ?? op.value.body;
+      if (msg != null && msg.length > TEXT.cardComment) return 'Comment too large';
+    }
     return null;
   }
 
@@ -41,8 +111,19 @@ export function validateOp(op) {
     if (op.value === undefined) return 'Update requires value';
     if (jsonSize(op.value) > MAX_JSON_BYTES) return 'Payload too large';
     if (op.entity === 'board' && op.field === 'action') {
-      const action = op.value;
-      if (!action?.type || !BOARD_ACTION_TYPES.has(action.type)) return 'Invalid board action';
+      return validateBoardAction(op.value) || null;
+    }
+    if (op.entity === 'node' && (op.field === 'data' || op.field === 'message')) {
+      const merged = typeof op.value === 'object' ? op.value : {};
+      const text = merged.text ?? merged.message;
+      if (text != null) {
+        const r = validateWhiteboardNodeText(text);
+        if (!r.ok) return 'Node text too large';
+      }
+    }
+    if (op.entity === 'comment') {
+      const msg = typeof op.value === 'string' ? op.value : op.value?.message;
+      if (msg != null && msg.length > TEXT.cardComment) return 'Comment too large';
     }
     return null;
   }
@@ -120,24 +201,22 @@ export function validatePresence(payload) {
     return 'Invalid onBoardSurface';
   }
   if (payload.hoverModalEl != null) {
-    if (typeof payload.hoverModalEl !== 'string' || payload.hoverModalEl.length > 64) {
+    if (typeof payload.hoverModalEl !== 'string' || payload.hoverModalEl.length > TEXT.hoverModalEl) {
       return 'Invalid hoverModalEl';
     }
   }
   if (payload.liveDraft != null) {
     if (typeof payload.liveDraft !== 'object') return 'Invalid liveDraft';
-    const stringKeys = ['title', 'description', 'priority', 'startDate', 'dueDate', 'recurrenceRule', 'cardColor', 'commentBody'];
-    for (const key of stringKeys) {
-      if (payload.liveDraft[key] != null && typeof payload.liveDraft[key] !== 'string') {
-        return 'Invalid liveDraft field';
-      }
-      if (typeof payload.liveDraft[key] === 'string' && payload.liveDraft[key].length > 8000) {
-        return 'liveDraft too large';
-      }
+    for (const key of Object.keys(LIVE_DRAFT_MAX)) {
+      const v = payload.liveDraft[key];
+      if (v == null) continue;
+      const r = validateLiveDraftField(key, v);
+      if (!r.ok) return 'liveDraft too large';
     }
     if (payload.liveDraft.labels != null && !Array.isArray(payload.liveDraft.labels)) {
       return 'Invalid liveDraft labels';
     }
+    if (payload.liveDraft.labels?.length > 15) return 'liveDraft labels too many';
     if (payload.liveDraft.isAllDay != null && typeof payload.liveDraft.isAllDay !== 'boolean') {
       return 'Invalid liveDraft isAllDay';
     }

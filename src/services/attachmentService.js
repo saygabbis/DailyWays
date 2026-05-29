@@ -1,3 +1,5 @@
+import { validateFile, COUNT, validateLinkUrl, validateLinkLabel } from '@dailyways/limits';
+import { resolveLimitError, LIMIT_MSG } from '../limits/messages.js';
 import { supabase } from './supabaseClient';
 
 const BUCKET = 'task-attachments';
@@ -92,8 +94,17 @@ export async function uploadAttachment(cardId, file, userId) {
   if (!cardId || !file || !userId) {
     return { success: false, error: 'Dados inválidos para upload.' };
   }
+  const fileCheck = validateFile(file, 'cardAttachment');
+  if (!fileCheck.ok) return { success: false, error: resolveLimitError(fileCheck) };
 
   try {
+    const { count, error: countErr } = await supabase
+      .from('card_attachments')
+      .select('id', { count: 'exact', head: true })
+      .eq('card_id', cardId);
+    if (!countErr && (count ?? 0) >= COUNT.attachmentsPerCard) {
+      return { success: false, error: LIMIT_MSG.attachments };
+    }
     const storagePath = createStoragePath(cardId, file.name);
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
@@ -133,6 +144,19 @@ export async function uploadAttachment(cardId, file, userId) {
 export async function createLinkAttachment(cardId, linkUrl, linkLabel, userId) {
   if (!cardId || !linkUrl || !userId) {
     return { success: false, error: 'Dados inválidos para link.' };
+  }
+  const urlCheck = validateLinkUrl(linkUrl);
+  if (!urlCheck.ok) return { success: false, error: resolveLimitError(urlCheck) };
+  if (linkLabel) {
+    const labelCheck = validateLinkLabel(linkLabel);
+    if (!labelCheck.ok) return { success: false, error: resolveLimitError(labelCheck) };
+  }
+  const { count, error: countErr } = await supabase
+    .from('card_attachments')
+    .select('id', { count: 'exact', head: true })
+    .eq('card_id', cardId);
+  if (!countErr && (count ?? 0) >= COUNT.attachmentsPerCard) {
+    return { success: false, error: LIMIT_MSG.attachments };
   }
 
   const { data, error } = await supabase

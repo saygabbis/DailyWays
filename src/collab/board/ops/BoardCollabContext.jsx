@@ -1,3 +1,5 @@
+import { validateBoardActionLimits } from '@dailyways/limits';
+import { resolveLimitError } from '../../../limits/messages.js';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../../../context/AppContext';
 import { useAuth } from '../../../context/AuthContext.jsx';
@@ -299,6 +301,13 @@ export function BoardCollabProvider({ children }) {
     if (!action?.type || !boardId) return;
     if (isBoardPrankFrozen()) return;
 
+    const board = getBoardSnapshot(boardId);
+    const limitErr = validateBoardActionLimits(board, action);
+    if (limitErr) {
+      addToast(resolveLimitError(limitErr), 'error');
+      return;
+    }
+
     const textDebounced = shouldDebounceBoardAction(action) && !options.skipHistory;
 
     if (!options.skipHistory) {
@@ -386,6 +395,7 @@ export function BoardCollabProvider({ children }) {
     getBoardSnapshot,
     flushBoardPersist,
     scheduleTextHistoryCommit,
+    addToast,
   ]);
 
   const collabDispatch = useCallback((action, explicitBoardId, options) => {

@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { validateProfileName, validateProfileBio, validateUsername } from '@dailyways/limits';
+import { resolveLimitError } from '../limits/messages.js';
 import { supabase } from '../services/supabaseClient';
 import { getAppOrigin } from '../utils/appUrl';
 import { logger } from '../utils/logger';
@@ -227,8 +229,8 @@ export function AuthProvider({ children }) {
         const { data, error } = await supabase.rpc('get_email_by_username', { u: identifier });
         if (error || !data) {
           setLoading(false);
-          setAuthError('Usuário não encontrado.');
-          return { success: false, error: 'Usuário não encontrado.' };
+          setAuthError('Credenciais inválidas.');
+          return { success: false, error: 'Credenciais inválidas.' };
         }
         email = data;
       }
@@ -405,6 +407,18 @@ export function AuthProvider({ children }) {
 
   const updateProfile = async (updates) => {
     if (!user?.id) return { success: false, error: 'Não autenticado.' };
+    if (updates.name != null) {
+      const r = validateProfileName(updates.name);
+      if (!r.ok) return { success: false, error: resolveLimitError(r) };
+    }
+    if (updates.bio != null) {
+      const r = validateProfileBio(updates.bio);
+      if (!r.ok) return { success: false, error: resolveLimitError(r) };
+    }
+    if (updates.username != null) {
+      const r = validateUsername(updates.username);
+      if (!r.ok) return { success: false, error: resolveLimitError(r) };
+    }
     const { error } = await supabase.from('profiles').update({
       ...updates,
       updated_at: new Date().toISOString(),

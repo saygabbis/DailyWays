@@ -5,6 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { useBoardCollabContext } from '../../collab/board/ops/BoardCollabContext.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { fetchBoardMembers, inviteBoardMember, updateMemberRole, removeMember, isBoardOwnerClient, sortBoardMembersOwnerFirst } from '../../services/boardService';
+import { TEXT } from '@dailyways/limits';
 import './BoardDetailsModal.css';
 
 export function RoleSelect({ value, onChange, options, className = '', disabled = false }) {
@@ -280,6 +281,7 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
                             <input
                                 type="text"
                                 value={title}
+                                maxLength={TEXT.boardTitle}
                                 onChange={e => setTitle(e.target.value)}
                                 placeholder="Nome do board"
                             />

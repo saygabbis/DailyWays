@@ -1,3 +1,5 @@
+import { validateChatMessage, validateFile } from '@dailyways/limits';
+import { resolveLimitError } from '../limits/messages.js';
 import { supabase } from './supabaseClient';
 
 const CHAT_BUCKET = 'chat-attachments';
@@ -50,6 +52,8 @@ export async function fetchChatMessages(conversationId, options = 120) {
 
 export async function sendChatMessage(conversationId, { body, messageType = 'text', attachmentUrl, attachmentMeta }) {
   if (!conversationId) return { success: false, error: 'Conversa inválida.' };
+  const textCheck = validateChatMessage(body ?? '');
+  if (!textCheck.ok) return { success: false, error: resolveLimitError(textCheck) };
   const { data, error } = await supabase.rpc('send_chat_message', {
     p_conversation_id: conversationId,
     p_body: body ?? '',
@@ -125,6 +129,8 @@ export async function toggleMessageReaction(messageId, emoji) {
 
 export async function uploadChatImage(conversationId, file) {
   if (!conversationId || !file) return { url: null, error: 'Arquivo inválido.' };
+  const fileCheck = validateFile(file, 'chatImage');
+  if (!fileCheck.ok) return { url: null, error: resolveLimitError(fileCheck) };
   const ext = file.name?.split('.').pop() || 'jpg';
   const path = `${conversationId}/${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase.storage.from(CHAT_BUCKET).upload(path, file, {

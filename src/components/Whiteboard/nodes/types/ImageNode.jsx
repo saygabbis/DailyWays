@@ -1,8 +1,9 @@
 import React from 'react';
 import BaseNode from './BaseNode';
+import { useSpaceAssetUrl } from '../../../../hooks/useSpaceAssetUrl';
 
 export default function ImageNode({ node, onNodePointerDown, onNodeContextMenu }) {
-    const url = node.data?.url ?? '';
+    const url = useSpaceAssetUrl(node);
 
     return (
         <BaseNode node={node} onNodePointerDown={onNodePointerDown} onNodeContextMenu={onNodeContextMenu}>

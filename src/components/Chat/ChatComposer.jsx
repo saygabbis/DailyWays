@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Smile, SendHorizonal, X } from 'lucide-react';
+import { TEXT } from '@dailyways/limits';
 
 const EMOJI_QUICK = ['😀', '😂', '❤️', '👍', '🙏', '🔥', '😍', '🎉', '😢', '🤔', '👏', '💯'];
 const EMOJI_ALL = [
@@ -118,6 +119,7 @@ export default function ChatComposer({
           rows={1}
           className="chat-composer-input"
           value={draft}
+          maxLength={TEXT.chatMessage}
           placeholder={placeholder}
           disabled={disabled}
           onChange={(e) => onDraftChange(e.target.value)}

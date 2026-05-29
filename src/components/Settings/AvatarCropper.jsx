@@ -1,4 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
+import { validateFile, formatMaxFileSize } from '@dailyways/limits';
+import { resolveLimitError } from '../../limits/messages.js';
 import './AvatarCropper.css';
 
 /**
@@ -9,6 +11,7 @@ import './AvatarCropper.css';
 export default function AvatarCropper({ onApply, onClose, t = {} }) {
     const [imgSrc, setImgSrc] = useState(null);
     const [imgObj, setImgObj] = useState(null);
+    const [fileError, setFileError] = useState('');
     const [dragging, setDragging] = useState(false);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
     const [scale, setScale] = useState(1);
@@ -65,6 +68,13 @@ export default function AvatarCropper({ onApply, onClose, t = {} }) {
     const handleFile = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        const check = validateFile(file, 'avatar');
+        if (!check.ok) {
+            setFileError(resolveLimitError(check));
+            e.target.value = '';
+            return;
+        }
+        setFileError('');
         const reader = new FileReader();
         reader.onload = (ev) => {
             setImgSrc(ev.target.result);
@@ -147,7 +157,8 @@ export default function AvatarCropper({ onApply, onClose, t = {} }) {
                     <div className="cropper-upload-area" onClick={() => fileRef.current?.click()}>
                         <div className="cropper-upload-icon">📷</div>
                         <p>{t.cropUploadClick || 'Clique para selecionar uma imagem'}</p>
-                        <span>{t.cropUploadFormats || 'JPG, PNG, WebP · máx. 5MB'}</span>
+                        <span>{t.cropUploadFormats || `JPG, PNG, WebP · máx. ${formatMaxFileSize('avatar')}`}</span>
+                        {fileError && <p className="cropper-error">{fileError}</p>}
                         <input
                             ref={fileRef}
                             type="file"

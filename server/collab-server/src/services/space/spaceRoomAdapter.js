@@ -30,9 +30,9 @@ export function createSpaceRoomState() {
   };
 }
 
-export async function loadSpaceRoom(roomId, { parseSpaceIdFromRoom }) {
+export async function loadSpaceRoom(roomId, { parseSpaceIdFromRoom, accessToken }) {
   const spaceId = parseSpaceIdFromRoom(roomId);
-  const data = spaceId ? await loadRoomFromDb(spaceId) : {};
+  const data = spaceId && accessToken ? await loadRoomFromDb(spaceId, accessToken) : {};
   return { ...createSpaceRoomState(), ...data };
 }
 

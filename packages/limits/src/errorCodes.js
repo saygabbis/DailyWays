@@ -1,0 +1,10 @@
+/** Códigos estáveis — mensagens ficam no frontend (src/limits/messages.js). */
+export const LIMIT_ERROR = {
+  TEXT_TOO_LONG: 'TEXT_TOO_LONG',
+  USERNAME_LENGTH: 'USERNAME_LENGTH',
+  FILE_TOO_LARGE: 'FILE_TOO_LARGE',
+  FILE_TYPE_NOT_ALLOWED: 'FILE_TYPE_NOT_ALLOWED',
+  INVALID_FILE: 'INVALID_FILE',
+  INVALID_CONFIG: 'INVALID_CONFIG',
+  COUNT_LIMIT: 'COUNT_LIMIT',
+};

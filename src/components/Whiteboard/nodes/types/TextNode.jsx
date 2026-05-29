@@ -1,5 +1,6 @@
 import React from 'react';
 import BaseNode from './BaseNode';
+import { TEXT } from '@dailyways/limits';
 import { useEditableNodeField } from '../../interaction/hooks/useEditableNodeField';
 import { getTextStyleFromNode, textStyleToCss } from '../../shared/textStyle';
 
@@ -31,6 +32,7 @@ export default function TextNode({ node, onNodePointerDown, onNodeContextMenu })
                     <textarea
                         className="text-node-edit"
                         value={editValue}
+                        maxLength={TEXT.whiteboardNodeText}
                         onChange={(e) => setEditValue(e.target.value)}
                         onBlur={handleBlur}
                         autoFocus

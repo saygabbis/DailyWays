@@ -6,6 +6,7 @@ import BoardList from './BoardList';
 import ListDetailsModal from './ListDetailsModal';
 import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
 import { Plus, Loader2, X, GripVertical, Share2 } from 'lucide-react';
+import { TEXT } from '@dailyways/limits';
 import { fetchBoardMembers, sortBoardMembersOwnerFirst } from '../../services/boardService';
 import { useMergedBoardEditors } from '../../hooks/useMergedBoardEditors';
 import BoardCollabStatusBanner from '../../collab/board/ui/BoardCollabStatusBanner.jsx';
@@ -1016,6 +1017,7 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
                                                             type="text"
                                                             placeholder="Nome da lista..."
                                                             value={newListTitle}
+                                                            maxLength={TEXT.listTitle}
                                                             onChange={e => setNewListTitle(e.target.value)}
                                                             autoFocus
                                                             onBlur={() => { if (!newListTitle.trim()) setAddingList(false); }}

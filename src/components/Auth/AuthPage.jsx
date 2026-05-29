@@ -7,6 +7,7 @@ import { ENABLE_MICROSOFT_LOGIN } from '../../config';
 import { Lock, Mail, User, ArrowRight, Chrome, Command, Github, Shield, Eye, EyeOff, X } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
+import { TEXT } from '@dailyways/limits';
 import logoWhite from '../../assets/Logo - Branco.png';
 import logoBlack from '../../assets/Logo - Preto.png';
 import './Auth.css';
@@ -219,7 +220,7 @@ export default function AuthPage() {
       let email = raw;
       if (!raw.includes('@')) {
         const { data, error: rpcErr } = await supabase.rpc('get_email_by_username', { u: raw });
-        if (rpcErr || !data) throw new Error('Usuário não encontrado para recuperação de senha.');
+        if (rpcErr || !data) throw new Error('Se o usuário existir, enviaremos um link por e-mail.');
         email = data;
       }
 
@@ -462,6 +463,7 @@ export default function AuthPage() {
                       type="text"
                       placeholder="Username (único)"
                       value={username}
+                      maxLength={TEXT.usernameMax}
                       onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
                       autoComplete="username"
                       aria-invalid={!!usernameError}

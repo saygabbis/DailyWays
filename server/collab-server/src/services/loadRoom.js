@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../db/supabase.js';
+import { createUserScopedClient } from '../db/supabase.js';
 
 function rowToNode(row) {
   if (!row) return null;
@@ -50,16 +50,18 @@ function rowToComment(row) {
   };
 }
 
-export async function loadRoomFromDb(spaceId) {
-  if (!supabaseAdmin) {
+/** Carga inicial do space com RLS do JWT (após canAccessSpace no JOIN). */
+export async function loadRoomFromDb(spaceId, accessToken) {
+  const db = createUserScopedClient(accessToken);
+  if (!db || !spaceId) {
     return { nodes: [], connectors: [], comments: [], revision: 0 };
   }
 
   const [nodesRes, connRes, commentsRes] = await Promise.all([
-    supabaseAdmin.from('space_nodes').select('*').eq('space_id', spaceId)
+    db.from('space_nodes').select('*').eq('space_id', spaceId)
       .order('z_index', { ascending: true }).order('created_at', { ascending: true }),
-    supabaseAdmin.from('space_connectors').select('*').eq('space_id', spaceId),
-    supabaseAdmin.from('space_comments').select('*').eq('space_id', spaceId).is('parent_id', null)
+    db.from('space_connectors').select('*').eq('space_id', spaceId),
+    db.from('space_comments').select('*').eq('space_id', spaceId).is('parent_id', null)
       .order('created_at', { ascending: false }),
   ]);
 
