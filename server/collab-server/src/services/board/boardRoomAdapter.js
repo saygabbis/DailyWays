@@ -16,6 +16,8 @@ export function createBoardRoomState() {
     flushRequested: false,
     flushErrorCount: 0,
     lastActivity: Date.now(),
+    flushAccessToken: null,
+    flushUserId: null,
   };
 }
 

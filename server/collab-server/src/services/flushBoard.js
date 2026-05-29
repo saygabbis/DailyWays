@@ -1,12 +1,17 @@
-import { supabaseAdmin } from '../db/supabase.js';
+import { getUserDbClient } from '../db/supabase.js';
 
 export async function flushBoard(room) {
-  if (!supabaseAdmin || !room?.board || !room.dirty) return;
-  const board = room.board;
-  const userId = board.ownerId;
-  if (!userId) return;
+  if (!room?.board || !room.dirty) return;
 
-  const { data, error } = await supabaseAdmin.rpc('upsert_board_full', {
+  const accessToken = room.flushAccessToken;
+  const db = getUserDbClient(accessToken);
+  if (!db) {
+    console.warn('[collab-server] flushBoard skipped: missing user access token (RLS)');
+    return;
+  }
+
+  const board = room.board;
+  const { data, error } = await db.rpc('upsert_board_full', {
     p_board: {
       id: board.id,
       title: board.title ?? 'Novo Board',
@@ -56,5 +61,11 @@ export async function flushBoard(room) {
     console.error('[collab-server] flushBoard RPC error', error);
     throw error;
   }
+
+  const parsed = typeof data === 'object' && data !== null ? data : {};
+  if (parsed.success === false) {
+    throw new Error(parsed.error || 'upsert_board_full rejected');
+  }
+
   room.dirty = false;
 }

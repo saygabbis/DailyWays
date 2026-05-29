@@ -1,10 +1,21 @@
 import { applyFieldToEntity } from '@dailyways/collab-protocol';
 
-export function applyOpToRoom(room, op) {
+function stampCreateValue(entity, value, userId) {
+  if (!userId || !value || typeof value !== 'object') return value;
+  if (entity === 'comment') {
+    return { ...value, authorId: userId };
+  }
+  if (entity === 'node') {
+    return { ...value, createdBy: userId };
+  }
+  return value;
+}
+
+export function applyOpToRoom(room, op, { userId } = {}) {
   const { type, entity, id, field, value } = op;
 
   if (type === 'create') {
-    const item = { ...value };
+    const item = stampCreateValue(entity, { ...value }, userId);
     if (entity === 'node') {
       if (room.nodes.some((n) => n.id === item.id)) return { ok: false, reason: 'Node already exists' };
       room.nodes.push(item);
@@ -50,7 +61,11 @@ export function applyOpToRoom(room, op) {
     if (entity === 'node') {
       const idx = room.nodes.findIndex((n) => n.id === id);
       if (idx < 0) return { ok: false, reason: 'Node not found' };
-      room.nodes[idx] = applyFieldToEntity(room.nodes[idx], field, value);
+      let next = applyFieldToEntity(room.nodes[idx], field, value);
+      if (userId && field === 'data' && next?.data) {
+        next = { ...next, createdBy: room.nodes[idx].createdBy ?? userId };
+      }
+      room.nodes[idx] = next;
       room.dirty.nodes.add(id);
     } else if (entity === 'connector') {
       const idx = room.connectors.findIndex((c) => c.id === id);
@@ -60,7 +75,10 @@ export function applyOpToRoom(room, op) {
     } else if (entity === 'comment') {
       const idx = room.comments.findIndex((c) => c.id === id);
       if (idx < 0) return { ok: false, reason: 'Comment not found' };
-      room.comments[idx] = applyFieldToEntity(room.comments[idx], field, value);
+      const patched = applyFieldToEntity(room.comments[idx], field, value);
+      room.comments[idx] = userId
+        ? { ...patched, authorId: room.comments[idx].authorId ?? userId }
+        : patched;
       room.dirty.comments.add(id);
     } else {
       return { ok: false, reason: 'Unknown entity' };

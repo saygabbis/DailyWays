@@ -1,4 +1,5 @@
 import { createOpIdTracker } from './opIdTracker.js';
+import { noteRoomFlushContext } from './roomFlushContext.js';
 import {
   applyRoomOp,
   flushRoomState,
@@ -169,8 +170,11 @@ export class RoomManager {
     return false;
   }
 
-  async applyOp(roomId, op) {
-    const room = await this.getOrLoad(roomId);
+  async applyOp(roomId, op, { accessToken, userId } = {}) {
+    const room = await this.getOrLoad(roomId, { accessToken });
+    if (accessToken || userId) {
+      noteRoomFlushContext(room, { accessToken, userId });
+    }
     // Bug#4 fix: usa FIFO em vez de Set simples para nunca apagar deduplicação recente
     if (!room.seenOpIds) room.seenOpIds = createOpIdTracker(5000);
     const seen = room.seenOpIds;
@@ -179,7 +183,7 @@ export class RoomManager {
     }
     seen.add(op.opId);
 
-    const result = applyRoomOp(roomId, room, op);
+    const result = applyRoomOp(roomId, room, op, { userId });
 
     if (result.ok) {
       if (room.kind === 'board' && this.shouldFlushBoardOpImmediately(op)) {

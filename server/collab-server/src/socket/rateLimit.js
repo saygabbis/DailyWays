@@ -3,10 +3,12 @@ const GC_INTERVAL_MS = 60_000;
 
 export const MAX_OPS_PER_SEC = Number(process.env.COLLAB_MAX_OPS_PER_SEC || 120);
 export const MAX_POSITION_OPS_PER_SEC = Number(process.env.COLLAB_MAX_POSITION_OPS_PER_SEC || 300);
+export const MAX_OPS_PER_IP_PER_SEC = Number(process.env.COLLAB_MAX_OPS_PER_IP_PER_SEC || 240);
 export const MAX_CONNECTIONS_PER_USER = Number(process.env.COLLAB_MAX_CONNECTIONS_PER_USER || 10);
 export const MAX_AUTH_FAILS_PER_IP_PER_MIN = Number(process.env.COLLAB_MAX_AUTH_FAILS_PER_IP || 60);
 
 const userOpWindows = new Map();
+const ipOpWindows = new Map();
 const userConnections = new Map();
 const ipAuthFails = new Map();
 
@@ -14,6 +16,9 @@ function gcStale() {
   const now = Date.now();
   for (const [key, entry] of userOpWindows) {
     if (now - entry.windowStart > WINDOW_MS * 2) userOpWindows.delete(key);
+  }
+  for (const [key, entry] of ipOpWindows) {
+    if (now - entry.windowStart > WINDOW_MS * 2) ipOpWindows.delete(key);
   }
   for (const [ip, entry] of ipAuthFails) {
     if (now - entry.windowStart > 60_000) ipAuthFails.delete(ip);
@@ -23,7 +28,7 @@ function gcStale() {
 const gcTimer = setInterval(gcStale, GC_INTERVAL_MS);
 if (gcTimer.unref) gcTimer.unref();
 
-function getClientIp(handshake) {
+export function getClientIp(handshake) {
   const forwarded = handshake?.headers?.['x-forwarded-for'];
   if (typeof forwarded === 'string' && forwarded.length) {
     return forwarded.split(',')[0].trim();
@@ -60,24 +65,28 @@ export function releaseUserConnection(userId) {
   else userConnections.set(userId, count - 1);
 }
 
-export function checkOpRateLimit(userId, isPositionOp) {
-  if (!userId) return { ok: false, reason: 'Rate limit' };
+function bumpWindow(map, key, isPositionOp) {
   const now = Date.now();
-  let entry = userOpWindows.get(userId);
+  let entry = map.get(key);
   if (!entry || now - entry.windowStart > WINDOW_MS) {
     entry = { windowStart: now, opCount: 0, positionOpCount: 0 };
-    userOpWindows.set(userId, entry);
+    map.set(key, entry);
   }
   if (isPositionOp) {
     entry.positionOpCount += 1;
-    if (entry.positionOpCount > MAX_POSITION_OPS_PER_SEC) {
-      return { ok: false, reason: 'Rate limit' };
-    }
-  } else {
-    entry.opCount += 1;
-    if (entry.opCount > MAX_OPS_PER_SEC) {
-      return { ok: false, reason: 'Rate limit' };
-    }
+    return entry.positionOpCount <= MAX_POSITION_OPS_PER_SEC;
+  }
+  entry.opCount += 1;
+  return entry.opCount <= MAX_OPS_PER_SEC;
+}
+
+export function checkOpRateLimit(userId, isPositionOp, clientIp) {
+  if (!userId) return { ok: false, reason: 'Rate limit' };
+  if (!bumpWindow(userOpWindows, userId, isPositionOp)) {
+    return { ok: false, reason: 'Rate limit' };
+  }
+  if (clientIp && !bumpWindow(ipOpWindows, clientIp, isPositionOp)) {
+    return { ok: false, reason: 'Rate limit' };
   }
   return { ok: true };
 }

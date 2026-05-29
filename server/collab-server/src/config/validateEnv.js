@@ -22,6 +22,10 @@ export function validateCollabEnv() {
     );
   }
 
+  if (process.env.NODE_ENV === 'production' && process.env.COLLAB_DEV_PRANK === '1') {
+    issues.push('COLLAB_DEV_PRANK=1 em produção — desative salvo necessidade explícita');
+  }
+
   if (issues.length === 0) return;
 
   const banner = [

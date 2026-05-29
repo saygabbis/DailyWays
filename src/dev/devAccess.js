@@ -61,6 +61,7 @@ export function isDevUser(user, profile, config = DEFAULT_DEV_CONFIG) {
 
   for (const entry of extras) {
     if (!entry?.value) continue;
+    if (entry.kind === 'userId' && user?.id === entry.value) return true;
     if (entry.kind === 'email' && email === entry.value) return true;
     if (entry.kind === 'username' && username === entry.value) return true;
   }

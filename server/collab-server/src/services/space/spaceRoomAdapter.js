@@ -27,6 +27,8 @@ export function createSpaceRoomState() {
     flushRequested: false,
     flushErrorCount: 0,
     lastActivity: Date.now(),
+    flushAccessToken: null,
+    flushUserId: null,
   };
 }
 
@@ -36,8 +38,8 @@ export async function loadSpaceRoom(roomId, { parseSpaceIdFromRoom, accessToken 
   return { ...createSpaceRoomState(), ...data };
 }
 
-export function applySpaceRoomOp(room, op) {
-  return applyOpToRoom(room, op);
+export function applySpaceRoomOp(room, op, ctx = {}) {
+  return applyOpToRoom(room, op, { userId: ctx.userId });
 }
 
 export async function flushSpaceRoom(room, { parseSpaceIdFromRoom, roomId }) {

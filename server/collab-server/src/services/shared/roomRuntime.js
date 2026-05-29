@@ -25,7 +25,7 @@ const roomRuntimes = {
     getState: getBoardRoomState,
   },
   space: {
-    load: (roomId) => loadSpaceRoom(roomId, runtimeContext),
+    load: (roomId, opts = {}) => loadSpaceRoom(roomId, { ...runtimeContext, ...opts }),
     applyOp: applySpaceRoomOp,
     flush: (roomId, room) => flushSpaceRoom(room, { ...runtimeContext, roomId }),
     hasPendingFlush: hasSpacePendingFlush,
@@ -47,8 +47,8 @@ export async function loadRoomState(roomId, options = {}) {
   return runtime.load(roomId, options);
 }
 
-export function applyRoomOp(roomId, room, op) {
-  return getRoomRuntime(roomId, room).applyOp(room, op);
+export function applyRoomOp(roomId, room, op, ctx = {}) {
+  return getRoomRuntime(roomId, room).applyOp(room, op, ctx);
 }
 
 export async function flushRoomState(roomId, room) {

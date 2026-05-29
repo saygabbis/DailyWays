@@ -1,6 +1,6 @@
-import { supabaseAdmin } from './supabase.js';
+import { getUserDbClient } from './supabase.js';
 
-function nodeToRow(node, spaceId) {
+function nodeToRow(node, spaceId, actingUserId) {
   return {
     id: node.id,
     space_id: spaceId,
@@ -15,7 +15,7 @@ function nodeToRow(node, spaceId) {
     style_json: node.style ?? {},
     parent_id: node.parentId ?? null,
     z_index: node.zIndex ?? 0,
-    created_by: node.createdBy ?? null,
+    created_by: actingUserId ?? node.createdBy ?? null,
   };
 }
 
@@ -30,14 +30,14 @@ function connectorToRow(conn, spaceId) {
   };
 }
 
-function commentToRow(comment, spaceId) {
+function commentToRow(comment, spaceId, actingUserId) {
   return {
     id: comment.id,
     space_id: spaceId,
     node_id: comment.nodeId ?? null,
     x: comment.x ?? null,
     y: comment.y ?? null,
-    author_id: comment.authorId,
+    author_id: actingUserId ?? comment.authorId,
     message: comment.message,
     parent_id: comment.parentId ?? null,
   };
@@ -51,8 +51,13 @@ function throwIfDbError(result, context) {
 }
 
 export async function flushRoom(room, spaceId) {
-  if (!supabaseAdmin) return;
+  const accessToken = room?.flushAccessToken;
+  const db = getUserDbClient(accessToken);
+  if (!db) {
+    throw new Error('[flushRoom] missing user access token (RLS)');
+  }
 
+  const actingUserId = room.flushUserId ?? null;
   const { dirty, deleted, nodes, connectors, comments } = room;
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
   const connectorsById = new Map(connectors.map((conn) => [conn.id, conn]));
@@ -61,7 +66,7 @@ export async function flushRoom(room, spaceId) {
   const deletedNodeIds = [...deleted.nodes];
   if (deletedNodeIds.length > 0) {
     throwIfDbError(
-      await supabaseAdmin.from('space_nodes').delete().in('id', deletedNodeIds),
+      await db.from('space_nodes').delete().in('id', deletedNodeIds),
       `delete ${deletedNodeIds.length} nodes`,
     );
   }
@@ -70,7 +75,7 @@ export async function flushRoom(room, spaceId) {
   const deletedConnectorIds = [...deleted.connectors];
   if (deletedConnectorIds.length > 0) {
     throwIfDbError(
-      await supabaseAdmin.from('space_connectors').delete().in('id', deletedConnectorIds),
+      await db.from('space_connectors').delete().in('id', deletedConnectorIds),
       `delete ${deletedConnectorIds.length} connectors`,
     );
   }
@@ -79,7 +84,7 @@ export async function flushRoom(room, spaceId) {
   const deletedCommentIds = [...deleted.comments];
   if (deletedCommentIds.length > 0) {
     throwIfDbError(
-      await supabaseAdmin.from('space_comments').delete().in('id', deletedCommentIds),
+      await db.from('space_comments').delete().in('id', deletedCommentIds),
       `delete ${deletedCommentIds.length} comments`,
     );
   }
@@ -89,11 +94,11 @@ export async function flushRoom(room, spaceId) {
   for (const id of dirty.nodes) {
     const node = nodesById.get(id);
     if (!node) continue;
-    nodeRows.push(nodeToRow(node, spaceId));
+    nodeRows.push(nodeToRow(node, spaceId, actingUserId));
   }
   if (nodeRows.length > 0) {
     throwIfDbError(
-      await supabaseAdmin.from('space_nodes').upsert(nodeRows, { onConflict: 'id' }),
+      await db.from('space_nodes').upsert(nodeRows, { onConflict: 'id' }),
       `upsert ${nodeRows.length} nodes`,
     );
   }
@@ -107,7 +112,7 @@ export async function flushRoom(room, spaceId) {
   }
   if (connectorRows.length > 0) {
     throwIfDbError(
-      await supabaseAdmin.from('space_connectors').upsert(connectorRows, { onConflict: 'id' }),
+      await db.from('space_connectors').upsert(connectorRows, { onConflict: 'id' }),
       `upsert ${connectorRows.length} connectors`,
     );
   }
@@ -117,11 +122,11 @@ export async function flushRoom(room, spaceId) {
   for (const id of dirty.comments) {
     const comment = commentsById.get(id);
     if (!comment) continue;
-    commentRows.push(commentToRow(comment, spaceId));
+    commentRows.push(commentToRow(comment, spaceId, actingUserId));
   }
   if (commentRows.length > 0) {
     throwIfDbError(
-      await supabaseAdmin.from('space_comments').upsert(commentRows, { onConflict: 'id' }),
+      await db.from('space_comments').upsert(commentRows, { onConflict: 'id' }),
       `upsert ${commentRows.length} comments`,
     );
   }

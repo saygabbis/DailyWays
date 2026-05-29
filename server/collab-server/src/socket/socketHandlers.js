@@ -19,7 +19,9 @@ import {
   checkAuthFailRateLimit,
   registerUserConnection,
   releaseUserConnection,
+  getClientIp,
 } from './rateLimit.js';
+import { noteRoomFlushContext } from '../services/roomFlushContext.js';
 
 const POSITION_FIELDS = new Set(['x', 'y']);
 const PRESENCE_LEAVE_GRACE_MS = 500;
@@ -177,6 +179,7 @@ export function registerSocketHandlers(io) {
   io.on('connection', (socket) => {
     socket.data.roomId = null;
     socket.data.canWrite = false;
+    socket.data.clientIp = getClientIp(socket.handshake);
 
     if (isDevPrankHandlerEnabled()) {
       registerDevPrankHandler(io, socket);
@@ -250,6 +253,12 @@ export function registerSocketHandlers(io) {
 
         socket.data.roomId = roomId;
         socket.data.canWrite = access.canWrite;
+        if (access.canWrite) {
+          noteRoomFlushContext(room, {
+            accessToken: socket.data.accessToken,
+            userId: socket.data.userId,
+          });
+        }
         socket.join(roomId);
         if (!alreadyInRoom) {
           roomManager.clientJoined(roomId);
@@ -304,7 +313,7 @@ export function registerSocketHandlers(io) {
         return;
       }
       const isPositionOp = op?.entity === 'node' && POSITION_FIELDS.has(op?.field);
-      const rate = checkOpRateLimit(socket.data.userId, isPositionOp);
+      const rate = checkOpRateLimit(socket.data.userId, isPositionOp, socket.data.clientIp);
       if (!rate.ok) {
         socket.emit(SERVER_EVENTS.REJECTED, { opId: op?.opId, reason: rate.reason });
         ack?.({ ok: false, error: rate.reason });
@@ -316,7 +325,10 @@ export function registerSocketHandlers(io) {
         ack?.({ ok: false, error: err });
         return;
       }
-      const result = await roomManager.applyOp(roomId, op);
+      const result = await roomManager.applyOp(roomId, op, {
+        accessToken: socket.data.accessToken,
+        userId: socket.data.userId,
+      });
       if (!result.ok) {
         socket.emit(SERVER_EVENTS.REJECTED, { opId: op.opId, reason: result.reason });
         ack?.({ ok: false, error: result.reason });

@@ -238,9 +238,7 @@ export function AuthProvider({ children }) {
       if (error) {
         const msg = error.message?.includes('Email not confirmed')
           ? 'Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada.'
-          : error.message?.includes('Invalid login')
-            ? 'E-mail ou senha incorretos.'
-            : error.message || 'Erro ao entrar.';
+          : 'Credenciais inválidas.';
         setLoading(false);
         setAuthError(msg);
         return { success: false, error: msg };
