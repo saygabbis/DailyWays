@@ -52,6 +52,7 @@ export default function BoardCard({
     const isCompleted = card.completed || false;
 
     const selectedCardIds = useBoardSelectionStore((s) => s.selectedCardIds);
+    const marqueePreviewCardIds = useBoardSelectionStore((s) => s.marqueePreviewCardIds);
     const toggleCard = useBoardSelectionStore((s) => s.toggleCard);
     const selectRangeInList = useBoardSelectionStore((s) => s.selectRangeInList);
     const clearSelection = useBoardSelectionStore((s) => s.clearSelection);
@@ -59,6 +60,7 @@ export default function BoardCard({
     const setLongPressPending = useBoardSelectionStore((s) => s.setLongPressPending);
 
     const isSelected = selectedCardIds.includes(card.id);
+    const isMarqueePreview = marqueePreviewCardIds.includes(card.id);
     const selectionCount = selectedCardIds.length;
     const isBulkContext = isSelected && selectionCount > 1;
     const isLongPressPending = longPressPendingCardId === card.id;
@@ -307,7 +309,7 @@ export default function BoardCard({
                 allDone ? 'board-card-all-subtasks-done' : '',
                 isBeingEdited ? 'board-card-presence-active' : '',
                 isRemoteHover ? 'board-card-remote-hover' : '',
-                isSelected ? 'board-card--selected' : '',
+                isSelected || isMarqueePreview ? 'board-card--selected' : '',
                 isLongPressPending ? 'board-card--long-press-pending' : '',
                 remoteSelectionPeer ? 'board-card--remote-selected' : '',
             ].filter(Boolean).join(' ')}

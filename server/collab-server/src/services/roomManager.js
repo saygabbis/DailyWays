@@ -24,7 +24,8 @@ function recordFlushError(room, roomId, err) {
       err,
     );
   } else {
-    console.error('[collab-server] flush error', roomId, err);
+    const detail = err?.message || String(err);
+    console.error('[collab-server] flush error', roomId, detail);
   }
 }
 
@@ -120,6 +121,16 @@ export class RoomManager {
     }
 
     if (!force && !hasPendingFlush(roomId, room)) return;
+
+    if (!room.flushAccessToken) {
+      if (hasPendingFlush(roomId, room)) {
+        console.warn(
+          '[collab-server] flush adiado: sem token de editor na sala',
+          roomId,
+        );
+      }
+      return;
+    }
 
     room.flushInFlight = true;
     try {

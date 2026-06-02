@@ -4,6 +4,7 @@ import { resolveLimitError } from '../../../limits/messages.js';
 import { useToast } from '../../../context/ToastContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useViewport } from '../interaction/hooks/useViewport';
+import { WhiteboardViewportProvider } from '../interaction/viewport/WhiteboardViewportContext.jsx';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 import { useWhiteboardSelectionStore } from '../../../stores/whiteboardSelectionStore';
 import { useWhiteboardDocumentStore } from '../../../stores/whiteboardDocumentStore';
@@ -33,14 +34,24 @@ import { useCollabPatch } from '../../../collab/space/ops/SpaceCollabOpsContext.
 import { useCollabPresence } from '../../../collab/board/presence/useCollabPresence.js';
 import SpaceRemoteDragLayer from '../../../collab/space/ui/SpaceRemoteDragLayer.jsx';
 import { screenToWorldWithContainer, worldToScreenWithContainer, rectIntersects, findContainerAt } from '../interaction/viewport/viewportUtils';
+import { IMAGE_RESIZE_MIN_WORLD } from '../interaction/viewport/viewportLimits.js';
+import {
+    getZoomAwareCreateDims,
+    getZoomAwareMinCreateSize,
+} from '../interaction/viewport/viewportCreation.js';
 import { computeResizeBounds } from '../interaction/transform/resizeBounds';
 import { computeSkewResizeBounds } from '../interaction/transform/resizeSkew';
+import {
+    buildImageResizeModifiers,
+    getImageResizeStartMode,
+    mergeImageObjectFitPatch,
+    shouldUseSkewResize,
+} from '../interaction/transform/imageResize';
 import { worldBoxFromAnchorWithModifiers } from '../interaction/transform/createDragBounds';
 import NodeLayer from './NodeLayer';
-import SelectionTransformOverlay from './overlays/SelectionTransformOverlay';
+import TransformHandlesLayer from './overlays/TransformHandlesLayer';
 import ConnectorLayer from './ConnectorLayer';
 import SelectionManager from './overlays/SelectionManager';
-import ResizeHandles from './overlays/ResizeHandles';
 import RulersOverlay from './overlays/RulersOverlay';
 import RulerGuidesOverlay from './overlays/RulerGuidesOverlay';
 import { useRulerGuideInteraction } from '../interaction/hooks/useRulerGuideInteraction';
@@ -91,10 +102,11 @@ import {
 import { getSelectionWorldBounds } from '../core/align/whiteboardAlign';
 import { contrastingTextColor } from '../../../utils/contrastingTextColor';
 import { recordNodesMutation } from '../core/history/whiteboardHistory';
+import ViewportControlsBar from '../panels/ViewportControlsBar';
+import WhiteboardBottomChrome from '../panels/WhiteboardBottomChrome';
 import LeftToolbar from '../panels/LeftToolbar';
 import DraggablePanel from '../panels/DraggablePanel';
 import WhiteboardContextMenu from '../panels/WhiteboardContextMenu';
-import { Grid3X3, ZoomIn, ZoomOut, Ruler, Magnet, HelpCircle, Focus, Crosshair } from 'lucide-react';
 import { uuidv4 } from '../../../utils/uuid';
 import { applyPostCreateActions } from '../core/creation/postCreateActions';
 import {
@@ -148,7 +160,16 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     const lastPointerClientRef = useRef(null);
     const initialPan = { x: space?.panX ?? 0, y: space?.panY ?? 0 };
     const initialZoom = space?.zoom ?? 1;
-    const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+    const [isMobile, setIsMobile] = useState(
+        () => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
+    );
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 768px)');
+        const onChange = () => setIsMobile(mq.matches);
+        onChange();
+        mq.addEventListener('change', onChange);
+        return () => mq.removeEventListener('change', onChange);
+    }, []);
 
     const { user } = useAuth();
     const { addToast } = useToast();
@@ -251,7 +272,15 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             Object.assign(payload.data, extraData.data || {}, { pageId });
             if (extraData.style) Object.assign(payload.style, extraData.style);
             if (dims?.width != null) payload.width = Math.max(CREATE_MIN_SIZE, dims.width);
+            else {
+                const z = viewportRef.current?.zoom ?? useWhiteboardSelectionStore.getState().viewport?.zoom ?? 1;
+                payload.width = getZoomAwareCreateDims(defaultKey, z).width;
+            }
             if (dims?.height != null) payload.height = Math.max(CREATE_MIN_SIZE, dims.height);
+            else {
+                const z = viewportRef.current?.zoom ?? useWhiteboardSelectionStore.getState().viewport?.zoom ?? 1;
+                payload.height = getZoomAwareCreateDims(defaultKey, z).height;
+            }
             const variantPayload = applyToolVariantToPayload(type, payload, extraData.variantId);
             Object.assign(payload, variantPayload);
             if (variantPayload.data) {
@@ -299,8 +328,9 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
 
     const applyCreateDragBox = useCallback(
         async (drag, currentWorld, modifiers = {}) => {
+            const zoom = viewportRef.current?.zoom ?? 1;
             const box = worldBoxFromAnchorWithModifiers(drag.anchorWorld, currentWorld, {
-                minSize: CREATE_MIN_SIZE,
+                minSize: getZoomAwareMinCreateSize(zoom),
                 shiftKey: modifiers.shiftKey,
                 altKey: modifiers.altKey,
                 aspectRatio: drag.aspectRatio ?? 1,
@@ -352,6 +382,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             if (!drag?.anchorWorld || !p || !rect || !viewportRef.current) return;
             const currentWorld = screenToWorldWithContainer(p.x, p.y, rect, viewportRef.current);
             const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey };
+            const zoom = viewportRef.current?.zoom ?? 1;
             setCreatePreview((prev) =>
                 prev
                     ? {
@@ -359,6 +390,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                           currentWorld,
                           shiftKey: modifiers.shiftKey,
                           altKey: modifiers.altKey,
+                          minSize: getZoomAwareMinCreateSize(zoom),
                       }
                     : null
             );
@@ -407,7 +439,14 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     const center = getViewportCenterWorld();
                     placement = { x: center.x, y: center.y, anchor: 'center' };
                 }
-                const payload = await buildImageNodePayload(file, result.url, placement);
+                const zoom = viewportRef.current?.zoom ?? 1;
+                const payload = await buildImageNodePayload(
+                    file,
+                    result.storagePath,
+                    placement,
+                    null,
+                    zoom
+                );
                 if (collabConnected) {
                     collabCreateNode({ ...payload, createdBy: user?.id ?? null });
                 } else {
@@ -442,7 +481,14 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 }
                 const isImage = file.type?.startsWith('image/');
                 if (isImage) {
-                    const payload = await buildImageNodePayload(file, result.url, placement);
+                    const zoom = viewportRef.current?.zoom ?? 1;
+                    const payload = await buildImageNodePayload(
+                        file,
+                        result.storagePath,
+                        placement,
+                        null,
+                        zoom
+                    );
                     if (collabConnected) {
                         collabCreateNode({ ...payload, createdBy: user?.id ?? null });
                     } else {
@@ -501,6 +547,10 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             collabCreateNode,
             collabConnected,
             store: useWhiteboardStore,
+            viewportZoom:
+                viewportRef.current?.zoom ??
+                useWhiteboardSelectionStore.getState().viewport?.zoom ??
+                1,
             onUploadError: (message) => addToast(message || 'Falha ao enviar arquivo.', 'error'),
         }),
         [spaceId, user?.id, collabCreateNode, collabConnected, addToast]
@@ -679,6 +729,8 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         !e.target?.closest?.('.whiteboard-resize-handle') &&
         !e.target?.closest?.('.whiteboard-rotate-handle') &&
         !e.target?.closest?.('.whiteboard-viewport-controls') &&
+        !e.target?.closest?.('.whiteboard-bottom-dock') &&
+        !e.target?.closest?.('.whiteboard-bottom-chrome') &&
         !e.target?.closest?.('.whiteboard-ruler-guide') &&
         !e.target?.closest?.('.whiteboard-rulers-horizontal') &&
         !e.target?.closest?.('.whiteboard-rulers-vertical');
@@ -725,9 +777,11 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         const nodeType = creationToolToNodeType(activeTool);
                         const defaultKey =
                             nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType;
-                        const defaults = getDefaultNodePayload(defaultKey, anchorWorld.x, anchorWorld.y);
+                        const zoom = viewportForChildren.zoom ?? 1;
+                        const aware = getZoomAwareCreateDims(defaultKey, zoom);
                         const aspectRatio =
-                            defaults.width && defaults.height ? defaults.width / defaults.height : 1;
+                            aware.width && aware.height ? aware.width / aware.height : 1;
+                        const minSize = getZoomAwareMinCreateSize(zoom);
                         createDragRef.current = {
                             tool: activeTool,
                             anchorWorld,
@@ -742,6 +796,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                             shiftKey: e.shiftKey,
                             altKey: e.altKey,
                             aspectRatio,
+                            minSize,
                         });
                     }
                     if (e.currentTarget && typeof e.currentTarget.setPointerCapture === 'function') {
@@ -824,7 +879,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         setResizeState({
             nodeId,
             corner,
-            mode: e.ctrlKey ? 'skew' : 'resize',
+            mode: getImageResizeStartMode(node.type, e.ctrlKey || e.metaKey),
             beforeNode: cloneNode(node),
             beforeSnapshots: captureNodesSnapshot(useWhiteboardStore, trackedIds),
             snapExcludeIds: buildSnapExcludeIds([nodeId], state.nodes),
@@ -853,9 +908,14 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 const rect = containerRef.current?.getBoundingClientRect();
                 if (!rect || !viewportRef.current) return;
                 const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
-                const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey, min: 0 };
-                const newBox = computeResizeBounds(origin, handle, world, modifiers);
                 const state = useWhiteboardStore.getState();
+                const selectedNodes = state.nodes.filter((n) => nodeIds.includes(n.id));
+                const resizeMin =
+                    selectedNodes.length > 0 && selectedNodes.every((n) => n.type === 'image')
+                        ? IMAGE_RESIZE_MIN_WORLD
+                        : 0;
+                const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey, min: resizeMin };
+                const newBox = computeResizeBounds(origin, handle, world, modifiers);
                 const { box: snappedBox, guides } = computeSnapForResize({
                     box: newBox,
                     handle,
@@ -927,10 +987,10 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             const rect = containerRef.current?.getBoundingClientRect();
             if (!rect || !viewportRef.current) return;
             const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
-            const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey, min: 0 };
             const state = useWhiteboardStore.getState();
             const node = state.nodes.find((n) => n.id === nodeId);
             if (!node) return;
+            const modifiers = buildImageResizeModifiers(node, origin, e);
             const byId = buildNodesById(state.nodes);
             const worldTop = nodeToWorld({ ...node, x: origin.x, y: origin.y }, byId);
             const worldOrigin = {
@@ -941,7 +1001,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 skewX: origin.skewX ?? 0,
                 skewY: origin.skewY ?? 0,
             };
-            if (mode === 'skew' || e.ctrlKey) {
+            if (shouldUseSkewResize(node, e.ctrlKey || e.metaKey, mode)) {
                 setSnapGuidesIfChangedRef.current([]);
                 const skewPatch = computeSkewResizeBounds(worldOrigin, handle, world, modifiers);
                 collabPatchNodeRef.current(
@@ -977,10 +1037,11 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 excludeIds: snapExcludeIds,
             });
             setSnapGuidesIfChangedRef.current(guides);
-            const finalPatch = worldTopLeftToNodePatch(node, snappedBox.x, snappedBox.y, state.nodes, {
+            let finalPatch = worldTopLeftToNodePatch(node, snappedBox.x, snappedBox.y, state.nodes, {
                 width: snappedBox.width,
                 height: snappedBox.height,
             });
+            finalPatch = mergeImageObjectFitPatch(node, finalPatch, e);
             if (node.type === 'frame') {
                 const nextFrame = {
                     x: finalPatch.x ?? node.x ?? 0,
@@ -1310,9 +1371,11 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     const nodeType = creationToolToNodeType(activeTool);
                     const defaultKey =
                         nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType;
-                    const defaults = getDefaultNodePayload(defaultKey, anchorWorld.x, anchorWorld.y);
+                    const zoom = viewportForChildren.zoom ?? 1;
+                    const aware = getZoomAwareCreateDims(defaultKey, zoom);
                     const aspectRatio =
-                        defaults.width && defaults.height ? defaults.width / defaults.height : 1;
+                        aware.width && aware.height ? aware.width / aware.height : 1;
+                    const minSize = getZoomAwareMinCreateSize(zoom);
                     createDragRef.current = {
                         tool: activeTool,
                         anchorWorld,
@@ -1327,6 +1390,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         shiftKey: e.shiftKey,
                         altKey: e.altKey,
                         aspectRatio,
+                        minSize,
                     });
                 } else if (NODE_TYPES_ALLOWED.includes(creationToolToNodeType(activeTool))) {
                     createDragRef.current = {
@@ -1350,6 +1414,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             if (editingId) {
                 commitTextEdit();
             }
+            containerRef.current?.focus?.({ preventScroll: true });
             if (activeTool === 'connector') {
                 e.stopPropagation();
                 if (connectorFromNodeId) {
@@ -1611,18 +1676,17 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             const nodeType = creationToolToNodeType(drag.tool);
 
             if (dist < CREATE_DRAG_THRESHOLD_PX) {
-                const defaults = getDefaultNodePayload(
-                    nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType,
-                    drag.anchorWorld.x,
-                    drag.anchorWorld.y
-                );
-                defaults.type = nodeType;
+                const defaultKey =
+                    nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType;
+                const zoom = viewportForChildren.zoom ?? 1;
+                const aware = getZoomAwareCreateDims(defaultKey, zoom);
+                const [ox, oy] = getNodeCreateOffset(defaultKey, zoom);
                 const id = await createNodeAt(
                     nodeType,
-                    drag.anchorWorld.x,
-                    drag.anchorWorld.y,
+                    drag.anchorWorld.x - ox,
+                    drag.anchorWorld.y - oy,
                     {},
-                    { width: defaults.width, height: defaults.height }
+                    aware
                 );
                 if (id) {
                     applyPostCreateActions({
@@ -1661,17 +1725,14 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             if (e.button === 0) {
                 keepCreationToolRef.current = e.ctrlKey || e.metaKey;
                 const rect = containerRef.current?.getBoundingClientRect();
-                const controlsEl = containerRef.current?.querySelector('.whiteboard-viewport-controls');
-                const controlsRect = controlsEl?.getBoundingClientRect?.();
                 const drag = createDragRef.current;
                 const dragStart = drag?.startScreen;
                 const isClickInControls =
-                    controlsRect &&
                     dragStart &&
-                    dragStart.x >= controlsRect.left &&
-                    dragStart.x <= controlsRect.right &&
-                    dragStart.y >= controlsRect.top &&
-                    dragStart.y <= controlsRect.bottom;
+                    (document.elementFromPoint(dragStart.x, dragStart.y)?.closest?.(
+                        '.whiteboard-viewport-controls, .whiteboard-bottom-dock, .whiteboard-bottom-chrome'
+                    ) ??
+                        false);
                 if (isClickInControls) {
                     createDragRef.current = null;
                     setCreatePreview(null);
@@ -1694,10 +1755,10 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                             const nodeType = creationToolToNodeType(drag.tool);
                             const defaultKey =
                                 nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType;
-                            const defaults = getDefaultNodePayload(defaultKey, w1.x, w1.y);
-                            defaults.type = nodeType;
-                            const [ox, oy] = getNodeCreateOffset(drag.tool || nodeType);
-                            const id = await createNodeAt(nodeType, w1.x - ox, w1.y - oy);
+                            const zoom = viewportForChildren.zoom ?? 1;
+                            const aware = getZoomAwareCreateDims(defaultKey, zoom);
+                            const [ox, oy] = getNodeCreateOffset(drag.tool || defaultKey, zoom);
+                            const id = await createNodeAt(nodeType, w1.x - ox, w1.y - oy, {}, aware);
                             if (id) {
                                 applyPostCreateActions({
                                     nodeId: id,
@@ -1768,12 +1829,14 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         viewportRef.current
                     );
                     const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey };
+                    const zoom = viewportRef.current?.zoom ?? 1;
                     setCreatePreview({
                         anchorWorld: drag.anchorWorld,
                         currentWorld,
                         shiftKey: modifiers.shiftKey,
                         altKey: modifiers.altKey,
                         aspectRatio: drag.aspectRatio ?? 1,
+                        minSize: getZoomAwareMinCreateSize(zoom),
                     });
                     const dist = Math.hypot(
                         e.clientX - drag.startScreen.x,
@@ -1802,7 +1865,14 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 return;
             }
             const el = e.target;
-            if (el?.closest?.('.whiteboard-node-wrapper') || el?.closest?.('.whiteboard-viewport-controls')) return;
+            if (
+                el?.closest?.('.whiteboard-node-wrapper') ||
+                el?.closest?.('.whiteboard-viewport-controls') ||
+                el?.closest?.('.whiteboard-bottom-dock') ||
+                el?.closest?.('.whiteboard-bottom-chrome')
+            ) {
+                return;
+            }
             e.preventDefault();
             const st = useWhiteboardStore.getState();
             const selStore = useWhiteboardSelectionStore.getState();
@@ -1910,7 +1980,8 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportForChildren);
             const toolType = e.dataTransfer.getData('application/x-whiteboard-tool');
             if (toolType && NODE_TYPES_ALLOWED.includes(toolType)) {
-                const [ox, oy] = getNodeCreateOffset(toolType);
+                const zoom = viewportForChildren.zoom ?? 1;
+                const [ox, oy] = getNodeCreateOffset(toolType, zoom);
                 let variantId = null;
                 try {
                     const variantRaw = e.dataTransfer.getData(TOOL_VARIANT_MIME);
@@ -1954,11 +2025,18 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     continue;
                 }
                 if (asImage) {
-                    const payload = await buildImageNodePayload(file, result.url, {
-                        x: world.x + i * 20,
-                        y: world.y + i * 20,
-                        anchor: 'center',
-                    });
+                    const zoom = viewportForChildren.zoom ?? 1;
+                    const payload = await buildImageNodePayload(
+                        file,
+                        result.storagePath,
+                        {
+                            x: world.x + i * 20,
+                            y: world.y + i * 20,
+                            anchor: 'center',
+                        },
+                        null,
+                        zoom
+                    );
                     const imgCenterX = payload.x + payload.width / 2;
                     const imgCenterY = payload.y + payload.height / 2;
                     const imgContainer = findContainerAt(nodes, imgCenterX, imgCenterY);
@@ -2024,6 +2102,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     backgroundPosition: `${viewportState.pan.x % (24 * viewportState.zoom)}px ${viewportState.pan.y % (24 * viewportState.zoom)}px`,
                 }}
             >
+                <WhiteboardViewportProvider zoom={viewportState.zoom}>
                 <div
                     className="whiteboard-canvas-transform"
                     style={viewportState.transformStyle}
@@ -2038,17 +2117,12 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     />
                     <div className="whiteboard-nodes-container">
                         <NodeLayer
+                            viewport={viewportForChildren}
+                            containerRef={containerRef}
                             onNodePointerDown={handleNodePointerDown}
                             onNodeContextMenu={handleNodeContextMenu}
-                            onResizeStart={handleResizeStart}
-                            onRotateStart={handleRotateStart}
                         />
                     </div>
-                    <SelectionTransformOverlay
-                        viewport={viewportForChildren}
-                        onResizeStart={handleResizeStart}
-                        onRotateStart={handleRotateStart}
-                    />
                     {(guidesVisible || guideCreatePreview) && (
                         <RulerGuidesOverlay
                             guides={pageGuides}
@@ -2059,12 +2133,23 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         />
                     )}
                 </div>
-                <SelectionManager
-                    selectionBox={selectionBox}
-                    createPreview={createPreview}
-                    viewport={viewportForChildren}
-                    containerRef={containerRef}
-                />
+                <div className="whiteboard-screen-overlays" aria-hidden={false}>
+                    <SelectionManager
+                        selectionBox={selectionBox}
+                        createPreview={createPreview}
+                        viewport={viewportForChildren}
+                        containerRef={containerRef}
+                    />
+                    {!selectionBox && (
+                        <TransformHandlesLayer
+                            viewport={viewportForChildren}
+                            containerRef={containerRef}
+                            onResizeStart={handleResizeStart}
+                            onRotateStart={handleRotateStart}
+                        />
+                    )}
+                </div>
+                </WhiteboardViewportProvider>
                 <PresenceLayer viewport={viewportForChildren} worldContainerRef={containerRef} />
                 <SpaceRemoteDragLayer viewport={viewportForChildren} worldContainerRef={containerRef} />
                 {rulersVisible && (
@@ -2075,86 +2160,51 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         onRulerPointerDown={handleRulerPointerDown}
                     />
                 )}
-                <div
-                    className="whiteboard-viewport-controls"
-                    onPointerDown={(e) => {
-                        e.stopPropagation();
-                    }}
-                >
-                    <button
-                        type="button"
-                        title="Centralizar vista"
-                        onClick={() => viewportState.setViewport({ x: 0, y: 0 }, 1)}
-                    >
-                        <Focus size={18} />
-                    </button>
-                    <span className="whiteboard-viewport-controls-divider" aria-hidden />
-                    <button
-                        type="button"
-                        title={gridVisible ? 'Ocultar grade' : 'Mostrar grade'}
-                        className={gridVisible ? 'active' : ''}
-                        onClick={() => setGridVisible(!gridVisible)}
-                    >
-                        <Grid3X3 size={18} />
-                    </button>
-                    <button
-                        type="button"
-                        title={rulersVisible ? 'Ocultar réguas (Ctrl+R)' : 'Mostrar réguas (Ctrl+R)'}
-                        className={rulersVisible ? 'active' : ''}
-                        onClick={() => setRulersVisible(!rulersVisible)}
-                    >
-                        <Ruler size={18} />
-                    </button>
-                    <button
-                        type="button"
-                        title={guidesVisible ? 'Ocultar guias de régua' : 'Mostrar guias de régua'}
-                        className={guidesVisible ? 'active' : ''}
-                        onClick={() => setGuidesVisible(!guidesVisible)}
-                    >
-                        <Crosshair size={18} />
-                    </button>
-                    <button
-                        type="button"
-                        title={snapEnabled ? 'Desativar imã (alinhamento)' : 'Ativar imã (alinhamento)'}
-                        className={snapEnabled ? 'active' : ''}
-                        onClick={() => {
-                            const next = !snapEnabled;
-                            setSnapEnabled(next);
-                            if (!next) setSnapGuidesIfChangedRef.current([]);
-                        }}
-                    >
-                        <Magnet size={18} />
-                    </button>
-                    <button
-                        type="button"
-                        title="Diminuir zoom"
-                        onClick={() => {
-                            const { x, y } = getZoomFocalClient();
-                            viewportState.zoomAtClient(x, y, 1 / 1.2);
-                        }}
-                    >
-                        <ZoomOut size={18} />
-                    </button>
-                    <span className="zoom-label">{Math.round(viewportState.zoom * 100)}%</span>
-                    <button
-                        type="button"
-                        title="Aumentar zoom"
-                        onClick={() => {
-                            const { x, y } = getZoomFocalClient();
-                            viewportState.zoomAtClient(x, y, 1.2);
-                        }}
-                    >
-                        <ZoomIn size={18} />
-                    </button>
-                    <button
-                        type="button"
-                        title="Atalhos (?)"
-                        onClick={() => setShortcutsHelpOpen(true)}
-                    >
-                        <HelpCircle size={18} />
-                    </button>
-                </div>
+                {isMobile && (
+                    <ViewportControlsBar
+                        viewportState={viewportState}
+                        gridVisible={gridVisible}
+                        setGridVisible={setGridVisible}
+                        rulersVisible={rulersVisible}
+                        setRulersVisible={setRulersVisible}
+                        guidesVisible={guidesVisible}
+                        setGuidesVisible={setGuidesVisible}
+                        snapEnabled={snapEnabled}
+                        setSnapEnabled={setSnapEnabled}
+                        setSnapGuidesIfChangedRef={setSnapGuidesIfChangedRef}
+                        getZoomFocalClient={getZoomFocalClient}
+                        onOpenShortcuts={() => setShortcutsHelpOpen(true)}
+                    />
+                )}
             </div>
+                {!isMobile && (
+                    <WhiteboardBottomChrome
+                        toolbarProps={{
+                            onUploadImage: handleUploadImage,
+                            onUploadFile: handleUploadFile,
+                            registerOpenImagePicker: (fn) => {
+                                openImagePickerRef.current = fn;
+                            },
+                            registerOpenFilePicker: (fn) => {
+                                openFilePickerRef.current = fn;
+                            },
+                        }}
+                        viewportControlsProps={{
+                            viewportState,
+                            gridVisible,
+                            setGridVisible,
+                            rulersVisible,
+                            setRulersVisible,
+                            guidesVisible,
+                            setGuidesVisible,
+                            snapEnabled,
+                            setSnapEnabled,
+                            setSnapGuidesIfChangedRef,
+                            getZoomFocalClient,
+                            onOpenShortcuts: () => setShortcutsHelpOpen(true),
+                        }}
+                    />
+                )}
                 </div>
                 <InspectorPanel
                     spaceId={spaceId}
@@ -2164,15 +2214,27 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 />
             </div>
             <ShortcutsHelp open={shortcutsHelpOpen} onClose={() => setShortcutsHelpOpen(false)} />
-            <DraggablePanel id="whiteboard-toolbar" defaultBottom={16} hideHandle style={isMobile ? { left: 12, right: 12, transform: 'none' } : undefined}>
-                <LeftToolbar
-                    onUploadImage={handleUploadImage}
-                    onUploadFile={handleUploadFile}
-                    registerOpenImagePicker={(fn) => { openImagePickerRef.current = fn; }}
-                    registerOpenFilePicker={(fn) => { openFilePickerRef.current = fn; }}
-                    variant="bottom"
-                />
-            </DraggablePanel>
+            {isMobile && (
+                <DraggablePanel
+                    id="whiteboard-toolbar"
+                    className="whiteboard-toolbar-panel"
+                    defaultBottom={16}
+                    hideHandle
+                    style={{ left: 12, right: 12, transform: 'none' }}
+                >
+                    <LeftToolbar
+                        onUploadImage={handleUploadImage}
+                        onUploadFile={handleUploadFile}
+                        registerOpenImagePicker={(fn) => {
+                            openImagePickerRef.current = fn;
+                        }}
+                        registerOpenFilePicker={(fn) => {
+                            openFilePickerRef.current = fn;
+                        }}
+                        variant="bottom"
+                    />
+                </DraggablePanel>
+            )}
             <WhiteboardContextMenu
                 position={contextMenuPosition}
                 onClose={() => setContextMenuPosition(null)}

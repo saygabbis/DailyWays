@@ -7,6 +7,8 @@ export const useBoardSelectionStore = create((set, get) => ({
     anchorCardId: null,
     clipboard: null,
     shiftSelecting: false,
+    /** Cards que a caixa de seleção (Shift+arrastar) está a tocar — preview antes de soltar. */
+    marqueePreviewCardIds: [],
     longPressPendingCardId: null,
     multiDragCardIds: [],
 
@@ -20,6 +22,7 @@ export const useBoardSelectionStore = create((set, get) => ({
             anchorCardId: null,
             longPressPendingCardId: null,
             multiDragCardIds: [],
+            marqueePreviewCardIds: [],
         });
     },
 
@@ -27,6 +30,7 @@ export const useBoardSelectionStore = create((set, get) => ({
         selectedCardIds: [],
         anchorListId: null,
         anchorCardId: null,
+        marqueePreviewCardIds: [],
     }),
 
     toggleCard: (cardId, listId) => {
@@ -125,6 +129,11 @@ export const useBoardSelectionStore = create((set, get) => ({
     },
 
     setShiftSelecting: (shiftSelecting) => set({ shiftSelecting }),
+
+    setMarqueePreviewCardIds: (marqueePreviewCardIds) =>
+        set({
+            marqueePreviewCardIds: Array.isArray(marqueePreviewCardIds) ? marqueePreviewCardIds : [],
+        }),
 
     setLongPressPending: (cardId) => set({ longPressPendingCardId: cardId ?? null }),
 

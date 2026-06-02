@@ -1,11 +1,11 @@
-import { fieldToPatch } from '@dailyways/collab-protocol';
+import { fieldToPatch, nodePatchFromCollabField } from '@dailyways/collab-protocol';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 
 export function applyRemoteOp(op, fromUserId, myUserId) {
   const store = useWhiteboardStore.getState();
   const isOwn = fromUserId && myUserId && fromUserId === myUserId;
 
-  if (op.revision != null && op.revision <= store.revision && !isOwn) {
+  if (op.revision != null && op.revision < store.revision && !isOwn) {
     return;
   }
 
@@ -20,7 +20,11 @@ export function applyRemoteOp(op, fromUserId, myUserId) {
     else if (entity === 'connector') store.removeConnectorRemote(id);
     else if (entity === 'comment') store.removeCommentRemote(id);
   } else if (type === 'update') {
-    const patch = fieldToPatch(field, value);
+    let patch = fieldToPatch(field, value);
+    if (entity === 'node' && field === 'imageFit') {
+      const node = store.nodes.find((n) => n.id === id);
+      patch = nodePatchFromCollabField(field, value, node);
+    }
     if (entity === 'node') store.applyRemotePatch(id, patch);
     else if (entity === 'connector') store.patchConnectorRemote(id, patch);
     else if (entity === 'comment') store.patchCommentRemote(id, patch);

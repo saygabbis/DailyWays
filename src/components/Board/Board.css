@@ -1206,7 +1206,8 @@
 }
 
 /* ── Card multiselection ── */
-.board-card--selected {
+.board-card--selected,
+.board-card--marquee-preview {
     outline: 2px solid var(--accent-primary);
     outline-offset: 2px;
     box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.15);

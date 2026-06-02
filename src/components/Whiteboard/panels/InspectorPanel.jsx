@@ -26,7 +26,7 @@ import {
     TEXT_STYLE_NODE_TYPES,
     getTextStyleFromNode,
 } from '../shared/textStyle';
-import { APPEARANCE_NODE_TYPES } from '../shared/appearanceStyle';
+import { APPEARANCE_NODE_TYPES, IMAGE_APPEARANCE_NODE_TYPES } from '../shared/appearanceStyle';
 import ShapeVariantSection from './inspector/ShapeVariantSection.jsx';
 import AppearanceOpacitySection from './inspector/AppearanceOpacitySection.jsx';
 import AppearanceCornersSection from './inspector/AppearanceCornersSection.jsx';
@@ -432,6 +432,13 @@ function DesignTab({ selectedNodes, single, nodes, spaceId }) {
                     <AppearanceOpacitySection node={single} />
                     <AppearanceCornersSection node={single} />
                     <AppearanceFillSection node={single} spaceId={spaceId} />
+                    <AppearanceStrokeSection node={single} />
+                </>
+            )}
+
+            {single && IMAGE_APPEARANCE_NODE_TYPES.has(single.type) && (
+                <>
+                    <AppearanceOpacitySection node={single} />
                     <AppearanceStrokeSection node={single} />
                 </>
             )}

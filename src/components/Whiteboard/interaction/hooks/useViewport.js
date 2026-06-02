@@ -2,8 +2,7 @@ import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { zoomViewportAtClient } from '../viewport/viewportUtils';
 
 /**
- * Handles pan and zoom for the canvas (Miro-style).
- * Wheel = zoom toward cursor. Space + drag = pan. Middle mouse + drag = pan.
+ * Pan/zoom estilo PureRef: scroll = zoom no cursor (sem Ctrl), espaço ou botão do meio = pan.
  */
 export function useViewport(initialPan = { x: 0, y: 0 }, initialZoom = 1, onViewportChange, containerRef) {
     const [pan, setPan] = useState(initialPan);
@@ -30,7 +29,7 @@ export function useViewport(initialPan = { x: 0, y: 0 }, initialZoom = 1, onView
 
     const applyWheelZoom = useCallback(
         (clientX, clientY, deltaY) => {
-            const zoomFactor = Math.exp(-deltaY * 0.0015);
+            const zoomFactor = Math.exp(-deltaY * 0.002);
             const rect = containerRef?.current?.getBoundingClientRect?.() ?? null;
             const { pan: newPan, zoom: newZoom } = zoomViewportAtClient(
                 panRef.current,

@@ -14,13 +14,13 @@ export const NODE_TYPES = [
 ];
 
 /** High-frequency fields (throttle on client). */
-export const THROTTLE_FIELDS = new Set(['position', 'size', 'bounds']);
+export const THROTTLE_FIELDS = new Set(['position', 'size', 'bounds', 'imageFit']);
 
 /** Text-like fields (debounce on client). */
 export const DEBOUNCE_FIELDS = new Set(['data', 'style', 'message']);
 
 export const UPDATE_FIELDS = new Set([
-  'position', 'size', 'bounds', 'transform', 'data', 'style', 'parentId', 'zIndex',
+  'position', 'size', 'bounds', 'transform', 'data', 'style', 'imageFit', 'parentId', 'zIndex',
   'controlPoints', 'message', 'nodeId', 'x', 'y', 'type', 'action',
 ]);
 

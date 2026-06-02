@@ -270,9 +270,16 @@ export async function pasteClipboardContent(ctx, placement, clipboardData, paste
             ctx.onUploadError?.(result?.error || 'Falha ao enviar arquivo.');
             return false;
         }
+        const zoom = ctx.viewportZoom ?? 1;
         payload =
             resolved.kind === 'image'
-                ? await buildImageNodePayload(resolved.file, result.url, placement)
+                ? await buildImageNodePayload(
+                      resolved.file,
+                      result.storagePath,
+                      placement,
+                      null,
+                      zoom
+                  )
                 : buildFilePayload(resolved.file, result.url, placement);
     } else if (resolved.kind === 'link') {
         payload = buildLinkPayload(resolved.url, placement);

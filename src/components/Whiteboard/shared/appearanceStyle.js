@@ -1,7 +1,11 @@
+import { effectiveStrokeScreenPx, strokeWidthInWorld } from './vectorViewport.js';
+
 export const APPEARANCE_NODE_TYPES = new Set(['shape', 'frame']);
+export const IMAGE_APPEARANCE_NODE_TYPES = new Set(['image']);
 
 export const STROKE_ALIGN_OPTIONS = ['inside', 'center', 'outside'];
 export const STROKE_DASH_OPTIONS = ['solid', 'dashed', 'dotted'];
+export const IMAGE_OUTLINE_STYLE_OPTIONS = ['solid', 'soft', 'glow', 'double'];
 export const FILL_TYPE_OPTIONS = ['color', 'image'];
 
 const DEFAULT_APPEARANCE = {
@@ -15,8 +19,10 @@ const DEFAULT_APPEARANCE = {
         color: '#ffffff',
         opacity: 100,
         imageUrl: null,
+        imageStoragePath: null,
         imageScale: 'fill',
     },
+    /** width = espessura em pixels de ecrã (não escala com zoom do canvas). */
     stroke: {
         visible: true,
         color: '#000000',
@@ -36,6 +42,7 @@ const FRAME_DEFAULTS = {
         color: 'var(--bg-elevated)',
         opacity: 100,
         imageUrl: null,
+        imageStoragePath: null,
         imageScale: 'fill',
     },
     stroke: {
@@ -65,6 +72,26 @@ const SHAPE_DEFAULTS = {
     },
 };
 
+const IMAGE_DEFAULTS = {
+    opacity: 100,
+    fill: {
+        visible: false,
+        type: 'color',
+        color: 'transparent',
+        opacity: 0,
+    },
+    stroke: {
+        visible: false,
+        color: 'var(--accent, #4d96ff)',
+        opacity: 100,
+        width: 2,
+        align: 'outside',
+        dash: 'solid',
+        outlineStyle: 'solid',
+        smoothness: 40,
+    },
+};
+
 function deepMergeAppearance(base, patch) {
     if (!patch) return base;
     return {
@@ -79,8 +106,9 @@ function deepMergeAppearance(base, patch) {
 }
 
 export function getDefaultAppearanceStyle(nodeType) {
-    const typeDefaults = nodeType === 'frame' ? FRAME_DEFAULTS : SHAPE_DEFAULTS;
-    return deepMergeAppearance(DEFAULT_APPEARANCE, typeDefaults);
+    if (nodeType === 'frame') return deepMergeAppearance(DEFAULT_APPEARANCE, FRAME_DEFAULTS);
+    if (nodeType === 'image') return deepMergeAppearance(DEFAULT_APPEARANCE, IMAGE_DEFAULTS);
+    return deepMergeAppearance(DEFAULT_APPEARANCE, SHAPE_DEFAULTS);
 }
 
 function migrateLegacyStyle(style = {}) {
@@ -194,10 +222,11 @@ export function polygonPointsInRect(sides, x, y, w, h) {
 }
 
 /** Padding extra do viewBox SVG para a borda não ser cortada (center/outside). */
-export function strokeViewportPad(stroke) {
+export function strokeViewportPad(stroke, zoom = 1, viewW = 1, viewH = 1) {
     if (!stroke?.visible) return 0;
-    const sw = Number(stroke.width) || 0;
-    if (sw <= 0) return 0;
+    const screenW = effectiveStrokeScreenPx(stroke);
+    if (screenW <= 0) return 0;
+    const sw = strokeWidthInWorld(zoom, screenW);
     if (stroke.align === 'outside') return sw;
     if (stroke.align === 'inside') return 0;
     return sw / 2;

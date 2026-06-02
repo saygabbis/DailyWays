@@ -12,7 +12,7 @@ const allowedOrigins = corsOrigin.split(',').map((s) => s.trim()).filter(Boolean
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-/** localhost + rede local — permitido só fora de produção. */
+/** localhost + rede local (192.168.x, 10.x, etc.) */
 function isPrivateLanOrigin(origin) {
   return /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/i.test(
     origin || '',
@@ -22,10 +22,9 @@ function isPrivateLanOrigin(origin) {
 function isAllowedOrigin(origin) {
   if (!origin) return true;
   if (allowedOrigins.includes(origin)) return true;
-  if (!isProduction) {
-    if (isPrivateLanOrigin(origin)) return true;
-    return true;
-  }
+  // LAN (192.168.x, etc.) — dev com Vite --host e testes na mesma rede
+  if (isPrivateLanOrigin(origin)) return true;
+  if (!isProduction) return true;
   return false;
 }
 

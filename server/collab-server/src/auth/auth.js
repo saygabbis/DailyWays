@@ -44,7 +44,7 @@ export async function canAccessSpace(userId, spaceId, accessToken) {
   return { access: true, canWrite };
 }
 
-export async function canAccessBoard(userId, boardId, accessToken) {
+export async function canAccessBoard(userId, boardId, accessToken, { quiet = false } = {}) {
   if (!userId || !boardId) return false;
   const db = getUserDbClient(accessToken);
   if (!db) return false;
@@ -56,12 +56,14 @@ export async function canAccessBoard(userId, boardId, accessToken) {
     .maybeSingle();
 
   if (error || !board) {
-    devLog('auth.canAccessBoard board lookup falhou', {
-      boardIdPrefix: boardId?.slice(0, 8),
-      userIdPrefix: userId?.slice(0, 8),
-      errCode: error?.code ?? null,
-      errMsg: error?.message?.slice(0, 80) ?? null,
-    });
+    if (!quiet) {
+      devLog('auth.canAccessBoard board lookup falhou', {
+        boardIdPrefix: boardId?.slice(0, 8),
+        userIdPrefix: userId?.slice(0, 8),
+        errCode: error?.code ?? null,
+        errMsg: error?.message?.slice(0, 80) ?? null,
+      });
+    }
     return { access: false, canWrite: false };
   }
 
@@ -86,4 +88,21 @@ export async function canAccessBoard(userId, boardId, accessToken) {
 
   const canWrite = ['owner', 'admin', 'editor'].includes(member.role);
   return { access: true, canWrite };
+}
+
+/** Resolve se entityId é space ou board (presença / join ambíguo). Space primeiro — evita ruído no log. */
+export async function resolveRoomEntityAccess(userId, entityId, accessToken) {
+  if (!userId || !entityId) return null;
+
+  const spaceAccess = await canAccessSpace(userId, entityId, accessToken);
+  if (spaceAccess?.access) {
+    return { kind: 'space', access: true, canWrite: spaceAccess.canWrite };
+  }
+
+  const boardAccess = await canAccessBoard(userId, entityId, accessToken, { quiet: true });
+  if (boardAccess?.access) {
+    return { kind: 'board', access: true, canWrite: boardAccess.canWrite };
+  }
+
+  return null;
 }

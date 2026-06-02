@@ -17,6 +17,7 @@ import {
     Unlock,
 } from 'lucide-react';
 import { getNodeCreateOffset } from '../core/whiteboardCreateOffsets';
+import { useWhiteboardSelectionStore } from '../../../stores/whiteboardSelectionStore';
 import '../styles/WhiteboardContextMenu.css';
 
 const CREATE_ITEMS = [
@@ -66,7 +67,8 @@ export default function WhiteboardContextMenu({
     const { left, top, worldX, worldY, mode = 'create', canGroup, canUngroup } = position;
 
     const handleCreate = (type) => {
-        const [ox, oy] = getNodeCreateOffset(type);
+        const zoom = useWhiteboardSelectionStore.getState().viewport?.zoom ?? 1;
+        const [ox, oy] = getNodeCreateOffset(type, zoom);
         onCreateNode?.(type, worldX - ox, worldY - oy);
         onClose?.();
     };

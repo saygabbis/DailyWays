@@ -8,7 +8,8 @@ import {
   validateOp,
   validatePresence,
 } from '@dailyways/collab-protocol';
-import { verifyToken, canAccessSpace, canAccessBoard } from '../auth/auth.js';
+import { verifyToken, canAccessSpace, canAccessBoard, resolveRoomEntityAccess } from '../auth/auth.js';
+import { noteRoomFlushContext } from '../services/roomFlushContext.js';
 import { roomManager } from '../services/roomManager.js';
 import { enrichPresenceFromProfile } from '../services/presenceProfile.js';
 import { isDevPrankAttacker, isDevPrankHandlerEnabled } from '../auth/devAccess.js';
@@ -21,7 +22,6 @@ import {
   releaseUserConnection,
   getClientIp,
 } from './rateLimit.js';
-import { noteRoomFlushContext } from '../services/roomFlushContext.js';
 
 const POSITION_FIELDS = new Set(['x', 'y']);
 const PRESENCE_LEAVE_GRACE_MS = 500;
@@ -349,24 +349,16 @@ export function registerSocketHandlers(io) {
       let roomId = socket.data.roomId;
       if (!roomId && payload?.roomId) {
         const requestedRoomEntityId = payload.roomId;
-        const boardAccess = await canAccessBoard(
+        const resolved = await resolveRoomEntityAccess(
           socket.data.userId,
           requestedRoomEntityId,
           socket.data.accessToken,
         );
-        const spaceAccess = boardAccess?.access
-          ? null
-          : await canAccessSpace(
-            socket.data.userId,
-            requestedRoomEntityId,
-            socket.data.accessToken,
-          );
-        if (boardAccess?.access || spaceAccess?.access) {
-          const isBoardRoom = Boolean(boardAccess?.access);
+        if (resolved?.access) {
+          const isBoardRoom = resolved.kind === 'board';
           const targetRoom = isBoardRoom
             ? roomIdForBoard(requestedRoomEntityId)
             : roomIdForSpace(requestedRoomEntityId);
-          const access = isBoardRoom ? boardAccess : spaceAccess;
           const prev = socket.data.roomId;
           if (prev && prev !== targetRoom) {
             socket.leave(prev);
@@ -378,9 +370,15 @@ export function registerSocketHandlers(io) {
           if (isBoardRoom && !presenceRoom.board) return;
           if (!isBoardRoom && !presenceRoom.space) return;
           socket.data.roomId = targetRoom;
-          socket.data.canWrite = access.canWrite;
+          socket.data.canWrite = resolved.canWrite;
           socket.data.boardId = isBoardRoom ? requestedRoomEntityId : null;
           socket.data.spaceId = isBoardRoom ? null : requestedRoomEntityId;
+          if (resolved.canWrite) {
+            noteRoomFlushContext(presenceRoom, {
+              accessToken: socket.data.accessToken,
+              userId: socket.data.userId,
+            });
+          }
           socket.join(targetRoom);
           roomManager.clientJoined(targetRoom);
           roomId = targetRoom;

@@ -7,12 +7,14 @@ import './AppBottomFabCluster.css';
 export default function AppBottomFabCluster({ boardId, showBoardHistory, onNavigateView }) {
     return (
         <div className="app-bottom-fab-cluster">
-            {showBoardHistory && boardId ? <BoardHistoryFab boardId={boardId} /> : null}
             <div className="app-bottom-fab-cluster-chat">
                 <ChatWidget />
             </div>
-            <div className="app-bottom-fab-cluster-help">
-                <AppHelpWidget onNavigateView={onNavigateView} />
+            <div className="app-bottom-fab-cluster-actions">
+                {showBoardHistory && boardId ? <BoardHistoryFab boardId={boardId} /> : null}
+                <div className="app-bottom-fab-cluster-help">
+                    <AppHelpWidget onNavigateView={onNavigateView} />
+                </div>
             </div>
         </div>
     );

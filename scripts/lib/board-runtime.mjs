@@ -92,11 +92,12 @@ export async function waitForHealth(url, timeoutMs = 60000, logPrefix = '[board]
 export function createProcessRunner(logPrefix) {
   const children = [];
 
-  function run(name, command, args, cwd = ROOT) {
+  function run(name, command, args, cwd = ROOT, envExtra = {}) {
     const child = spawn(command, args, {
       cwd,
       stdio: 'inherit',
       shell: process.platform === 'win32',
+      env: { ...process.env, ...envExtra },
     });
     child.on('exit', (code) => {
       if (code && code !== 0) {

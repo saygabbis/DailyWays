@@ -1,6 +1,14 @@
 import { CONTAINER_NODE_TYPES } from '../../interaction/viewport/viewportUtils';
 import { getNodePageId } from '../pages/whiteboardPages';
 
+/** Irmãos no mesmo parentId, ordenados por zIndex (baixo → alto). */
+export function getSiblings(nodes, parentId, pageId) {
+    const pid = parentId ?? null;
+    return (nodes ?? [])
+        .filter((n) => getNodePageId(n) === pageId && (n.parentId ?? null) === pid)
+        .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+}
+
 export function buildLayerTree(nodes, pageId) {
     const pageNodes = (nodes ?? []).filter((n) => getNodePageId(n) === pageId);
     const byParent = new Map();

@@ -12,6 +12,39 @@
     transition: background-color var(--transition-base), border-color var(--transition-base);
 }
 
+@media (max-width: 768px) {
+    .space-inspector:not(.space-inspector--collapsed) {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: min(46vh, 380px);
+        max-height: min(46vh, 380px);
+        border-left: none;
+        border-top: 1px solid var(--border-color);
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        box-shadow: var(--shadow-lg);
+        z-index: 35;
+    }
+
+    .space-inspector--collapsed {
+        position: fixed;
+        right: 8px;
+        bottom: calc(var(--mobile-bottom-nav-height, 56px) + 72px);
+        width: 44px;
+        height: auto;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-md);
+        z-index: 34;
+    }
+
+    .whiteboard-editor-layout:has(.space-inspector:not(.space-inspector--collapsed)) .whiteboard-viewport-controls {
+        bottom: calc(min(46vh, 380px) + 72px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
 .space-inspector--collapsed {
     width: 44px;
     align-items: center;
@@ -128,6 +161,25 @@
 
 .space-inspector-section {
     padding: 12px 14px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.space-inspector-section.inspector-block {
+    margin: 8px 10px;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    overflow: hidden;
+    transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.space-inspector-section.inspector-block.is-expanded {
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--text-primary) 6%, transparent);
+    border-color: color-mix(in srgb, var(--border-color) 70%, var(--accent-primary));
+}
+
+.space-inspector-section.inspector-block.is-collapsed {
     border-bottom: 1px solid var(--border-color);
 }
 
@@ -581,7 +633,7 @@
 
 /* Blocos modulares de aparência (Inspector) */
 .inspector-block {
-    margin-bottom: 4px;
+    margin-bottom: 0;
 }
 
 .inspector-block-header {
@@ -590,10 +642,17 @@
     justify-content: space-between;
     gap: 8px;
     margin-bottom: 0;
+    padding: 10px 12px;
+    background: color-mix(in srgb, var(--bg-secondary) 85%, var(--bg-primary));
 }
 
 .inspector-block.is-expanded .inspector-block-header {
-    margin-bottom: 8px;
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.inspector-block.is-collapsed .inspector-block-header {
+    border-bottom: none;
 }
 
 .inspector-block-toggle {
@@ -629,7 +688,11 @@
 }
 
 .inspector-block-body {
-    padding-top: 0;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--bg-primary);
 }
 
 .inspector-block.is-collapsed .inspector-block-header {
@@ -653,15 +716,147 @@
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
-    padding: 4px;
-    border-radius: 4px;
+    padding: 5px;
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
 .inspector-icon-btn:hover {
-    background: var(--bg-primary);
+    background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-tertiary));
     color: var(--text-primary);
+}
+
+/* Campo de cor circular */
+.inspector-color-field {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.inspector-color-swatch-wrap {
+    position: relative;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 2px solid color-mix(in srgb, var(--border-color) 90%, white);
+    box-shadow:
+        inset 0 1px 2px color-mix(in srgb, black 18%, transparent),
+        0 0 0 1px color-mix(in srgb, white 8%, transparent);
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.inspector-color-swatch-wrap:hover {
+    transform: scale(1.05);
+    box-shadow:
+        inset 0 1px 2px color-mix(in srgb, black 18%, transparent),
+        0 0 0 2px color-mix(in srgb, var(--accent-primary) 35%, transparent);
+}
+
+.inspector-color-swatch-wrap input[type='color'] {
+    position: absolute;
+    inset: -8px;
+    width: calc(100% + 16px);
+    height: calc(100% + 16px);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    opacity: 0;
+}
+
+.inspector-color-swatch-preview {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: var(--swatch-color, #000);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.inspector-color-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.inspector-opacity-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+}
+
+/* Campos estruturados */
+.inspector-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.inspector-field--full {
+    width: 100%;
+}
+
+.inspector-field-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.inspector-field-value {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent-primary, var(--accent));
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.inspector-field-hint {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    line-height: 1.35;
+}
+
+.inspector-field-control,
+.inspector-field input[type='number'] {
+    width: 100%;
+    padding: 7px 10px;
+    font-size: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.inspector-field-control:focus,
+.inspector-field input[type='number']:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--accent-primary) 55%, var(--border-color));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 18%, transparent);
+}
+
+.inspector-range {
+    width: 100%;
+    height: 4px;
+    accent-color: var(--accent-primary, var(--accent));
+    cursor: pointer;
 }
 
 .inspector-swatch {
@@ -704,37 +899,62 @@
     background: var(--bg-tertiary);
 }
 
+.inspector-corners-grid {
+    gap: 8px;
+}
+
 .inspector-fill-preview {
     width: 100%;
-    height: 64px;
-    border-radius: var(--radius-sm);
+    height: 72px;
+    border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
+    background-color: color-mix(in srgb, var(--bg-tertiary) 50%, transparent);
     background-size: cover;
     background-position: center;
-    margin-top: 8px;
+    box-shadow: inset 0 1px 3px color-mix(in srgb, black 8%, transparent);
 }
 
 .inspector-segmented {
     display: flex;
-    gap: 2px;
+    gap: 3px;
     width: 100%;
+    padding: 3px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
 }
 
 .inspector-segmented button {
     flex: 1;
-    padding: 6px 4px;
+    padding: 7px 4px;
     font-size: 11px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-primary);
+    font-weight: 500;
+    border: none;
+    background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
-    border-radius: var(--radius-sm);
+    border-radius: calc(var(--radius-md) - 2px);
+    transition: background-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.inspector-segmented button:hover {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--bg-tertiary) 80%, transparent);
 }
 
 .inspector-segmented button.active {
-    background: var(--accent-primary, var(--accent));
-    color: white;
-    border-color: transparent;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+}
+
+.whiteboard-vector-sharp {
+    pointer-events: none;
+}
+
+.whiteboard-node-wrapper .whiteboard-vector-sharp,
+.whiteboard-node-wrapper .whiteboard-vector-sharp * {
+    pointer-events: auto;
 }
 
 .whiteboard-appearance-renderer {

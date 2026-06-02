@@ -13,6 +13,29 @@ import {
 } from '../../core/layers/whiteboardGroupOps';
 import { deleteNode as deleteNodeService } from '../../../../services/whiteboardService';
 
+/** AltGr (ABNT) envia Ctrl+Alt — não tratar como atalho com modificador. */
+function isAltGrKey(e) {
+    if (typeof e.getModifierState === 'function' && e.getModifierState('AltGraph')) return true;
+    return e.altKey && e.ctrlKey;
+}
+
+/**
+ * [ ] um nível; Shift+[ ] extremo.
+ * Caractere tem prioridade sobre e.code (ABNT: AltGr pode usar BracketRight para ambos).
+ */
+function layerReorderModeFromKeyEvent(e) {
+    const k = e.key;
+    if (k === '[' || k === '{') return e.shiftKey ? 'back' : 'backward';
+    if (k === ']' || k === '}') return e.shiftKey ? 'front' : 'forward';
+    if (isAltGrKey(e)) {
+        if (e.code === 'Digit9') return e.shiftKey ? 'back' : 'backward';
+        if (e.code === 'Digit0') return e.shiftKey ? 'front' : 'forward';
+    }
+    if (e.code === 'BracketLeft') return e.shiftKey ? 'back' : 'backward';
+    if (e.code === 'BracketRight') return e.shiftKey ? 'front' : 'forward';
+    return null;
+}
+
 export function useCanvasShortcuts({
     containerRef,
     collabConnected,
@@ -66,6 +89,16 @@ export function useCanvasShortcuts({
 
         const shouldHandleCanvasShortcut = () =>
             !isEditingWhiteboardText() && !isSpaceUiTextFocus();
+
+        /** Camadas: permitir com foco no inspetor; bloquear só texto no nó ou UI fora do whiteboard. */
+        const canUseLayerReorderShortcut = () => {
+            if (isEditingWhiteboardText()) return false;
+            const el = document.activeElement;
+            if (!el) return true;
+            if (el.closest?.('.whiteboard-node-wrapper')) return false;
+            if (el.closest?.('.whiteboard-editor-layout')) return true;
+            return !isSpaceUiTextFocus();
+        };
 
         const onKeyDown = (e) => {
             if (e.key === ' ') {
@@ -167,24 +200,22 @@ export function useCanvasShortcuts({
                         viewportState.zoomAtClient(x, y, 1 / 1.2);
                         return;
                     }
-                    if (e.key === ']') {
-                        e.preventDefault();
-                        patchZIndexSelected(
-                            useWhiteboardStore,
-                            collabPatchNodes,
-                            e.shiftKey ? 'front' : 'forward'
-                        );
-                        return;
-                    }
-                    if (e.key === '[') {
-                        e.preventDefault();
-                        patchZIndexSelected(
-                            useWhiteboardStore,
-                            collabPatchNodes,
-                            e.shiftKey ? 'back' : 'backward'
-                        );
-                        return;
-                    }
+                }
+            }
+
+            const layerMode = layerReorderModeFromKeyEvent(e);
+            if (
+                layerMode &&
+                canUseLayerReorderShortcut() &&
+                !((e.ctrlKey || e.metaKey) && !isAltGrKey(e)) &&
+                (!e.altKey || isAltGrKey(e))
+            ) {
+                const st = useWhiteboardStore.getState();
+                if (st.selectedNodeIds.length) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    patchZIndexSelected(useWhiteboardStore, collabPatchNodes, layerMode);
+                    return;
                 }
             }
 

@@ -27,6 +27,7 @@
     height: 100%;
     overflow: hidden;
     position: relative;
+    isolation: isolate;
     background-color: var(--bg-primary);
     background-image: radial-gradient(var(--border-color) 1px, transparent 1px);
     cursor: default;
@@ -246,6 +247,38 @@
     pointer-events: none;
 }
 
+.whiteboard-node.image-node {
+    background: transparent;
+}
+
+.whiteboard-image-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    font-size: 12px;
+    background: var(--bg-tertiary);
+    border: 1px dashed var(--border-color);
+    border-radius: 8px;
+    box-sizing: border-box;
+}
+
+.whiteboard-image-placeholder.is-loading {
+    color: var(--text-secondary);
+    animation: whiteboard-image-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes whiteboard-image-pulse {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+}
+
+.whiteboard-image-svg {
+    overflow: visible;
+}
+
 .whiteboard-node-wrapper.selected {
     outline: none;
 }
@@ -255,23 +288,48 @@
     will-change: transform;
 }
 
+/* Handles e marquee ficam dentro do viewport (não cobrem header/toolbars globais). */
+.whiteboard-screen-overlays {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 8;
+    pointer-events: none;
+}
+
+.whiteboard-screen-overlays .whiteboard-resize-handle,
+.whiteboard-screen-overlays .whiteboard-rotate-handle {
+    pointer-events: auto;
+}
+
+.whiteboard-marquee-preview-outline {
+    z-index: 7;
+}
+
 .whiteboard-resize-handles {
     z-index: 5;
+}
+
+.whiteboard-resize-handles--screen {
+    z-index: 1;
+}
+
+.whiteboard-selection-box,
+.whiteboard-create-preview {
+    z-index: 1;
 }
 
 .whiteboard-resize-handles-outline {
     position: absolute;
     inset: 0;
-    border: 2px solid var(--accent, #4d96ff);
+    border-style: solid;
+    border-color: var(--accent, #4d96ff);
     border-radius: 2px;
     pointer-events: none;
     box-sizing: border-box;
 }
 
-.whiteboard-resize-handles--unified .whiteboard-resize-handles-outline {
-    border-width: 2px;
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #4d96ff) 25%, transparent);
-}
+/* box-shadow unificado definido inline em ResizeHandles (compensa zoom) */
 
 .whiteboard-resize-handle {
     display: flex;
@@ -286,7 +344,8 @@
 
 .whiteboard-resize-handle-visual {
     display: block;
-    border: 2px solid var(--accent, #4d96ff);
+    border-style: solid;
+    border-color: var(--accent, #4d96ff);
     background: var(--bg-primary);
     border-radius: 2px;
     box-sizing: border-box;
@@ -301,7 +360,6 @@
     position: absolute;
     left: 50%;
     top: 0;
-    width: 2px;
     transform: translate(-50%, -100%);
     background: var(--accent, #4d96ff);
     pointer-events: none;
@@ -325,7 +383,8 @@
 
 .whiteboard-rotate-handle-visual {
     display: block;
-    border: 2px solid var(--accent, #4d96ff);
+    border-style: solid;
+    border-color: var(--accent, #4d96ff);
     background: var(--bg-primary);
     border-radius: 50%;
     box-sizing: border-box;
@@ -333,67 +392,6 @@
 
 .whiteboard-rotate-handle:hover .whiteboard-rotate-handle-visual {
     background: var(--accent, #4d96ff);
-}
-
-.whiteboard-viewport-controls {
-    position: absolute;
-    bottom: calc(12px + 44px + 10px);
-    right: calc(12px + var(--inspector-inset, 0px));
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 6px;
-    min-height: 32px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-full);
-    box-shadow: var(--shadow-md);
-    z-index: 11;
-}
-
-@media (max-width: 768px) {
-    .whiteboard-viewport-controls {
-        bottom: calc(12px + 44px + 10px + env(safe-area-inset-bottom, 0px));
-    }
-}
-
-.whiteboard-viewport-controls-divider {
-    width: 1px;
-    height: 20px;
-    background: var(--border-color);
-    margin: 0 2px;
-    flex-shrink: 0;
-}
-
-.whiteboard-viewport-controls button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-}
-
-.whiteboard-viewport-controls button:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-}
-
-.whiteboard-viewport-controls button.active {
-    background: var(--bg-tertiary);
-    color: var(--accent, #4d96ff);
-}
-
-.whiteboard-viewport-controls .zoom-label {
-    min-width: 36px;
-    font-size: 11px;
-    line-height: 26px;
-    color: var(--text-secondary);
-    text-align: center;
 }
 
 .whiteboard-node-wrapper.whiteboard-node--remote-selected {

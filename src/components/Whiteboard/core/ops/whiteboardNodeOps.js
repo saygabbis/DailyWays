@@ -3,8 +3,13 @@ import { insertNode } from '../../../../services/whiteboardService';
 import { findContainerAt } from '../../interaction/viewport/viewportUtils';
 import { pushNodesAddBatch, recordNodesMutation } from '../history/whiteboardHistory';
 import { resolveDragNodeIds } from '../selection/whiteboardSelectionUtils';
-import { assignFreshGroupIdToClones } from '../layers/whiteboardGroupOps';
+import {
+    assignFreshGroupIdToClones,
+    expandIdsToNodeGroups,
+    getNodeGroupId,
+} from '../layers/whiteboardGroupOps';
 import { filterNodesByPage } from '../pages/whiteboardPages';
+import { getSiblings } from '../layers/layerTreeUtils';
 
 import {
     buildNodesById,
@@ -153,14 +158,56 @@ export function nudgeSelectedNodes(store, collabPatchNodes, dx, dy) {
     }
 }
 
-function reorderPageNodesByZ(pageNodes, selectedIds, mode) {
+/** Unidades de camada entre irmãos: nó solto ou grupo lógico inteiro (mesmo parentId). */
+function buildSiblingLayerUnits(siblings) {
+    const ordered = [...siblings].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+    const membersByGroup = new Map();
+    for (const n of ordered) {
+        const gid = getNodeGroupId(n);
+        if (!gid) continue;
+        if (!membersByGroup.has(gid)) membersByGroup.set(gid, []);
+        membersByGroup.get(gid).push(n);
+    }
+    const seenGroups = new Set();
+    const units = [];
+    for (const n of ordered) {
+        const gid = getNodeGroupId(n);
+        if (gid) {
+            if (seenGroups.has(gid)) continue;
+            seenGroups.add(gid);
+            const members = membersByGroup.get(gid) ?? [n];
+            units.push({
+                id: `__layer_unit_group__${gid}`,
+                memberIds: members.map((m) => m.id),
+            });
+        } else {
+            units.push({ id: n.id, memberIds: [n.id] });
+        }
+    }
+    return units;
+}
+
+function flattenLayerUnitsToNodes(units, siblings) {
+    const byId = new Map(siblings.map((n) => [n.id, n]));
+    const flat = [];
+    for (const unit of units) {
+        const members = unit.memberIds
+            .map((id) => byId.get(id))
+            .filter(Boolean)
+            .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+        flat.push(...members);
+    }
+    return flat;
+}
+
+function reorderZItems(items, selectedIds, mode) {
     const selectedSet = new Set(selectedIds);
-    const ordered = [...pageNodes].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
-    const selected = ordered.filter((n) => selectedSet.has(n.id));
+    const ordered = [...items];
+    const selected = ordered.filter((item) => selectedSet.has(item.id));
     if (!selected.length) return ordered;
 
-    const rest = ordered.filter((n) => !selectedSet.has(n.id));
-    const indices = ordered.map((n, i) => (selectedSet.has(n.id) ? i : -1)).filter((i) => i >= 0);
+    const rest = ordered.filter((item) => !selectedSet.has(item.id));
+    const indices = ordered.map((item, i) => (selectedSet.has(item.id) ? i : -1)).filter((i) => i >= 0);
     const minI = Math.min(...indices);
     const maxI = Math.max(...indices);
 
@@ -200,15 +247,32 @@ export function patchZIndexSelected(store, collabPatchNodes, mode) {
     if (!prunedIds.length) return;
 
     const pageId = state.activePageId;
-    const pageNodes = filterNodesByPage(state.nodes, pageId);
-    const newOrdered = reorderPageNodesByZ(pageNodes, prunedIds, mode);
+    const targetIds = expandIdsToNodeGroups(state.nodes, prunedIds);
+    const selectedSet = new Set(targetIds);
+    const parentIds = new Set();
+    for (const id of targetIds) {
+        const n = state.nodes.find((node) => node.id === id);
+        if (n) parentIds.add(n.parentId ?? null);
+    }
 
-    const patches = newOrdered
-        .map((n, i) => {
-            if ((n.zIndex ?? 0) === i) return null;
-            return { id: n.id, patch: { zIndex: i } };
-        })
-        .filter(Boolean);
+    const patches = [];
+    for (const parentId of parentIds) {
+        const siblings = getSiblings(state.nodes, parentId, pageId);
+        const units = buildSiblingLayerUnits(siblings);
+        const selectedUnitIds = units
+            .filter((u) => u.memberIds.some((id) => selectedSet.has(id)))
+            .map((u) => u.id);
+        if (!selectedUnitIds.length) continue;
+
+        const newUnits = reorderZItems(units, selectedUnitIds, mode);
+        const flatNodes = flattenLayerUnitsToNodes(newUnits, siblings);
+        for (let i = 0; i < flatNodes.length; i++) {
+            const n = flatNodes[i];
+            if ((n.zIndex ?? 0) !== i) {
+                patches.push({ id: n.id, patch: { zIndex: i } });
+            }
+        }
+    }
 
     if (!patches.length) return;
 

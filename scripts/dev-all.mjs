@@ -24,7 +24,7 @@ freePort(port, LOG);
 freePort(VITE_PORT, LOG);
 await new Promise((r) => setTimeout(r, 600));
 
-run('collab', 'npm', ['run', 'dev:collab']);
+run('collab', 'npm', ['run', 'dev:collab'], undefined, { NODE_ENV: 'development' });
 
 try {
   await waitForHealth(healthUrl, 60000, LOG);

@@ -153,6 +153,19 @@ export function patchToOps(entity, id, patch) {
 }
 
 export function applyFieldToEntity(entity, field, value) {
+  if (field === 'imageFit') {
+    const fit = value === 'cover' ? 'cover' : 'fill';
+    return { ...entity, data: { ...(entity?.data || {}), objectFit: fit } };
+  }
   const patch = fieldToPatch(field, value);
   return { ...entity, ...patch };
+}
+
+/** Patch local a partir de op remota (imageFit faz merge em data). */
+export function nodePatchFromCollabField(field, value, node) {
+  if (field === 'imageFit') {
+    const fit = value === 'cover' ? 'cover' : 'fill';
+    return { data: { ...(node?.data || {}), objectFit: fit } };
+  }
+  return fieldToPatch(field, value);
 }

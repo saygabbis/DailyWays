@@ -1,5 +1,4 @@
-const MIN_ZOOM = 0.1;
-const MAX_ZOOM = 5;
+import { clampViewportZoom } from './viewportLimits.js';
 
 /** Centraliza e ajusta zoom para caber os nós no container (origem no centro). */
 export function computeViewportToFitNodes(nodes, containerRect, padding = 80) {
@@ -30,7 +29,7 @@ export function computeViewportToFitNodes(nodes, containerRect, padding = 80) {
     const worldH = Math.max(maxY - minY, 80);
     const availW = Math.max(containerRect.width - padding, 40);
     const availH = Math.max(containerRect.height - padding, 40);
-    const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(availW / worldW, availH / worldH)));
+    const zoom = clampViewportZoom(Math.min(availW / worldW, availH / worldH));
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
 

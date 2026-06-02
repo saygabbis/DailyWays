@@ -3,7 +3,7 @@
  * @param {{ x: number, y: number, width: number, height: number }} origin — snapshot no início do drag
  * @param {'nw'|'ne'|'sw'|'se'|'n'|'s'|'e'|'w'} handle
  * @param {{ x: number, y: number }} world — cursor em coordenadas mundo
- * @param {{ shiftKey?: boolean, altKey?: boolean, min?: number }} modifiers
+ * @param {{ shiftKey?: boolean, altKey?: boolean, min?: number, aspectRatio?: number }} modifiers
  */
 export function computeResizeBounds(origin, handle, world, modifiers = {}) {
     const min = modifiers.min ?? 0;
@@ -16,7 +16,10 @@ export function computeResizeBounds(origin, handle, world, modifiers = {}) {
     const bottom = origin.y + h0;
     const cx = origin.x + w0 / 2;
     const cy = origin.y + h0 / 2;
-    const aspect = w0 / h0;
+    const aspect =
+        modifiers.aspectRatio > 0 && Number.isFinite(modifiers.aspectRatio)
+            ? modifiers.aspectRatio
+            : w0 / h0;
 
     let x = origin.x;
     let y = origin.y;

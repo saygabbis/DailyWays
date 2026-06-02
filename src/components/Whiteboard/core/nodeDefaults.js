@@ -34,7 +34,7 @@ export function getDefaultNodePayload(type, x, y) {
         connector: { type: 'connector', width: 0, height: 0, data: {}, style: {} },
         comment: { type: 'comment', width: 200, height: 80, data: { message: '' }, style: {} },
         draw: { type: 'draw', width: 200, height: 150, data: { paths: [] }, style: { stroke: '#000' } },
-        image: { type: 'image', width: 200, height: 150, data: { url: '' }, style: {} },
+        image: { type: 'image', width: 200, height: 150, data: { url: '' }, style: { appearance: getDefaultAppearanceStyle('image') } },
         file: { type: 'file_card', width: 220, height: 80, data: { url: '', filename: '', size: '' }, style: {} },
     };
     const d = defaults[type] || defaults.sticky_note;

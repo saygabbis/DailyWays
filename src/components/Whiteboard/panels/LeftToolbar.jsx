@@ -55,9 +55,14 @@ export default function LeftToolbar({ onUploadImage, onUploadFile, registerOpenI
         canUndo,
         canRedo,
     } = useWhiteboardStore();
-    const { collabPatchNode, collabCreateNode, collabDeleteNodes } = useCollabPatch();
+    const {
+        collabPatchNode,
+        collabCreateNode,
+        collabDeleteNodes,
+        collabEmitNodeOps,
+    } = useCollabPatch();
 
-    const collabApi = { collabPatchNode, collabCreateNode, collabDeleteNodes };
+    const collabApi = { collabPatchNode, collabCreateNode, collabDeleteNodes, collabEmitNodeOps };
 
     const handleUndo = () => performUndo(collabApi);
 

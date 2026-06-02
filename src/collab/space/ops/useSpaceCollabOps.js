@@ -75,6 +75,11 @@ export function useSpaceCollabOps() {
       return;
     }
 
+    if (field === 'imageFit') {
+      sendOp(op);
+      return;
+    }
+
     if (THROTTLE_FIELDS.has(field)) {
       pendingThrottleOps.current.set(key, op);
       if (throttleTimers.current.has(key)) return;
@@ -102,9 +107,32 @@ export function useSpaceCollabOps() {
   }, [sendOp]);
 
   const emitFromPatch = useCallback((entity, id, patch) => {
-    const ops = patchToOps(entity, id, patch);
-    for (const op of ops) scheduleOp(op);
+    if (!patch || typeof patch !== 'object') return;
+    const { data, style, ...geometry } = patch;
+    const geometryKeys = Object.keys(geometry);
+    if (geometryKeys.length > 0) {
+      const ops = patchToOps(entity, id, geometry);
+      for (const op of ops) scheduleOp(op);
+    }
+    if (data !== undefined) {
+      const dataKeys = Object.keys(data);
+      if (dataKeys.length === 1 && dataKeys[0] === 'objectFit') {
+        scheduleOp({ type: 'update', entity, id, field: 'imageFit', value: data.objectFit });
+      } else {
+        scheduleOp({ type: 'update', entity, id, field: 'data', value: data });
+      }
+    }
+    if (style !== undefined) {
+      scheduleOp({ type: 'update', entity, id, field: 'style', value: style });
+    }
   }, [scheduleOp]);
+
+  const collabEmitNodeOps = useCallback((ops) => {
+    if (!collab?.connected || !ops?.length) return;
+    for (const op of ops) {
+      scheduleOp({ entity: 'node', ...op });
+    }
+  }, [collab?.connected, scheduleOp]);
 
   const collabPatchNode = useCallback((nodeId, patch) => {
     useWhiteboardStore.getState().patchNode(nodeId, patch);
@@ -119,15 +147,15 @@ export function useSpaceCollabOps() {
     }
   }, [collab?.connected, emitFromPatch]);
 
-  const collabCreateNode = useCallback((node) => {
-    useWhiteboardStore.getState().addNode(node);
+  const collabCreateNode = useCallback((node, options = {}) => {
+    if (!options.remoteOnly) useWhiteboardStore.getState().addNode(node);
     if (collab?.connected) {
-      scheduleOp({ type: 'create', entity: 'node', value: node });
+      scheduleOp({ type: 'create', entity: 'node', id: node.id, value: node });
     }
   }, [collab?.connected, scheduleOp]);
 
-  const collabDeleteNodes = useCallback((ids) => {
-    useWhiteboardStore.getState().deleteNodes(ids);
+  const collabDeleteNodes = useCallback((ids, options = {}) => {
+    if (!options.remoteOnly) useWhiteboardStore.getState().deleteNodes(ids);
     if (!collab?.connected) return;
     for (const id of ids) {
       scheduleOp({ type: 'delete', entity: 'node', id });
@@ -157,6 +185,7 @@ export function useSpaceCollabOps() {
   return {
     collabPatchNode,
     collabPatchNodes,
+    collabEmitNodeOps,
     collabCreateNode,
     collabDeleteNodes,
     collabCreateConnector,

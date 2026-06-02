@@ -37,6 +37,15 @@ export function worldToScreenWithContainer(worldX, worldY, containerRect, viewpo
     };
 }
 
+/** Converte coordenadas de cliente (getBoundingClientRect) para o espaço local do container. */
+export function clientToContainerLocal(clientX, clientY, containerRect) {
+    if (!containerRect) return { x: clientX, y: clientY };
+    return {
+        x: clientX - containerRect.left,
+        y: clientY - containerRect.top,
+    };
+}
+
 export function screenToWorld(screenX, screenY, viewport) {
     if (!viewport) return { x: screenX, y: screenY };
     return {
@@ -56,13 +65,17 @@ export function screenToWorldWithContainer(clientX, clientY, containerRect, view
     };
 }
 
-const MIN_ZOOM = 0.1;
-const MAX_ZOOM = 5;
+import { clampViewportZoom } from './viewportLimits.js';
+
+export { clampViewportZoom, formatViewportZoomPercent, VIEWPORT_ZOOM_MIN, VIEWPORT_ZOOM_MAX } from './viewportLimits.js';
 
 /** Aplica zoom mantendo o ponto do cursor fixo no mundo (origem no centro do container). */
 export function zoomViewportAtClient(pan, zoom, clientX, clientY, containerRect, zoomFactor) {
-    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * zoomFactor));
-    if (!containerRect || newZoom === zoom) {
+    const newZoom = clampViewportZoom(zoom * zoomFactor);
+    if (!containerRect) {
+        return { pan, zoom: newZoom };
+    }
+    if (newZoom === zoom) {
         return { pan, zoom: newZoom };
     }
     const mx = clientX - containerRect.left - containerRect.width / 2;
@@ -79,6 +92,24 @@ export function zoomViewportAtClient(pan, zoom, clientX, clientY, containerRect,
 
 export function rectIntersects(a, b) {
     return !(a.x + a.width < b.x || b.x + b.width < a.x || a.y + a.height < b.y || b.y + b.height < a.y);
+}
+
+/** Retângulo visível em coordenadas de mundo (origem no centro do container). */
+export function computeWorldViewportBounds(viewport, containerWidth, containerHeight, marginPx = 400) {
+    const z = clampViewportZoom(Number(viewport?.zoom) || 1);
+    const panX = Number(viewport?.panX ?? viewport?.pan?.x) || 0;
+    const panY = Number(viewport?.panY ?? viewport?.pan?.y) || 0;
+    const W = Math.max(1, Number(containerWidth) || 1920);
+    const H = Math.max(1, Number(containerHeight) || 1080);
+    const margin = marginPx / z;
+    const centerX = -panX / z;
+    const centerY = -panY / z;
+    return {
+        x: centerX - W / (2 * z) - margin,
+        y: centerY - H / (2 * z) - margin,
+        width: W / z + margin * 2,
+        height: H / z + margin * 2,
+    };
 }
 
 /** Frame/container types that can hold child nodes. */

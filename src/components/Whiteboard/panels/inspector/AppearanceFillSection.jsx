@@ -1,9 +1,12 @@
 import React, { useRef } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import InspectorSection from './InspectorSection.jsx';
+import InspectorColorField from './InspectorColorField.jsx';
+import InspectorSegmentedField from './InspectorSegmentedField.jsx';
 import { useInspectorStylePatch } from './useInspectorStylePatch.js';
 import { uploadSpaceAsset } from '../../../../services/whiteboardService';
 import { useAuth } from '../../../../context/AuthContext';
+import { useSpaceAssetUrl } from '../../../../hooks/useSpaceAssetUrl';
 
 export default function AppearanceFillSection({ node, spaceId }) {
     const { user } = useAuth();
@@ -12,6 +15,11 @@ export default function AppearanceFillSection({ node, spaceId }) {
     if (!appearance) return null;
 
     const fill = appearance.fill ?? {};
+    const previewUrl = useSpaceAssetUrl(
+        fill.type === 'image'
+            ? { storagePath: fill.imageStoragePath, url: fill.imageUrl }
+            : null,
+    );
     const hexColor = fill.color?.startsWith('#') ? fill.color : '#ffffff';
 
     const patchFill = (partial) => patchAppearance({ fill: { ...fill, ...partial } });
@@ -19,8 +27,13 @@ export default function AppearanceFillSection({ node, spaceId }) {
     const handleImageUpload = async (file) => {
         if (!file || !spaceId) return;
         const result = await uploadSpaceAsset(spaceId, file, user?.id);
-        if (result?.url) {
-            patchFill({ type: 'image', imageUrl: result.url, visible: true });
+        if (result?.storagePath) {
+            patchFill({
+                type: 'image',
+                imageStoragePath: result.storagePath,
+                imageUrl: null,
+                visible: true,
+            });
         }
     };
 
@@ -38,23 +51,23 @@ export default function AppearanceFillSection({ node, spaceId }) {
                 </button>
             }
         >
-            <label className="space-inspector-field space-inspector-field--full">
-                <span>Tipo</span>
-                <select
-                    value={fill.type ?? 'color'}
-                    onChange={(e) => patchFill({ type: e.target.value })}
-                >
-                    <option value="color">Cor</option>
-                    <option value="image">Imagem</option>
-                </select>
-            </label>
+            <InspectorSegmentedField
+                label="Tipo"
+                value={fill.type ?? 'color'}
+                options={[
+                    { id: 'color', label: 'Cor' },
+                    { id: 'image', label: 'Imagem' },
+                ]}
+                onChange={(id) => patchFill({ type: id })}
+            />
 
             {fill.type === 'image' ? (
                 <>
-                    <div className="inspector-block-row">
+                    <div className="inspector-field inspector-field--full">
+                        <span className="inspector-field-label">Arquivo</span>
                         <button
                             type="button"
-                            className="inspector-text-btn"
+                            className="inspector-text-btn inspector-field-control"
                             onClick={() => fileRef.current?.click()}
                         >
                             Enviar imagem
@@ -71,47 +84,26 @@ export default function AppearanceFillSection({ node, spaceId }) {
                             }}
                         />
                     </div>
-                    {fill.imageUrl ? (
-                        <div className="inspector-fill-preview" style={{ backgroundImage: `url(${fill.imageUrl})` }} />
+                    {previewUrl ? (
+                        <div className="inspector-fill-preview" style={{ backgroundImage: `url(${previewUrl})` }} />
                     ) : null}
-                    <label className="space-inspector-field space-inspector-field--full">
-                        <span>Escala</span>
-                        <select
-                            value={fill.imageScale ?? 'fill'}
-                            onChange={(e) => patchFill({ imageScale: e.target.value })}
-                        >
-                            <option value="fill">Preencher</option>
-                            <option value="fit">Ajustar</option>
-                        </select>
-                    </label>
+                    <InspectorSegmentedField
+                        label="Escala"
+                        value={fill.imageScale ?? 'fill'}
+                        options={[
+                            { id: 'fill', label: 'Preencher' },
+                            { id: 'fit', label: 'Ajustar' },
+                        ]}
+                        onChange={(id) => patchFill({ imageScale: id })}
+                    />
                 </>
             ) : (
-                <div className="inspector-block-row">
-                    <input
-                        type="color"
-                        className="space-inspector-color-input inspector-swatch"
-                        value={hexColor}
-                        onChange={(e) => patchFill({ color: e.target.value, type: 'color' })}
-                    />
-                    <input
-                        type="text"
-                        className="inspector-hex-input"
-                        value={hexColor.replace('#', '').toUpperCase()}
-                        onChange={(e) => {
-                            const raw = e.target.value.replace(/[^0-9a-f]/gi, '').slice(0, 6);
-                            if (raw.length === 6) patchFill({ color: `#${raw}`, type: 'color' });
-                        }}
-                    />
-                    <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        className="inspector-opacity-input"
-                        value={fill.opacity ?? 100}
-                        onChange={(e) => patchFill({ opacity: Number(e.target.value) })}
-                    />
-                    <span className="inspector-value-label">%</span>
-                </div>
+                <InspectorColorField
+                    color={hexColor}
+                    opacity={fill.opacity ?? 100}
+                    onColorChange={(c) => patchFill({ color: c, type: 'color' })}
+                    onOpacityChange={(v) => patchFill({ opacity: v })}
+                />
             )}
         </InspectorSection>
     );

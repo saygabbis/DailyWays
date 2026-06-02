@@ -25,10 +25,10 @@ const SECTIONS = [
             ['Ctrl+Shift+G', 'Desagrupar'],
             ['Shift+clique', 'Adicionar grupo à seleção'],
             ['Ctrl+clique', 'Selecionar só um item do grupo'],
-            ['Ctrl+]', 'Avançar camada'],
-            ['Ctrl+[', 'Recuar camada'],
-            ['Ctrl+Shift+]', 'Trazer para frente'],
-            ['Ctrl+Shift+[', 'Enviar para trás'],
+            [']', 'Avançar camada (um nível)'],
+            ['[', 'Recuar camada (um nível)'],
+            ['Shift+]', 'Trazer para frente'],
+            ['Shift+[', 'Enviar para trás'],
         ],
     },
     {
@@ -50,8 +50,8 @@ const SECTIONS = [
     {
         title: 'Zoom e vista',
         items: [
-            ['Scroll', 'Zoom no cursor'],
-            ['Ctrl+Scroll', 'Zoom (sem zoom do browser)'],
+            ['Scroll', 'Zoom no cursor (estilo PureRef)'],
+            ['Ctrl+Scroll', 'Zoom (evita zoom do browser)'],
             ['Ctrl+0', 'Zoom 100%'],
             ['Ctrl+1 / Shift+1', 'Ajustar à tela'],
             ['Ctrl++', 'Aumentar zoom'],

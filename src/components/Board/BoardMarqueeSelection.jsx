@@ -24,10 +24,28 @@ function rectsIntersect(a, b) {
     return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
 }
 
+function collectMarqueeCardIds(start, current) {
+    const selRect = {
+        left: Math.min(start.x, current.x),
+        top: Math.min(start.y, current.y),
+        right: Math.max(start.x, current.x),
+        bottom: Math.max(start.y, current.y),
+    };
+    const ids = [];
+    document.querySelectorAll('.board-card[data-card-id]').forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (rectsIntersect(selRect, r)) {
+            ids.push(el.getAttribute('data-card-id'));
+        }
+    });
+    return ids;
+}
+
 export default function BoardMarqueeSelection({ scrollerRef }) {
     const selectMany = useBoardSelectionStore((s) => s.selectMany);
     const clearSelection = useBoardSelectionStore((s) => s.clearSelection);
     const setShiftSelecting = useBoardSelectionStore((s) => s.setShiftSelecting);
+    const setMarqueePreviewCardIds = useBoardSelectionStore((s) => s.setMarqueePreviewCardIds);
     const [box, setBox] = useState(null);
     const activeRef = useRef(false);
     const startRef = useRef({ x: 0, y: 0 });
@@ -70,6 +88,7 @@ export default function BoardMarqueeSelection({ scrollerRef }) {
             pointerRef.current = { x: e.clientX, y: e.clientY };
             updatePointer(e.clientX, e.clientY);
             setBox({ start: startRef.current, current: startRef.current });
+            setMarqueePreviewCardIds([]);
             setShiftSelecting(true);
             startEdgeScroll();
             e.preventDefault();
@@ -79,30 +98,20 @@ export default function BoardMarqueeSelection({ scrollerRef }) {
             if (!activeRef.current) return;
             pointerRef.current = { x: e.clientX, y: e.clientY };
             updatePointer(e.clientX, e.clientY);
-            setBox({ start: startRef.current, current: { x: e.clientX, y: e.clientY } });
+            const current = { x: e.clientX, y: e.clientY };
+            setBox({ start: startRef.current, current });
+            setMarqueePreviewCardIds(collectMarqueeCardIds(startRef.current, current));
         };
 
         const finish = () => {
             if (!activeRef.current) return;
             activeRef.current = false;
             stopEdgeScroll();
+            setMarqueePreviewCardIds([]);
 
             const start = startRef.current;
             const current = pointerRef.current;
-            const selRect = {
-                left: Math.min(start.x, current.x),
-                top: Math.min(start.y, current.y),
-                right: Math.max(start.x, current.x),
-                bottom: Math.max(start.y, current.y),
-            };
-
-            const ids = [];
-            document.querySelectorAll('.board-card[data-card-id]').forEach((el) => {
-                const r = el.getBoundingClientRect();
-                if (rectsIntersect(selRect, r)) {
-                    ids.push(el.getAttribute('data-card-id'));
-                }
-            });
+            const ids = collectMarqueeCardIds(start, current);
 
             if (ids.length > 0) {
                 selectMany(ids);
@@ -135,7 +144,15 @@ export default function BoardMarqueeSelection({ scrollerRef }) {
             window.removeEventListener('keyup', onKeyUpMarquee);
             stopEdgeScroll();
         };
-    }, [selectMany, clearSelection, setShiftSelecting, startEdgeScroll, stopEdgeScroll, updatePointer]);
+    }, [
+        selectMany,
+        clearSelection,
+        setShiftSelecting,
+        setMarqueePreviewCardIds,
+        startEdgeScroll,
+        stopEdgeScroll,
+        updatePointer,
+    ]);
 
     if (!box) return null;
     const { start, current } = box;

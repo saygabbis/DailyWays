@@ -3,6 +3,7 @@ import BaseNode from './BaseNode';
 import { TEXT } from '@dailyways/limits';
 import { useEditableNodeField } from '../../interaction/hooks/useEditableNodeField';
 import { getTextStyleFromNode, textStyleToCss } from '../../shared/textStyle';
+import VectorViewportShell from '../../shared/VectorViewportShell.jsx';
 
 export default function TextNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const text = node.data?.text ?? '';
@@ -20,13 +21,11 @@ export default function TextNode({ node, onNodePointerDown, onNodeContextMenu })
 
     return (
         <BaseNode node={node} onNodePointerDown={onNodePointerDown} onNodeContextMenu={onNodeContextMenu}>
-            <div
+            <VectorViewportShell
+                width={node.width}
+                height={node.height}
                 className={`whiteboard-node text-node ${isEditing ? 'text-node--editing' : ''} ${!text && !isEditing ? 'text-node--empty' : ''}`}
-                style={{
-                    width: node.width,
-                    height: node.height,
-                    ...css,
-                }}
+                style={css}
             >
                 {isEditing ? (
                     <textarea
@@ -51,7 +50,7 @@ export default function TextNode({ node, onNodePointerDown, onNodeContextMenu })
                 ) : (
                     text || <span className="text-node-placeholder">Digite aqui…</span>
                 )}
-            </div>
+            </VectorViewportShell>
         </BaseNode>
     );
 }

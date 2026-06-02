@@ -29,6 +29,7 @@ export function useCollabPatch() {
   return {
     collabPatchNode: store.patchNode,
     collabPatchNodes: (patches) => store.patchNodes(patches),
+    collabEmitNodeOps: () => {},
     collabCreateNode: store.addNode,
     collabDeleteNodes: store.deleteNodes,
     collabCreateConnector: store.addConnector,

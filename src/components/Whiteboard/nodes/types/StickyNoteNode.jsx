@@ -6,6 +6,7 @@ import { useCollabPatch } from '../../../../collab/space/ops/SpaceCollabOpsConte
 import { recordNodesMutation } from '../../core/history/whiteboardHistory';
 import { contrastingTextColor } from '../../../../utils/contrastingTextColor';
 import { getTextStyleFromNode, textStyleToCss } from '../../shared/textStyle';
+import VectorViewportShell from '../../shared/VectorViewportShell.jsx';
 
 export default function StickyNoteNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const text = node.data?.text ?? '';
@@ -39,13 +40,11 @@ export default function StickyNoteNode({ node, onNodePointerDown, onNodeContextM
 
     return (
         <BaseNode node={node} onNodePointerDown={onNodePointerDown} onNodeContextMenu={onNodeContextMenu}>
-            <div
+            <VectorViewportShell
+                width={node.width}
+                height={node.height}
                 className="whiteboard-node sticky-note"
-                style={{
-                    width: node.width,
-                    height: node.height,
-                    backgroundColor: color,
-                }}
+                style={{ backgroundColor: color }}
             >
                 <textarea
                     className="sticky-note-text"
@@ -56,16 +55,17 @@ export default function StickyNoteNode({ node, onNodePointerDown, onNodeContextM
                     onBlur={isEditing ? handleBlur : undefined}
                     autoFocus={isEditing}
                     style={{
-                        width: '100%',
-                        height: '100%',
+                        width: node.width,
+                        height: node.height,
                         resize: 'none',
                         border: 'none',
                         background: 'transparent',
                         padding: 8,
+                        boxSizing: 'border-box',
                         ...typographyCss,
                     }}
                 />
-            </div>
+            </VectorViewportShell>
         </BaseNode>
     );
 }

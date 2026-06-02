@@ -1,6 +1,8 @@
 import React from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import InspectorSection from './InspectorSection.jsx';
+import InspectorColorField from './InspectorColorField.jsx';
+import InspectorSegmentedField from './InspectorSegmentedField.jsx';
 import { useInspectorStylePatch } from './useInspectorStylePatch.js';
 
 const ALIGN_OPTIONS = [
@@ -15,12 +17,22 @@ const DASH_OPTIONS = [
     { id: 'dotted', label: 'Pontilhada' },
 ];
 
+const IMAGE_OUTLINE_OPTIONS = [
+    { id: 'solid', label: 'Contorno' },
+    { id: 'soft', label: 'Suave' },
+    { id: 'glow', label: 'Brilho' },
+    { id: 'double', label: 'Dupla' },
+];
+
 export default function AppearanceStrokeSection({ node }) {
     const { appearance, patchAppearance } = useInspectorStylePatch(node);
     if (!appearance) return null;
 
+    const isImage = node?.type === 'image';
     const stroke = appearance.stroke ?? {};
     const hexColor = stroke.color?.startsWith('#') ? stroke.color : '#000000';
+    const smoothness = stroke.smoothness ?? 40;
+    const outlineStyle = stroke.outlineStyle ?? stroke.dash ?? 'solid';
 
     const patchStroke = (partial) => patchAppearance({ stroke: { ...stroke, ...partial } });
 
@@ -38,75 +50,65 @@ export default function AppearanceStrokeSection({ node }) {
                 </button>
             }
         >
-            <div className="inspector-block-row">
-                <input
-                    type="color"
-                    className="space-inspector-color-input inspector-swatch"
-                    value={hexColor}
-                    onChange={(e) => patchStroke({ color: e.target.value })}
-                />
-                <input
-                    type="text"
-                    className="inspector-hex-input"
-                    value={hexColor.replace('#', '').toUpperCase()}
-                    onChange={(e) => {
-                        const raw = e.target.value.replace(/[^0-9a-f]/gi, '').slice(0, 6);
-                        if (raw.length === 6) patchStroke({ color: `#${raw}` });
-                    }}
-                />
-                <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    className="inspector-opacity-input"
-                    value={stroke.opacity ?? 100}
-                    onChange={(e) => patchStroke({ opacity: Number(e.target.value) })}
-                />
-                <span className="inspector-value-label">%</span>
-            </div>
+            <InspectorColorField
+                color={hexColor}
+                opacity={stroke.opacity ?? 100}
+                onColorChange={(c) => patchStroke({ color: c })}
+                onOpacityChange={(v) => patchStroke({ opacity: v })}
+            />
 
-            <label className="space-inspector-field space-inspector-field--full">
-                <span>Espessura</span>
+            <label className="inspector-field inspector-field--full">
+                <span className="inspector-field-label">Espessura</span>
                 <input
                     type="number"
                     min={0}
                     step={0.5}
+                    className="inspector-field-control"
                     value={stroke.width ?? 1}
                     onChange={(e) => patchStroke({ width: Math.max(0, parseFloat(e.target.value) || 0) })}
                 />
             </label>
 
-            <label className="space-inspector-field space-inspector-field--full">
-                <span>Alinhamento</span>
-                <div className="inspector-segmented">
-                    {ALIGN_OPTIONS.map(({ id, label }) => (
-                        <button
-                            key={id}
-                            type="button"
-                            className={
-                                stroke.align === id || (!stroke.align && id === 'center')
-                                    ? 'active'
-                                    : ''
-                            }
-                            onClick={() => patchStroke({ align: id })}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </div>
-            </label>
+            <InspectorSegmentedField
+                label="Alinhamento"
+                value={stroke.align ?? 'center'}
+                options={ALIGN_OPTIONS}
+                onChange={(id) => patchStroke({ align: id })}
+            />
 
-            <label className="space-inspector-field space-inspector-field--full">
-                <span>Estilo</span>
-                <select
+            {isImage ? (
+                <>
+                    <InspectorSegmentedField
+                        label="Estilo"
+                        value={outlineStyle}
+                        options={IMAGE_OUTLINE_OPTIONS}
+                        onChange={(id) => patchStroke({ outlineStyle: id })}
+                    />
+                    <label className="inspector-field inspector-field--full">
+                        <span className="inspector-field-label">
+                            Suavização
+                            <span className="inspector-field-value">{smoothness}%</span>
+                        </span>
+                        <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            step={1}
+                            className="inspector-range"
+                            value={smoothness}
+                            onChange={(e) => patchStroke({ smoothness: Number(e.target.value) })}
+                        />
+                        <span className="inspector-field-hint">0 = borda dura · 100 = borda alisada</span>
+                    </label>
+                </>
+            ) : (
+                <InspectorSegmentedField
+                    label="Estilo"
                     value={stroke.dash ?? 'solid'}
-                    onChange={(e) => patchStroke({ dash: e.target.value })}
-                >
-                    {DASH_OPTIONS.map(({ id, label }) => (
-                        <option key={id} value={id}>{label}</option>
-                    ))}
-                </select>
-            </label>
+                    options={DASH_OPTIONS}
+                    onChange={(id) => patchStroke({ dash: id })}
+                />
+            )}
         </InspectorSection>
     );
 }

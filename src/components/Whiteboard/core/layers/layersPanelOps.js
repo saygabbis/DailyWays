@@ -5,17 +5,12 @@ import { buildNodesById, nodeToWorld } from '../ops/whiteboardNodeOps';
 import { recordNodesMutation, patchNodesWithHistory, pushNodesAddBatch } from '../history/whiteboardHistory';
 import { CONTAINER_NODE_TYPES, findContainerAt } from '../../interaction/viewport/viewportUtils';
 import { getNodePageId, filterNodesByPage } from '../pages/whiteboardPages';
-import { collectDescendantIds, isDescendantOf } from '../layers/layerTreeUtils';
+import { collectDescendantIds, isDescendantOf, getSiblings } from '../layers/layerTreeUtils';
 import { normalizeFrameConstraints } from '../frame/frameConstraints.js';
 
 const PASTE_STEP = 20;
 
-export function getSiblings(nodes, parentId, pageId) {
-    const pid = parentId ?? null;
-    return nodes
-        .filter((n) => getNodePageId(n) === pageId && (n.parentId ?? null) === pid)
-        .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
-}
+export { getSiblings };
 
 /** Patch para aninhar nó em container mantendo posição visual (mundo → local). */
 export function buildNestInContainerPatch(node, container, nodes) {

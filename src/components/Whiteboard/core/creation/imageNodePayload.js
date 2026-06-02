@@ -1,4 +1,6 @@
 import { getDefaultNodePayload } from '../nodeDefaults.js';
+import { getDefaultAppearanceStyle } from '../../shared/appearanceStyle.js';
+import { clampViewportZoom } from '../../interaction/viewport/viewportLimits.js';
 
 export function formatFileSizeBytes(bytes) {
     if (bytes == null) return '';
@@ -45,16 +47,26 @@ export function topLeftFromAnchor(anchor, width, height, anchorMode = 'center') 
  * Monta payload de nó image com dimensões nativas do arquivo.
  * @param {{ x: number, y: number, anchor?: 'center'|'topleft' }} placement
  */
-export async function buildImageNodePayload(file, urlOrPath, placement, storagePath = null) {
-    let width = 200;
-    let height = 150;
+export async function buildImageNodePayload(
+    file,
+    urlOrPath,
+    placement,
+    storagePath = null,
+    viewportZoom = 1
+) {
+    let naturalWidth = 200;
+    let naturalHeight = 150;
     try {
         const dims = await readImageFileDimensions(file);
-        width = dims.width;
-        height = dims.height;
+        naturalWidth = dims.width;
+        naturalHeight = dims.height;
     } catch {
         /* mantém defaults */
     }
+
+    const z = clampViewportZoom(viewportZoom);
+    const width = naturalWidth / z;
+    const height = naturalHeight / z;
 
     const anchorMode = placement.anchor ?? 'center';
     const { x, y } = topLeftFromAnchor(placement, width, height, anchorMode);
@@ -68,6 +80,13 @@ export async function buildImageNodePayload(file, urlOrPath, placement, storageP
         url: path ? null : urlOrPath,
         filename: file.name,
         size: formatFileSizeBytes(file.size),
+        naturalWidth,
+        naturalHeight,
+        objectFit: 'fill',
+    };
+    payload.style = {
+        ...(payload.style || {}),
+        appearance: getDefaultAppearanceStyle('image'),
     };
     return payload;
 }

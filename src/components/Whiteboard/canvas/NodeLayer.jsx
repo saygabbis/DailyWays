@@ -1,12 +1,15 @@
-import React, { useMemo, memo } from 'react';
+import React, { useMemo, memo, useState, useLayoutEffect } from 'react';
 import { useWhiteboardDocumentStore } from '../../../stores/whiteboardDocumentStore';
 import { useWhiteboardSelectionStore } from '../../../stores/whiteboardSelectionStore';
-import { intersectsViewport, CONTAINER_NODE_TYPES } from '../interaction/viewport/viewportUtils';
+import {
+    intersectsViewport,
+    CONTAINER_NODE_TYPES,
+    computeWorldViewportBounds,
+} from '../interaction/viewport/viewportUtils';
 import { getNodePageId } from '../core/pages/whiteboardPages';
-import ResizeHandles from './overlays/ResizeHandles';
-import { getTransformTargetIds } from '../interaction/transform/selectionTransform';
 import { NODE_COMPONENTS } from '../nodes/registry';
 import { useNodeDragTranslate, dragTranslateStyle } from '../interaction/hooks/useNodeDragTranslate';
+import { usePageSpaceAssetPrefetch } from '../../../hooks/usePageSpaceAssetPrefetch';
 
 const CanvasNode = memo(function CanvasNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const Comp = NODE_COMPONENTS[node.type] ?? NODE_COMPONENTS.sticky_note;
@@ -26,7 +29,6 @@ function FrameGroupShell({ root, children, onNodePointerDown, onNodeContextMenu 
     const dragTranslate = useNodeDragTranslate(root.id);
     const FrameComp = NODE_COMPONENTS[root.type] ?? NODE_COMPONENTS.frame;
     const rootAtZero = { ...root, x: 0, y: 0 };
-
     const clipContent = root?.data?.clipContent !== false;
 
     return (
@@ -78,43 +80,82 @@ function getChildren(nodes, parentId) {
     return nodes.filter((n) => n.parentId === parentId).sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
 }
 
-export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, onResizeStart, onRotateStart }) {
+function useContainerSize(containerRef) {
+    const [size, setSize] = useState({ width: 0, height: 0 });
+
+    useLayoutEffect(() => {
+        const el = containerRef?.current;
+        if (!el) return undefined;
+
+        const update = () => {
+            const rect = el.getBoundingClientRect();
+            setSize({
+                width: Math.max(1, Math.round(rect.width)),
+                height: Math.max(1, Math.round(rect.height)),
+            });
+        };
+
+        update();
+        const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+        ro?.observe(el);
+        window.addEventListener('resize', update);
+        return () => {
+            ro?.disconnect();
+            window.removeEventListener('resize', update);
+        };
+    }, [containerRef]);
+
+    return size;
+}
+
+function getRootId(byId, nodeId) {
+    let n = byId.get(nodeId);
+    while (n?.parentId) n = byId.get(n.parentId);
+    return n?.id ?? null;
+}
+
+export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, viewport, containerRef }) {
     const nodes = useWhiteboardDocumentStore((s) => s.nodes);
     const activePageId = useWhiteboardDocumentStore((s) => s.activePageId);
     const selectedNodeIds = useWhiteboardSelectionStore((s) => s.selectedNodeIds);
-    const groupDrill = useWhiteboardSelectionStore((s) => s.groupDrill);
-    const isolateSelection = useWhiteboardSelectionStore((s) => s.isolateSelection);
-    const viewport = useWhiteboardSelectionStore((s) => s.viewport);
+    const storeViewport = useWhiteboardSelectionStore((s) => s.viewport);
+    const liveViewport = viewport ?? storeViewport;
+    const containerSize = useContainerSize(containerRef);
+
     const pageNodes = useMemo(
         () => nodes.filter((n) => getNodePageId(n) === activePageId),
         [nodes, activePageId]
     );
     const roots = useMemo(() => getRoots(pageNodes), [pageNodes]);
+    usePageSpaceAssetPrefetch(pageNodes);
+
+    const forcedRootIds = useMemo(() => {
+        const byId = new Map(pageNodes.map((n) => [n.id, n]));
+        const ids = new Set();
+        for (const id of selectedNodeIds ?? []) {
+            const rootId = getRootId(byId, id);
+            if (rootId) ids.add(rootId);
+        }
+        return ids;
+    }, [pageNodes, selectedNodeIds]);
+
     const vp = useMemo(() => {
-        const z = Math.max(0.1, Number(viewport?.zoom) || 1);
-        const panX = Number(viewport?.panX) || 0;
-        const panY = Number(viewport?.panY) || 0;
-        const W = typeof window !== 'undefined' ? window.innerWidth : 1920;
-        const H = typeof window !== 'undefined' ? window.innerHeight : 1080;
-        const centerX = -panX / z;
-        const centerY = -panY / z;
-        const margin = 400 / z;
-        return {
-            x: centerX - W / (2 * z) - margin,
-            y: centerY - H / (2 * z) - margin,
-            width: W / z + margin * 2,
-            height: H / z + margin * 2,
-        };
-    }, [viewport]);
+        const W = containerSize.width || (typeof window !== 'undefined' ? window.innerWidth : 1920);
+        const H = containerSize.height || (typeof window !== 'undefined' ? window.innerHeight : 1080);
+        return computeWorldViewportBounds(liveViewport, W, H, 1200);
+    }, [liveViewport, containerSize.width, containerSize.height]);
 
     const visibleRoots = useMemo(() => {
         if (roots.length === 0) return [];
         if (!Number.isFinite(vp.x) || !Number.isFinite(vp.y) || vp.width <= 0 || vp.height <= 0) {
             return [...roots].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
         }
-        return roots.filter((r) => {
+
+        const selected = new Set(selectedNodeIds ?? []);
+        const filtered = roots.filter((r) => {
+            if (selected.has(r.id) || forcedRootIds.has(r.id)) return true;
             if (CONTAINER_NODE_TYPES.includes(r.type)) {
-                const children = getChildren(nodes, r.id);
+                const children = getChildren(pageNodes, r.id);
                 const selfVisible = intersectsViewport(r, vp);
                 const childVisible = children.some((c) =>
                     intersectsViewport({ ...c, x: r.x + c.x, y: r.y + c.y }, vp)
@@ -123,18 +164,9 @@ export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, onResi
             }
             return intersectsViewport(r, vp);
         }).sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
-    }, [pageNodes, roots, vp]);
 
-    const selectionContext = useMemo(
-        () => ({ groupDrill, isolateSelection }),
-        [groupDrill, isolateSelection]
-    );
-    const transformIds = useMemo(
-        () => getTransformTargetIds(selectedNodeIds, nodes, selectionContext),
-        [selectedNodeIds, nodes, selectionContext]
-    );
-    const useUnifiedTransform = transformIds.length > 1;
-    const transformIdSet = useMemo(() => new Set(transformIds), [transformIds]);
+        return filtered;
+    }, [roots, vp, pageNodes, selectedNodeIds, forcedRootIds, liveViewport, viewport, containerSize]);
 
     const renderNode = (node) => (
         <CanvasNode
@@ -166,35 +198,6 @@ export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, onResi
                 }
                 return renderNode(root);
             })}
-            {onResizeStart &&
-                !useUnifiedTransform &&
-                visibleRoots
-                    .filter((n) => transformIdSet.has(n.id) && n.width && n.height)
-                    .map((node) => (
-                        <ResizeHandles
-                            key={`resize-${node.id}`}
-                            node={node}
-                            zoom={viewport?.zoom ?? 1}
-                            onResizeStart={onResizeStart}
-                            onRotateStart={onRotateStart}
-                        />
-                    ))}
-            {onResizeStart &&
-                !useUnifiedTransform &&
-                visibleRoots.flatMap((root) =>
-                    getChildren(pageNodes, root.id)
-                        .filter((c) => transformIdSet.has(c.id) && c.width && c.height)
-                        .map((child) => (
-                            <ResizeHandles
-                                key={`resize-${child.id}`}
-                                node={child}
-                                zoom={viewport?.zoom ?? 1}
-                                onResizeStart={onResizeStart}
-                                onRotateStart={onRotateStart}
-                                offset={{ x: root.x, y: root.y }}
-                            />
-                        ))
-                )}
         </>
     );
 }

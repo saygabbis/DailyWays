@@ -45,11 +45,12 @@ export default function AppearanceCornersSection({ node }) {
             }
         >
             {linked ? (
-                <label className="space-inspector-field space-inspector-field--full">
-                    <span>Arredondamento</span>
+                <label className="inspector-field inspector-field--full">
+                    <span className="inspector-field-label">Arredondamento</span>
                     <input
                         type="number"
                         min={0}
+                        className="inspector-field-control"
                         value={appearance.cornerRadius ?? 0}
                         onChange={(e) => {
                             const v = Math.max(0, parseFloat(e.target.value) || 0);
@@ -58,13 +59,14 @@ export default function AppearanceCornersSection({ node }) {
                     />
                 </label>
             ) : (
-                <div className="space-inspector-grid">
+                <div className="space-inspector-grid inspector-corners-grid">
                     {(['tl', 'tr', 'br', 'bl']).map((key) => (
-                        <label key={key} className="space-inspector-field">
-                            <span>{key.toUpperCase()}</span>
+                        <label key={key} className="inspector-field">
+                            <span className="inspector-field-label">{key.toUpperCase()}</span>
                             <input
                                 type="number"
                                 min={0}
+                                className="inspector-field-control"
                                 value={ind[key] ?? 0}
                                 onChange={(e) => {
                                     const v = Math.max(0, parseFloat(e.target.value) || 0);

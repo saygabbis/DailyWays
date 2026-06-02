@@ -44,9 +44,10 @@ function commentToRow(comment, spaceId, actingUserId) {
 }
 
 function throwIfDbError(result, context) {
-  const error = result?.error ?? result;
-  if (error) {
-    throw new Error(`[flushRoom] ${context}: ${error.message}`);
+  const pgError = result?.error ?? null;
+  if (pgError) {
+    const detail = pgError.message || pgError.code || pgError.details || JSON.stringify(pgError);
+    throw new Error(`[flushRoom] ${context}: ${detail}`);
   }
 }
 
