@@ -162,13 +162,18 @@ export function submitOp(socket, op) {
       return;
     }
     rememberOwnOp(op?.opId);
+    // Sem resposta (socket caiu, servidor travou) a promessa não pode ficar pendurada para sempre:
+    // quem chamou devolve a op para a fila e reenvia ao reconectar.
+    const timer = setTimeout(() => reject(new Error('Op timeout')), OP_TIMEOUT_MS);
     socket.emit(CLIENT_EVENTS.OP, op, (res) => {
+      clearTimeout(timer);
       if (res?.ok) resolve(res);
       else reject(new Error(res?.error || 'Op rejected'));
     });
   });
 }
 
+const OP_TIMEOUT_MS = 10000;
 const BOARD_OP_TIMEOUT_MS = 8000;
 
 /** Op de board sem estar na sala dele: o servidor collab aplica, avisa a sala e persiste. */

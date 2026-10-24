@@ -1,4 +1,9 @@
 import { validateBoardActionLimits } from '@dailyways/limits';
+import {
+  BOARD_ACTION_TYPES,
+  normalizeBoardAction,
+  sanitizeBoardAction,
+} from '@dailyways/collab-protocol';
 import { resolveLimitError } from '../../../limits/messages.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../../../context/useApp';
@@ -27,25 +32,32 @@ import {
 } from './boardActionPriority.js';
 import { isBoardPrankFrozen } from '../dev/boardDevPrank.js';
 import { BoardCollabContext } from './useBoardCollab';
+import { boardOutbox } from './boardOutboxInstance.js';
+import { useLatestRef } from '../../../hooks/useLatestRef';
+import { waitForBoardCreation } from '../../../services/boardService';
 
 /**
  * Padrão único de mutação de board:
- * 1. dispatch local (UI imediata)
- * 2. WebSocket (sala collab ativa + conectado)
- * 3. Supabase backup em ações imediatas (completed, move, add…)
+ * 1. normaliza a ação (ids, "marcar como") e aplica localmente (UI imediata);
+ * 2. com a sala do board ao vivo (ou entrando/reconectando): fila de saída (boardOutbox), que
+ *    funde edições seguidas do mesmo item, envia em ordem e reenvia depois de reconectar;
+ * 3. fora da sala, com socket: op avulsa pelo servidor (board:op);
+ * 4. sem collab: o navegador grava (fallback).
  */
 
 const TEXT_DEBOUNCE_MS = 180;
-const OP_RETRY_ATTEMPTS = 2;
-const OP_RETRY_DELAY_MS = 300;
+/** Campos não-texto (cor, prioridade, datas…): junta o que chegar nesse intervalo numa op só. */
+const FIELD_BATCH_MS = 80;
+const RATE_LIMIT_RETRY_MS = 500;
+/** Socket caído por mais que isso com ops na fila → o navegador grava (collab fora do ar). */
+const OFFLINE_FALLBACK_MS = 5000;
+const OFF_ROOM_ATTEMPTS = 3;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-
-
-function boardActionOp(boardId, action) {
+function boardActionOp(boardId, action, opId = uuidv4()) {
   return {
-    opId: uuidv4(),
+    opId,
     type: 'update',
     entity: 'board',
     id: boardId,
@@ -55,23 +67,31 @@ function boardActionOp(boardId, action) {
   };
 }
 
+function sendDelayFor(action) {
+  if (shouldDebounceBoardAction(action)) return TEXT_DEBOUNCE_MS;
+  if (String(action?.type).startsWith('UPDATE_')) return FIELD_BATCH_MS;
+  return 0;
+}
+
+const isTransientError = (msg = '') => /not connected|timeout|Not in room|Rate limit|Board prank/i.test(msg);
+
 export function BoardCollabProvider({ children }) {
   const { dispatch, persistBoard, flushBoardPersist, setCollabBoardRoomLive, markBoardLocalEdit, state } = useApp();
   const { user } = useAuth();
   const collab = useCollab();
-  const boardsRef = useRef(state.boards);
-  boardsRef.current = state.boards;
+  const boardsRef = useLatestRef(state.boards);
   const { addToast } = useToast();
   const [activeBoardId, setActiveBoardId] = useState(null);
   const [roomReadyMap, setRoomReadyMap] = useState({});
-  const roomReadyMapRef = useRef(roomReadyMap);
-  roomReadyMapRef.current = roomReadyMap;
-  const debounceTimers = useRef(new Map());
-  const debouncedActionsRef = useRef(new Map());
+  const roomReadyMapRef = useLatestRef(roomReadyMap);
   const roomReadyRef = useRef({});
-  const pendingOpsRef = useRef({});
+  const sendTimers = useRef(new Map());
+  const inflight = useRef(new Map());
+  const offlineTimers = useRef(new Map());
   const textHistoryPendingRef = useRef(new Map());
   const textHistoryCommitTimers = useRef(new Map());
+  const socketRef = useLatestRef(collab?.socket);
+  const flushOutboxRef = useRef(null);
 
   useEffect(() => {
     useBoardHistoryStore.getState().initForUser(user?.id ?? null);
@@ -85,7 +105,7 @@ export function BoardCollabProvider({ children }) {
   const getBoardSnapshot = useCallback((boardId) => {
     const b = boardsRef.current.find((x) => x.id === boardId);
     return b ? JSON.parse(JSON.stringify(b)) : null;
-  }, []);
+  }, [boardsRef]);
 
   const setCollabPending = useCallback((boardId, pending) => {
     if (!boardId) return;
@@ -98,10 +118,14 @@ export function BoardCollabProvider({ children }) {
   }, [dispatch]);
 
   const syncPendingFlag = useCallback((boardId) => {
-    const queued = pendingOpsRef.current[boardId]?.length > 0;
-    const debouncing = [...debounceTimers.current.keys()].some((k) => k.startsWith(`${boardId}:`));
-    setCollabPending(boardId, queued || debouncing);
+    setCollabPending(boardId, boardOutbox.pendingCount(boardId) > 0);
   }, [setCollabPending]);
+
+  /** Mostra o estado "confirmado + pendentes" (depois de recusa ou rebase). */
+  const showBoard = useCallback((boardId, board) => {
+    if (!board) return;
+    dispatch({ type: 'UPDATE_BOARD', payload: { id: boardId, updates: { lists: board.lists, title: board.title, emoji: board.emoji, color: board.color } } });
+  }, [dispatch]);
 
   const isBoardRoomLive = useCallback((boardId) => {
     return Boolean(collab?.connected && roomReadyRef.current[boardId]);
@@ -110,91 +134,127 @@ export function BoardCollabProvider({ children }) {
   const isBoardRoomReady = useCallback((boardId) => {
     if (!isCollabEnabled() || !boardId) return true;
     return Boolean(roomReadyMapRef.current[boardId]);
-  }, []);
+  }, [roomReadyMapRef]);
 
-  const submitActionToServer = useCallback(async (boardId, action) => {
-    const socket = collab?.socket;
-    if (!socket?.connected || !boardId || !action?.type) return false;
-    setCollabSaving(boardId, true);
-    const opPayload = boardActionOp(boardId, action);
-    try {
-      for (let attempt = 0; attempt <= OP_RETRY_ATTEMPTS; attempt += 1) {
-        try {
-          if (!socket?.connected) throw new Error('Socket not connected');
-          // Aceito pelo servidor → ele persiste. Nada de salvar o board inteiro daqui.
-          await submitOp(socket, opPayload);
-          return true;
-        } catch (err) {
-          if (attempt < OP_RETRY_ATTEMPTS) {
-            await sleep(OP_RETRY_DELAY_MS);
-            continue;
-          }
-          throw err;
-        }
+  /** Op avulsa (fora da sala). Mesmo opId nas tentativas: o servidor não aplica duas vezes. */
+  const submitOffRoom = useCallback(async (boardId, op) => {
+    let lastErr = null;
+    for (let attempt = 0; attempt < OFF_ROOM_ATTEMPTS; attempt += 1) {
+      try {
+        await submitBoardOp(socketRef.current, boardId, op);
+        return true;
+      } catch (err) {
+        lastErr = err;
+        if (!isTransientError(err?.message)) break;
+        await sleep(RATE_LIMIT_RETRY_MS * (attempt + 1));
       }
-      return true;
-    } catch (err) {
-      console.warn('[boardCollab] op failed', err.message);
-      const msg = err.message?.includes('Rate limit')
-        ? 'Muitas alterações ao mesmo tempo. Aguarde um instante.'
-        : socket?.connected
-          ? 'Alteração no board não foi aceita pelo servidor. Recarregue o board se algo parecer errado.'
-          : 'Alteração no board não foi sincronizada. Salvando localmente…';
-      toastCollabError(addToast, msg);
-      // Fallback: só grava pelo navegador se a sala não estiver mais ao vivo (o AppContext decide).
-      persistBoard(boardId, { force: true, ensureSave: true });
-      return false;
-    } finally {
-      setCollabSaving(boardId, false);
-      syncPendingFlag(boardId);
     }
-  }, [collab?.socket, persistBoard, setCollabSaving, syncPendingFlag, addToast]);
+    console.warn('[boardCollab] off-room op failed', lastErr?.message);
+    return false;
+  }, [socketRef]);
 
-  /**
-   * Edição de um board de FORA da sala dele (Importante, Planejado, Diário, outra aba…).
-   * Vai pelo servidor collab, que é o único que grava enquanto há conexão. Antes o navegador
-   * mandava o board inteiro para o banco e sobrescrevia (ou era sobrescrito por) quem estava
-   * dentro do board — era o "app esquecendo alterações" com várias pessoas.
-   */
-  const submitOffRoomAction = useCallback(async (boardId, action) => {
-    const socket = collab?.socket;
-    setCollabSaving(boardId, true);
-    try {
-      await submitBoardOp(socket, boardId, boardActionOp(boardId, action));
-      return true;
-    } catch (err) {
-      console.warn('[boardCollab] off-room op failed', err?.message);
-      persistBoard(boardId, { force: true, ensureSave: true });
-      return false;
-    } finally {
-      setCollabSaving(boardId, false);
-    }
-  }, [collab?.socket, persistBoard, setCollabSaving]);
+  const sendEntry = useCallback((boardId, entry) => {
+    const socket = socketRef.current;
+    const op = boardActionOp(boardId, entry.action, entry.opId);
+    const promise = submitOp(socket, op)
+      .then((res) => {
+        if (res?.duplicate) {
+          boardOutbox.dropDuplicate(boardId, entry.opId);
+        } else if (boardOutbox.pendingActions(boardId).includes(entry.action)) {
+          // Ack sem o eco (raro): confirma por aqui.
+          boardOutbox.applyServerOp(boardId, entry.opId, entry.action);
+        }
+        return true;
+      })
+      .catch(async (err) => {
+        const msg = err?.message || '';
+        if (/Not in room/i.test(msg)) {
+          // Saiu do board antes do servidor processar: entrega como op avulsa.
+          const ok = await submitOffRoom(boardId, op);
+          boardOutbox.dropDuplicate(boardId, entry.opId);
+          if (!ok) persistBoard(boardId, { force: true, ensureSave: true });
+          return ok;
+        }
+        if (isTransientError(msg)) {
+          // Volta para a fila: reenvia já (limite/timeout com socket de pé) ou no próximo join.
+          boardOutbox.markUnsent(boardId, entry.opId);
+          setTimeout(() => flushOutboxRef.current?.(boardId), RATE_LIMIT_RETRY_MS);
+          return false;
+        }
+        console.warn('[boardCollab] op recusada', msg);
+        showBoard(boardId, boardOutbox.reject(boardId, entry.opId));
+        toastCollabError(addToast, 'Uma alteração não foi aceita pelo servidor e foi desfeita.');
+        return false;
+      })
+      .finally(() => {
+        inflight.current.delete(entry.opId);
+        syncPendingFlag(boardId);
+      });
+    inflight.current.set(entry.opId, promise);
+    return promise;
+  }, [socketRef, submitOffRoom, persistBoard, showBoard, addToast, syncPendingFlag]);
 
-  useEffect(() => () => {
-    for (const timer of debounceTimers.current.values()) {
-      clearTimeout(timer);
-    }
-    debounceTimers.current.clear();
-    debouncedActionsRef.current.clear();
-    pendingOpsRef.current = {};
-  }, []);
-
-  const flushPendingOps = useCallback((boardId) => {
-    const queue = pendingOpsRef.current[boardId];
-    if (!queue?.length) return;
-    delete pendingOpsRef.current[boardId];
-    syncPendingFlag(boardId);
-    if (!collab?.socket?.connected) {
-      persistBoard(boardId, { force: true, ensureSave: true });
+  const flushOutbox = useCallback((boardId) => {
+    const timer = sendTimers.current.get(boardId);
+    if (timer) clearTimeout(timer);
+    sendTimers.current.delete(boardId);
+    if (!socketRef.current?.connected) return;
+    const entries = boardOutbox.takeUnsent(boardId);
+    if (!entries.length) return;
+    if (roomReadyRef.current[boardId]) {
+      for (const entry of entries) void sendEntry(boardId, entry);
       return;
     }
-    (async () => {
-      for (const action of queue) {
-        await submitActionToServer(boardId, action);
+    // Sem sala (saiu do board ou o join falhou): entrega em ordem como ops avulsas.
+    void (async () => {
+      for (const entry of entries) {
+        const ok = await submitOffRoom(boardId, boardActionOp(boardId, entry.action, entry.opId));
+        boardOutbox.dropDuplicate(boardId, entry.opId);
+        if (!ok) persistBoard(boardId, { force: true, ensureSave: true });
       }
+      syncPendingFlag(boardId);
     })();
-  }, [collab?.socket, submitActionToServer, persistBoard, syncPendingFlag]);
+  }, [socketRef, sendEntry, submitOffRoom, persistBoard, syncPendingFlag]);
+
+  useEffect(() => {
+    flushOutboxRef.current = flushOutbox;
+  }, [flushOutbox]);
+
+  /** Socket caído com op nova na fila: se não voltar logo, o navegador grava o board. */
+  const armOfflineFallback = useCallback((boardId) => {
+    const timers = offlineTimers.current;
+    if (timers.has(boardId)) return;
+    timers.set(boardId, setTimeout(() => {
+      timers.delete(boardId);
+      if (socketRef.current?.connected) return;
+      boardOutbox.clearPending(boardId);
+      syncPendingFlag(boardId);
+      persistBoard(boardId, { force: true, ensureSave: true });
+    }, OFFLINE_FALLBACK_MS));
+  }, [socketRef, persistBoard, syncPendingFlag]);
+
+  const scheduleFlush = useCallback((boardId, delay) => {
+    const existing = sendTimers.current.get(boardId);
+    if (existing && delay > 0) return; // já tem envio marcado; a fusão cuida do resto
+    if (existing) clearTimeout(existing);
+    sendTimers.current.set(boardId, setTimeout(() => flushOutbox(boardId), delay));
+  }, [flushOutbox]);
+
+  // Socket caiu com ops na fila: espera a reconexão um pouco; se não voltar, o navegador grava.
+  useEffect(() => {
+    const timers = offlineTimers.current;
+    if (collab?.connected) {
+      for (const t of timers.values()) clearTimeout(t);
+      timers.clear();
+      return;
+    }
+    for (const boardId of boardOutbox.boardsWithPending()) armOfflineFallback(boardId);
+  }, [collab?.connected, armOfflineFallback]);
+
+  useEffect(() => () => {
+    for (const timer of sendTimers.current.values()) clearTimeout(timer);
+    sendTimers.current.clear();
+  }, []);
 
   const setBoardRoomReady = useCallback((boardId, ready) => {
     if (!boardId) return;
@@ -206,56 +266,34 @@ export function BoardCollabProvider({ children }) {
     if (ready) {
       roomReadyRef.current[boardId] = true;
       setCollabBoardRoomLive(true);
-      flushPendingOps(boardId);
+      flushOutbox(boardId);
     } else {
+      // Saindo da sala: o que ainda não foi enviado vai agora (o servidor processa antes do leave).
+      if (roomReadyRef.current[boardId]) flushOutbox(boardId);
       delete roomReadyRef.current[boardId];
       setCollabBoardRoomLive(false);
       setCollabSaving(boardId, false);
     }
-  }, [flushPendingOps, setCollabSaving, setCollabBoardRoomLive]);
+  }, [flushOutbox, setCollabSaving, setCollabBoardRoomLive]);
 
-  const sendBoardOp = useCallback((boardId, action) => {
-    if (!boardId || !action?.type) return Promise.resolve(false);
-
-    if (!collab?.socket?.connected) return Promise.resolve(false);
-
-    if (!roomReadyRef.current[boardId]) {
-      if (!pendingOpsRef.current[boardId]) pendingOpsRef.current[boardId] = [];
-      pendingOpsRef.current[boardId].push(action);
-      syncPendingFlag(boardId);
-      return Promise.resolve(false);
-    }
-
-    return submitActionToServer(boardId, action);
-  }, [collab?.socket, submitActionToServer, syncPendingFlag]);
-
+  // Aba escondida/fechando: envia já o que está esperando a janela de fusão.
   useEffect(() => {
-    const flushDebounced = () => {
-      for (const timer of textHistoryCommitTimers.current.values()) {
-        clearTimeout(timer);
-      }
+    const flushAll = () => {
+      for (const timer of textHistoryCommitTimers.current.values()) clearTimeout(timer);
       textHistoryCommitTimers.current.clear();
       flushAllPendingTextHistory(textHistoryPendingRef.current);
-      for (const [key, action] of debouncedActionsRef.current.entries()) {
-        const boardId = key.split(':')[0];
-        const timer = debounceTimers.current.get(key);
-        if (timer) clearTimeout(timer);
-        debounceTimers.current.delete(key);
-        if (boardId && action) sendBoardOp(boardId, action);
-      }
-      debouncedActionsRef.current.clear();
+      for (const boardId of [...sendTimers.current.keys()]) flushOutbox(boardId);
     };
     const onHide = () => {
-      if (document.visibilityState !== 'hidden') return;
-      flushDebounced();
+      if (document.visibilityState === 'hidden') flushAll();
     };
-    window.addEventListener('pagehide', flushDebounced);
+    window.addEventListener('pagehide', flushAll);
     document.addEventListener('visibilitychange', onHide);
     return () => {
-      window.removeEventListener('pagehide', flushDebounced);
+      window.removeEventListener('pagehide', flushAll);
       document.removeEventListener('visibilitychange', onHide);
     };
-  }, [sendBoardOp]);
+  }, [flushOutbox]);
 
   const commitTextHistoryForKey = useCallback((boardId, key) => {
     const pending = textHistoryPendingRef.current.get(key);
@@ -296,56 +334,30 @@ export function BoardCollabProvider({ children }) {
     return () => registerTextHistoryFlush(null);
   }, [commitTextHistoryForKey]);
 
-  const emitBoardAction = useCallback((boardId, action, options = {}) => {
-    if (!boardId || !action?.type) return Promise.resolve();
-
-    const send = () => sendBoardOp(boardId, action);
-
-    if (shouldDebounceBoardAction(action) && !options.skipHistory) {
-      const key = historyDebounceKey(boardId, action);
-      setCollabPending(boardId, true);
-      debouncedActionsRef.current.set(key, action);
-      if (debounceTimers.current.has(key)) clearTimeout(debounceTimers.current.get(key));
-      debounceTimers.current.set(
-        key,
-        setTimeout(() => {
-          debounceTimers.current.delete(key);
-          debouncedActionsRef.current.delete(key);
-          send();
-        }, TEXT_DEBOUNCE_MS),
-      );
-      return Promise.resolve();
+  const collabDispatchForBoard = useCallback(async (boardId, rawAction, options = {}) => {
+    if (!rawAction?.type || !boardId) return;
+    if (isBoardPrankFrozen()) return;
+    if (!BOARD_ACTION_TYPES.has(rawAction.type)) {
+      dispatch(rawAction);
+      return;
     }
 
-    return send();
-  }, [sendBoardOp, setCollabPending]);
-
-  const collabDispatchForBoard = useCallback(async (boardId, action, options = {}) => {
-    if (!action?.type || !boardId) return;
-    if (isBoardPrankFrozen()) return;
-
     const board = getBoardSnapshot(boardId);
+    const action = normalizeBoardAction(sanitizeBoardAction(rawAction), board);
     const limitErr = validateBoardActionLimits(board, action);
     if (limitErr) {
       addToast(resolveLimitError(limitErr), 'error');
       return;
     }
 
-    const textDebounced = shouldDebounceBoardAction(action) && !options.skipHistory;
-
     if (!options.skipHistory) {
-      if (textDebounced) {
+      if (shouldDebounceBoardAction(action)) {
         const key = historyDebounceKey(boardId, action);
-        stashTextHistoryPending(
-          textHistoryPendingRef.current,
-          boardId,
-          getBoardSnapshot(boardId),
-          action,
-        );
+        stashTextHistoryPending(textHistoryPendingRef.current, boardId, board, action);
         scheduleTextHistoryCommit(boardId, key);
       } else {
         flushAllPendingTextHistory(textHistoryPendingRef.current, boardId);
-        recordBoardHistory(boardId, getBoardSnapshot(boardId), action);
+        recordBoardHistory(boardId, board, action);
       }
     }
 
@@ -353,58 +365,44 @@ export function BoardCollabProvider({ children }) {
     markBoardLocalEdit?.(boardId);
 
     const collabOn = isCollabEnabled();
-    const live = collabOn && isBoardRoomLive(boardId);
-    const joiningActiveBoard = collabOn
-      && collab?.connected
-      && activeBoardId === boardId
-      && !live;
+    const connected = collabOn && Boolean(collab?.connected);
+    const inRoomFlow = collabOn && (
+      roomReadyRef.current[boardId]
+      || activeBoardId === boardId
+    );
 
-    const collabConnected = collabOn && collab?.connected;
-    const offRoom = collabConnected && !live;
-
-    // Socket só com sala do board ativa (vista Board). Fora da sala → só Supabase (sem toast).
-    if (collabConnected && live) {
-      const sendOp = async () => {
-        if (shouldDebounceBoardAction(action) && !options.skipHistory) {
-          if (options.awaitCollab) {
-            await emitBoardAction(boardId, action, options);
-          } else {
-            emitBoardAction(boardId, action, options);
-          }
-          return;
-        }
-        if (options.awaitCollab) {
-          await submitActionToServer(boardId, action);
-        } else {
-          emitBoardAction(boardId, action, options);
-        }
-      };
-
-      if (options.awaitCollab) {
-        await sendOp();
-      } else if (joiningActiveBoard) {
-        if (!pendingOpsRef.current[boardId]) pendingOpsRef.current[boardId] = [];
-        pendingOpsRef.current[boardId].push(action);
-        syncPendingFlag(boardId);
-      } else {
-        sendOp().catch((err) => console.warn('[boardCollab] op failed', err?.message));
-      }
-    } else if (collabConnected && joiningActiveBoard) {
-      if (!pendingOpsRef.current[boardId]) pendingOpsRef.current[boardId] = [];
-      pendingOpsRef.current[boardId].push(action);
+    // Board aberto (sala ao vivo, entrando ou reconectando): fila de saída.
+    if (inRoomFlow && (connected || offlineTimers.current.has(boardId) || boardOutbox.hasConfirmed(boardId))) {
+      const opId = boardOutbox.enqueue(boardId, action, uuidv4());
       syncPendingFlag(boardId);
-    } else if (offRoom) {
-      // Fora da sala: o servidor aplica e grava (o fallback do navegador só roda se ele recusar).
-      // Sequencial por board: a ordem das ações (ex.: MOVE_CARD e depois UPDATE_CARD) importa.
-      await submitOffRoomAction(boardId, action);
+      if (!connected) {
+        armOfflineFallback(boardId); // reenvia ao reconectar; se demorar, o navegador grava
+        return;
+      }
+      if (options.awaitCollab) {
+        flushOutbox(boardId);
+        await inflight.current.get(opId);
+        return;
+      }
+      scheduleFlush(boardId, sendDelayFor(action));
       return;
     }
 
-    const needsDbBackup = !options.deferPersist && (
-      options.forcePersist
-      || (!collabConnected && !options.skipHistory && shouldBackupBoardActionToSupabase(action))
-    );
+    // Fora da sala, com socket: o servidor aplica e grava (o navegador só grava se ele recusar).
+    if (connected) {
+      setCollabSaving(boardId, true);
+      // Board acabou de ser criado: o servidor só pode carregá-lo depois das listas no banco.
+      await waitForBoardCreation(boardId);
+      const ok = await submitOffRoom(boardId, boardActionOp(boardId, action));
+      setCollabSaving(boardId, false);
+      if (!ok) persistBoard(boardId, { force: true, ensureSave: true });
+      return;
+    }
 
+    // Sem collab: o navegador grava.
+    const needsDbBackup = !options.deferPersist && (
+      options.forcePersist || shouldBackupBoardActionToSupabase(action) || action.type === 'UPDATE_BOARD'
+    );
     if (needsDbBackup) {
       if (options.awaitPersist && flushBoardPersist) {
         await flushBoardPersist(boardId);
@@ -412,12 +410,13 @@ export function BoardCollabProvider({ children }) {
         persistBoard(boardId, { force: true, ensureSave: true });
       }
     }
-  }, [getBoardSnapshot, dispatch, markBoardLocalEdit, isBoardRoomLive, collab?.connected, activeBoardId, addToast, scheduleTextHistoryCommit, emitBoardAction, submitActionToServer, submitOffRoomAction, syncPendingFlag, flushBoardPersist, persistBoard]);
+  }, [getBoardSnapshot, dispatch, markBoardLocalEdit, collab?.connected, activeBoardId, addToast, scheduleTextHistoryCommit, syncPendingFlag, armOfflineFallback, flushOutbox, scheduleFlush, setCollabSaving, submitOffRoom, flushBoardPersist, persistBoard]);
 
   const collabDispatch = useCallback((action, explicitBoardId, options) => {
     const boardId =
       explicitBoardId
       || action?.payload?.boardId
+      || (action?.type === 'UPDATE_BOARD' ? action?.payload?.id : null)
       || activeBoardId;
     if (!boardId) {
       dispatch(action);
@@ -435,6 +434,8 @@ export function BoardCollabProvider({ children }) {
     setActiveBoardId,
     setBoardRoomReady,
     isBoardRoomReady,
+    isBoardRoomLive,
+    flushBoardOutbox: flushOutbox,
   }), [
     collabDispatch,
     collabDispatchForBoard,
@@ -443,6 +444,8 @@ export function BoardCollabProvider({ children }) {
     setActiveBoardId,
     setBoardRoomReady,
     isBoardRoomReady,
+    isBoardRoomLive,
+    flushOutbox,
   ]);
 
   return (
@@ -451,7 +454,3 @@ export function BoardCollabProvider({ children }) {
     </BoardCollabContext.Provider>
   );
 }
-
-
-
-

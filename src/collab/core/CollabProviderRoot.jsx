@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { SERVER_EVENTS } from '@dailyways/collab-protocol';
+import { CLIENT_EVENTS, SERVER_EVENTS } from '@dailyways/collab-protocol';
 import { useAuth } from '../../context/useAuth';
 import { supabase } from '../../services/supabaseClient';
 import { useWhiteboardStore } from '../../stores/whiteboardStore';
@@ -193,13 +193,23 @@ export default function CollabProviderRoot({ children }) {
 
       const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
         if (cancelled || !session?.access_token) return;
-        if (event === 'TOKEN_REFRESHED') {
-          reconnectWithToken(session.access_token);
-          return;
-        }
         if (sock) {
           sock.auth = { token: session.access_token };
         }
+        if (event !== 'TOKEN_REFRESHED') return;
+        // Troca o token no servidor sem derrubar o socket (as salas e a fila de ops continuam).
+        // Só reconecta se o servidor não aceitar (servidor antigo, sem o evento).
+        if (!sock?.connected) return;
+        const token = session.access_token;
+        let answered = false;
+        const fallback = setTimeout(() => {
+          if (!answered) reconnectWithToken(token);
+        }, 5000);
+        sock.emit(CLIENT_EVENTS.AUTH_REFRESH, { token }, (res) => {
+          answered = true;
+          clearTimeout(fallback);
+          if (!res?.ok) reconnectWithToken(token);
+        });
       });
       authSub = sub;
     })();

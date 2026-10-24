@@ -268,6 +268,17 @@ export function useBoardPersistence({ userId, userIdRef, dispatch, stateRef, ini
         saveTimeoutRef.current = timeouts;
     }, [userId, initialLoadDone, isBoardServerAuthoritative, shouldPersistBoard, suppressRealtime, dispatch, executeBoardPersistNow]);
 
+    /** Espera os saves do navegador deste board terminarem (antes de entrar na sala do collab). */
+    const waitForBoardSaves = useCallback(async (boardId, timeoutMs = 15000) => {
+        const start = Date.now();
+        while (
+            (saveInProgressRef.current[boardId] || saveTimeoutRef.current?.[boardId])
+            && Date.now() - start < timeoutMs
+        ) {
+            await new Promise((r) => setTimeout(r, 50));
+        }
+    }, []);
+
     // Salva todos os boards com debounce pendente imediatamente (usado pelo botão flutuante)
     const saveAllPending = useCallback(async () => {
         const timeouts = saveTimeoutRef.current || {};
@@ -435,6 +446,7 @@ export function useBoardPersistence({ userId, userIdRef, dispatch, stateRef, ini
         shouldPersistBoard,
         executeBoardPersistNow,
         flushBoardPersist,
+        waitForBoardSaves,
         persistBoard,
         saveAllPending,
         persistBoardImmediate,

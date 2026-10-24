@@ -205,6 +205,17 @@ export function appReducer(state, action) {
                 boards: state.boards.map(b => b.id === action.payload.id ? { ...b, ...action.payload.updates } : b),
             };
 
+        // Realtime: versão do banco de UM board (troca ou acrescenta, sem mexer no resto do estado).
+        case 'REPLACE_BOARD_FROM_SERVER': {
+            const board = action.payload;
+            if (!board?.id) return state;
+            const exists = state.boards.some((b) => b.id === board.id);
+            return {
+                ...state,
+                boards: exists ? state.boards.map((b) => (b.id === board.id ? board : b)) : [...state.boards, board],
+            };
+        }
+
         case 'DELETE_BOARD': {
             const deletedBoard = state.boards.find(b => b.id === action.payload);
             const groupId = deletedBoard?.groupId;

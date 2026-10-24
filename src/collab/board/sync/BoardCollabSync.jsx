@@ -3,10 +3,8 @@ import { useEffect, useRef, useCallback } from 'react';
 import { SERVER_EVENTS } from '@dailyways/collab-protocol';
 
 import { useApp } from '../../../context/useApp';
-import {
-  boardStructuralFingerprint,
-  isStaleBoardSnapshot,
-} from './boardFingerprint.js';
+import { boardOutbox } from '../ops/boardOutboxInstance.js';
+import { waitForBoardCreation } from '../../../services/boardService';
 
 import { useAuth } from '../../../context/useAuth';
 
@@ -64,13 +62,11 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
     setCollabActiveBoardId,
     setCollabConnectedForBoard,
     state,
-    pendingBoardIds,
-    savingBoardIds,
+    waitForBoardSaves,
   } = useApp();
 
   const boardsRef = useLatestRef(state.boards);
-  const pendingBoardIdsRef = useLatestRef(pendingBoardIds);
-  const savingBoardIdsRef = useLatestRef(savingBoardIds);
+  const waitForBoardSavesRef = useLatestRef(waitForBoardSaves);
 
   const joinedRef = useRef(null);
 
@@ -79,8 +75,6 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
   const joinGenRef = useRef(0);
 
   const presenceBumpTimerRef = useRef(null);
-
-  const hydratedBoardIdsRef = useRef(new Set());
 
   const boardCollabRef = useLatestRef(boardCollab);
 
@@ -193,31 +187,23 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
 
 
+    /**
+     * Snapshot do servidor (todo join/rejoin) = estado confirmado; o que ainda está na fila de
+     * saída é reaplicado por cima. Antes o snapshot só era aplicado no 1º join e era ignorado com
+     * ops pendentes: depois de reconectar a tela ficava sem as edições dos outros.
+     */
     const applyBoardSnapshot = (board) => {
       if (!board || cancelled) return;
-      if (
-        pendingBoardIdsRef.current.includes(board.id)
-        || savingBoardIdsRef.current.includes(board.id)
-      ) {
-        return;
-      }
+      const shown = boardOutbox.setConfirmed(board.id, board);
+      boardOutbox.resetSent(board.id);
       const current = boardsRef.current.find((b) => b.id === board.id);
-      if (!current) {
-        dispatch({
-          type: 'UPDATE_BOARD',
-          payload: { id: board.id, updates: board },
-        });
-        return;
-      }
-      if (isStaleBoardSnapshot(current, board)) {
-        return;
-      }
-      if (boardStructuralFingerprint(current) === boardStructuralFingerprint(board)) {
+      if (current && JSON.stringify(current.lists) === JSON.stringify(shown.lists)
+        && current.title === shown.title && current.color === shown.color && current.emoji === shown.emoji) {
         return;
       }
       dispatch({
         type: 'UPDATE_BOARD',
-        payload: { id: board.id, updates: board },
+        payload: { id: board.id, updates: { lists: shown.lists, title: shown.title, color: shown.color, emoji: shown.emoji } },
       });
     };
 
@@ -311,6 +297,14 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
         }
 
+        // Save do navegador (fallback offline) ainda em andamento: entra depois, senão o servidor
+        // carregaria o board antigo e gravaria por cima.
+        await Promise.all([
+          waitForBoardSavesRef.current?.(joiningBoardId),
+          waitForBoardCreation(joiningBoardId),
+        ]);
+        if (cancelled || effectGenRef.current !== gen || joinGenRef.current !== joinGen) return;
+
 
 
         const res = await joinBoardRoom(socket, joiningBoardId);
@@ -331,12 +325,7 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
         boardCollabRef.current?.setActiveBoardId?.(joiningBoardId);
 
-        const alreadyHydrated = hydratedBoardIdsRef.current.has(joiningBoardId);
-
-        if (!alreadyHydrated && res.board) {
-          applyBoardSnapshot(res.board);
-          hydratedBoardIdsRef.current.add(joiningBoardId);
-        }
+        if (res.board) applyBoardSnapshot(res.board);
 
         boardCollabRef.current?.setBoardRoomReady?.(joiningBoardId, true);
 
@@ -384,6 +373,8 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
         console.warn('[BoardCollabSync] join failed', err.message);
 
         boardCollabRef.current?.setBoardRoomReady?.(joiningBoardId, false);
+        // O que ficou na fila vai como op avulsa (ou o navegador grava, se o servidor recusar).
+        boardCollabRef.current?.flushBoardOutbox?.(joiningBoardId);
 
         joinedRef.current = null;
 
@@ -549,6 +540,7 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
         });
 
         latestBoardCollab?.setBoardRoomReady?.(boardAtCleanup, false);
+        boardOutbox.dropConfirmed(boardAtCleanup);
 
         setCollabActiveBoardId(null);
 
@@ -558,18 +550,7 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
     };
 
-  }, [boardId, collab?.socket, dispatch, setCollabActiveBoardId, setCollabConnectedForBoard, publishNow, boardCollabRef, pendingBoardIdsRef, savingBoardIdsRef, boardsRef, authRef]);
-
-
-
-  useEffect(() => {
-
-    const hydrated = hydratedBoardIdsRef.current;
-    return () => {
-      hydrated.delete(boardId);
-    };
-
-  }, [boardId]);
+  }, [boardId, collab?.socket, dispatch, setCollabActiveBoardId, setCollabConnectedForBoard, publishNow, boardCollabRef, waitForBoardSavesRef, boardsRef, authRef]);
 
 
 

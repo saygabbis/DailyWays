@@ -1,103 +1,119 @@
 /**
  * Realtime do Supabase (postgres_changes) para sincronizar boards entre abas/usuários.
- * Ignora o eco das próprias gravações e, com a sala de collab ao vivo, o eco de lists/cards/subtasks.
+ *
+ * Cada evento recarrega SÓ o board afetado (antes: todos os boards do usuário a cada linha
+ * alterada — com o save tocando centenas de linhas, era o "engarrafamento"). O board com a sala
+ * de collab ao vivo é ignorado: o servidor collab já entrega as ops dele em tempo real.
  */
 import { useEffect } from 'react';
 import { supabase } from '../../services/supabaseClient';
-import { fetchBoards } from '../../services/boardService';
+import { fetchBoard, fetchBoards } from '../../services/boardService';
 import { logger } from '../../utils/logger';
 import { isCollabEnabled } from '../../collab/core/collabConfig.js';
+import { resolveRealtimeBoardId } from './realtimeBoardTarget.js';
 
 /** Janela em que uma edição local ainda pode não ter chegado ao banco (flush do collab ~600 ms). */
 const LOCAL_EDIT_GRACE_MS = 4000;
+const DEBOUNCE_MS = 250;
+const FULL = '__all__';
 
 export function useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone, activeSavesRef, realtimeSuppressUntilRef, collabActiveBoardIdRef, collabConnectedRef, collabBoardRoomLiveRef, recentLocalEditsRef }) {
-    // ── Realtime: subscribe to postgres_changes for cross-tab / multi-user sync ──
     useEffect(() => {
         if (!userId) return;
-        // Only subscribe after the initial load is done to avoid duplicate SET_BOARDS
-        // We poll until initialLoadDone.current is true (it's a ref, so not tracked by React)
         let cancelled = false;
         let realtimeChannel = null;
         let debounceTimer = null;
+        const dirty = new Set();
+
+        const isLiveRoom = (boardId) => (
+            isCollabEnabled()
+            && boardId
+            && boardId === collabActiveBoardIdRef.current
+            && collabConnectedRef.current
+            && collabBoardRoomLiveRef.current
+        );
+        const editedRecently = (boardId) => (
+            Date.now() - (recentLocalEditsRef?.current?.get(boardId) ?? 0) < LOCAL_EDIT_GRACE_MS
+        );
+
+        const schedule = (delay = DEBOUNCE_MS) => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(run, delay);
+        };
+
+        const replaceBoard = (board, boardId) => {
+            if (board) {
+                dispatch({ type: 'REPLACE_BOARD_FROM_SERVER', payload: board });
+            } else if (stateRef.current.boards.some((b) => b.id === boardId)) {
+                // Apagado ou o acesso foi removido.
+                dispatch({ type: 'DELETE_BOARD', payload: boardId });
+            }
+        };
+
+        async function run() {
+            if (cancelled || !dirty.size) return;
+            // Save do próprio navegador em andamento: espera terminar (o eco dele chega depois).
+            if (activeSavesRef.current > 0 || Date.now() < realtimeSuppressUntilRef.current) {
+                schedule(Math.max(DEBOUNCE_MS, realtimeSuppressUntilRef.current - Date.now()));
+                return;
+            }
+            const ids = [...dirty];
+            dirty.clear();
+
+            if (ids.includes(FULL)) {
+                logger.debug('[realtime] refetch completo');
+                const { data, error } = await fetchBoards(userId);
+                if (cancelled || error) return;
+                const localById = new Map(stateRef.current.boards.map((b) => [b.id, b]));
+                let keptRecent = false;
+                const merged = data.map((b) => {
+                    const local = localById.get(b.id);
+                    if (!local) return b;
+                    if (isLiveRoom(b.id)) return local;
+                    if (editedRecently(b.id)) {
+                        keptRecent = true;
+                        dirty.add(b.id);
+                        return local;
+                    }
+                    return b;
+                });
+                dispatch({ type: 'SET_BOARDS', payload: merged });
+                if (keptRecent) schedule(LOCAL_EDIT_GRACE_MS);
+                return;
+            }
+
+            for (const boardId of ids) {
+                if (cancelled) return;
+                if (isLiveRoom(boardId)) continue;
+                // Edição local ainda chegando ao banco: confere de novo quando o banco alcançar.
+                if (editedRecently(boardId)) {
+                    dirty.add(boardId);
+                    continue;
+                }
+                const { data, error } = await fetchBoard(boardId);
+                if (cancelled || error) continue;
+                if (editedRecently(boardId) || isLiveRoom(boardId)) {
+                    dirty.add(boardId);
+                    continue;
+                }
+                replaceBoard(data, boardId);
+            }
+            if (dirty.size) schedule(LOCAL_EDIT_GRACE_MS);
+        }
+
+        const handleChange = (payload) => {
+            const target = resolveRealtimeBoardId(payload, stateRef.current.boards);
+            if (target && target !== FULL && isLiveRoom(target)) return;
+            dirty.add(target || FULL);
+            schedule();
+        };
 
         const waitAndSubscribe = () => {
-            if (activeSavesRef.current > 0) {
+            if (cancelled) return;
+            if (activeSavesRef.current > 0 || !initialLoadDone.current) {
                 setTimeout(waitAndSubscribe, 200);
                 return;
             }
-
-            if (!initialLoadDone.current) {
-                // Initial load not done yet — retry in 200ms
-                setTimeout(waitAndSubscribe, 200);
-                return;
-            }
-
-            const handleChange = (payload) => {
-                const table = payload?.table;
-                const collabEchoOnLiveBoard =
-                    isCollabEnabled()
-                    && collabActiveBoardIdRef.current
-                    && collabConnectedRef.current
-                    && collabBoardRoomLiveRef.current;
-
-                if (
-                    collabEchoOnLiveBoard
-                    && ['lists', 'cards', 'subtasks'].includes(table)
-                ) {
-                    return;
-                }
-
-                // If THIS tab triggered this write, skip the echo to avoid overwriting
-                // optimistic local state with potentially stale server data.
-                const now = Date.now();
-                const suppressedByWindow = now < realtimeSuppressUntilRef.current;
-                const suppressedByActiveSaves = activeSavesRef.current > 0;
-
-                if (suppressedByWindow || suppressedByActiveSaves) {
-                    return;
-                }
-
-                if (debounceTimer) clearTimeout(debounceTimer);
-                // Realtime: refetch curto para melhorar sensação de "instantâneo"
-                const refetch = async () => {
-                    if (cancelled) return;
-                    logger.debug('[AppContext] Realtime refetch for user', userId.slice(0, 8));
-
-                    const { data, error } = await fetchBoards(userId);
-
-                    if (cancelled || error) {
-                        return;
-                    }
-                    const activeId = collabActiveBoardIdRef.current;
-                    const collabLive =
-                        isCollabEnabled()
-                        && activeId
-                        && collabConnectedRef.current;
-                    const now = Date.now();
-                    const recent = recentLocalEditsRef?.current ?? new Map();
-                    const keepLocal = (boardId) => (
-                        (collabLive && boardId === activeId)
-                        || now - (recent.get(boardId) ?? 0) < LOCAL_EDIT_GRACE_MS
-                    );
-                    const localById = new Map(stateRef.current.boards.map((b) => [b.id, b]));
-                    let keptRecent = false;
-                    const merged = data.map((b) => {
-                        const local = localById.get(b.id);
-                        if (!local || !keepLocal(b.id)) return b;
-                        if (b.id !== activeId) keptRecent = true;
-                        return local;
-                    });
-                    dispatch({ type: 'SET_BOARDS', payload: merged });
-                    // Manteve versão local de board recém-editado: confere de novo quando o banco alcançar.
-                    if (keptRecent && !cancelled) {
-                        if (debounceTimer) clearTimeout(debounceTimer);
-                        debounceTimer = setTimeout(refetch, LOCAL_EDIT_GRACE_MS);
-                    }
-                };
-                debounceTimer = setTimeout(refetch, 250);
-            };
-
             realtimeChannel = supabase
                 .channel('dailyways-sync-' + userId.slice(0, 8))
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'boards' }, handleChange)

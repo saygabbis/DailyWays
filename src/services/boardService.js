@@ -32,41 +32,65 @@ import {
 
 // ── Helpers: DB row → app ──────────────────────────────────────────
 
-// ── Detecta se coluna "position" existe na tabela cards ────────────
-// Cacheamos para não bater na API toda vez.
-let _cardsHasPosition = null;
-
-async function cardsHasPositionColumn() {
-  if (_cardsHasPosition !== null) return _cardsHasPosition;
-  try {
-    // Tenta buscar 0 rows ordenando por position.
-    // Se a coluna não existir, o Supabase retorna erro 400/42703.
-    const { error } = await supabase
-      .from('cards')
-      .select('id')
-      .order('position', { ascending: true })
-      .limit(0);
-    _cardsHasPosition = !error;
-  } catch {
-    _cardsHasPosition = false;
-  }
-  if (!_cardsHasPosition) {
-    console.warn(
-      '[boardService] Coluna "position" não encontrada na tabela cards. ' +
-      'Execute a migration 20250218160000_cards_position_and_rls_fix.sql no SQL Editor do Supabase.'
-    );
-  }
-  return _cardsHasPosition;
-}
-
-// Prepara o row de card, removendo "position" se a coluna não existir
-function cardToRowSafe(card, listId, position, hasPosition) {
-  const row = cardToRow(card, listId, position);
-  if (!hasPosition) delete row.position;
-  return row;
-}
-
 // ── Fetch ──────────────────────────────────────────────────────────
+
+const BOARD_COLUMNS = 'id, title, color, emoji, position, group_id, owner_id, created_at';
+const LIST_COLUMNS = 'id, board_id, title, color, position, is_completion_list';
+const CARD_COLUMNS = 'id, list_id, title, description, priority, due_date, start_date, is_all_day, recurrence_rule, my_day, day_category, estimated_minutes, labels, color, cover_attachment_id, created_at, updated_at, completed, position';
+const SUBTASK_COLUMNS = 'id, card_id, title, done, position, link_url, link_label, created_at, updated_at';
+
+/** Ids por requisição em `.in(...)`: centenas de UUIDs numa URL só estouram o limite do proxy. */
+const IN_CHUNK = 120;
+
+/**
+ * `.in(coluna, ids)` em lotes. Qualquer lote com erro → erro (nunca devolve parcial: um board sem as
+ * subtarefas, se salvo depois, apagaria as subtarefas do banco).
+ */
+async function selectIn(table, columns, column, ids, orderBy) {
+  const rows = [];
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    let q = supabase.from(table).select(columns).in(column, ids.slice(i, i + IN_CHUNK));
+    if (orderBy) q = q.order(orderBy, { ascending: true });
+    const { data, error } = await q;
+    if (error) return { data: null, error };
+    rows.push(...(data ?? []));
+  }
+  if (orderBy && ids.length > IN_CHUNK) rows.sort((a, b) => (a[orderBy] ?? 0) - (b[orderBy] ?? 0));
+  return { data: rows, error: null };
+}
+
+/** Listas, cards e subtarefas dos boards dados, montados no formato do app. */
+async function loadBoardContents(boardRows) {
+  const boardIds = boardRows.map((b) => b.id);
+  const lists = boardIds.length
+    ? await selectIn('lists', LIST_COLUMNS, 'board_id', boardIds, 'position')
+    : { data: [], error: null };
+  if (lists.error) return { data: null, error: lists.error.message || 'Erro ao carregar listas.' };
+
+  const listIds = lists.data.map((l) => l.id);
+  const cards = listIds.length
+    ? await selectIn('cards', CARD_COLUMNS, 'list_id', listIds, 'position')
+    : { data: [], error: null };
+  if (cards.error) return { data: null, error: cards.error.message || 'Erro ao carregar cards.' };
+
+  const cardIds = cards.data.map((c) => c.id);
+  const subtasks = cardIds.length
+    ? await selectIn('subtasks', SUBTASK_COLUMNS, 'card_id', cardIds)
+    : { data: [], error: null };
+  if (subtasks.error) return { data: null, error: subtasks.error.message || 'Erro ao carregar subtarefas.' };
+
+  const subtasksByCard = {};
+  for (const s of subtasks.data) (subtasksByCard[s.card_id] ??= []).push(s);
+  const cardsByList = {};
+  for (const c of cards.data) (cardsByList[c.list_id] ??= []).push(rowToCard(c, subtasksByCard[c.id] ?? []));
+  const listsByBoard = {};
+  for (const l of lists.data) (listsByBoard[l.board_id] ??= []).push(rowToList(l, cardsByList[l.id] ?? []));
+
+  const data = boardRows
+    .map((b) => ({ ...rowToBoard(b), lists: listsByBoard[b.id] ?? [] }))
+    .sort((a, b) => (a.position - b.position) || (new Date(a.createdAt) - new Date(b.createdAt)));
+  return { data, error: null };
+}
 
 /**
  * Busca todos os boards do usuário (owner ou member) com listas, cards e subtarefas.
@@ -76,11 +100,9 @@ function cardToRowSafe(card, listId, position, hasPosition) {
 export async function fetchBoards(userId) {
   if (!userId) return { data: [], error: null };
 
-  const hasPosition = await cardsHasPositionColumn();
-
   const { data: owned, error: ownedErr } = await supabase
     .from('boards')
-    .select('id, title, color, emoji, position, group_id, owner_id, created_at')
+    .select(BOARD_COLUMNS)
     .eq('owner_id', userId)
     .order('position', { ascending: true });
   if (ownedErr) {
@@ -101,17 +123,12 @@ export async function fetchBoards(userId) {
   const memberBoardIds = (memberRows ?? []).map(r => r.board_id).filter(id => !ownedIds.has(id));
   let boardsData = [...(owned ?? [])];
   if (memberBoardIds.length > 0) {
-    const { data: shared, error: sharedErr } = await supabase
-      .from('boards')
-      .select('id, title, color, emoji, position, group_id, owner_id, created_at')
-      .in('id', memberBoardIds)
-      .order('position', { ascending: true });
-    if (sharedErr) {
-      console.error('[boardService] fetchBoards shared boards error', sharedErr);
-      return { data: [], error: sharedErr.message || 'Erro ao carregar boards partilhados.' };
+    const shared = await selectIn('boards', BOARD_COLUMNS, 'id', memberBoardIds, 'position');
+    if (shared.error) {
+      console.error('[boardService] fetchBoards shared boards error', shared.error);
+      return { data: [], error: shared.error.message || 'Erro ao carregar boards partilhados.' };
     }
-    // Usar o que o SELECT devolver (pode ser parcial); não falhar só porque veio 0 linhas
-    boardsData = boardsData.concat(shared ?? []);
+    boardsData = boardsData.concat(shared.data);
   }
 
   if (!boardsData.length) {
@@ -138,76 +155,26 @@ export async function fetchBoards(userId) {
     return { data: [], error: null };
   }
 
-  const boardIds = boardsData.map(b => b.id);
-
-  // ── Lists ──
-  const { data: listsData, error: listsError } = await supabase
-    .from('lists')
-    .select('id, board_id, title, color, position, is_completion_list')
-    .in('board_id', boardIds)
-    .order('position', { ascending: true });
-  if (listsError) {
-    console.error('[boardService] fetchBoards lists error', listsError);
-    return { data: [], error: listsError.message || 'Erro ao carregar listas.' };
+  const { data, error } = await loadBoardContents(boardsData);
+  if (error) {
+    console.error('[boardService] fetchBoards contents error', error);
+    return { data: [], error };
   }
-
-  // ── Cards ──
-  const listIds = (listsData ?? []).map(l => l.id);
-
-  // Usa position se existir, senão created_at
-  const baseCardSelect = 'id, list_id, title, description, priority, due_date, start_date, is_all_day, recurrence_rule, my_day, labels, color, cover_attachment_id, created_at, updated_at, completed';
-  let cardsQuery = supabase.from('cards').select(hasPosition ? `${baseCardSelect}, position` : baseCardSelect).in('list_id', listIds);
-  if (hasPosition) {
-    cardsQuery = cardsQuery.order('position', { ascending: true });
-  } else {
-    cardsQuery = cardsQuery.order('created_at', { ascending: true });
-  }
-  const { data: cardsData, error: cardsError } = await cardsQuery;
-  if (cardsError) {
-    console.error('[boardService] fetchBoards cards error', cardsError);
-    return { data: [], error: cardsError.message || 'Erro ao carregar cards.' };
-  }
-
-  // ── Subtasks ──
-  const cardIds = (cardsData ?? []).map(c => c.id);
-  let subtasksData = [];
-  if (cardIds.length > 0) {
-    const { data: stData, error: stErr } = await supabase
-      .from('subtasks')
-      .select('id, card_id, title, done, position, link_url, link_label, created_at, updated_at')
-      .in('card_id', cardIds);
-    if (stErr) {
-      console.error('[boardService] fetchBoards subtasks error', stErr);
-    }
-    subtasksData = stData ?? [];
-  }
-
-  // ── Montar estrutura ──
-  const subtasksByCard = {};
-  subtasksData.forEach(s => {
-    if (!subtasksByCard[s.card_id]) subtasksByCard[s.card_id] = [];
-    subtasksByCard[s.card_id].push(s);
-  });
-
-  const cardsByList = {};
-  (cardsData ?? []).forEach(c => {
-    if (!cardsByList[c.list_id]) cardsByList[c.list_id] = [];
-    cardsByList[c.list_id].push(rowToCard(c, subtasksByCard[c.id] ?? []));
-  });
-
-  const listsByBoard = {};
-  (listsData ?? []).forEach(l => {
-    if (!listsByBoard[l.board_id]) listsByBoard[l.board_id] = [];
-    listsByBoard[l.board_id].push(rowToList(l, cardsByList[l.id] ?? []));
-  });
-
-  const data = boardsData.map(b => ({
-    ...rowToBoard(b),
-    lists: listsByBoard[b.id] ?? [],
-  })).sort((a, b) => (a.position - b.position) || (new Date(a.createdAt) - new Date(b.createdAt)));
-
-  console.log(`[boardService] fetchBoards OK: ${data.length} boards, ${(listsData ?? []).length} lists, ${(cardsData ?? []).length} cards, ${subtasksData.length} subtasks`);
   return { data, error: null };
+}
+
+/**
+ * Um board só (Realtime): antes cada evento recarregava TODOS os boards do usuário.
+ * data = null quando o board não existe mais ou o usuário perdeu o acesso.
+ */
+export async function fetchBoard(boardId) {
+  if (!boardId) return { data: null, error: null };
+  const { data: row, error } = await supabase.from('boards').select(BOARD_COLUMNS).eq('id', boardId).maybeSingle();
+  if (error) return { data: null, error: error.message || 'Erro ao carregar board.' };
+  if (!row) return { data: null, error: null };
+  const contents = await loadBoardContents([row]);
+  if (contents.error) return { data: null, error: contents.error };
+  return { data: contents.data[0] ?? null, error: null };
 }
 
 // ── Sharing helpers: members & invitations ───────────────────────────
@@ -225,14 +192,39 @@ export async function deleteBoard(boardId) {
 
 // ── Insert ──────────────────────────────────────────────────────────
 
+/** Boards sendo criados agora: o join no collab espera (senão o servidor carrega o board vazio). */
+const creatingBoards = new Map();
+
+/** Resolve quando a criação do board (se houver) terminar. */
+export function waitForBoardCreation(boardId) {
+  return creatingBoards.get(boardId) ?? Promise.resolve();
+}
+
+/** Linhas em lotes: um INSERT por tabela em vez de um por linha. */
+async function insertRows(table, rows) {
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await supabase.from(table).insert(rows.slice(i, i + 500));
+    if (error) return error;
+  }
+  return null;
+}
+
 /**
  * Insere um board completo (board + board_members + lists + cards + subtasks).
+ * Antes: um INSERT por lista/card/subtarefa, e o board já abria (e entrava no collab) no meio do
+ * caminho — o servidor carregava o board sem listas e o próximo flush apagava as listas padrão.
  */
-export async function insertBoardFull(userId, board) {
-  const hasPosition = await cardsHasPositionColumn();
-  const boardId = board.id;
+export function insertBoardFull(userId, board) {
+  const run = insertBoardFullNow(userId, board);
+  creatingBoards.set(board.id, run);
+  run.finally(() => {
+    if (creatingBoards.get(board.id) === run) creatingBoards.delete(board.id);
+  });
+  return run;
+}
 
-  console.log(`[boardService] insertBoardFull: board "${board.title}" (${boardId}), ${(board.lists ?? []).length} lists`);
+async function insertBoardFullNow(userId, board) {
+  const boardId = board.id;
 
   const { error: boardErr } = await supabase.from('boards').insert({
     id: boardId,
@@ -266,36 +258,22 @@ export async function insertBoardFull(userId, board) {
   }
 
   const lists = board.lists ?? [];
-  for (let i = 0; i < lists.length; i++) {
-    const list = lists[i];
-    const { error: listErr } = await supabase.from('lists').insert(listToRow(list, boardId, i));
-    if (listErr) {
-      console.error('[boardService] insertBoardFull list error', list.id, listErr);
-      return { success: false, error: listErr.message };
-    }
-
-    const cards = list.cards ?? [];
-    for (let ci = 0; ci < cards.length; ci++) {
-      const card = cards[ci];
-      const { error: cardErr } = await supabase.from('cards').insert(cardToRowSafe(card, list.id, ci, hasPosition));
-      if (cardErr) {
-        console.error('[boardService] insertBoardFull card error', card.id, cardErr);
-        return { success: false, error: cardErr.message };
-      }
-
-      const subtasks = card.subtasks ?? [];
-      for (let si = 0; si < subtasks.length; si++) {
-        const st = subtasks[si];
-        const { error: stErr } = await supabase.from('subtasks').insert(subtaskToRow(st, card.id, si));
-        if (stErr) {
-          console.error('[boardService] insertBoardFull subtask error', st.id, stErr);
-          return { success: false, error: stErr.message };
-        }
-      }
+  const cards = lists.flatMap((list) => (list.cards ?? []).map((card, ci) => cardToRow(card, list.id, ci)));
+  const subtasks = lists.flatMap((list) => (list.cards ?? []).flatMap((card) =>
+    (card.subtasks ?? []).map((st, si) => subtaskToRow(st, card.id, si))));
+  const steps = [
+    ['lists', lists.map((list, i) => listToRow(list, boardId, i))],
+    ['cards', cards],
+    ['subtasks', subtasks],
+  ];
+  for (const [table, rows] of steps) {
+    const err = rows.length ? await insertRows(table, rows) : null;
+    if (err) {
+      console.error(`[boardService] insertBoardFull ${table} error`, err);
+      return { success: false, error: err.message };
     }
   }
 
-  console.log(`[boardService] insertBoardFull OK: board "${board.title}"`);
   return { success: true };
 }
 

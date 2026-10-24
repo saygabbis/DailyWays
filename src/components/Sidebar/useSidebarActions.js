@@ -75,7 +75,13 @@ export function useSidebarActions(ctx) {
         dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: true } });
         if (suppressRealtime) suppressRealtime(3000);
         try {
-            await insertBoardFull(user.id, { ...newBoard, position: state.boards.length });
+            const res = await insertBoardFull(user.id, { ...newBoard, position: state.boards.length });
+            if (!res?.success) {
+                dispatch({
+                    type: 'PUSH_SAVE_ERROR',
+                    payload: { boardId: newBoard.id, boardTitle: newBoard.title, boardSnapshot: null, error: res?.error || 'Não foi possível criar o board.' },
+                });
+            }
         } finally {
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__board_ops__', saving: false } });
         }
