@@ -6,6 +6,7 @@ import { User, Palette, Globe, Smartphone, ChevronRight, Shield, X, ShieldCheck,
 import logoWhite from '../../assets/Logo - Branco.png';
 import logoBlack from '../../assets/Logo - Preto.png';
 import './Settings.css';
+import './AvatarCropper.css';
 import AccountPanel from './panels/AccountPanel';
 import SecurityPanel from './panels/SecurityPanel';
 import AppearancePanel from './panels/AppearancePanel';

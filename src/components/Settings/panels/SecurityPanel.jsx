@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback, memo } from 'react';
 import { ShieldCheck, Link2, Unlink } from 'lucide-react';
 import { Chrome, Command, Github } from 'lucide-react';
 import { ENABLE_MICROSOFT_LOGIN } from '../../../config';
-import '../Settings.css';
-import '../AvatarCropper.css';
 
 const PROVIDERS = [
     { id: 'google', label: 'Google', icon: Chrome },

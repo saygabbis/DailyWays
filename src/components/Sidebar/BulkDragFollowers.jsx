@@ -1,5 +1,4 @@
 import { useRef, useEffect } from 'react';
-import './Sidebar.css';
 
 /** "Corrente" de itens que segue o cursor ao arrastar vários boards/spaces selecionados. */
 const BulkDragFollowers = ({ count, items = [] }) => {

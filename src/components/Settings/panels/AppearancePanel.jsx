@@ -4,8 +4,6 @@ import { Plus } from 'lucide-react';
 import CustomAccentPopover from '../CustomAccentPopover';
 import { CUSTOM_ACCENT_ID } from '../../../context/ThemeContext';
 import { PRESENCE_COLOR_PRESETS } from '../../../utils/presenceColor';
-import '../Settings.css';
-import '../AvatarCropper.css';
 
 // ─────────────────────────────────────────────
 // APPEARANCE PANEL

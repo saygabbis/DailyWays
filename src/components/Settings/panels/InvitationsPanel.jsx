@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback, memo } from 'react';
 import { useApp } from '../../../context/useApp';
 import { fetchMyInvitations, fetchMyInvitationHistory, clearMyInvitationHistory, acceptInvitation, declineInvitation } from '../../../services/boardSharingService';
-import '../Settings.css';
-import '../AvatarCropper.css';
 
 // ─────────────────────────────────────────────
 // INVITATIONS PANEL

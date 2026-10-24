@@ -1,6 +1,5 @@
 /** Ações da sidebar: criar/renomear/duplicar/apagar boards, spaces e pastas, seleção em massa e menus de contexto. */
 import { insertBoardFull } from '../../services/boardService';
-import './Sidebar.css';
 import { uuidv4 } from '../../utils/uuid';
 import { useSidebarContextMenus } from './useSidebarContextMenus';
 

@@ -2,8 +2,6 @@ import { useState, useEffect, memo } from 'react';
 import { Smartphone, Save, Bell } from 'lucide-react';
 import pkg from '../../../../package.json';
 import { getNotificationPrefs, setNotificationPrefs } from '../../../services/notificationPrefs';
-import '../Settings.css';
-import '../AvatarCropper.css';
 
 // ─────────────────────────────────────────────
 // APP PANEL

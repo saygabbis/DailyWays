@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback, memo } from 'react';
 import { fetchContacts, fetchContactRequests, respondToContactRequest } from '../../../services/contactsService';
 import { fetchBlockedUsers, unblockUser } from '../../../services/privacyService';
-import '../Settings.css';
-import '../AvatarCropper.css';
 
 // ─────────────────────────────────────────────
 // CONTACTS PANEL (settings)

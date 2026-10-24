@@ -1,7 +1,7 @@
 /** Raio/forma da borda usada no preview de arrasto de um nó (elipse, cantos da aparência ou borderRadius). */
 import { getCornerRadii } from '../../shared/appearanceStyle';
 
-export const DEFAULT_NODE_RADIUS = {
+const DEFAULT_NODE_RADIUS = {
     sticky_note: 8,
     comment: 8,
     todo_list: 8,

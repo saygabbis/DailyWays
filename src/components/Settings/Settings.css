@@ -156,6 +156,8 @@
     justify-content: space-between;
     gap: var(--space-md);
     flex-wrap: wrap;
+    /* mesmo respiro do título solto; a descrição logo abaixo usa margin-top negativo */
+    margin-bottom: var(--space-lg);
 }
 
 .settings-section-head .settings-section-title {

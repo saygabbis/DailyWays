@@ -1,6 +1,4 @@
 import { memo } from 'react';
-import '../Settings.css';
-import '../AvatarCropper.css';
 
 // ─────────────────────────────────────────────
 // LANGUAGE PANEL

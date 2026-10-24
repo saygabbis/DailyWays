@@ -1,8 +1,6 @@
 import { useState, useEffect, memo } from 'react';
 import { Save, Shield, Bell, ShieldCheck } from 'lucide-react';
 import { fetchPrivacySettings, updatePrivacySettings } from '../../../services/privacyService';
-import '../Settings.css';
-import '../AvatarCropper.css';
 
 const PRIVACY_ALLOW_OPTIONS = [
     { id: 'everyone', label: 'Todos' },

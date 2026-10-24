@@ -83,11 +83,11 @@ export async function inviteBoardMember(boardId, identifier, role = 'reader') {
   return { success: true };
 }
 
-export const INVITE_BASE_SELECT = 'id, board_id, inviter_id, invitee_email, invitee_user_id, role, status, created_at';
+const INVITE_BASE_SELECT = 'id, board_id, inviter_id, invitee_email, invitee_user_id, role, status, created_at';
 
-export const SPACE_INVITE_BASE_SELECT = 'id, space_id, inviter_id, invitee_email, invitee_user_id, role, status, created_at';
+const SPACE_INVITE_BASE_SELECT = 'id, space_id, inviter_id, invitee_email, invitee_user_id, role, status, created_at';
 
-export function mapBoardInviteRow(row) {
+function mapBoardInviteRow(row) {
   return {
     id: row.id,
     kind: 'board',
@@ -105,7 +105,7 @@ export function mapBoardInviteRow(row) {
   };
 }
 
-export function mapSpaceInviteRow(row) {
+function mapSpaceInviteRow(row) {
   return {
     id: row.id,
     kind: 'space',
@@ -123,7 +123,7 @@ export function mapSpaceInviteRow(row) {
   };
 }
 
-export async function fetchInviteRowsForUser(table, baseSelect, statusFilter, user, emailLower) {
+async function fetchInviteRowsForUser(table, baseSelect, statusFilter, user, emailLower) {
   const isPending = statusFilter === 'pending';
   const statusClause = Array.isArray(statusFilter)
     ? (q) => q.in('status', statusFilter)
@@ -160,7 +160,7 @@ export async function fetchInviteRowsForUser(table, baseSelect, statusFilter, us
   return { data: [...unique.values()], error: null };
 }
 
-export async function enrichInvitations(items) {
+async function enrichInvitations(items) {
   if (!items.length) return items;
 
   const boardIds = [...new Set(items.filter((i) => i.kind !== 'space').map((i) => i.boardId).filter(Boolean))];
@@ -324,7 +324,7 @@ export async function declineInvitation(inviteId, kind = 'board') {
 }
 
 /** Valores válidos em board_members.role (incl. admin). */
-export function normalizeBoardMemberRole(role) {
+function normalizeBoardMemberRole(role) {
   if (role === 'owner') return 'owner';
   if (role === 'admin') return 'admin';
   if (role === 'editor') return 'editor';

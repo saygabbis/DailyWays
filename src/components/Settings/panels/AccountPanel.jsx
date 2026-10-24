@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect, useCallback, memo, lazy, Suspense } from 'react';
 import { Save, LogOut, Camera, Trash2 } from 'lucide-react';
 import { TEXT } from '@dailyways/limits';
-import '../Settings.css';
-import '../AvatarCropper.css';
 
 const AvatarCropper = lazy(() => import('../AvatarCropper'));
 

@@ -1,7 +1,7 @@
 /** Estado inicial, paletas e o board de boas-vindas de um usuário novo. */
 import { uuidv4 } from '../../utils/uuid';
 
-export const LABEL_COLORS = [
+const LABEL_COLORS = [
     { id: 'red', name: 'Vermelho', color: '#ff6b6b' },
     { id: 'orange', name: 'Laranja', color: '#ffa06b' },
     { id: 'yellow', name: 'Amarelo', color: '#ffd93d' },

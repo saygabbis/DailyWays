@@ -1,5 +1,5 @@
 /** Constantes e helpers de criação por arrasto (lógica principal em CanvasShell). */
-export const CREATION_DRAG_TOOLS = new Set([
+const CREATION_DRAG_TOOLS = new Set([
     'sticky_note',
     'text',
     'shape',

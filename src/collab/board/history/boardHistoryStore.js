@@ -3,7 +3,7 @@ import storageService from '../../../services/storageService';
 import { uuidv4 } from '../../../utils/uuid';
 import { scheduleRemoteBoardHistoryPersist, resetBoardHistoryHydrationCache } from './boardHistorySync.js';
 
-export const BOARD_HISTORY_MAX = 1000;
+const BOARD_HISTORY_MAX = 1000;
 
 function storageKey(userId) {
     return `dailyways_board_history_v1_${userId}`;
