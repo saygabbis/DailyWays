@@ -24,3 +24,15 @@ ALTER FUNCTION public.handle_updated_at() SET search_path = public;
 ALTER FUNCTION public.storage_space_id_from_path(text) SET search_path = public;
 ALTER FUNCTION public.storage_conversation_id_from_path(text) SET search_path = public;
 ALTER FUNCTION public.profiles_reserved_username_guard() SET search_path = public;
+
+-- 5) Checagens usadas DENTRO das políticas RLS continuam executáveis por anon: sem sessão elas
+--    sempre respondem "não" (auth.uid() é NULL), e sem o EXECUTE uma consulta anônima daria erro
+--    de permissão em vez de voltar vazia. (Aplicado logo após o item 1, na mesma janela.)
+GRANT EXECUTE ON FUNCTION
+  public.auth_user_is_board_member(uuid), public.board_member_target_is_board_owner(uuid, uuid),
+  public.can_access_card(uuid), public.can_access_space(uuid, boolean), public.can_edit_card_content(uuid),
+  public.can_moderate_card_comments(uuid), public.has_contact_request_with(uuid), public.is_board_admin(uuid),
+  public.is_board_owner(uuid), public.is_contact(uuid), public.is_shared_board_member(uuid), public.is_space_owner(uuid),
+  public.owns_board(uuid), public.storage_conversation_id_from_path(text), public.storage_space_id_from_path(text),
+  public.can_send_conversation_message(uuid), public.is_conversation_participant(uuid)
+TO anon;
