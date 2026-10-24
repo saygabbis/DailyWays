@@ -135,6 +135,8 @@ function TaskList({ cards, emptyText, limit = 5, showAllLabel, ...itemProps }) {
     );
 }
 
+const isCompleted = c => c._list?.isCompletionList === true;
+
 export default function DashboardView() {
     const { state, getMyDayCards, getMyDayCardsAll } = useApp();
     // O anel de progresso entra animado de 0 até o valor real; depois acompanha direto.
@@ -144,8 +146,7 @@ export default function DashboardView() {
         b.lists.flatMap(l => l.cards.map(c => ({ ...c, _list: l, _board: b })))
     ), [state.boards]);
 
-    const isCompleted = c => c._list?.isCompletionList === true;
-    const activeCards = useMemo(() => allCardsWithMeta.filter(c => c._list?.isCompletionList !== true), [allCardsWithMeta]);
+    const activeCards = useMemo(() => allCardsWithMeta.filter(c => !isCompleted(c)), [allCardsWithMeta]);
     const completedCards = allCardsWithMeta.filter(isCompleted);
 
     const allSubtasks = useMemo(() => state.boards.flatMap(b =>
