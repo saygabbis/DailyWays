@@ -59,7 +59,7 @@ export default function SpaceRemoteDragLayer({ viewport, worldContainerRef = nul
       }
     }
     return out;
-  }, [collab?.connected, myId, peers, viewport?.panX, viewport?.panY, viewport?.zoom, worldContainerRef]);
+  }, [collab?.connected, myId, peers, viewport, worldContainerRef]);
 
   if (!collab?.connected || dragGhosts.length === 0) return null;
 

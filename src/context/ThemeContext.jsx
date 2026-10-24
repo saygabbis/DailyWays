@@ -603,7 +603,7 @@ export function ThemeProvider({ children }) {
         storageService.save('dailyways_custom_accent', JSON.stringify(value));
         setAccentId(CUSTOM_ACCENT_ID);
         saveToDb({ accent: CUSTOM_ACCENT_ID });
-    }, []);
+    }, [saveToDb]);
 
     const setCustomAccentValue = useCallback((value) => {
         setCustomAccentValueState(value);

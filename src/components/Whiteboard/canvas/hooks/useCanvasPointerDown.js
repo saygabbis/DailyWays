@@ -110,15 +110,7 @@ export function useCanvasPointerDown(ctx) {
                 }
             }
         },
-        [
-            viewportState,
-            isSpacePressed,
-            activeTool,
-            commitTextEdit,
-            viewportForChildren,
-            tryPickGuideOnBackground,
-            clearGuideSelection,
-        ]
+        [isCanvasBackground, isSpacePressed, rightMousePanRef, viewportState, containerRef, commitTextEdit, activeTool, tryPickGuideOnBackground, isDragCreationTool, clearGuideSelection, setSelectionBox, viewportForChildren, createDragRef, setCreatePreview]
     );
 
     return {

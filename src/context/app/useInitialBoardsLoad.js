@@ -115,5 +115,6 @@ export function useInitialBoardsLoad({ userId, dispatch, initialLoadDone, saveTi
             }
         })();
         return () => { cancelled = true; };
-    }, [userId]);
+        // Só userId dispara: o resto são refs/dispatch (identidade estável).
+    }, [userId, dispatch, initialLoadDone, saveTimeoutRef, activeSavesRef, realtimeSuppressUntilRef]);
 }

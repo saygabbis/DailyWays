@@ -110,5 +110,5 @@ export function useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone,
                 supabase.removeChannel(realtimeChannel);
             }
         };
-    }, [userId]);
+    }, [userId, dispatch, stateRef, initialLoadDone, activeSavesRef, realtimeSuppressUntilRef, collabActiveBoardIdRef, collabConnectedRef, collabBoardRoomLiveRef]);
 }

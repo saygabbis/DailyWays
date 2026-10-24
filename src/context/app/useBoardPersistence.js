@@ -111,7 +111,7 @@ export function useBoardPersistence({ userId, userIdRef, dispatch, stateRef, ini
             logger.error('[AppContext] getFreshUserId error:', err.message);
             return null;
         }
-    }, []);
+    }, [userIdRef]);
 
     const shouldPersistBoard = useCallback((boardId, { force = false } = {}) => {
         if (!boardId) return true;
@@ -223,7 +223,7 @@ export function useBoardPersistence({ userId, userIdRef, dispatch, stateRef, ini
         dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
         delete saveTimeoutRef.current[boardId];
         delete saveInProgressRef.current[boardId];
-    }, [userId, suppressRealtime, getFreshUserId, dispatch, isBoardServerAuthoritative]);
+    }, [userId, initialLoadDone, isBoardServerAuthoritative, dispatch, suppressRealtime, stateRef, getFreshUserId]);
 
     const flushBoardPersist = useCallback(async (boardId) => {
         if (!userId || !initialLoadDone.current || !boardId) return;
@@ -237,7 +237,7 @@ export function useBoardPersistence({ userId, userIdRef, dispatch, stateRef, ini
         dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: false } });
         suppressRealtime(8000);
         await executeBoardPersistNow(boardId);
-    }, [userId, shouldPersistBoard, suppressRealtime, dispatch, executeBoardPersistNow]);
+    }, [userId, initialLoadDone, shouldPersistBoard, dispatch, suppressRealtime, executeBoardPersistNow]);
 
     // Helper para salvar um board específico de forma eficiente
     const persistBoard = useCallback(async (boardId, options = {}) => {
@@ -259,7 +259,7 @@ export function useBoardPersistence({ userId, userIdRef, dispatch, stateRef, ini
         }, options.force ? 0 : 180);
 
         saveTimeoutRef.current = timeouts;
-    }, [userId, suppressRealtime, shouldPersistBoard, dispatch, executeBoardPersistNow, isBoardServerAuthoritative]);
+    }, [userId, initialLoadDone, isBoardServerAuthoritative, shouldPersistBoard, suppressRealtime, dispatch, executeBoardPersistNow]);
 
     // Salva todos os boards com debounce pendente imediatamente (usado pelo botão flutuante)
     const saveAllPending = useCallback(async () => {
@@ -274,7 +274,7 @@ export function useBoardPersistence({ userId, userIdRef, dispatch, stateRef, ini
         suppressRealtime(8000);
 
         await Promise.all(boardIds.map((boardId) => flushBoardPersist(boardId)));
-    }, [suppressRealtime, flushBoardPersist]);
+    }, [stateRef, suppressRealtime, flushBoardPersist]);
 
     // Helper interno compartilhado para persistência imediata com rollback + token refresh
     const persistBoardImmediate = useCallback(async (boardId, updates, options = {}) => {
@@ -343,7 +343,7 @@ export function useBoardPersistence({ userId, userIdRef, dispatch, stateRef, ini
             if (activeSavesRef.current === 0) suppressRealtime(2000);
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
         }
-    }, [suppressRealtime, getFreshUserId]);
+    }, [shouldPersistBoard, stateRef, dispatch, suppressRealtime, getFreshUserId]);
 
     // Atualiza board no estado e persiste IMEDIATAMENTE (usado para Drag & Drop e mudanças estruturais)
     const updateBoardAndPersistImmediate = useCallback(async (boardId, updates) => {
@@ -396,7 +396,7 @@ export function useBoardPersistence({ userId, userIdRef, dispatch, stateRef, ini
             if (activeSavesRef.current === 0) suppressRealtime(500);
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
         }
-    }, [getFreshUserId, suppressRealtime, isBoardServerAuthoritative]);
+    }, [stateRef, isBoardServerAuthoritative, dispatch, suppressRealtime, getFreshUserId]);
 
     /**
      * Descarta as alterações locais e recarrega a página para restaurar o estado
@@ -407,7 +407,7 @@ export function useBoardPersistence({ userId, userIdRef, dispatch, stateRef, ini
         // Recarregar a página: token refreshed garantido, reconexão limpa ao banco,
         // estado recarregado do servidor sem risco de dados corrompidos localmente.
         window.location.reload();
-    }, []);
+    }, [dispatch]);
 
     return {
         saveTimeoutRef,

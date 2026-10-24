@@ -21,7 +21,7 @@ import {
 import { RULER_SIZE } from '../../canvas/overlays/RulersOverlay';
 import { computeSnapForRulerGuidePosition, snapGuidesEqual } from '../snap/whiteboardSnap';
 
-export function useRulerGuideInteraction({ containerRef, viewportRef, collabConnected, spaceId }) {
+export function useRulerGuideInteraction({ containerRef, viewportRef, spaceId }) {
     const [guideCreatePreview, setGuideCreatePreview] = useState(null);
     const [guideSnapGuides, setGuideSnapGuides] = useState([]);
     const guideSnapGuidesRef = useRef([]);
@@ -166,7 +166,7 @@ export function useRulerGuideInteraction({ containerRef, viewportRef, collabConn
             window.addEventListener('pointerup', onUp);
             window.addEventListener('pointercancel', onUp);
         },
-        [rulersVisible, containerRef, viewportRef, collabConnected, spaceId, snapGuidePosition, clearGuideSnapGuides]
+        [rulersVisible, containerRef, viewportRef, spaceId, snapGuidePosition, clearGuideSnapGuides]
     );
 
     const handleGuidePointerDown = useCallback(
@@ -232,7 +232,7 @@ export function useRulerGuideInteraction({ containerRef, viewportRef, collabConn
             window.addEventListener('pointerup', onUp);
             window.addEventListener('pointercancel', onUp);
         },
-        [containerRef, viewportRef, collabConnected, snapGuidePosition, clearGuideSnapGuides]
+        [containerRef, viewportRef, snapGuidePosition, clearGuideSnapGuides]
     );
 
     const tryPickGuideOnBackground = useCallback(

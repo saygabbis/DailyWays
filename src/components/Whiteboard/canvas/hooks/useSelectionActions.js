@@ -41,7 +41,7 @@ export function useSelectionActions(ctx) {
             showColorPicker,
             showDownloadImage,
         });
-    }, []);
+    }, [COLORABLE_TYPES, setContextMenuPosition]);
 
     const handleDownloadSelectedImages = useCallback(() => {
         const st = useWhiteboardStore.getState();

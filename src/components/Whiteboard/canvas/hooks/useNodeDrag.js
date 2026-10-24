@@ -167,7 +167,7 @@ export function useNodeDrag(ctx) {
                 } catch (_) {}
             }
         },
-        [viewportForChildren, activeTool, connectorFromNodeId, setConnectorFromNodeId, spaceId, collabConnected, collabCreateConnector, commitTextEdit]
+        [resizeActiveRef, activeTool, containerRef, nodeDragRef, viewportForChildren, isDragCreationTool, createDragRef, setCreatePreview, commitTextEdit, connectorFromNodeId, collabConnected, setConnectorFromNodeId, collabCreateConnector, spaceId]
     );
 
     useEffect(() => {

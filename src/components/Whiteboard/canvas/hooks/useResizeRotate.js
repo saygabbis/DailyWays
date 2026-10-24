@@ -103,7 +103,7 @@ export function useResizeRotate(ctx) {
                 skewY: node.skewY ?? 0,
             },
         });
-    }, []);
+    }, [nodeDragRef, resizeActiveRef, setResizeState, setRotateState]);
 
     useEffect(() => {
         if (!resizeState) return;
@@ -311,7 +311,7 @@ export function useResizeRotate(ctx) {
             window.removeEventListener('pointercancel', finishResize);
             resizeActiveRef.current = false;
         };
-    }, [resizeState]);
+    }, [collabPatchNodeRef, collabPatchNodesRef, containerRef, resizeActiveRef, resizeState, setResizeState, setSnapGuidesIfChangedRef, viewportRef]);
 
     const handleRotateStart = useCallback((nodeId, e) => {
         e.stopPropagation();
@@ -360,7 +360,7 @@ export function useResizeRotate(ctx) {
             originRotation: node.rotation ?? 0,
             startAngle: pointerWorldAngleDeg(center.x, center.y, world.x, world.y),
         });
-    }, []);
+    }, [containerRef, nodeDragRef, resizeActiveRef, setResizeState, setRotateState, viewportRef]);
 
     useEffect(() => {
         if (!rotateState) return;
@@ -453,7 +453,7 @@ export function useResizeRotate(ctx) {
             window.removeEventListener('pointercancel', finishRotate);
             resizeActiveRef.current = false;
         };
-    }, [rotateState]);
+    }, [collabPatchNodeRef, collabPatchNodesRef, containerRef, resizeActiveRef, rotateState, setRotateState, viewportRef]);
 
     const COLORABLE_TYPES = new Set(['sticky_note', 'text', 'shape', 'frame', 'comment']);
 

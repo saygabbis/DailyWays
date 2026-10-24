@@ -104,7 +104,7 @@ export function useCanvasContextMenu(ctx) {
                 mode: 'create',
             });
         },
-        [viewportForChildren, activeTool, openSelectionContextMenu, guidesVisible]
+        [rightMousePanRef, activeTool, containerRef, viewportRef, guidesVisible, viewportForChildren, setContextMenuPosition, openSelectionContextMenu]
     );
 
     const handleContextMenuCreate = useCallback(
@@ -119,7 +119,7 @@ export function useCanvasContextMenu(ctx) {
             }
             setContextMenuPosition(null);
         },
-        [createNodeAt]
+        [createNodeAt, setContextMenuPosition]
     );
 
     const handleContextMenuUploadImage = useCallback(() => {
@@ -132,7 +132,7 @@ export function useCanvasContextMenu(ctx) {
             setContextMenuPosition(null);
         }
         openImagePickerRef.current?.();
-    }, [contextMenuPosition]);
+    }, [contextMenuPosition, openImagePickerRef, pendingUploadWorldPositionRef, setContextMenuPosition]);
 
     const handleContextMenuUploadFile = useCallback(() => {
         if (contextMenuPosition) {
@@ -144,7 +144,7 @@ export function useCanvasContextMenu(ctx) {
             setContextMenuPosition(null);
         }
         openFilePickerRef.current?.();
-    }, [contextMenuPosition]);
+    }, [contextMenuPosition, openFilePickerRef, pendingUploadWorldPositionRef, setContextMenuPosition]);
 
     const handleDragOver = useCallback((e) => {
         e.preventDefault();
@@ -250,7 +250,7 @@ export function useCanvasContextMenu(ctx) {
                 }
             }
         },
-        [viewportForChildren, spaceId, user?.id, createNodeAt, collabCreateNode, collabConnected, guardNodeLimit, addToast]
+        [containerRef, viewportForChildren, createNodeAt, guardNodeLimit, spaceId, user?.id, addToast, collabConnected, collabCreateNode]
     );
 
     return {

@@ -363,7 +363,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         }
         document.addEventListener('mousedown', handleOutsideClick);
         return () => document.removeEventListener('mousedown', handleOutsideClick);
-    }, []);
+    }, [setShowCoverPanel]);
 
     const handleDelete = useCallback(async ({ defaultPermanentChecked = false } = {}) => {
         const result = await showConfirm({

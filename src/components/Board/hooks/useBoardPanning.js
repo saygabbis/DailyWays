@@ -30,7 +30,7 @@ export function useBoardPanning(ctx) {
             ro.disconnect();
             window.removeEventListener('resize', bump);
         };
-    }, [board?.id]);
+    }, [board?.id, scrollerRef]);
 
     // Pan horizontal só com mouse — no touch o scroll nativo do .board-scroller não conflita com o DnD
     const handlePanPointerDown = (e) => {

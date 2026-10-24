@@ -12,7 +12,7 @@ export function useAppShellEffects(ctx) {
     const handleResize = () => setIsDesktop(window.innerWidth > 768);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [setIsDesktop]);
 
   // Apply stored zoom on mount
   useEffect(() => {
@@ -36,5 +36,5 @@ export function useAppShellEffects(ctx) {
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, []);
+  }, [setShowSearch, setSidebarOpen]);
 }

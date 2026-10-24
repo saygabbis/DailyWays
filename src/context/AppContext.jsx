@@ -175,7 +175,7 @@ export function AppProvider({ children }) {
         } finally {
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__workspace_order__', saving: false } });
         }
-    }, [userId, suppressRealtime]);
+    }, [userId, dispatch, suppressRealtime]);
 
     // Helpers (estáveis enquanto os boards não mudam → o value do contexto pode ser memoizado)
     const { boards, activeBoard } = state;
@@ -240,7 +240,7 @@ export function AppProvider({ children }) {
                 }
             });
         });
-    }, []);
+    }, [dispatch]);
 
     const confirmConfig = state.confirmModal;
 
@@ -259,7 +259,7 @@ export function AppProvider({ children }) {
         if (fromDb) {
             dispatch({ type: 'SET_BOARDS', payload: fromDb });
         }
-    }, [userId]);
+    }, [dispatch, userId]);
 
     const contextValue = useMemo(() => ({
         state,

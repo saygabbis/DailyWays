@@ -47,7 +47,7 @@ export function useCanvasClipboard(ctx) {
         const p = lastPointerClientRef.current;
         if (p) return p;
         return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-    }, []);
+    }, [containerRef, lastPointerClientRef]);
 
     const { undo: performUndo, redo: performRedo } = useWhiteboardUndo();
 
@@ -64,7 +64,7 @@ export function useCanvasClipboard(ctx) {
                 1,
             onUploadError: (message) => addToast(message || 'Falha ao enviar arquivo.', 'error'),
         }),
-        [spaceId, user?.id, collabCreateNode, collabConnected, addToast]
+        [spaceId, user?.id, collabCreateNode, collabConnected, viewportRef, addToast]
     );
 
     const handleCopy = useCallback(() => {
@@ -84,7 +84,7 @@ export function useCanvasClipboard(ctx) {
         }
         const center = getViewportCenterWorld();
         return { x: center.x, y: center.y, anchor: 'center' };
-    }, [getViewportCenterWorld]);
+    }, [containerRef, getViewportCenterWorld, lastPointerClientRef, viewportRef]);
 
     const handlePaste = useCallback(
         async (clipboardData = null) => {

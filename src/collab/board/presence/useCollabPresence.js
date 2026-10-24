@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useMemo, useRef, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import {
   resolvePresenceColor,
@@ -45,17 +45,18 @@ export function useCollabPresence(roomId, { mode = 'world', scope = 'board' } = 
     return () => { cancelled = true; };
   }, [user?.id, profile?.photo_url, profile?.presence_color_auto]);
 
-  const authRef = useRef({ user, profile });
-  authRef.current = { user, profile };
+  // Perfil mudou (nome/foto/cor) → payload novo → quem depende de flushPresence republica.
+  const auth = useMemo(() => ({ user, profile }), [user, profile]);
 
   const buildPayload = useCallback(() => {
     if (!roomId) return {};
-    return buildBoardPresencePayload(roomId, authRef.current);
-  }, [roomId, user?.id, profile?.name, profile?.photo_url, profile?.presence_color]);
+    return buildBoardPresencePayload(roomId, auth);
+  }, [roomId, auth]);
 
   const canEmitPresence = useCallback(() => {
     if (scope === 'board' && (isBoardPrankFrozen() || isBoardPrankHeld())) return false;
-    if (!roomId || !collab?.socket?.connected) return false;
+    // collab.connected (estado do contexto) também entra: reconectar recria o callback e republica.
+    if (!roomId || !collab?.connected || !collab?.socket?.connected) return false;
     const joined = getJoinedRoomId(scope);
     if (joined && joined !== roomId) return false;
     return true;
@@ -70,11 +71,11 @@ export function useCollabPresence(roomId, { mode = 'world', scope = 'board' } = 
   const flushCursor = useCallback(() => {
     const socket = collab?.socket;
     if (!canEmitPresence()) return;
-    const payload = buildCursorPresencePayload(roomId, authRef.current);
+    const payload = buildCursorPresencePayload(roomId, auth);
     if (payload.cursor && typeof payload.cursor.x === 'number' && typeof payload.cursor.y === 'number') {
       emitPresence(socket, payload);
     }
-  }, [collab?.socket, roomId, canEmitPresence]);
+  }, [collab?.socket, roomId, canEmitPresence, auth]);
 
   const scheduleMetaSend = useCallback(() => {
     if (metaTimerRef.current) clearTimeout(metaTimerRef.current);
@@ -184,7 +185,7 @@ export function useCollabPresence(roomId, { mode = 'world', scope = 'board' } = 
       fields.selectedNodeIds = coords.selectedNodeIds;
     }
     scheduleCursorSend();
-  }, [roomId, mode, flushPresence, scheduleCursorSend]);
+  }, [roomId, mode, scheduleCursorSend]);
 
   const updateSelection = useCallback((selectedNodeIds) => {
     mergeFields({ selectedNodeIds: selectedNodeIds || [] });

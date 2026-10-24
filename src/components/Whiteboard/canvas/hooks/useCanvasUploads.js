@@ -26,7 +26,7 @@ export function useCanvasUploads(ctx) {
         const cx = rect.left + rect.width / 2;
         const cy = rect.top + rect.height / 2;
         return screenToWorldWithContainer(cx, cy, rect, viewportRef.current);
-    }, []);
+    }, [containerRef, viewportRef]);
 
     const handleUploadImage = useCallback(
         async (file) => {
@@ -70,7 +70,7 @@ export function useCanvasUploads(ctx) {
                 console.error('[CanvasEngine] handleUploadImage error', err);
             }
         },
-        [spaceId, user?.id, collabCreateNode, collabConnected, getViewportCenterWorld, guardNodeLimit, addToast]
+        [spaceId, guardNodeLimit, user?.id, pendingUploadWorldPositionRef, viewportRef, collabConnected, addToast, getViewportCenterWorld, collabCreateNode]
     );
 
     const handleUploadFile = useCallback(
@@ -129,7 +129,7 @@ export function useCanvasUploads(ctx) {
                 console.error('[CanvasEngine] handleUploadFile error', err);
             }
         },
-        [spaceId, user?.id, collabCreateNode, collabConnected, getViewportCenterWorld, guardNodeLimit, addToast]
+        [spaceId, guardNodeLimit, user?.id, pendingUploadWorldPositionRef, collabConnected, addToast, getViewportCenterWorld, viewportRef, collabCreateNode]
     );
 
     return {

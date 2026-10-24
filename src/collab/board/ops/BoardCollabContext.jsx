@@ -381,19 +381,7 @@ export function BoardCollabProvider({ children }) {
         persistBoard(boardId, { force: true, ensureSave: true });
       }
     }
-  }, [
-    dispatch,
-    collab?.connected,
-    activeBoardId,
-    emitBoardAction,
-    persistBoard,
-    isBoardRoomLive,
-    syncPendingFlag,
-    getBoardSnapshot,
-    flushBoardPersist,
-    scheduleTextHistoryCommit,
-    addToast,
-  ]);
+  }, [getBoardSnapshot, dispatch, isBoardRoomLive, collab?.connected, activeBoardId, addToast, scheduleTextHistoryCommit, emitBoardAction, submitActionToServer, syncPendingFlag, flushBoardPersist, persistBoard]);
 
   const collabDispatch = useCallback((action, explicitBoardId, options) => {
     const boardId =

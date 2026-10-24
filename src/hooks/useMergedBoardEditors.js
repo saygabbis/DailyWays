@@ -36,5 +36,5 @@ export function useMergedBoardEditors(focusedCardId, boardId) {
     merged[focusedCardId] = [selfEditor, ...remote];
 
     return merged;
-  }, [editorsByCardId, focusedCardId, boardId, user?.id, profile?.name, profile?.photo_url, profile?.presence_color, profile?.presence_color_auto]);
+  }, [editorsByCardId, focusedCardId, boardId, user, profile]);
 }

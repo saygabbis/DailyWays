@@ -47,7 +47,7 @@ export default function RulersOverlay({
         }));
 
         return { rect, hTicks, vTicks, step };
-    }, [viewport?.panX, viewport?.panY, viewport?.zoom, containerRef]);
+    }, [containerRef, viewport]);
 
     const stopBubble = useCallback((e) => {
         e.stopPropagation();

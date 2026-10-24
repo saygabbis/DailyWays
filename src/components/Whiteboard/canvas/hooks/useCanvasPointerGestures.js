@@ -98,7 +98,7 @@ export function useCanvasPointerGestures(ctx) {
             createDragRef.current = null;
             setCreatePreview(null);
         },
-        [viewportForChildren, createNodeAt, applyCreateDragBox]
+        [viewportForChildren, createDragRef, setCreatePreview, createNodeAt, keepCreationToolRef, applyCreateDragBox]
     );
 
     const handlePointerUp = useCallback(
@@ -192,7 +192,7 @@ export function useCanvasPointerGestures(ctx) {
             }
             viewportState.handleMouseUp();
         },
-        [selectionBox, viewportForChildren, setSelection, clearGuideSelection, activeTool, createNodeAt, finalizeCreateDrag]
+        [rightMousePanRef, viewportState, keepCreationToolRef, containerRef, createDragRef, viewportForChildren, selectionBox, setCreatePreview, finalizeCreateDrag, createNodeAt, setSelectionBox, activeTool, setSelection, clearGuideSelection]
     );
 
     const handlePointerMove = useCallback(
@@ -240,7 +240,7 @@ export function useCanvasPointerGestures(ctx) {
                 updateCursor({ x: world.x, y: world.y });
             }
         },
-        [selectionBox, viewportState, updateCursor, applyCreateDragBox]
+        [lastPointerClientRef, createDragRef, selectionBox, containerRef, viewportRef, keepCreationToolRef, setSelectionBox, setCreatePreview, applyCreateDragBox, viewportState, updateCursor]
     );
 
     return {

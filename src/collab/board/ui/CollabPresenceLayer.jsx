@@ -397,18 +397,7 @@ export default function CollabPresenceLayer({
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [
-    collab?.connected,
-    visibleMeta.length,
-    mode,
-    panX,
-    panY,
-    zoom,
-    useBoardContentCoords,
-    modalRootRef,
-    overlayScrollSelector,
-    boardScrollerRef,
-  ]);
+  }, [collab?.connected, visibleMeta.length, mode, panX, panY, zoom, useBoardContentCoords, modalRootRef, overlayScrollSelector, boardScrollerRef, worldContainerRef]);
 
   if (!collab?.connected || !visibleMeta.length) return null;
 

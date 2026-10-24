@@ -11,8 +11,6 @@ export function useGlobalDragHandlers(ctx) {
     getActiveBoard,
     dispatch,
     state,
-    updateBoardsOrder,
-    suppressRealtime,
     updateWorkspaceOrder,
     collabDispatch,
     collab,
@@ -60,7 +58,7 @@ export function useGlobalDragHandlers(ctx) {
         dispatch({ type: 'SET_DRAGGING_BULK', payload: true });
       }
     }
-  }, [state.selectedItems, dispatch, hideContextMenu, getActiveBoard, collab?.socket, collab?.connected, user, profile]);
+  }, [state.selectedItems, dispatch, hideContextMenu, getActiveBoard, collab?.socket, user, profile]);
 
   const handleGlobalDragEnd = useCallback((result) => {
     document.body.classList.remove('dnd-dragging');
@@ -143,7 +141,7 @@ export function useGlobalDragHandlers(ctx) {
       document.body.classList.remove('board-multi-drag-active');
       useBoardSelectionStore.getState().clearMultiDrag();
     }
-  }, [state.boards, collabDispatch, user?.id, profile, collab?.socket, collab?.connected, getActiveBoard, updateBoardsOrder, suppressRealtime]);
+  }, [getActiveBoard, dispatch, boardViewRef, collab?.socket, user, profile, state.boards, collabDispatch, setPlannedDropCard, updateWorkspaceOrder]);
 
   const handlePlannedDateSelect = (date) => {
     if (!plannedDropCard) return;

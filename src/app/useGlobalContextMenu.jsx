@@ -69,7 +69,7 @@ export function useGlobalContextMenu(ctx) {
     ];
 
     showContextMenu(e, [...navItems, ...boardItems, ...generalItems], { title: 'DailyWays' });
-  }, [activeView, activeBoard, sidebarOpen, showContextMenu, toggleSidebar]);
+  }, [activeView, activeBoard, sidebarOpen, toggleSidebar, showContextMenu, hideContextMenu, setActiveView, setShowSearch, setShowSettings]);
 
   return {
     handleGlobalContextMenu,

@@ -109,7 +109,7 @@ export function useBoardDragEnd(ctx) {
             }
         }
 
-    }, [getActiveBoard, collabDispatch, state.user?.id]);
+    }, [getActiveBoard, collabDispatch, state.user?.id, setDroppedListId, getBoardSnapshot]);
 
     return {
         handleDragEnd,

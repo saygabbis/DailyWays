@@ -49,7 +49,7 @@ export function useBoardToolbarDrag(ctx) {
 
     const handleToolbarPointerUpGlobal = useCallback(() => {
         setIsDragging(false);
-    }, []);
+    }, [setIsDragging]);
 
     useEffect(() => {
         const handleMove = (e) => {
@@ -82,7 +82,7 @@ export function useBoardToolbarDrag(ctx) {
             document.removeEventListener('pointerup', handleToolbarPointerUpGlobal);
             document.removeEventListener('pointercancel', handleToolbarPointerUpGlobal);
         };
-    }, [isDragging, handleToolbarPointerUpGlobal]);
+    }, [isDragging, handleToolbarPointerUpGlobal, dragStartRef, toolbarRef, containerRef, setToolbarPos]);
 
     /** Deslocamento temporário (viewport px) — não altera toolbarPos; zera ao fechar o menu. */
     const [profileAvoidTranslate, setProfileAvoidTranslate] = useState({ x: 0, y: 0 });
@@ -139,16 +139,7 @@ export function useBoardToolbarDrag(ctx) {
             window.removeEventListener('resize', run);
             ro?.disconnect();
         };
-    }, [
-        profileMenuOpen,
-        showBoardToolbar,
-        toolbarPos?.x,
-        toolbarPos?.y,
-        board?.id,
-        narrowBoardLayout,
-        toolbarMembers.length,
-        toolbarMembersLoading,
-    ]);
+    }, [profileMenuOpen, showBoardToolbar, toolbarPos.x, toolbarPos.y, board.id, narrowBoardLayout, toolbarMembers.length, toolbarMembersLoading, containerRef, toolbarRef]);
 
     const toolbarDefaultBottomCorner = narrowBoardLayout && toolbarPos == null;
 

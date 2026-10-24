@@ -128,7 +128,7 @@ export function useNodeCreation(ctx) {
             });
             return payload.id;
         },
-        [spaceId, user?.id, collabCreateNode, collabConnected]
+        [spaceId, collabConnected, user?.id, viewportRef, collabCreateNode]
     );
 
     const applyCreateDragBox = useCallback(
@@ -174,7 +174,7 @@ export function useNodeCreation(ctx) {
                 collabPatchNode(drag.nodeId, patch);
             }
         },
-        [createNodeAt, collabPatchNode]
+        [viewportRef, createNodeAt, collabPatchNode]
     );
 
     useEffect(() => {
@@ -210,7 +210,7 @@ export function useNodeCreation(ctx) {
             window.removeEventListener('keydown', refreshFromModifiers);
             window.removeEventListener('keyup', refreshFromModifiers);
         };
-    }, [createPreview, applyCreateDragBox]);
+    }, [createPreview, applyCreateDragBox, createDragRef, lastPointerClientRef, containerRef, viewportRef, setCreatePreview]);
 
     return {
         dragPreviewBorderFromNode,

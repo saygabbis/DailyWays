@@ -23,7 +23,7 @@ export function useWorkspaceNavigation(ctx) {
   useEffect(() => {
     if (!navPersistReadyRef.current) return;
     persistNavigation(activeView, state.activeBoard);
-  }, [activeView, state.activeBoard]);
+  }, [activeView, navPersistReadyRef, state.activeBoard]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -31,7 +31,7 @@ export function useWorkspaceNavigation(ctx) {
       navPersistReadyRef.current = false;
       setNavReady(false);
     }
-  }, [user?.id]);
+  }, [navPersistReadyRef, setNavReady, user?.id, viewRestoreDoneRef]);
 
   // After F5 / open: restore last screen (board, space, dashboard, myday, …)
   useEffect(() => {
@@ -58,14 +58,7 @@ export function useWorkspaceNavigation(ctx) {
     viewRestoreDoneRef.current = true;
     navPersistReadyRef.current = true;
     setNavReady(true);
-  }, [
-    user?.id,
-    state.boards,
-    state.spaces,
-    state.activeBoard,
-    boardsLoadError,
-    dispatch,
-  ]);
+  }, [user.id, state.boards, state.spaces, state.activeBoard, boardsLoadError, dispatch, viewRestoreDoneRef, setActiveView, navPersistReadyRef, setNavReady]);
   const [selectedCard, setSelectedCard] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState('account');

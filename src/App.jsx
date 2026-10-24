@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import ErrorBoundary from './components/Common/ErrorBoundary';
 import { useAuth } from './context/AuthContext';
 import { useApp } from './context/AppContext';
@@ -60,8 +60,6 @@ function AppContent() {
     getActiveBoard,
     dispatch,
     state,
-    updateBoardsOrder,
-    suppressRealtime,
     updateWorkspaceOrder,
     boardsLoadError,
     profileMenuOpen,
@@ -151,8 +149,6 @@ function AppContent() {
     getActiveBoard,
     dispatch,
     state,
-    updateBoardsOrder,
-    suppressRealtime,
     updateWorkspaceOrder,
     collabDispatch,
     collab,
@@ -181,7 +177,7 @@ function AppContent() {
   };
 
   // Handle view change — intercept "settings" to open modal instead
-  const handleViewChange = async (view, boardIdOverride = null) => {
+  const handleViewChange = useCallback(async (view, boardIdOverride = null) => {
     if (view === 'settings') {
       setShowSettings(true);
       return;
@@ -195,7 +191,7 @@ function AppContent() {
     setActiveView(view);
     const boardId = view === 'board' ? (boardIdOverride || state.activeBoard) : state.activeBoard;
     persistNavigation(view, boardId);
-  };
+  }, [activeView, saveAllPending, state.activeBoard, setShowSettings]);
 
   useEffect(() => {
     const onNavigate = (e) => {
