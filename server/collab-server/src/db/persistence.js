@@ -51,6 +51,13 @@ function throwIfDbError(result, context) {
   }
 }
 
+/** Esvazia um Set e devolve o conteúdo (o que chegar depois entra no próximo flush). */
+function drain(set) {
+  const items = [...set];
+  set.clear();
+  return items;
+}
+
 export async function flushRoom(room, spaceId) {
   const accessToken = room?.flushAccessToken;
   const db = getUserDbClient(accessToken);
@@ -60,76 +67,80 @@ export async function flushRoom(room, spaceId) {
 
   const actingUserId = room.flushUserId ?? null;
   const { dirty, deleted, nodes, connectors, comments } = room;
+
+  // Retrato do que está pendente, tirado ANTES de qualquer await. Antes os Sets eram limpos
+  // depois de gravar, então uma alteração que chegasse durante a gravação era apagada da fila
+  // sem nunca ir para o banco (edições sumindo no Spaces).
+  const pending = {
+    deletedNodes: drain(deleted.nodes),
+    deletedConnectors: drain(deleted.connectors),
+    deletedComments: drain(deleted.comments),
+    dirtyNodes: drain(dirty.nodes),
+    dirtyConnectors: drain(dirty.connectors),
+    dirtyComments: drain(dirty.comments),
+  };
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
   const connectorsById = new Map(connectors.map((conn) => [conn.id, conn]));
   const commentsById = new Map(comments.map((comment) => [comment.id, comment]));
 
-  const deletedNodeIds = [...deleted.nodes];
-  if (deletedNodeIds.length > 0) {
-    throwIfDbError(
-      await db.from('space_nodes').delete().in('id', deletedNodeIds),
-      `delete ${deletedNodeIds.length} nodes`,
-    );
-  }
-  deleted.nodes.clear();
+  const nodeRows = pending.dirtyNodes
+    .map((id) => nodesById.get(id))
+    .filter(Boolean)
+    .map((node) => nodeToRow(node, spaceId, actingUserId));
+  const connectorRows = pending.dirtyConnectors
+    .map((id) => connectorsById.get(id))
+    .filter(Boolean)
+    .map((conn) => connectorToRow(conn, spaceId));
+  const commentRows = pending.dirtyComments
+    .map((id) => commentsById.get(id))
+    .filter(Boolean)
+    .map((comment) => commentToRow(comment, spaceId, actingUserId));
 
-  const deletedConnectorIds = [...deleted.connectors];
-  if (deletedConnectorIds.length > 0) {
-    throwIfDbError(
-      await db.from('space_connectors').delete().in('id', deletedConnectorIds),
-      `delete ${deletedConnectorIds.length} connectors`,
-    );
+  try {
+    if (pending.deletedNodes.length > 0) {
+      throwIfDbError(
+        await db.from('space_nodes').delete().in('id', pending.deletedNodes),
+        `delete ${pending.deletedNodes.length} nodes`,
+      );
+    }
+    if (pending.deletedConnectors.length > 0) {
+      throwIfDbError(
+        await db.from('space_connectors').delete().in('id', pending.deletedConnectors),
+        `delete ${pending.deletedConnectors.length} connectors`,
+      );
+    }
+    if (pending.deletedComments.length > 0) {
+      throwIfDbError(
+        await db.from('space_comments').delete().in('id', pending.deletedComments),
+        `delete ${pending.deletedComments.length} comments`,
+      );
+    }
+    if (nodeRows.length > 0) {
+      throwIfDbError(
+        await db.from('space_nodes').upsert(nodeRows, { onConflict: 'id' }),
+        `upsert ${nodeRows.length} nodes`,
+      );
+    }
+    if (connectorRows.length > 0) {
+      throwIfDbError(
+        await db.from('space_connectors').upsert(connectorRows, { onConflict: 'id' }),
+        `upsert ${connectorRows.length} connectors`,
+      );
+    }
+    if (commentRows.length > 0) {
+      throwIfDbError(
+        await db.from('space_comments').upsert(commentRows, { onConflict: 'id' }),
+        `upsert ${commentRows.length} comments`,
+      );
+    }
+  } catch (err) {
+    // Falhou: devolve tudo para a fila (gravações são idempotentes) e o roomManager tenta de novo.
+    pending.deletedNodes.forEach((id) => deleted.nodes.add(id));
+    pending.deletedConnectors.forEach((id) => deleted.connectors.add(id));
+    pending.deletedComments.forEach((id) => deleted.comments.add(id));
+    pending.dirtyNodes.forEach((id) => { if (!deleted.nodes.has(id)) dirty.nodes.add(id); });
+    pending.dirtyConnectors.forEach((id) => { if (!deleted.connectors.has(id)) dirty.connectors.add(id); });
+    pending.dirtyComments.forEach((id) => { if (!deleted.comments.has(id)) dirty.comments.add(id); });
+    throw err;
   }
-  deleted.connectors.clear();
-
-  const deletedCommentIds = [...deleted.comments];
-  if (deletedCommentIds.length > 0) {
-    throwIfDbError(
-      await db.from('space_comments').delete().in('id', deletedCommentIds),
-      `delete ${deletedCommentIds.length} comments`,
-    );
-  }
-  deleted.comments.clear();
-
-  const nodeRows = [];
-  for (const id of dirty.nodes) {
-    const node = nodesById.get(id);
-    if (!node) continue;
-    nodeRows.push(nodeToRow(node, spaceId, actingUserId));
-  }
-  if (nodeRows.length > 0) {
-    throwIfDbError(
-      await db.from('space_nodes').upsert(nodeRows, { onConflict: 'id' }),
-      `upsert ${nodeRows.length} nodes`,
-    );
-  }
-  dirty.nodes.clear();
-
-  const connectorRows = [];
-  for (const id of dirty.connectors) {
-    const conn = connectorsById.get(id);
-    if (!conn) continue;
-    connectorRows.push(connectorToRow(conn, spaceId));
-  }
-  if (connectorRows.length > 0) {
-    throwIfDbError(
-      await db.from('space_connectors').upsert(connectorRows, { onConflict: 'id' }),
-      `upsert ${connectorRows.length} connectors`,
-    );
-  }
-  dirty.connectors.clear();
-
-  const commentRows = [];
-  for (const id of dirty.comments) {
-    const comment = commentsById.get(id);
-    if (!comment) continue;
-    commentRows.push(commentToRow(comment, spaceId, actingUserId));
-  }
-  if (commentRows.length > 0) {
-    throwIfDbError(
-      await db.from('space_comments').upsert(commentRows, { onConflict: 'id' }),
-      `upsert ${commentRows.length} comments`,
-    );
-  }
-  dirty.comments.clear();
 }

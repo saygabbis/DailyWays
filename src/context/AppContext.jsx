@@ -50,6 +50,8 @@ export function AppProvider({ children }) {
         collabActiveBoardIdRef,
         collabConnectedRef,
         collabBoardRoomLiveRef,
+        recentLocalEditsRef,
+        markBoardLocalEdit,
         setCollabActiveBoardId,
         setCollabConnectedForBoard,
         setCollabBoardRoomLive,
@@ -94,7 +96,7 @@ export function AppProvider({ children }) {
 
     useInitialBoardsLoad({ userId, dispatch, initialLoadDone, saveTimeoutRef, activeSavesRef, realtimeSuppressUntilRef });
 
-    useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone, activeSavesRef, realtimeSuppressUntilRef, collabActiveBoardIdRef, collabConnectedRef, collabBoardRoomLiveRef });
+    useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone, activeSavesRef, realtimeSuppressUntilRef, collabActiveBoardIdRef, collabConnectedRef, collabBoardRoomLiveRef, recentLocalEditsRef });
 
     const updateWorkspaceOrder = useCallback(async (itemType, itemId, sourceGroupId, destGroupId, destIndex) => {
         if (!userId) return;
@@ -300,6 +302,7 @@ export function AppProvider({ children }) {
         setCollabActiveBoardId,
         setCollabConnectedForBoard,
         setCollabBoardRoomLive,
+        markBoardLocalEdit,
         shouldPersistBoard,
     }), [
         confirmConfig,
@@ -315,6 +318,7 @@ export function AppProvider({ children }) {
         isSavingBoard,
         isSidebarOpen,
         lastReorderedIds,
+        markBoardLocalEdit,
         persistBoard,
         recentlyAddedId,
         reloadBoards,

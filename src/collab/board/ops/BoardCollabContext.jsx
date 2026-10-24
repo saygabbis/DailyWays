@@ -16,7 +16,7 @@ import {
 } from '../history/boardHistoryCoalesce.js';
 import { useBoardHistoryStore } from '../history/boardHistoryStore.js';
 import { ensureBoardHistoryHydrated } from '../history/boardHistorySync.js';
-import { submitOp } from '../../core/collabClient.js';
+import { submitBoardOp, submitOp } from '../../core/collabClient.js';
 import { isCollabEnabled } from '../../core/collabConfig.js';
 import { uuidv4 } from '../../../utils/uuid';
 import { useToast } from '../../../context/useToast';
@@ -43,8 +43,20 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 
 
+function boardActionOp(boardId, action) {
+  return {
+    opId: uuidv4(),
+    type: 'update',
+    entity: 'board',
+    id: boardId,
+    field: 'action',
+    value: action,
+    clientTs: Date.now(),
+  };
+}
+
 export function BoardCollabProvider({ children }) {
-  const { dispatch, persistBoard, flushBoardPersist, setCollabBoardRoomLive, state } = useApp();
+  const { dispatch, persistBoard, flushBoardPersist, setCollabBoardRoomLive, markBoardLocalEdit, state } = useApp();
   const { user } = useAuth();
   const collab = useCollab();
   const boardsRef = useRef(state.boards);
@@ -104,15 +116,7 @@ export function BoardCollabProvider({ children }) {
     const socket = collab?.socket;
     if (!socket?.connected || !boardId || !action?.type) return false;
     setCollabSaving(boardId, true);
-    const opPayload = {
-      opId: uuidv4(),
-      type: 'update',
-      entity: 'board',
-      id: boardId,
-      field: 'action',
-      value: action,
-      clientTs: Date.now(),
-    };
+    const opPayload = boardActionOp(boardId, action);
     try {
       for (let attempt = 0; attempt <= OP_RETRY_ATTEMPTS; attempt += 1) {
         try {
@@ -145,6 +149,27 @@ export function BoardCollabProvider({ children }) {
       syncPendingFlag(boardId);
     }
   }, [collab?.socket, persistBoard, setCollabSaving, syncPendingFlag, addToast]);
+
+  /**
+   * Edição de um board de FORA da sala dele (Importante, Planejado, Diário, outra aba…).
+   * Vai pelo servidor collab, que é o único que grava enquanto há conexão. Antes o navegador
+   * mandava o board inteiro para o banco e sobrescrevia (ou era sobrescrito por) quem estava
+   * dentro do board — era o "app esquecendo alterações" com várias pessoas.
+   */
+  const submitOffRoomAction = useCallback(async (boardId, action) => {
+    const socket = collab?.socket;
+    setCollabSaving(boardId, true);
+    try {
+      await submitBoardOp(socket, boardId, boardActionOp(boardId, action));
+      return true;
+    } catch (err) {
+      console.warn('[boardCollab] off-room op failed', err?.message);
+      persistBoard(boardId, { force: true, ensureSave: true });
+      return false;
+    } finally {
+      setCollabSaving(boardId, false);
+    }
+  }, [collab?.socket, persistBoard, setCollabSaving]);
 
   useEffect(() => () => {
     for (const timer of debounceTimers.current.values()) {
@@ -325,6 +350,7 @@ export function BoardCollabProvider({ children }) {
     }
 
     dispatch(action);
+    markBoardLocalEdit?.(boardId);
 
     const collabOn = isCollabEnabled();
     const live = collabOn && isBoardRoomLive(boardId);
@@ -367,11 +393,15 @@ export function BoardCollabProvider({ children }) {
       if (!pendingOpsRef.current[boardId]) pendingOpsRef.current[boardId] = [];
       pendingOpsRef.current[boardId].push(action);
       syncPendingFlag(boardId);
+    } else if (offRoom) {
+      // Fora da sala: o servidor aplica e grava (o fallback do navegador só roda se ele recusar).
+      // Sequencial por board: a ordem das ações (ex.: MOVE_CARD e depois UPDATE_CARD) importa.
+      await submitOffRoomAction(boardId, action);
+      return;
     }
 
     const needsDbBackup = !options.deferPersist && (
       options.forcePersist
-      || (offRoom && (options.skipHistory || shouldBackupBoardActionToSupabase(action)))
       || (!collabConnected && !options.skipHistory && shouldBackupBoardActionToSupabase(action))
     );
 
@@ -382,7 +412,7 @@ export function BoardCollabProvider({ children }) {
         persistBoard(boardId, { force: true, ensureSave: true });
       }
     }
-  }, [getBoardSnapshot, dispatch, isBoardRoomLive, collab?.connected, activeBoardId, addToast, scheduleTextHistoryCommit, emitBoardAction, submitActionToServer, syncPendingFlag, flushBoardPersist, persistBoard]);
+  }, [getBoardSnapshot, dispatch, markBoardLocalEdit, isBoardRoomLive, collab?.connected, activeBoardId, addToast, scheduleTextHistoryCommit, emitBoardAction, submitActionToServer, submitOffRoomAction, syncPendingFlag, flushBoardPersist, persistBoard]);
 
   const collabDispatch = useCallback((action, explicitBoardId, options) => {
     const boardId =

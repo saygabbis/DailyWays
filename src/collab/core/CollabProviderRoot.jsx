@@ -8,6 +8,7 @@ import {
   connectCollabSocket,
   disconnectCollabSocket,
   getCollabSocket,
+  isOwnOp,
 } from './collabClient.js';
 import { CollabProvider } from './CollabContext.jsx';
 import { applyRemoteOp } from '../space/ops/applyOp.js';
@@ -103,7 +104,7 @@ export default function CollabProviderRoot({ children }) {
         const op = payload?.op;
         if (!op) return;
         if (op.entity === 'board') return;
-        if (fromUserId === userIdRef.current) {
+        if (isOwnOp(payload.opId ?? op.opId)) {
           const store = useWhiteboardStore.getState();
           if (store.pendingOps[op.opId]) {
             store.clearPendingOp(op.opId);

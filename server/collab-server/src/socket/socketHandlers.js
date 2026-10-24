@@ -300,17 +300,8 @@ export function registerSocketHandlers(io) {
       ack?.({ ok: true, peers });
     });
 
-    socket.on(CLIENT_EVENTS.OP, async (op, ack) => {
-      const roomId = socket.data.roomId;
-      if (!roomId) {
-        ack?.({ ok: false, error: 'Not in room' });
-        return;
-      }
-      if (!socket.data.canWrite) {
-        socket.emit(SERVER_EVENTS.REJECTED, { opId: op?.opId, reason: 'Read-only' });
-        ack?.({ ok: false, error: 'Read-only' });
-        return;
-      }
+    /** Aplica uma op já autorizada numa sala e avisa quem está nela. */
+    const applyAuthorizedOp = async (roomId, op, ack) => {
       const isPositionOp = op?.entity === 'node' && POSITION_FIELDS.has(op?.field);
       const rate = checkOpRateLimit(socket.data.userId, isPositionOp, socket.data.clientIp);
       if (!rate.ok) {
@@ -342,7 +333,67 @@ export function registerSocketHandlers(io) {
       socket.to(roomId).emit(SERVER_EVENTS.APPLIED, applied);
       socket.emit(SERVER_EVENTS.APPLIED, applied);
       ack?.({ ok: true, revision: result.revision });
+    };
+
+    socket.on(CLIENT_EVENTS.OP, async (op, ack) => {
+      const roomId = socket.data.roomId;
+      if (!roomId) {
+        ack?.({ ok: false, error: 'Not in room' });
+        return;
+      }
+      if (!socket.data.canWrite) {
+        socket.emit(SERVER_EVENTS.REJECTED, { opId: op?.opId, reason: 'Read-only' });
+        ack?.({ ok: false, error: 'Read-only' });
+        return;
+      }
+      await applyAuthorizedOp(roomId, op, ack);
     });
+
+    // Cache curto de permissão por board (evita 2 consultas ao banco por op fora da sala).
+    const boardWriteAccess = new Map();
+    const BOARD_ACCESS_TTL_MS = 30_000;
+    const canWriteBoard = async (boardId) => {
+      const cached = boardWriteAccess.get(boardId);
+      if (cached && Date.now() - cached.at < BOARD_ACCESS_TTL_MS) return cached.canWrite;
+      const access = await canAccessBoard(socket.data.userId, boardId, socket.data.accessToken, { quiet: true });
+      const canWrite = Boolean(access?.access && access.canWrite);
+      boardWriteAccess.set(boardId, { canWrite, at: Date.now() });
+      return canWrite;
+    };
+
+    // Fila por socket: a checagem de permissão é assíncrona e não pode inverter a ordem das ops
+    // (ex.: MOVE_CARD seguido de UPDATE_CARD).
+    let boardOpQueue = Promise.resolve();
+    socket.on(CLIENT_EVENTS.BOARD_OP, (payload, ack) => {
+      boardOpQueue = boardOpQueue.then(() => handleBoardOp(payload, ack));
+    });
+
+    const handleBoardOp = async (payload, ack) => {
+      try {
+        const boardId = payload?.boardId;
+        const op = payload?.op;
+        if (typeof boardId !== 'string' || !op || op.entity !== 'board' || op.id !== boardId) {
+          ack?.({ ok: false, error: 'Invalid board op' });
+          return;
+        }
+        if (!(await canWriteBoard(boardId))) {
+          ack?.({ ok: false, error: 'Read-only' });
+          return;
+        }
+        const roomId = roomIdForBoard(boardId);
+        await roomManager.getOrLoad(roomId, { accessToken: socket.data.accessToken });
+        const room = await roomManager.refreshIdleBoardRoom(roomId, { accessToken: socket.data.accessToken });
+        if (!room?.board) {
+          roomManager.evictRoom(roomId);
+          ack?.({ ok: false, error: 'Board not found' });
+          return;
+        }
+        await applyAuthorizedOp(roomId, op, ack);
+      } catch (err) {
+        console.error('[collab-server] board op error', err?.message || err);
+        ack?.({ ok: false, error: 'Board op failed' });
+      }
+    };
 
     socket.on(CLIENT_EVENTS.PRESENCE, async (payload) => {
       let roomId = socket.data.roomId;

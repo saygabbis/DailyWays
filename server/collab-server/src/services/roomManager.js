@@ -15,6 +15,11 @@ const MAX_FLUSH_ERRORS = 5;
 // GC centralizado: um único setInterval varre todas as salas vazias, em vez de
 // criar um setTimeout por sala fechada (evita acumular N timers em sequência).
 const GC_INTERVAL_MS = 60_000;
+const FLUSH_RETRY_BASE_MS = 1000;
+const FLUSH_RETRY_MAX_MS = 30_000;
+// Sala de board sem ninguém dentro e sem nada pendente: recarrega do banco antes de aplicar uma
+// op vinda de fora (o board pode ter sido salvo pelo fallback do navegador nesse meio-tempo).
+const IDLE_BOARD_RELOAD_MS = Number(process.env.COLLAB_IDLE_BOARD_RELOAD_MS || 15_000);
 
 function recordFlushError(room, roomId, err) {
   room.flushErrorCount = (room.flushErrorCount || 0) + 1;
@@ -98,9 +103,14 @@ export class RoomManager {
     }
 
     const promise = (async () => {
-      const room = await loadRoomState(roomId, { accessToken });
-      this.rooms.set(roomId, room);
-      this.loading.delete(roomId);
+      try {
+        const room = await loadRoomState(roomId, { accessToken });
+        room.loadedAt = Date.now();
+        this.rooms.set(roomId, room);
+      } finally {
+        // Sem o finally, um erro de carga deixava a promessa rejeitada presa aqui para sempre.
+        this.loading.delete(roomId);
+      }
     })();
 
     this.loading.set(roomId, promise);
@@ -144,9 +154,38 @@ export class RoomManager {
       }
     } catch (err) {
       recordFlushError(room, roomId, err);
+      this._scheduleFlushRetry(roomId, room);
     } finally {
       room.flushInFlight = false;
     }
+  }
+
+  /** Antes uma falha de flush só era tentada de novo na próxima op: com a sala vazia, nunca. */
+  _scheduleFlushRetry(roomId, room) {
+    if (room.flushTimer) clearTimeout(room.flushTimer);
+    const attempt = Math.max(1, room.flushErrorCount || 1);
+    const delay = Math.min(FLUSH_RETRY_MAX_MS, FLUSH_RETRY_BASE_MS * 2 ** (attempt - 1));
+    room.flushTimer = setTimeout(() => {
+      room.flushTimer = null;
+      if (this.rooms.get(roomId) !== room) return;
+      void this.flushNow(roomId, { force: true });
+    }, delay);
+    if (room.flushTimer.unref) room.flushTimer.unref();
+  }
+
+  /** Sala de board vazia e limpa há um tempo → recarrega do banco (ver IDLE_BOARD_RELOAD_MS). */
+  async refreshIdleBoardRoom(roomId, { accessToken } = {}) {
+    const room = this.rooms.get(roomId);
+    if (!room || room.kind !== 'board' || !accessToken) return room;
+    const idle = room.clientCount === 0 && !room.dirty && !room.flushInFlight;
+    const stale = Date.now() - (room.loadedAt || 0) > IDLE_BOARD_RELOAD_MS;
+    if (!idle || !stale) return room;
+    const data = await loadRoomState(roomId, { accessToken });
+    if (data?.board && room.clientCount === 0 && !room.dirty && !room.flushInFlight) {
+      room.board = data.board;
+      room.loadedAt = Date.now();
+    }
+    return room;
   }
 
   scheduleFlush(roomId) {

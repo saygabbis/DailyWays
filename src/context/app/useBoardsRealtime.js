@@ -8,7 +8,10 @@ import { fetchBoards } from '../../services/boardService';
 import { logger } from '../../utils/logger';
 import { isCollabEnabled } from '../../collab/core/collabConfig.js';
 
-export function useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone, activeSavesRef, realtimeSuppressUntilRef, collabActiveBoardIdRef, collabConnectedRef, collabBoardRoomLiveRef }) {
+/** Janela em que uma edição local ainda pode não ter chegado ao banco (flush do collab ~600 ms). */
+const LOCAL_EDIT_GRACE_MS = 4000;
+
+export function useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone, activeSavesRef, realtimeSuppressUntilRef, collabActiveBoardIdRef, collabConnectedRef, collabBoardRoomLiveRef, recentLocalEditsRef }) {
     // ── Realtime: subscribe to postgres_changes for cross-tab / multi-user sync ──
     useEffect(() => {
         if (!userId) return;
@@ -57,7 +60,7 @@ export function useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone,
 
                 if (debounceTimer) clearTimeout(debounceTimer);
                 // Realtime: refetch curto para melhorar sensação de "instantâneo"
-                debounceTimer = setTimeout(async () => {
+                const refetch = async () => {
                     if (cancelled) return;
                     logger.debug('[AppContext] Realtime refetch for user', userId.slice(0, 8));
 
@@ -71,23 +74,28 @@ export function useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone,
                         isCollabEnabled()
                         && activeId
                         && collabConnectedRef.current;
-                    if (collabLive) {
-                        const localActive = stateRef.current.boards.find(
-                            (b) => b.id === activeId,
-                        );
-                        if (localActive) {
-                            dispatch({
-                                type: 'SET_BOARDS',
-                                payload: data.map((b) => (
-                                    b.id === activeId ? localActive : b
-                                )),
-                            });
-                            return;
-                        }
+                    const now = Date.now();
+                    const recent = recentLocalEditsRef?.current ?? new Map();
+                    const keepLocal = (boardId) => (
+                        (collabLive && boardId === activeId)
+                        || now - (recent.get(boardId) ?? 0) < LOCAL_EDIT_GRACE_MS
+                    );
+                    const localById = new Map(stateRef.current.boards.map((b) => [b.id, b]));
+                    let keptRecent = false;
+                    const merged = data.map((b) => {
+                        const local = localById.get(b.id);
+                        if (!local || !keepLocal(b.id)) return b;
+                        if (b.id !== activeId) keptRecent = true;
+                        return local;
+                    });
+                    dispatch({ type: 'SET_BOARDS', payload: merged });
+                    // Manteve versão local de board recém-editado: confere de novo quando o banco alcançar.
+                    if (keptRecent && !cancelled) {
+                        if (debounceTimer) clearTimeout(debounceTimer);
+                        debounceTimer = setTimeout(refetch, LOCAL_EDIT_GRACE_MS);
                     }
-                    dispatch({ type: 'SET_BOARDS', payload: data });
-                    // Sem localStorage — servidor é a fonte de verdade
-                }, 250);
+                };
+                debounceTimer = setTimeout(refetch, 250);
             };
 
             realtimeChannel = supabase
@@ -110,5 +118,5 @@ export function useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone,
                 supabase.removeChannel(realtimeChannel);
             }
         };
-    }, [userId, dispatch, stateRef, initialLoadDone, activeSavesRef, realtimeSuppressUntilRef, collabActiveBoardIdRef, collabConnectedRef, collabBoardRoomLiveRef]);
+    }, [userId, dispatch, stateRef, initialLoadDone, activeSavesRef, realtimeSuppressUntilRef, collabActiveBoardIdRef, collabConnectedRef, collabBoardRoomLiveRef, recentLocalEditsRef]);
 }

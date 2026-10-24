@@ -22,6 +22,13 @@ export function useBoardPersistence({ userId, userIdRef, dispatch, stateRef, ini
     const collabActiveBoardIdRef = useRef(null);
     const collabConnectedRef = useRef(false);
     const collabBoardRoomLiveRef = useRef(false);
+    // boardId → instante da última edição local. O refetch do Realtime não pode trocar esses
+    // boards por um retrato do banco que ainda não tem a edição (piscava o valor antigo).
+    const recentLocalEditsRef = useRef(new Map());
+
+    const markBoardLocalEdit = useCallback((boardId) => {
+        if (boardId) recentLocalEditsRef.current.set(boardId, Date.now());
+    }, []);
 
     const setCollabActiveBoardId = useCallback((boardId) => {
         collabActiveBoardIdRef.current = boardId || null;
@@ -417,6 +424,8 @@ export function useBoardPersistence({ userId, userIdRef, dispatch, stateRef, ini
         collabActiveBoardIdRef,
         collabConnectedRef,
         collabBoardRoomLiveRef,
+        recentLocalEditsRef,
+        markBoardLocalEdit,
         setCollabActiveBoardId,
         setCollabConnectedForBoard,
         setCollabBoardRoomLive,

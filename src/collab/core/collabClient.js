@@ -1,11 +1,30 @@
 import { io } from 'socket.io-client';
 import { CLIENT_EVENTS } from '@dailyways/collab-protocol';
-import { getCollabServerUrl, isLocalOrLanHost } from './collabConfig.js';
+import { getCollabServerUrl } from './collabConfig.js';
 import { getBoardCollabMountGen } from '../board/sync/boardCollabSession.js';
 import { isBoardPrankFrozen, isBoardPrankHeld } from '../board/dev/boardDevPrank.js';
 import { shouldEmitPresenceForRoom } from '../shared/session/presenceGuards.js';
 import { getJoinedRoomId } from '../shared/session/scopeSessionState.js';
 let socketInstance = null;
+
+/**
+ * Ops enviadas POR ESTA ABA (o servidor devolve o op:applied também para quem enviou).
+ * Antes o filtro era por usuário, então a 2ª aba do mesmo usuário ignorava tudo da 1ª.
+ */
+const OWN_OP_LIMIT = 2000;
+const ownOpIds = new Set();
+
+function rememberOwnOp(opId) {
+  if (!opId) return;
+  ownOpIds.add(opId);
+  if (ownOpIds.size > OWN_OP_LIMIT) {
+    ownOpIds.delete(ownOpIds.values().next().value);
+  }
+}
+
+export function isOwnOp(opId) {
+  return Boolean(opId) && ownOpIds.has(opId);
+}
 
 export function getCollabSocket() {
   return socketInstance;
@@ -25,9 +44,10 @@ export function connectCollabSocket(token) {
     socketInstance = null;
   }
 
-  // Usa WebSocket para localhost E para IPs de rede local (amigo via 192.168.x.x).
-  // Apenas produção com domínio público continua em polling (nginx não faz proxy WS por padrão).
-  const pollingOnly = import.meta.env.PROD && !isLocalOrLanHost();
+  // Começa em polling e sobe para WebSocket quando o proxy deixa (o nginx de deploy/ faz o upgrade).
+  // Se o upgrade falhar, o socket.io segue em polling sozinho. Só polling: VITE_COLLAB_POLLING_ONLY=1.
+  // Antes produção ficava SEMPRE em polling: cada alteração virava uma requisição HTTP (lento).
+  const pollingOnly = import.meta.env.VITE_COLLAB_POLLING_ONLY === '1';
   socketInstance = io(url, {
     auth: { token },
     path: '/socket.io',
@@ -141,7 +161,31 @@ export function submitOp(socket, op) {
       reject(new Error('Socket not connected'));
       return;
     }
+    rememberOwnOp(op?.opId);
     socket.emit(CLIENT_EVENTS.OP, op, (res) => {
+      if (res?.ok) resolve(res);
+      else reject(new Error(res?.error || 'Op rejected'));
+    });
+  });
+}
+
+const BOARD_OP_TIMEOUT_MS = 8000;
+
+/** Op de board sem estar na sala dele: o servidor collab aplica, avisa a sala e persiste. */
+export function submitBoardOp(socket, boardId, op) {
+  return new Promise((resolve, reject) => {
+    if (isBoardPrankFrozen()) {
+      reject(new Error('Board prank frozen'));
+      return;
+    }
+    if (!socket?.connected) {
+      reject(new Error('Socket not connected'));
+      return;
+    }
+    rememberOwnOp(op?.opId);
+    const timer = setTimeout(() => reject(new Error('Board op timeout')), BOARD_OP_TIMEOUT_MS);
+    socket.emit(CLIENT_EVENTS.BOARD_OP, { boardId, op }, (res) => {
+      clearTimeout(timer);
       if (res?.ok) resolve(res);
       else reject(new Error(res?.error || 'Op rejected'));
     });

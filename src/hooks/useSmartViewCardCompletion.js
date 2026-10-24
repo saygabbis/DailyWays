@@ -59,7 +59,9 @@ export function useSmartViewCardCompletion() {
             restoreListId: markComplete ? null : restoreListId,
         });
 
-        await flushBoardPersist(boardId);
+        // Com collab conectado o servidor já gravou; o save do board inteiro pelo navegador
+        // só vale como fallback (senão sobrescreve edições de quem está dentro do board).
+        if (!ctx?.connected) await flushBoardPersist(boardId);
 
         if (markComplete) {
             recordCompletion({
@@ -76,6 +78,7 @@ export function useSmartViewCardCompletion() {
     }, [
         state.boards,
         userId,
+        ctx?.connected,
         collabDispatchForBoard,
         getBoardSnapshot,
         recordCompletion,

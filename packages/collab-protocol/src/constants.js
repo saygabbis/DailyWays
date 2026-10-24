@@ -28,6 +28,8 @@ export const CLIENT_EVENTS = {
   JOIN: 'room:join',
   LEAVE: 'room:leave',
   OP: 'op:submit',
+  /** Op de board sem entrar na sala (edição a partir de outra vista: Importante, Diário…). */
+  BOARD_OP: 'board:op',
   PRESENCE: 'presence:update',
 };
 
