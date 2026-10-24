@@ -1,52 +1,20 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { validateWhiteboardNodeCount, isImageFile } from '@dailyways/limits';
+import { validateWhiteboardNodeCount } from '@dailyways/limits';
 import { resolveLimitError } from '../../../limits/messages.js';
 import { useToast } from '../../../context/ToastContext';
 import { useAuth } from '../../../context/AuthContext';
-import { useViewport } from '../interaction/hooks/useViewport';
 import { WhiteboardViewportProvider } from '../interaction/viewport/WhiteboardViewportContext.jsx';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 import { useWhiteboardSelectionStore } from '../../../stores/whiteboardSelectionStore';
 import { useWhiteboardDocumentStore } from '../../../stores/whiteboardDocumentStore';
-import { getDefaultNodePayload, isCreationTool } from '../../../stores/whiteboardStore';
-import { applyToolVariantToPayload } from '../core/creation/applyToolVariant.js';
-import { buildImageNodePayload } from '../core/creation/imageNodePayload.js';
-import { TOOL_VARIANT_MIME } from '../panels/toolbar/toolMenuRegistry.js';
-import {
-    insertNode,
-    insertConnector,
-    uploadSpaceAsset,
-    deleteNode as deleteNodeService,
-    fetchRulerGuides,
-} from '../../../services/whiteboardService';
-import { useWhiteboardUndo } from '../interaction/hooks/useWhiteboardUndo';
+import { fetchRulerGuides } from '../../../services/whiteboardService';
 import { useCanvasShortcuts } from '../interaction/hooks/useCanvasShortcuts';
-import {
-    CREATE_DRAG_THRESHOLD_PX,
-    CREATE_MIN_SIZE,
-    creationToolToNodeType,
-    isDragCreationTool as checkDragCreationTool,
-} from '../interaction/hooks/useCreateTool';
+import { isDragCreationTool as checkDragCreationTool } from '../interaction/hooks/useCreateTool';
 import { useResizeRotateState } from '../interaction/hooks/useResizeRotate';
 import PresenceLayer from '../../../collab/board/ui/PresenceLayer.jsx';
 import { useCollabPatch } from '../../../collab/space/ops/SpaceCollabOpsContext.jsx';
 import { useCollabPresence } from '../../../collab/board/presence/useCollabPresence.js';
 import SpaceRemoteDragLayer from '../../../collab/space/ui/SpaceRemoteDragLayer.jsx';
-import { screenToWorldWithContainer, findContainerAt } from '../interaction/viewport/viewportUtils';
-import { IMAGE_RESIZE_MIN_WORLD } from '../interaction/viewport/viewportLimits.js';
-import {
-    getZoomAwareCreateDims,
-    getZoomAwareMinCreateSize,
-} from '../interaction/viewport/viewportCreation.js';
-import { computeResizeBounds } from '../interaction/transform/resizeBounds';
-import { computeSkewResizeBounds } from '../interaction/transform/resizeSkew';
-import {
-    buildImageResizeModifiers,
-    getImageResizeStartMode,
-    mergeImageObjectFitPatch,
-    shouldUseSkewResize,
-} from '../interaction/transform/imageResize';
-import { worldBoxFromAnchorWithModifiers } from '../interaction/transform/createDragBounds';
 import NodeLayer from './NodeLayer';
 import TransformHandlesLayer from './overlays/TransformHandlesLayer';
 import ConnectorLayer from './ConnectorLayer';
@@ -54,78 +22,29 @@ import SelectionManager from './overlays/SelectionManager';
 import RulersOverlay from './overlays/RulersOverlay';
 import RulerGuidesOverlay from './overlays/RulerGuidesOverlay';
 import { useRulerGuideInteraction } from '../interaction/hooks/useRulerGuideInteraction';
-import { pickGuideAt } from '../interaction/guides/guideInteraction';
-import { captureNodesSnapshot, cloneNode } from '../core/history/whiteboardHistory';
-import { filterNodesByPage } from '../core/pages/whiteboardPages';
 import { getInspectorInsetPx } from '../shared/inspectorLayout';
-import { getNodeCenterWorld, pointerWorldAngleDeg, computeRotationFromPointer } from '../interaction/transform/rotatePointer';
-import {
-    copyNodesToClipboard,
-    setClipboardFromNodes,
-    duplicateSelectedNodes,
-    pasteFromClipboard,
-    patchZIndexSelected,
-} from '../core/ops/whiteboardNodeOps';
-import { pasteClipboardContent } from '../core/ops/pasteExternalContent.js';
+import { patchZIndexSelected } from '../core/ops/whiteboardNodeOps';
 import ShortcutsHelp from '../panels/ShortcutsHelp';
 import SnapGuidesOverlay from './overlays/SnapGuidesOverlay';
 import InspectorPanel from '../panels/InspectorPanel';
-import { computeSnapForDrag, computeSnapForResize, buildSnapExcludeIds, snapGuidesEqual } from '../interaction/snap/whiteboardSnap';
-import { nodeToWorld, worldTopLeftToNodePatch, buildNodesById } from '../core/ops/whiteboardNodeOps';
-import {
-    resolveDragNodeIds,
-    resolveMarqueeSelectionIds,
-    buildDragFinishPatches,
-} from '../core/selection/whiteboardSelectionUtils';
-import { getNodeCreateOffset } from '../core/whiteboardCreateOffsets';
-import {
-    groupSelectedNodes,
-    ungroupSelectedNodes,
-    getSelectionContextFlags,
-} from '../core/layers/whiteboardGroupOps';
-import {
-    findDropContainerForNode,
-    buildNestInContainerPatch,
-} from '../core/layers/layersPanelOps';
-import { getCornerRadii } from '../shared/appearanceStyle';
-import {
-    SELECTION_TRANSFORM_ID,
-    getTransformTargetIds,
-    getUnifiedSelectionBox,
-    computeMultiResizePatches,
-    computeMultiRotatePatches,
-    getSelectionTransformCenter,
-} from '../interaction/transform/selectionTransform';
-import { contrastingTextColor } from '../../../utils/contrastingTextColor';
-import { recordNodesMutation } from '../core/history/whiteboardHistory';
+import { snapGuidesEqual } from '../interaction/snap/whiteboardSnap';
+import { groupSelectedNodes, ungroupSelectedNodes } from '../core/layers/whiteboardGroupOps';
 import ViewportControlsBar from '../panels/ViewportControlsBar';
 import WhiteboardBottomChrome from '../panels/WhiteboardBottomChrome';
 import LeftToolbar from '../panels/LeftToolbar';
 import DraggablePanel from '../panels/DraggablePanel';
 import WhiteboardContextMenu from '../panels/WhiteboardContextMenu';
-import { uuidv4 } from '../../../utils/uuid';
-import { applyPostCreateActions } from '../core/creation/postCreateActions';
-import {
-    FRAME_CONSTRAINT_DEFAULT,
-    normalizeFrameConstraints,
-    applyFrameResizeToChildren,
-} from '../core/frame/frameConstraints.js';
 import './CanvasShell.css';
-
-const DEFAULT_NODE_RADIUS = {
-    sticky_note: 8,
-    comment: 8,
-    todo_list: 8,
-    link: 8,
-    file_card: 8,
-    frame: 8,
-};
-
-function getNextTopLevelZIndex(nodes) {
-    const topLevel = (nodes || []).filter((n) => !n.parentId);
-    if (!topLevel.length) return 0;
-    return Math.max(...topLevel.map((n) => n.zIndex ?? 0)) + 1;
-}
+import { NODE_TYPES_ALLOWED } from '../shared/constants';
+import { useNodeCreation } from './hooks/useNodeCreation';
+import { useCanvasUploads } from './hooks/useCanvasUploads';
+import { useCanvasClipboard } from './hooks/useCanvasClipboard';
+import { useResizeRotate } from './hooks/useResizeRotate';
+import { useSelectionActions } from './hooks/useSelectionActions';
+import { useNodeDrag } from './hooks/useNodeDrag';
+import { useCanvasPointerDown } from './hooks/useCanvasPointerDown';
+import { useCanvasPointerGestures } from './hooks/useCanvasPointerGestures';
+import { useCanvasContextMenu } from './hooks/useCanvasContextMenu';
 
 export default function CanvasEngine({ spaceId, space, onViewportChange, onRegisterViewportControl }) {
     const containerRef = useRef(null);
@@ -237,419 +156,74 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         spaceId,
     });
 
-    const NODE_TYPES_ALLOWED = ['sticky_note', 'text', 'shape', 'frame', 'image', 'comment', 'link', 'todo_list', 'file_card', 'drawing', 'table'];
     const isDragCreationTool = (tool) => checkDragCreationTool(tool, NODE_TYPES_ALLOWED);
 
-    const dragPreviewBorderFromNode = useCallback((node) => {
-        if (!node) return {};
-        if (node.type === 'shape' && node.data?.shape === 'ellipse') {
-            return { radiusShape: 'ellipse' };
-        }
-        const appearance = node.style?.appearance;
-        if (appearance) {
-            const corners = getCornerRadii(appearance);
-            return { cornerRadii: corners };
-        }
-        if (typeof node.style?.borderRadius === 'number') {
-            return { borderRadius: node.style.borderRadius };
-        }
-        const fallback = DEFAULT_NODE_RADIUS[node.type];
-        if (typeof fallback === 'number') return { borderRadius: fallback };
-        return {};
-    }, []);
+    const {
+        dragPreviewBorderFromNode,
+        createNodeAt,
+        applyCreateDragBox,
+    } = useNodeCreation({
+        spaceId,
+        containerRef,
+        createPreview,
+        setCreatePreview,
+        createDragRef,
+        viewportRef,
+        lastPointerClientRef,
+        user,
+        collabPatchNode,
+        collabCreateNode,
+        collabConnected,
+    });
 
-    const createNodeAt = useCallback(
-        async (type, worldX, worldY, extraData = {}, dims) => {
-            if (!spaceId || !NODE_TYPES_ALLOWED.includes(type)) return null;
-            const defaultKey = type === 'drawing' ? 'draw' : type === 'file_card' ? 'file' : type;
-            const payload = getDefaultNodePayload(defaultKey, worldX, worldY);
-            payload.type = type;
-            const pageId = useWhiteboardStore.getState().activePageId;
-            Object.assign(payload.data, extraData.data || {}, { pageId });
-            if (extraData.style) Object.assign(payload.style, extraData.style);
-            if (dims?.width != null) payload.width = Math.max(CREATE_MIN_SIZE, dims.width);
-            else {
-                const z = viewportRef.current?.zoom ?? useWhiteboardSelectionStore.getState().viewport?.zoom ?? 1;
-                payload.width = getZoomAwareCreateDims(defaultKey, z).width;
-            }
-            if (dims?.height != null) payload.height = Math.max(CREATE_MIN_SIZE, dims.height);
-            else {
-                const z = viewportRef.current?.zoom ?? useWhiteboardSelectionStore.getState().viewport?.zoom ?? 1;
-                payload.height = getZoomAwareCreateDims(defaultKey, z).height;
-            }
-            const variantPayload = applyToolVariantToPayload(type, payload, extraData.variantId);
-            Object.assign(payload, variantPayload);
-            if (variantPayload.data) {
-                payload.data = { ...payload.data, pageId };
-            }
-            const allNodes = useWhiteboardStore.getState().nodes;
-            const pageNodes = filterNodesByPage(allNodes, pageId);
-            const byId = buildNodesById(pageNodes);
-            const centerX = worldX + (payload.width ?? 0) / 2;
-            const centerY = worldY + (payload.height ?? 0) / 2;
-            const container = findContainerAt(pageNodes, centerX, centerY);
-            if (container) {
-                const containerWorld = nodeToWorld(container, byId);
-                payload.parentId = container.id;
-                payload.x = worldX - containerWorld.x;
-                payload.y = worldY - containerWorld.y;
-                if (container.type === 'frame') {
-                    payload.data = {
-                        ...(payload.data || {}),
-                        constraints: normalizeFrameConstraints(payload.data?.constraints || FRAME_CONSTRAINT_DEFAULT),
-                    };
-                }
-            } else if (type === 'shape') {
-                // New standalone shapes should appear above every top-level layer.
-                payload.zIndex = getNextTopLevelZIndex(pageNodes);
-            }
-            if (collabConnected) {
-                collabCreateNode({ ...payload, createdBy: user?.id ?? null });
-            } else {
-                const res = await insertNode(spaceId, payload, user?.id);
-                if (res.success) {
-                    useWhiteboardStore.getState().addNode(payload);
-                } else {
-                    return null;
-                }
-            }
-            useWhiteboardStore.getState().pushHistory({
-                type: 'node_add',
-                payload: { node: cloneNode({ ...payload, createdBy: user?.id ?? null }) },
-            });
-            return payload.id;
-        },
-        [spaceId, user?.id, collabCreateNode, collabConnected]
-    );
+    const {
+        getViewportCenterWorld,
+        handleUploadImage,
+        handleUploadFile,
+    } = useCanvasUploads({
+        spaceId,
+        containerRef,
+        pendingUploadWorldPositionRef,
+        viewportRef,
+        user,
+        addToast,
+        guardNodeLimit,
+        collabCreateNode,
+        collabConnected,
+    });
 
-    const applyCreateDragBox = useCallback(
-        async (drag, currentWorld, modifiers = {}) => {
-            const zoom = viewportRef.current?.zoom ?? 1;
-            const box = worldBoxFromAnchorWithModifiers(drag.anchorWorld, currentWorld, {
-                minSize: getZoomAwareMinCreateSize(zoom),
-                shiftKey: modifiers.shiftKey,
-                altKey: modifiers.altKey,
-                aspectRatio: drag.aspectRatio ?? 1,
-            });
-            const nodeType = creationToolToNodeType(drag.tool);
-            if (!drag.nodeId) {
-                if (!drag._initPromise) {
-                    drag._initPromise = createNodeAt(nodeType, box.x, box.y, {}, {
-                        width: box.width,
-                        height: box.height,
-                    }).then((id) => {
-                        if (id) drag.nodeId = id;
-                        return id;
-                    });
-                }
-                await drag._initPromise;
-            }
-            if (drag.nodeId) {
-                const state = useWhiteboardStore.getState();
-                const node = state.nodes.find((n) => n.id === drag.nodeId);
-                const patch = {
-                    x: box.x,
-                    y: box.y,
-                    width: box.width,
-                    height: box.height,
-                };
-                if (node?.parentId) {
-                    const byId = buildNodesById(state.nodes);
-                    const parent = byId.get(node.parentId);
-                    if (parent) {
-                        const parentWorld = nodeToWorld(parent, byId);
-                        patch.x = box.x - parentWorld.x;
-                        patch.y = box.y - parentWorld.y;
-                    }
-                }
-                collabPatchNode(drag.nodeId, patch);
-            }
-        },
-        [createNodeAt, collabPatchNode]
-    );
-
-    useEffect(() => {
-        if (!createPreview) return undefined;
-        const refreshFromModifiers = (e) => {
-            if (e.key !== 'Shift' && e.key !== 'Alt') return;
-            const drag = createDragRef.current;
-            const p = lastPointerClientRef.current;
-            const rect = containerRef.current?.getBoundingClientRect();
-            if (!drag?.anchorWorld || !p || !rect || !viewportRef.current) return;
-            const currentWorld = screenToWorldWithContainer(p.x, p.y, rect, viewportRef.current);
-            const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey };
-            const zoom = viewportRef.current?.zoom ?? 1;
-            setCreatePreview((prev) =>
-                prev
-                    ? {
-                          ...prev,
-                          currentWorld,
-                          shiftKey: modifiers.shiftKey,
-                          altKey: modifiers.altKey,
-                          minSize: getZoomAwareMinCreateSize(zoom),
-                      }
-                    : null
-            );
-            const dist = Math.hypot(p.x - drag.startScreen.x, p.y - drag.startScreen.y);
-            if (dist >= CREATE_DRAG_THRESHOLD_PX) {
-                void applyCreateDragBox(drag, currentWorld, modifiers);
-            }
-        };
-        window.addEventListener('keydown', refreshFromModifiers);
-        window.addEventListener('keyup', refreshFromModifiers);
-        return () => {
-            window.removeEventListener('keydown', refreshFromModifiers);
-            window.removeEventListener('keyup', refreshFromModifiers);
-        };
-    }, [createPreview, applyCreateDragBox]);
-
-    const getViewportCenterWorld = useCallback(() => {
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect || !viewportRef.current) return { x: 0, y: 0 };
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-        return screenToWorldWithContainer(cx, cy, rect, viewportRef.current);
-    }, []);
-
-    const handleUploadImage = useCallback(
-        async (file) => {
-            if (!spaceId || !file) return;
-            if (!guardNodeLimit(1)) return;
-            if (!guardNodeLimit(1)) return;
-            if (!isImageFile(file)) {
-                console.warn('[CanvasEngine] handleUploadImage: not an image file', file.name);
-                return;
-            }
-            try {
-                const result = await uploadSpaceAsset(spaceId, file, user?.id);
-                if (!result.url) {
-                    addToast(result.error || 'Falha ao enviar imagem.', 'error');
-                    return;
-                }
-                let placement;
-                const pending = pendingUploadWorldPositionRef.current;
-                if (pending) {
-                    pendingUploadWorldPositionRef.current = null;
-                    placement = { x: pending.x, y: pending.y, anchor: pending.anchor ?? 'center' };
-                } else {
-                    const center = getViewportCenterWorld();
-                    placement = { x: center.x, y: center.y, anchor: 'center' };
-                }
-                const zoom = viewportRef.current?.zoom ?? 1;
-                const payload = await buildImageNodePayload(
-                    file,
-                    result.storagePath,
-                    placement,
-                    null,
-                    zoom
-                );
-                if (collabConnected) {
-                    collabCreateNode({ ...payload, createdBy: user?.id ?? null });
-                } else {
-                    const res = await insertNode(spaceId, payload, user?.id);
-                    if (res.success) useWhiteboardStore.getState().addNode(payload);
-                }
-            } catch (err) {
-                console.error('[CanvasEngine] handleUploadImage error', err);
-            }
-        },
-        [spaceId, user?.id, collabCreateNode, collabConnected, getViewportCenterWorld, guardNodeLimit, addToast]
-    );
-
-    const handleUploadFile = useCallback(
-        async (file) => {
-            if (!spaceId || !file) return;
-            if (!guardNodeLimit(1)) return;
-            try {
-                const result = await uploadSpaceAsset(spaceId, file, user?.id);
-                if (!result.url) {
-                    addToast(result.error || 'Falha ao enviar arquivo.', 'error');
-                    return;
-                }
-                let placement;
-                const pending = pendingUploadWorldPositionRef.current;
-                if (pending) {
-                    pendingUploadWorldPositionRef.current = null;
-                    placement = { x: pending.x, y: pending.y, anchor: pending.anchor ?? 'center' };
-                } else {
-                    const center = getViewportCenterWorld();
-                    placement = { x: center.x, y: center.y, anchor: 'center' };
-                }
-                const isImage = file.type?.startsWith('image/');
-                if (isImage) {
-                    const zoom = viewportRef.current?.zoom ?? 1;
-                    const payload = await buildImageNodePayload(
-                        file,
-                        result.storagePath,
-                        placement,
-                        null,
-                        zoom
-                    );
-                    if (collabConnected) {
-                        collabCreateNode({ ...payload, createdBy: user?.id ?? null });
-                    } else {
-                        const res = await insertNode(spaceId, payload, user?.id);
-                        if (res.success) useWhiteboardStore.getState().addNode(payload);
-                    }
-                    return;
-                }
-                const sizeStr = file.size != null ? (file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`) : '';
-                const defaultKey = 'file';
-                const offsetX = 110;
-                const offsetY = 40;
-                const place = placement.anchor === 'topleft'
-                    ? placement
-                    : { x: placement.x - offsetX, y: placement.y - offsetY, anchor: 'topleft' };
-                const payload = getDefaultNodePayload(defaultKey, place.x, place.y);
-                Object.assign(payload.data, { url: result.url, filename: file.name, size: sizeStr });
-                if (collabConnected) {
-                    collabCreateNode({ ...payload, createdBy: user?.id ?? null });
-                } else {
-                    const res = await insertNode(spaceId, payload, user?.id);
-                    if (res.success) useWhiteboardStore.getState().addNode(payload);
-                }
-            } catch (err) {
-                console.error('[CanvasEngine] handleUploadFile error', err);
-            }
-        },
-        [spaceId, user?.id, collabCreateNode, collabConnected, getViewportCenterWorld, guardNodeLimit, addToast]
-    );
-
-    const persistViewport = useCallback(
-        (pan, zoom) => {
-            setStoreViewport({ panX: pan.x, panY: pan.y, zoom });
-            if (onViewportChange) onViewportChange(pan, zoom);
-        },
-        [setStoreViewport, onViewportChange]
-    );
-
-    const viewportState = useViewport(initialPan, initialZoom, persistViewport, containerRef);
-
-    const getZoomFocalClient = useCallback(() => {
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect) return { x: 0, y: 0 };
-        const p = lastPointerClientRef.current;
-        if (p) return p;
-        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-    }, []);
-
-    const { undo: performUndo, redo: performRedo } = useWhiteboardUndo();
-
-    const nodeOpsCtx = useCallback(
-        () => ({
-            spaceId,
-            userId: user?.id,
-            collabCreateNode,
-            collabConnected,
-            store: useWhiteboardStore,
-            viewportZoom:
-                viewportRef.current?.zoom ??
-                useWhiteboardSelectionStore.getState().viewport?.zoom ??
-                1,
-            onUploadError: (message) => addToast(message || 'Falha ao enviar arquivo.', 'error'),
-        }),
-        [spaceId, user?.id, collabCreateNode, collabConnected, addToast]
-    );
-
-    const handleCopy = useCallback(() => {
-        if (useWhiteboardSelectionStore.getState().selectedGuideIds.length) {
-            handleCopyGuides();
-            return;
-        }
-        copyNodesToClipboard(useWhiteboardStore);
-    }, [handleCopyGuides]);
-
-    const getPastePlacement = useCallback(() => {
-        const rect = containerRef.current?.getBoundingClientRect();
-        const p = lastPointerClientRef.current;
-        if (p && rect && viewportRef.current) {
-            const world = screenToWorldWithContainer(p.x, p.y, rect, viewportRef.current);
-            return { x: world.x, y: world.y, anchor: 'center' };
-        }
-        const center = getViewportCenterWorld();
-        return { x: center.x, y: center.y, anchor: 'center' };
-    }, [getViewportCenterWorld]);
-
-    const handlePaste = useCallback(
-        async (clipboardData = null) => {
-            const clipGuides = useWhiteboardSelectionStore.getState().clipboardGuides;
-            if (clipGuides?.length && !clipboardData) {
-                await handlePasteGuides();
-                return;
-            }
-            const ctx = nodeOpsCtx();
-            const placement = getPastePlacement();
-            await pasteClipboardContent(ctx, placement, clipboardData, () => pasteFromClipboard(ctx));
-        },
-        [nodeOpsCtx, getPastePlacement, handlePasteGuides]
-    );
-
-    const handlePasteInPlace = useCallback(
-        async (clipboardData = null) => {
-            const ctx = nodeOpsCtx();
-            const placement = getPastePlacement();
-            await pasteClipboardContent(ctx, placement, clipboardData, () =>
-                pasteFromClipboard(ctx, { inPlace: true })
-            );
-        },
-        [nodeOpsCtx, getPastePlacement]
-    );
-
-    const handleViewportPaste = useCallback(
-        (e) => {
-            const el = document.activeElement;
-            if (el) {
-                const tag = el.tagName;
-                const isEditable =
-                    tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
-                if (isEditable) {
-                    if (el.closest?.('.whiteboard-node-wrapper')) return;
-                    if (el.closest?.('.whiteboard-floating-toolbar')) return;
-                    return;
-                }
-            }
-            e.preventDefault();
-            void handlePaste(e.clipboardData);
-        },
-        [handlePaste]
-    );
-
-    const handleDuplicate = useCallback(async () => {
-        await duplicateSelectedNodes(nodeOpsCtx());
-    }, [nodeOpsCtx]);
-
-    const handleCut = useCallback(async () => {
-        if (useWhiteboardSelectionStore.getState().selectedGuideIds.length) {
-            await handleCutGuides();
-            return;
-        }
-        const state = useWhiteboardStore.getState();
-        if (!state.selectedNodeIds.length) return;
-        const selectedNodes = state.nodes.filter((n) => state.selectedNodeIds.includes(n.id));
-        setClipboardFromNodes(useWhiteboardStore, selectedNodes);
-        useWhiteboardStore.getState().pushHistory({
-            type: 'node_delete',
-            payload: { nodes: selectedNodes.map((n) => JSON.parse(JSON.stringify(n))) },
-        });
-        if (!collabConnected) {
-            for (const id of state.selectedNodeIds) {
-                deleteNodeService(id);
-            }
-        }
-        collabDeleteNodes(state.selectedNodeIds);
-        setSelection([]);
-    }, [collabConnected, collabDeleteNodes, setSelection, handleCutGuides]);
-
-    const commitTextEdit = useCallback(() => {
-        const el = document.activeElement;
-        if (
-            el &&
-            (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') &&
-            el.closest?.('.whiteboard-node-wrapper')
-        ) {
-            el.blur();
-        }
-    }, []);
+    const {
+        viewportState,
+        getZoomFocalClient,
+        performUndo,
+        performRedo,
+        handleCopy,
+        handlePaste,
+        handlePasteInPlace,
+        handleViewportPaste,
+        handleDuplicate,
+        handleCut,
+        commitTextEdit,
+    } = useCanvasClipboard({
+        spaceId,
+        onViewportChange,
+        containerRef,
+        viewportRef,
+        lastPointerClientRef,
+        initialPan,
+        initialZoom,
+        user,
+        addToast,
+        collabCreateNode,
+        collabDeleteNodes,
+        collabConnected,
+        setSelection,
+        setStoreViewport,
+        handleCopyGuides,
+        handleCutGuides,
+        handlePasteGuides,
+        getViewportCenterWorld,
+    });
 
     useCanvasShortcuts({
         containerRef,
@@ -730,1344 +304,135 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         !e.target?.closest?.('.whiteboard-rulers-horizontal') &&
         !e.target?.closest?.('.whiteboard-rulers-vertical');
 
-    const handlePointerDown = useCallback(
-        (e) => {
-            if (e.button !== 0 && e.button !== 1 && e.button !== 2) return;
-            const isBg = isCanvasBackground(e);
-            if (e.button === 2 || e.button === 1 || (e.button === 0 && isSpacePressed)) {
-                e.preventDefault();
-                e.stopPropagation();
-                rightMousePanRef.current = e.button === 2;
-                viewportState.handleMouseDown(e, isSpacePressed);
-                if (e.currentTarget?.setPointerCapture) {
-                    e.currentTarget.setPointerCapture(e.pointerId);
-                }
-                return;
-            }
-            if (e.button === 0 && isBg && !isSpacePressed) {
-                e.preventDefault();
-                containerRef.current?.focus?.({ preventScroll: true });
-                commitTextEdit();
-                if (activeTool === 'select' && tryPickGuideOnBackground(e)) {
-                    return;
-                }
-                if (activeTool === 'select') {
-                    clearGuideSelection();
-                    setSelectionBox({
-                        start: { x: e.clientX, y: e.clientY },
-                        current: { x: e.clientX, y: e.clientY },
-                    });
-                    if (e.currentTarget && typeof e.currentTarget.setPointerCapture === 'function') {
-                        e.currentTarget.setPointerCapture(e.pointerId);
-                    }
-                } else if (isDragCreationTool(activeTool)) {
-                    const rect = containerRef.current?.getBoundingClientRect();
-                    if (rect && viewportForChildren) {
-                        const anchorWorld = screenToWorldWithContainer(
-                            e.clientX,
-                            e.clientY,
-                            rect,
-                            viewportForChildren
-                        );
-                        const nodeType = creationToolToNodeType(activeTool);
-                        const defaultKey =
-                            nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType;
-                        const zoom = viewportForChildren.zoom ?? 1;
-                        const aware = getZoomAwareCreateDims(defaultKey, zoom);
-                        const aspectRatio =
-                            aware.width && aware.height ? aware.width / aware.height : 1;
-                        const minSize = getZoomAwareMinCreateSize(zoom);
-                        createDragRef.current = {
-                            tool: activeTool,
-                            anchorWorld,
-                            startScreen: { x: e.clientX, y: e.clientY },
-                            nodeId: null,
-                            creating: false,
-                            aspectRatio,
-                        };
-                        setCreatePreview({
-                            anchorWorld,
-                            currentWorld: anchorWorld,
-                            shiftKey: e.shiftKey,
-                            altKey: e.altKey,
-                            aspectRatio,
-                            minSize,
-                        });
-                    }
-                    if (e.currentTarget && typeof e.currentTarget.setPointerCapture === 'function') {
-                        e.currentTarget.setPointerCapture(e.pointerId);
-                    }
-                } else if (
-                    isCreationTool(activeTool) &&
-                    activeTool !== 'connector' &&
-                    NODE_TYPES_ALLOWED.includes(creationToolToNodeType(activeTool))
-                ) {
-                    createDragRef.current = {
-                        tool: activeTool,
-                        clickOnly: true,
-                        startScreen: { x: e.clientX, y: e.clientY },
-                    };
-                    if (e.currentTarget && typeof e.currentTarget.setPointerCapture === 'function') {
-                        e.currentTarget.setPointerCapture(e.pointerId);
-                    }
-                }
-            }
-        },
-        [
-            viewportState,
-            isSpacePressed,
-            activeTool,
-            commitTextEdit,
-            viewportForChildren,
-            tryPickGuideOnBackground,
-            clearGuideSelection,
-        ]
-    );
+    const {
+        handlePointerDown,
+    } = useCanvasPointerDown({
+        containerRef,
+        setSelectionBox,
+        setCreatePreview,
+        isSpacePressed,
+        createDragRef,
+        rightMousePanRef,
+        activeTool,
+        clearGuideSelection,
+        tryPickGuideOnBackground,
+        isDragCreationTool,
+        viewportState,
+        commitTextEdit,
+        viewportForChildren,
+        isCanvasBackground,
+    });
 
-    const handleResizeStart = useCallback((nodeId, corner, e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        nodeDragRef.current = null;
-        resizeActiveRef.current = true;
-        if (e.currentTarget?.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
-        const state = useWhiteboardStore.getState();
-        setRotateState(null);
+    const {
+        handleResizeStart,
+        handleRotateStart,
+        COLORABLE_TYPES,
+    } = useResizeRotate({
+        containerRef,
+        resizeActiveRef,
+        resizeState,
+        setResizeState,
+        rotateState,
+        setRotateState,
+        nodeDragRef,
+        viewportRef,
+        collabPatchNodeRef,
+        collabPatchNodesRef,
+        setSnapGuidesIfChangedRef,
+    });
 
-        if (nodeId === SELECTION_TRANSFORM_ID) {
-            const transformIds = getTransformTargetIds(state.selectedNodeIds, state.nodes, {
-                groupDrill: state.groupDrill,
-                isolateSelection: state.isolateSelection,
-            });
-            if (transformIds.length < 2) {
-                resizeActiveRef.current = false;
-                return;
-            }
-            const beforeSnapshots = captureNodesSnapshot(useWhiteboardStore, transformIds);
-            if (!beforeSnapshots.length) {
-                resizeActiveRef.current = false;
-                return;
-            }
-            const box = getUnifiedSelectionBox(state.nodes, transformIds);
-            if (!box) return;
-            setResizeState({
-                mode: 'selection',
-                nodeIds: transformIds,
-                corner,
-                beforeSnapshots,
-                snapExcludeIds: buildSnapExcludeIds(transformIds, state.nodes),
-                origin: {
-                    x: box.minX,
-                    y: box.minY,
-                    width: box.width,
-                    height: box.height,
-                },
-            });
-            return;
-        }
+    const {
+        openSelectionContextMenu,
+        handleDownloadSelectedImages,
+        handleDeleteSelection,
+        handleSelectionColor,
+        handleNodeContextMenu,
+    } = useSelectionActions({
+        setContextMenuPosition,
+        collabPatchNode,
+        collabDeleteNodes,
+        collabConnected,
+        setSelection,
+        handleDeleteSelectedGuides,
+        COLORABLE_TYPES,
+    });
 
-        const node = state.nodes.find((n) => n.id === nodeId);
-        if (!node) return;
-        const childIds = node.type === 'frame'
-            ? state.nodes.filter((n) => n.parentId === nodeId).map((n) => n.id)
-            : [];
-        const trackedIds = [nodeId, ...childIds];
-        setResizeState({
-            nodeId,
-            corner,
-            mode: getImageResizeStartMode(node.type, e.ctrlKey || e.metaKey),
-            beforeNode: cloneNode(node),
-            beforeSnapshots: captureNodesSnapshot(useWhiteboardStore, trackedIds),
-            snapExcludeIds: buildSnapExcludeIds([nodeId], state.nodes),
-            origin: {
-                x: node.x,
-                y: node.y,
-                width: node.width ?? 0,
-                height: node.height ?? 0,
-                skewX: node.skewX ?? 0,
-                skewY: node.skewY ?? 0,
-            },
-        });
-    }, []);
+    const {
+        handleNodePointerDown,
+    } = useNodeDrag({
+        spaceId,
+        containerRef,
+        setCreatePreview,
+        resizeActiveRef,
+        nodeDragRef,
+        createDragRef,
+        viewportRef,
+        collabCreateConnector,
+        collabConnected,
+        collabPatchNodeRef,
+        collabPatchNodesRef,
+        updateDragPreviewRef,
+        setSnapGuidesIfChangedRef,
+        activeTool,
+        connectorFromNodeId,
+        setConnectorFromNodeId,
+        isDragCreationTool,
+        dragPreviewBorderFromNode,
+        commitTextEdit,
+        viewportForChildren,
+    });
 
-    useEffect(() => {
-        if (!resizeState) return;
+    const {
+        handlePointerUp,
+        handlePointerMove,
+    } = useCanvasPointerGestures({
+        containerRef,
+        selectionBox,
+        setSelectionBox,
+        setCreatePreview,
+        createDragRef,
+        rightMousePanRef,
+        keepCreationToolRef,
+        viewportRef,
+        lastPointerClientRef,
+        updateCursor,
+        setSelection,
+        activeTool,
+        clearGuideSelection,
+        createNodeAt,
+        applyCreateDragBox,
+        viewportState,
+        viewportForChildren,
+    });
 
-        if (resizeState.mode === 'selection') {
-            const { corner: handle, origin, beforeSnapshots, nodeIds, snapExcludeIds } = resizeState;
-            let rafId = 0;
-            let pendingEvent = null;
-            const flushMove = () => {
-                rafId = 0;
-                const e = pendingEvent;
-                if (!e) return;
-                const rect = containerRef.current?.getBoundingClientRect();
-                if (!rect || !viewportRef.current) return;
-                const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
-                const state = useWhiteboardStore.getState();
-                const selectedNodes = state.nodes.filter((n) => nodeIds.includes(n.id));
-                const resizeMin =
-                    selectedNodes.length > 0 && selectedNodes.every((n) => n.type === 'image')
-                        ? IMAGE_RESIZE_MIN_WORLD
-                        : 0;
-                const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey, min: resizeMin };
-                const newBox = computeResizeBounds(origin, handle, world, modifiers);
-                const { box: snappedBox, guides } = computeSnapForResize({
-                    box: newBox,
-                    handle,
-                    nodes: state.nodes,
-                    movingIds: nodeIds,
-                    zoom: viewportRef.current?.zoom ?? 1,
-                    pageId: state.activePageId,
-                    fromCenter: modifiers.altKey,
-                    originForAspect: modifiers.shiftKey ? origin : null,
-                    enabled: state.snapEnabled,
-                    guidesVisible: state.guidesVisible,
-                    rulerGuides: state.rulerGuides,
-                    excludeIds: snapExcludeIds,
-                });
-                setSnapGuidesIfChangedRef.current(guides);
-                const patches = computeMultiResizePatches(
-                    beforeSnapshots,
-                    state.nodes,
-                    origin,
-                    snappedBox
-                );
-                if (patches.length) collabPatchNodesRef.current(patches);
-            };
-            const onMove = (e) => {
-                pendingEvent = e;
-                if (rafId) return;
-                rafId = requestAnimationFrame(flushMove);
-            };
-            const finishResize = () => {
-                if (rafId) cancelAnimationFrame(rafId);
-                setSnapGuidesIfChangedRef.current([]);
-                const before = resizeState.beforeSnapshots ?? [];
-                const after = captureNodesSnapshot(useWhiteboardStore, nodeIds);
-                const changed =
-                    before.length > 0 &&
-                    before.some((b, i) => {
-                        const a = after[i];
-                        if (!a) return true;
-                        return JSON.stringify(b.node) !== JSON.stringify(a.node);
-                    });
-                if (changed) {
-                    useWhiteboardStore.getState().pushHistory({
-                        type: 'nodes_replace',
-                        payload: { before, after },
-                    });
-                }
-                resizeActiveRef.current = false;
-                setResizeState(null);
-            };
-            window.addEventListener('pointermove', onMove);
-            window.addEventListener('pointerup', finishResize);
-            window.addEventListener('pointercancel', finishResize);
-            return () => {
-                if (rafId) cancelAnimationFrame(rafId);
-                window.removeEventListener('pointermove', onMove);
-                window.removeEventListener('pointerup', finishResize);
-                window.removeEventListener('pointercancel', finishResize);
-                resizeActiveRef.current = false;
-            };
-        }
-
-        const { nodeId, corner: handle, origin, mode, snapExcludeIds } = resizeState;
-        let rafId = 0;
-        let pendingEvent = null;
-        const flushMove = () => {
-            rafId = 0;
-            const e = pendingEvent;
-            if (!e) return;
-            const rect = containerRef.current?.getBoundingClientRect();
-            if (!rect || !viewportRef.current) return;
-            const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
-            const state = useWhiteboardStore.getState();
-            const node = state.nodes.find((n) => n.id === nodeId);
-            if (!node) return;
-            const modifiers = buildImageResizeModifiers(node, origin, e);
-            const byId = buildNodesById(state.nodes);
-            const worldTop = nodeToWorld({ ...node, x: origin.x, y: origin.y }, byId);
-            const worldOrigin = {
-                x: worldTop.x,
-                y: worldTop.y,
-                width: origin.width ?? 0,
-                height: origin.height ?? 0,
-                skewX: origin.skewX ?? 0,
-                skewY: origin.skewY ?? 0,
-            };
-            if (shouldUseSkewResize(node, e.ctrlKey || e.metaKey, mode)) {
-                setSnapGuidesIfChangedRef.current([]);
-                const skewPatch = computeSkewResizeBounds(worldOrigin, handle, world, modifiers);
-                collabPatchNodeRef.current(
-                    nodeId,
-                    worldTopLeftToNodePatch(node, skewPatch.x, skewPatch.y, state.nodes, {
-                        width: skewPatch.width,
-                        height: skewPatch.height,
-                        skewX: skewPatch.skewX,
-                        skewY: skewPatch.skewY,
-                    })
-                );
-                return;
-            }
-            const patch = computeResizeBounds(worldOrigin, handle, world, modifiers);
-            const worldBox = {
-                x: patch.x,
-                y: patch.y,
-                width: patch.width ?? 0,
-                height: patch.height ?? 0,
-            };
-            const { box: snappedBox, guides } = computeSnapForResize({
-                box: worldBox,
-                handle,
-                nodes: state.nodes,
-                movingIds: [nodeId],
-                zoom: viewportRef.current?.zoom ?? 1,
-                pageId: state.activePageId,
-                fromCenter: modifiers.altKey,
-                originForAspect: modifiers.shiftKey ? worldOrigin : null,
-                enabled: state.snapEnabled,
-                guidesVisible: state.guidesVisible,
-                rulerGuides: state.rulerGuides,
-                excludeIds: snapExcludeIds,
-            });
-            setSnapGuidesIfChangedRef.current(guides);
-            let finalPatch = worldTopLeftToNodePatch(node, snappedBox.x, snappedBox.y, state.nodes, {
-                width: snappedBox.width,
-                height: snappedBox.height,
-            });
-            finalPatch = mergeImageObjectFitPatch(node, finalPatch, e);
-            if (node.type === 'frame') {
-                const nextFrame = {
-                    x: finalPatch.x ?? node.x ?? 0,
-                    y: finalPatch.y ?? node.y ?? 0,
-                    width: finalPatch.width ?? node.width ?? 0,
-                    height: finalPatch.height ?? node.height ?? 0,
-                };
-                const children = state.nodes.filter((n) => n.parentId === nodeId);
-                const childPatches = applyFrameResizeToChildren(children, origin, nextFrame);
-                if (childPatches.length > 0) {
-                    collabPatchNodesRef.current([{ id: nodeId, patch: finalPatch }, ...childPatches]);
-                    return;
-                }
-            }
-            collabPatchNodeRef.current(nodeId, finalPatch);
-        };
-        const onMove = (e) => {
-            pendingEvent = e;
-            if (rafId) return;
-            rafId = requestAnimationFrame(flushMove);
-        };
-        const finishResize = () => {
-            if (rafId) cancelAnimationFrame(rafId);
-            setSnapGuidesIfChangedRef.current([]);
-            const before = resizeState.beforeSnapshots?.length
-                ? resizeState.beforeSnapshots
-                : (resizeState.beforeNode ? [{ id: nodeId, node: resizeState.beforeNode }] : []);
-            const trackedIds = before.map((b) => b.id);
-            const after = captureNodesSnapshot(useWhiteboardStore, trackedIds);
-            const changed =
-                before.length > 0 &&
-                before.some((b, i) => {
-                    const a = after[i];
-                    if (!a) return true;
-                    return JSON.stringify(b.node) !== JSON.stringify(a.node);
-                });
-            if (changed) {
-                useWhiteboardStore.getState().pushHistory({
-                    type: 'nodes_replace',
-                    payload: {
-                        before,
-                        after,
-                    },
-                });
-            }
-            resizeActiveRef.current = false;
-            setResizeState(null);
-        };
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', finishResize);
-        window.addEventListener('pointercancel', finishResize);
-        return () => {
-            if (rafId) cancelAnimationFrame(rafId);
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', finishResize);
-            window.removeEventListener('pointercancel', finishResize);
-            resizeActiveRef.current = false;
-        };
-    }, [resizeState]);
-
-    const handleRotateStart = useCallback((nodeId, e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        nodeDragRef.current = null;
-        resizeActiveRef.current = true;
-        if (e.currentTarget?.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
-        const state = useWhiteboardStore.getState();
-        const rect = containerRef.current?.getBoundingClientRect();
-        const vp = viewportRef.current;
-        if (!rect || !vp) {
-            resizeActiveRef.current = false;
-            return;
-        }
-        const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, vp);
-        setResizeState(null);
-
-        if (nodeId === SELECTION_TRANSFORM_ID) {
-            const transformIds = getTransformTargetIds(state.selectedNodeIds, state.nodes, {
-                groupDrill: state.groupDrill,
-                isolateSelection: state.isolateSelection,
-            });
-            if (transformIds.length < 2) {
-                resizeActiveRef.current = false;
-                return;
-            }
-            const beforeSnapshots = captureNodesSnapshot(useWhiteboardStore, transformIds);
-            const center = getSelectionTransformCenter(state.nodes, transformIds);
-            setRotateState({
-                mode: 'selection',
-                nodeIds: transformIds,
-                beforeSnapshots,
-                center,
-                startAngle: pointerWorldAngleDeg(center.x, center.y, world.x, world.y),
-            });
-            return;
-        }
-
-        const node = state.nodes.find((n) => n.id === nodeId);
-        if (!node) return;
-        const center = getNodeCenterWorld(node, state.nodes);
-        setRotateState({
-            nodeId,
-            beforeNode: cloneNode(node),
-            center,
-            originRotation: node.rotation ?? 0,
-            startAngle: pointerWorldAngleDeg(center.x, center.y, world.x, world.y),
-        });
-    }, []);
-
-    useEffect(() => {
-        if (!rotateState) return;
-
-        if (rotateState.mode === 'selection') {
-            const { center, startAngle, beforeSnapshots, nodeIds } = rotateState;
-            const onMove = (e) => {
-                const rect = containerRef.current?.getBoundingClientRect();
-                if (!rect || !viewportRef.current) return;
-                const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
-                const currentAngle = pointerWorldAngleDeg(center.x, center.y, world.x, world.y);
-                let delta = currentAngle - startAngle;
-                if (e.shiftKey) {
-                    delta = Math.round(delta / 15) * 15;
-                }
-                const state = useWhiteboardStore.getState();
-                const patches = computeMultiRotatePatches(
-                    beforeSnapshots,
-                    state.nodes,
-                    center,
-                    delta
-                );
-                if (patches.length) collabPatchNodesRef.current(patches);
-            };
-            const finishRotate = () => {
-                const before = rotateState.beforeSnapshots ?? [];
-                const after = captureNodesSnapshot(useWhiteboardStore, nodeIds);
-                const changed =
-                    before.length > 0 &&
-                    before.some((b, i) => {
-                        const a = after[i];
-                        if (!a) return true;
-                        return JSON.stringify(b.node) !== JSON.stringify(a.node);
-                    });
-                if (changed) {
-                    useWhiteboardStore.getState().pushHistory({
-                        type: 'nodes_replace',
-                        payload: { before, after },
-                    });
-                }
-                resizeActiveRef.current = false;
-                setRotateState(null);
-            };
-            window.addEventListener('pointermove', onMove);
-            window.addEventListener('pointerup', finishRotate);
-            window.addEventListener('pointercancel', finishRotate);
-            return () => {
-                window.removeEventListener('pointermove', onMove);
-                window.removeEventListener('pointerup', finishRotate);
-                window.removeEventListener('pointercancel', finishRotate);
-                resizeActiveRef.current = false;
-            };
-        }
-
-        const { nodeId, center, originRotation, startAngle } = rotateState;
-        const onMove = (e) => {
-            const rect = containerRef.current?.getBoundingClientRect();
-            if (!rect || !viewportRef.current) return;
-            const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
-            const currentAngle = pointerWorldAngleDeg(center.x, center.y, world.x, world.y);
-            const rotation = computeRotationFromPointer(
-                originRotation,
-                startAngle,
-                currentAngle,
-                e.shiftKey
-            );
-            collabPatchNodeRef.current(nodeId, { rotation });
-        };
-        const finishRotate = () => {
-            const before = rotateState.beforeNode;
-            const afterSnap = captureNodesSnapshot(useWhiteboardStore, [nodeId])[0];
-            if (before && afterSnap?.node && JSON.stringify(before) !== JSON.stringify(afterSnap.node)) {
-                useWhiteboardStore.getState().pushHistory({
-                    type: 'nodes_replace',
-                    payload: {
-                        before: [{ id: nodeId, node: before }],
-                        after: [{ id: nodeId, node: afterSnap.node }],
-                    },
-                });
-            }
-            resizeActiveRef.current = false;
-            setRotateState(null);
-        };
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', finishRotate);
-        window.addEventListener('pointercancel', finishRotate);
-        return () => {
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', finishRotate);
-            window.removeEventListener('pointercancel', finishRotate);
-            resizeActiveRef.current = false;
-        };
-    }, [rotateState]);
-
-    const COLORABLE_TYPES = new Set(['sticky_note', 'text', 'shape', 'frame', 'comment']);
-
-    const openSelectionContextMenu = useCallback((clientX, clientY) => {
-        const st = useWhiteboardStore.getState();
-        const prunedIds = resolveDragNodeIds(st.selectedNodeIds, st.nodes, {
-            groupDrill: st.groupDrill,
-            isolateSelection: st.isolateSelection,
-        });
-        const { canGroup, canUngroup } = getSelectionContextFlags(st.nodes, st.selectedNodeIds);
-        const showColorPicker = st.nodes.some(
-            (n) => prunedIds.includes(n.id) && COLORABLE_TYPES.has(n.type)
-        );
-        const showDownloadImage = st.nodes.some(
-            (n) => prunedIds.includes(n.id) && n.type === 'image' && n.data?.url
-        );
-        setContextMenuPosition({
-            left: clientX,
-            top: clientY,
-            mode: 'selection',
-            canGroup,
-            canUngroup,
-            showColorPicker,
-            showDownloadImage,
-        });
-    }, []);
-
-    const handleDownloadSelectedImages = useCallback(() => {
-        const st = useWhiteboardStore.getState();
-        const ids = resolveDragNodeIds(st.selectedNodeIds, st.nodes, {
-            groupDrill: st.groupDrill,
-            isolateSelection: st.isolateSelection,
-        });
-        const images = st.nodes.filter(
-            (n) => ids.includes(n.id) && n.type === 'image' && n.data?.url
-        );
-        for (const node of images) {
-            const a = document.createElement('a');
-            a.href = node.data.url;
-            a.download = node.data.filename || 'imagem';
-            a.rel = 'noopener noreferrer';
-            a.target = '_blank';
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-        }
-    }, []);
-
-    const handleDeleteSelection = useCallback(async () => {
-        if (useWhiteboardSelectionStore.getState().selectedGuideIds.length) {
-            await handleDeleteSelectedGuides();
-            return;
-        }
-        const state = useWhiteboardStore.getState();
-        const ids = resolveDragNodeIds(state.selectedNodeIds, state.nodes, {
-            groupDrill: state.groupDrill,
-            isolateSelection: state.isolateSelection,
-        });
-        if (!ids.length) return;
-        const selectedNodes = state.nodes.filter((n) => ids.includes(n.id));
-        useWhiteboardStore.getState().pushHistory({
-            type: 'node_delete',
-            payload: { nodes: selectedNodes.map((n) => JSON.parse(JSON.stringify(n))) },
-        });
-        if (!collabConnected) {
-            for (const id of ids) {
-                deleteNodeService(id);
-            }
-        }
-        collabDeleteNodes(ids);
-        setSelection([]);
-    }, [collabConnected, collabDeleteNodes, setSelection, handleDeleteSelectedGuides]);
-
-    const handleSelectionColor = useCallback(
-        (color) => {
-            const state = useWhiteboardStore.getState();
-            const ids = resolveDragNodeIds(state.selectedNodeIds, state.nodes, {
-                groupDrill: state.groupDrill,
-                isolateSelection: state.isolateSelection,
-            });
-            const selected = state.nodes.filter((n) => ids.includes(n.id));
-            if (!selected.length) return;
-            recordNodesMutation(useWhiteboardStore, ids, () => {
-                selected.forEach((n) => {
-                    const style = { ...n.style, backgroundColor: color, fill: color };
-                    if (n.type === 'sticky_note') {
-                        style.color = contrastingTextColor(color);
-                    }
-                    collabPatchNode(n.id, { style });
-                });
-            });
-        },
-        [collabPatchNode]
-    );
-
-    const handleNodeContextMenu = useCallback(
-        (e, nodeId) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const st = useWhiteboardStore.getState();
-            if (!st.selectedNodeIds.includes(nodeId)) {
-                setSelection([nodeId]);
-            }
-            openSelectionContextMenu(e.clientX, e.clientY);
-        },
-        [openSelectionContextMenu, setSelection]
-    );
-
-    const handleNodePointerDown = useCallback(
-        (e, nodeId) => {
-            if (e.button !== 0) return;
-            if (e.target?.closest?.('.whiteboard-resize-handle, .whiteboard-rotate-handle')) return;
-            if (resizeActiveRef.current) return;
-            if (isCreationTool(activeTool) && activeTool !== 'connector') {
-                e.stopPropagation();
-                e.preventDefault();
-                const rect = containerRef.current?.getBoundingClientRect();
-                if (!rect || !viewportForChildren) return;
-                if (isDragCreationTool(activeTool)) {
-                    const anchorWorld = screenToWorldWithContainer(
-                        e.clientX,
-                        e.clientY,
-                        rect,
-                        viewportForChildren
-                    );
-                    const nodeType = creationToolToNodeType(activeTool);
-                    const defaultKey =
-                        nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType;
-                    const zoom = viewportForChildren.zoom ?? 1;
-                    const aware = getZoomAwareCreateDims(defaultKey, zoom);
-                    const aspectRatio =
-                        aware.width && aware.height ? aware.width / aware.height : 1;
-                    const minSize = getZoomAwareMinCreateSize(zoom);
-                    createDragRef.current = {
-                        tool: activeTool,
-                        anchorWorld,
-                        startScreen: { x: e.clientX, y: e.clientY },
-                        nodeId: null,
-                        creating: false,
-                        aspectRatio,
-                    };
-                    setCreatePreview({
-                        anchorWorld,
-                        currentWorld: anchorWorld,
-                        shiftKey: e.shiftKey,
-                        altKey: e.altKey,
-                        aspectRatio,
-                        minSize,
-                    });
-                } else if (NODE_TYPES_ALLOWED.includes(creationToolToNodeType(activeTool))) {
-                    createDragRef.current = {
-                        tool: activeTool,
-                        clickOnly: true,
-                        startScreen: { x: e.clientX, y: e.clientY },
-                    };
-                }
-                const captureEl = e.currentTarget ?? e.target;
-                if (captureEl?.setPointerCapture) {
-                    try {
-                        captureEl.setPointerCapture(e.pointerId);
-                    } catch (_) {}
-                }
-                return;
-            }
-            const editingId = useWhiteboardStore.getState().editingNodeId;
-            if (editingId === nodeId && e.target.closest('textarea, input')) {
-                return;
-            }
-            if (editingId) {
-                commitTextEdit();
-            }
-            containerRef.current?.focus?.({ preventScroll: true });
-            if (activeTool === 'connector') {
-                e.stopPropagation();
-                if (connectorFromNodeId) {
-                    if (connectorFromNodeId === nodeId) {
-                        setConnectorFromNodeId(null);
-                        return;
-                    }
-                    const connId = uuidv4();
-                    const conn = {
-                        id: connId,
-                        fromNodeId: connectorFromNodeId,
-                        toNodeId: nodeId,
-                        controlPoints: [],
-                        style: {},
-                    };
-                    if (collabConnected) {
-                        collabCreateConnector(conn);
-                    } else {
-                        (async () => {
-                            const res = await insertConnector(spaceId, conn);
-                            if (res.success) useWhiteboardStore.getState().addConnector(conn);
-                        })();
-                    }
-                    setConnectorFromNodeId(null);
-                } else {
-                    setConnectorFromNodeId(nodeId);
-                }
-                return;
-            }
-            const rect = containerRef.current?.getBoundingClientRect();
-            if (!rect) return;
-            const state = useWhiteboardStore.getState();
-            const dragIds = state.selectedNodeIds.includes(nodeId) ? state.selectedNodeIds : [nodeId];
-            const prunedDragIds = resolveDragNodeIds(dragIds, state.nodes, {
-                groupDrill: state.groupDrill,
-                isolateSelection: state.isolateSelection,
-            });
-            nodeDragRef.current = {
-                nodeId,
-                pointerStartClient: { x: e.clientX, y: e.clientY },
-                dragIds: prunedDragIds,
-                beforeSnapshots: captureNodesSnapshot(useWhiteboardStore, prunedDragIds),
-                snapExcludeIds: buildSnapExcludeIds(prunedDragIds, state.nodes),
-                lastOffset: { dx: 0, dy: 0 },
-            };
-            useWhiteboardSelectionStore.getState().setNodeDragPreview({
-                ids: prunedDragIds,
-                dx: 0,
-                dy: 0,
-            });
-            const captureEl = e.currentTarget ?? e.target;
-            if (captureEl?.setPointerCapture) {
-                try {
-                    captureEl.setPointerCapture(e.pointerId);
-                } catch (_) {}
-            }
-        },
-        [viewportForChildren, activeTool, connectorFromNodeId, setConnectorFromNodeId, spaceId, collabConnected, collabCreateConnector, commitTextEdit]
-    );
-
-    useEffect(() => {
-        let rafId = 0;
-        let pendingEvent = null;
-
-        const finishDrag = () => {
-            if (rafId) {
-                cancelAnimationFrame(rafId);
-                rafId = 0;
-            }
-            setSnapGuidesIfChangedRef.current([]);
-            const ref = nodeDragRef.current;
-            if (ref) {
-                const ids = ref.dragIds ?? [ref.nodeId];
-                const state = useWhiteboardStore.getState();
-
-                useWhiteboardSelectionStore.getState().clearNodeDragPreview();
-
-                updateDragPreviewRef.current({ draggingNodeIds: [], dragPreviewRects: [] });
-
-                const stateAfterPatch = useWhiteboardStore.getState();
-                const pageId = stateAfterPatch.activePageId;
-                const pageNodes = filterNodesByPage(stateAfterPatch.nodes, pageId);
-                const nestPatches = ids
-                    .map((id) => {
-                        const node = pageNodes.find((n) => n.id === id);
-                        if (!node) return null;
-                        const container = findDropContainerForNode(node, pageNodes, {
-                            frameOnly: true,
-                            pageId,
-                        });
-                        if (!container || node.parentId === container.id) return null;
-                        return {
-                            id,
-                            patch: buildNestInContainerPatch(node, container, pageNodes),
-                        };
-                    })
-                    .filter(Boolean);
-                if (nestPatches.length) collabPatchNodesRef.current(nestPatches);
-
-                const stateAfterNest = useWhiteboardStore.getState();
-                const byIdAfter = buildNodesById(stateAfterNest.nodes);
-                ids.forEach((id) => {
-                    const node = stateAfterNest.nodes.find((n) => n.id === id);
-                    if (!node?.parentId) return;
-                    const parent = stateAfterNest.nodes.find((n) => n.id === node.parentId);
-                    if (!parent) return;
-                    if (parent.type === 'frame') return;
-                    const px = node.x ?? 0;
-                    const py = node.y ?? 0;
-                    const pw = parent.width ?? 0;
-                    const ph = parent.height ?? 0;
-                    const w = node.width ?? 0;
-                    const h = node.height ?? 0;
-                    const inside = px >= 0 && py >= 0 && px + w <= pw && py + h <= ph;
-                    if (!inside) {
-                        const world = nodeToWorld(node, byIdAfter);
-                        collabPatchNodeRef.current(id, {
-                            parentId: null,
-                            x: world.x,
-                            y: world.y,
-                        });
-                    }
-                });
-                const after = captureNodesSnapshot(useWhiteboardStore, ids);
-                const before = ref.beforeSnapshots ?? [];
-                const changed =
-                    before.length > 0 &&
-                    before.some((b, i) => {
-                        const a = after[i];
-                        if (!a) return true;
-                        return JSON.stringify(b.node) !== JSON.stringify(a.node);
-                    });
-                if (changed) {
-                    state.pushHistory({
-                        type: 'nodes_replace',
-                        payload: { before, after },
-                    });
-                }
-            }
-            nodeDragRef.current = null;
-            updateDragPreviewRef.current({ draggingNodeIds: [], dragPreviewRects: [] });
-            useWhiteboardSelectionStore.getState().clearNodeDragPreview();
-        };
-
-        const flushMove = () => {
-            rafId = 0;
-            const e = pendingEvent;
-            if (!e || resizeActiveRef.current) return;
-            const ref = nodeDragRef.current;
-            if (!ref || !containerRef.current) return;
-            const rect = containerRef.current.getBoundingClientRect();
-            const vp = viewportRef.current;
-            if (!vp || !ref.pointerStartClient) return;
-            const startWorld = screenToWorldWithContainer(
-                ref.pointerStartClient.x,
-                ref.pointerStartClient.y,
-                rect,
-                vp
-            );
-            const curWorld = screenToWorldWithContainer(e.clientX, e.clientY, rect, vp);
-            const totalDx = curWorld.x - startWorld.x;
-            const totalDy = curWorld.y - startWorld.y;
-            const state = useWhiteboardStore.getState();
-            const ids = ref.dragIds ?? [ref.nodeId];
-            const snap = computeSnapForDrag({
-                nodes: state.nodes,
-                movingIds: ids,
-                initialSnapshots: ref.beforeSnapshots,
-                totalDx,
-                totalDy,
-                zoom: vp?.zoom ?? 1,
-                pageId: state.activePageId,
-                enabled: state.snapEnabled,
-                guidesVisible: state.guidesVisible,
-                rulerGuides: state.rulerGuides,
-                excludeIds: ref.snapExcludeIds,
-            });
-            setSnapGuidesIfChangedRef.current(snap.guides);
-            if (ref.lastOffset?.dx === snap.dx && ref.lastOffset?.dy === snap.dy) return;
-            ref.lastOffset = { dx: snap.dx, dy: snap.dy };
-
-            const patches = buildDragFinishPatches(ids, ref.beforeSnapshots, snap, state.nodes);
-            if (patches.length) collabPatchNodesRef.current(patches);
-
-            useWhiteboardSelectionStore.getState().setNodeDragPreview({
-                ids,
-                dx: 0,
-                dy: 0,
-            });
-
-            const stateAfter = useWhiteboardStore.getState();
-            const dragById = buildNodesById(stateAfter.nodes);
-            const dragPreviewRects = (ref.beforeSnapshots || [])
-                .slice(0, 24)
-                .map((entry) => {
-                    const node = stateAfter.nodes.find((n) => n.id === entry.id);
-                    if (!node) return null;
-                    const world = nodeToWorld(node, dragById);
-                    return {
-                        id: entry.id,
-                        x: world.x,
-                        y: world.y,
-                        width: node.width ?? 0,
-                        height: node.height ?? 0,
-                        ...dragPreviewBorderFromNode(node),
-                    };
-                })
-                .filter(Boolean);
-            updateDragPreviewRef.current({
-                draggingNodeIds: ids,
-                dragPreviewRects,
-            });
-        };
-
-        const onMove = (e) => {
-            if (resizeActiveRef.current) return;
-            pendingEvent = e;
-            if (rafId) return;
-            rafId = requestAnimationFrame(flushMove);
-        };
-
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', finishDrag);
-        window.addEventListener('pointercancel', finishDrag);
-        return () => {
-            if (rafId) cancelAnimationFrame(rafId);
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', finishDrag);
-            window.removeEventListener('pointercancel', finishDrag);
-        };
-    }, []);
-
-    const finalizeCreateDrag = useCallback(
-        async (drag, e, rect) => {
-            if (!drag?.anchorWorld || drag.finalized || !rect || !viewportForChildren) return;
-            const dragStart = drag.startScreen;
-            const insideViewport =
-                dragStart.x >= rect.left &&
-                dragStart.x <= rect.right &&
-                dragStart.y >= rect.top &&
-                dragStart.y <= rect.bottom;
-            if (!insideViewport) {
-                drag.finalized = true;
-                createDragRef.current = null;
-                setCreatePreview(null);
-                return;
-            }
-
-            const currentWorld = screenToWorldWithContainer(
-                e.clientX,
-                e.clientY,
-                rect,
-                viewportForChildren
-            );
-            const dist = Math.hypot(
-                e.clientX - drag.startScreen.x,
-                e.clientY - drag.startScreen.y
-            );
-            const nodeType = creationToolToNodeType(drag.tool);
-
-            if (dist < CREATE_DRAG_THRESHOLD_PX) {
-                const defaultKey =
-                    nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType;
-                const zoom = viewportForChildren.zoom ?? 1;
-                const aware = getZoomAwareCreateDims(defaultKey, zoom);
-                const [ox, oy] = getNodeCreateOffset(defaultKey, zoom);
-                const id = await createNodeAt(
-                    nodeType,
-                    drag.anchorWorld.x - ox,
-                    drag.anchorWorld.y - oy,
-                    {},
-                    aware
-                );
-                if (id) {
-                    applyPostCreateActions({
-                        nodeId: id,
-                        nodeType,
-                        keepCreationTool: keepCreationToolRef.current,
-                    });
-                }
-            } else {
-                await applyCreateDragBox(drag, currentWorld, {
-                    shiftKey: e.shiftKey,
-                    altKey: e.altKey,
-                });
-                if (drag.nodeId) {
-                    applyPostCreateActions({
-                        nodeId: drag.nodeId,
-                        nodeType,
-                        keepCreationTool: keepCreationToolRef.current,
-                    });
-                }
-            }
-
-            drag.finalized = true;
-            createDragRef.current = null;
-            setCreatePreview(null);
-        },
-        [viewportForChildren, createNodeAt, applyCreateDragBox]
-    );
-
-    const handlePointerUp = useCallback(
-        async (e) => {
-            if (e.currentTarget && typeof e.currentTarget.releasePointerCapture === 'function') {
-                try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
-            }
-            if ((e.buttons & 2) === 0) rightMousePanRef.current = false;
-            if (e.button === 0) {
-                keepCreationToolRef.current = e.ctrlKey || e.metaKey;
-                const rect = containerRef.current?.getBoundingClientRect();
-                const drag = createDragRef.current;
-                const dragStart = drag?.startScreen;
-                const isClickInControls =
-                    dragStart &&
-                    (document.elementFromPoint(dragStart.x, dragStart.y)?.closest?.(
-                        '.whiteboard-viewport-controls, .whiteboard-bottom-dock, .whiteboard-bottom-chrome'
-                    ) ??
-                        false);
-                if (isClickInControls) {
-                    createDragRef.current = null;
-                    setCreatePreview(null);
-                } else if (drag?.anchorWorld && rect && viewportForChildren && !isClickInControls) {
-                    const stillDragging =
-                        e.type === 'pointerleave' && (e.buttons & 1);
-                    if (!stillDragging) {
-                        await finalizeCreateDrag(drag, e, rect);
-                    }
-                } else if (drag?.clickOnly && !drag?.finalized && rect && viewportForChildren && !isClickInControls) {
-                    const stillDraggingClick =
-                        e.type === 'pointerleave' && (e.buttons & 1);
-                    if (!stillDraggingClick) {
-                        const { x: sx, y: sy } = drag.startScreen;
-                        const insideViewport =
-                            sx >= rect.left && sx <= rect.right && sy >= rect.top && sy <= rect.bottom;
-                        const clickDist = Math.hypot(e.clientX - sx, e.clientY - sy);
-                        if (insideViewport && clickDist < CREATE_DRAG_THRESHOLD_PX) {
-                            const w1 = screenToWorldWithContainer(sx, sy, rect, viewportForChildren);
-                            const nodeType = creationToolToNodeType(drag.tool);
-                            const defaultKey =
-                                nodeType === 'drawing' ? 'draw' : nodeType === 'file_card' ? 'file' : nodeType;
-                            const zoom = viewportForChildren.zoom ?? 1;
-                            const aware = getZoomAwareCreateDims(defaultKey, zoom);
-                            const [ox, oy] = getNodeCreateOffset(drag.tool || defaultKey, zoom);
-                            const id = await createNodeAt(nodeType, w1.x - ox, w1.y - oy, {}, aware);
-                            if (id) {
-                                applyPostCreateActions({
-                                    nodeId: id,
-                                    nodeType,
-                                    keepCreationTool: keepCreationToolRef.current,
-                                });
-                            }
-                        }
-                        drag.finalized = true;
-                        createDragRef.current = null;
-                    }
-                } else if (selectionBox) {
-                    const w = Math.abs(selectionBox.current.x - selectionBox.start.x);
-                    const h = Math.abs(selectionBox.current.y - selectionBox.start.y);
-                    const isClick = w < 8 && h < 8;
-                    if (rect && viewportForChildren) {
-                        const w1 = screenToWorldWithContainer(
-                            selectionBox.start.x,
-                            selectionBox.start.y,
-                            rect,
-                            viewportForChildren
-                        );
-                        if (isClick && activeTool === 'select') {
-                            setSelection([]);
-                            clearGuideSelection();
-                        } else if (!isClick) {
-                            const w2 = screenToWorldWithContainer(
-                                selectionBox.current.x,
-                                selectionBox.current.y,
-                                rect,
-                                viewportForChildren
-                            );
-                            const box = {
-                                x: Math.min(w1.x, w2.x),
-                                y: Math.min(w1.y, w2.y),
-                                width: Math.abs(w2.x - w1.x),
-                                height: Math.abs(w2.y - w1.y),
-                            };
-                            const { nodes, activePageId } = useWhiteboardStore.getState();
-                            clearGuideSelection();
-                            setSelection(resolveMarqueeSelectionIds(nodes, box, activePageId));
-                        }
-                    }
-                    setSelectionBox(null);
-                }
-            }
-            viewportState.handleMouseUp();
-        },
-        [selectionBox, viewportForChildren, setSelection, clearGuideSelection, activeTool, createNodeAt, finalizeCreateDrag]
-    );
-
-    const handlePointerMove = useCallback(
-        (e) => {
-            lastPointerClientRef.current = { x: e.clientX, y: e.clientY };
-            if (createDragRef.current) {
-                keepCreationToolRef.current = e.ctrlKey || e.metaKey;
-            }
-            const drag = createDragRef.current;
-            if (selectionBox) {
-                setSelectionBox((prev) => (prev ? { ...prev, current: { x: e.clientX, y: e.clientY } } : null));
-            } else if (drag?.anchorWorld) {
-                const rect = containerRef.current?.getBoundingClientRect();
-                if (rect && viewportRef.current) {
-                    const currentWorld = screenToWorldWithContainer(
-                        e.clientX,
-                        e.clientY,
-                        rect,
-                        viewportRef.current
-                    );
-                    const modifiers = { shiftKey: e.shiftKey, altKey: e.altKey };
-                    const zoom = viewportRef.current?.zoom ?? 1;
-                    setCreatePreview({
-                        anchorWorld: drag.anchorWorld,
-                        currentWorld,
-                        shiftKey: modifiers.shiftKey,
-                        altKey: modifiers.altKey,
-                        aspectRatio: drag.aspectRatio ?? 1,
-                        minSize: getZoomAwareMinCreateSize(zoom),
-                    });
-                    const dist = Math.hypot(
-                        e.clientX - drag.startScreen.x,
-                        e.clientY - drag.startScreen.y
-                    );
-                    if (dist >= CREATE_DRAG_THRESHOLD_PX) {
-                        void applyCreateDragBox(drag, currentWorld, modifiers);
-                    }
-                }
-            } else {
-                viewportState.handleMouseMove(e);
-            }
-            const rect = containerRef.current?.getBoundingClientRect();
-            if (rect && viewportRef.current) {
-                const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportRef.current);
-                updateCursor({ x: world.x, y: world.y });
-            }
-        },
-        [selectionBox, viewportState, updateCursor, applyCreateDragBox]
-    );
-
-    const handleContextMenu = useCallback(
-        (e) => {
-            if (rightMousePanRef.current) {
-                e.preventDefault();
-                return;
-            }
-            const el = e.target;
-            if (
-                el?.closest?.('.whiteboard-node-wrapper') ||
-                el?.closest?.('.whiteboard-viewport-controls') ||
-                el?.closest?.('.whiteboard-bottom-dock') ||
-                el?.closest?.('.whiteboard-bottom-chrome')
-            ) {
-                return;
-            }
-            e.preventDefault();
-            const st = useWhiteboardStore.getState();
-            const selStore = useWhiteboardSelectionStore.getState();
-            if (selStore.selectedGuideIds.length > 0 && activeTool === 'select') {
-                const locked = selStore.lockedGuideIds;
-                const ids = selStore.selectedGuideIds;
-                setContextMenuPosition({
-                    left: e.clientX,
-                    top: e.clientY,
-                    mode: 'guide',
-                    guideAllLocked: ids.every((id) => locked.includes(id)),
-                });
-                return;
-            }
-            const rectPick = containerRef.current?.getBoundingClientRect();
-            const vpPick = viewportRef.current;
-            if (rectPick && vpPick && activeTool === 'select' && guidesVisible) {
-                const picked = pickGuideAt(
-                    st.rulerGuides,
-                    st.activePageId,
-                    e.clientX,
-                    e.clientY,
-                    rectPick,
-                    vpPick,
-                    selStore.lockedGuideIds
-                );
-                if (picked) {
-                    selStore.setSelectedGuideIds([picked]);
-                    setContextMenuPosition({
-                        left: e.clientX,
-                        top: e.clientY,
-                        mode: 'guide',
-                        guideAllLocked: selStore.lockedGuideIds.includes(picked),
-                    });
-                    return;
-                }
-            }
-            if (st.selectedNodeIds.length > 0 && activeTool === 'select') {
-                openSelectionContextMenu(e.clientX, e.clientY);
-                return;
-            }
-            const rect = containerRef.current?.getBoundingClientRect();
-            if (!rect || !viewportForChildren) return;
-            const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportForChildren);
-            setContextMenuPosition({
-                left: e.clientX,
-                top: e.clientY,
-                worldX: world.x,
-                worldY: world.y,
-                mode: 'create',
-            });
-        },
-        [viewportForChildren, activeTool, openSelectionContextMenu, guidesVisible]
-    );
-
-    const handleContextMenuCreate = useCallback(
-        async (type, worldX, worldY) => {
-            const id = await createNodeAt(type, worldX, worldY);
-            if (id) {
-                applyPostCreateActions({
-                    nodeId: id,
-                    nodeType: type,
-                    keepCreationTool: false,
-                });
-            }
-            setContextMenuPosition(null);
-        },
-        [createNodeAt]
-    );
-
-    const handleContextMenuUploadImage = useCallback(() => {
-        if (contextMenuPosition) {
-            pendingUploadWorldPositionRef.current = {
-                x: contextMenuPosition.worldX,
-                y: contextMenuPosition.worldY,
-                anchor: 'center',
-            };
-            setContextMenuPosition(null);
-        }
-        openImagePickerRef.current?.();
-    }, [contextMenuPosition]);
-
-    const handleContextMenuUploadFile = useCallback(() => {
-        if (contextMenuPosition) {
-            pendingUploadWorldPositionRef.current = {
-                x: contextMenuPosition.worldX,
-                y: contextMenuPosition.worldY,
-                anchor: 'center',
-            };
-            setContextMenuPosition(null);
-        }
-        openFilePickerRef.current?.();
-    }, [contextMenuPosition]);
-
-    const handleDragOver = useCallback((e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'copy';
-    }, []);
-
-    const handleDrop = useCallback(
-        async (e) => {
-            e.preventDefault();
-            const rect = containerRef.current?.getBoundingClientRect();
-            if (!rect || !viewportForChildren) return;
-            const world = screenToWorldWithContainer(e.clientX, e.clientY, rect, viewportForChildren);
-            const toolType = e.dataTransfer.getData('application/x-whiteboard-tool');
-            if (toolType && NODE_TYPES_ALLOWED.includes(toolType)) {
-                const zoom = viewportForChildren.zoom ?? 1;
-                const [ox, oy] = getNodeCreateOffset(toolType, zoom);
-                let variantId = null;
-                try {
-                    const variantRaw = e.dataTransfer.getData(TOOL_VARIANT_MIME);
-                    if (variantRaw) {
-                        const parsed = JSON.parse(variantRaw);
-                        if (parsed.toolId === toolType) variantId = parsed.variantId;
-                    }
-                } catch {
-                    /* ignore malformed drag payload */
-                }
-                const id = await createNodeAt(toolType, world.x - ox, world.y - oy, { variantId });
-                if (id) {
-                    applyPostCreateActions({
-                        nodeId: id,
-                        nodeType: toolType,
-                        keepCreationTool: e.ctrlKey || e.metaKey,
-                    });
-                }
-                return;
-            }
-            const files = e.dataTransfer.files;
-            if (!files?.length) return;
-            const nodes = useWhiteboardStore.getState().nodes;
-            const byId = buildNodesById(nodes);
-            for (let i = 0; i < files.length; i++) {
-                if (!guardNodeLimit(1)) break;
-                const file = files[i];
-                const asImage = isImageFile(file);
-                let wx = world.x - 100 + i * 20;
-                let wy = world.y - 75 + i * 20;
-                if (!asImage) {
-                    wx = world.x - 110 + i * 20;
-                    wy = world.y - 40 + i * 20;
-                }
-                const centerX = wx + (asImage ? 100 : 110);
-                const centerY = wy + (asImage ? 75 : 40);
-                const container = findContainerAt(nodes, centerX, centerY);
-                const result = await uploadSpaceAsset(spaceId, file, user?.id);
-                if (!result?.url) {
-                    addToast(result?.error || 'Falha ao enviar arquivo.', 'error');
-                    continue;
-                }
-                if (asImage) {
-                    const zoom = viewportForChildren.zoom ?? 1;
-                    const payload = await buildImageNodePayload(
-                        file,
-                        result.storagePath,
-                        {
-                            x: world.x + i * 20,
-                            y: world.y + i * 20,
-                            anchor: 'center',
-                        },
-                        null,
-                        zoom
-                    );
-                    const imgCenterX = payload.x + payload.width / 2;
-                    const imgCenterY = payload.y + payload.height / 2;
-                    const imgContainer = findContainerAt(nodes, imgCenterX, imgCenterY);
-                    if (imgContainer) {
-                        const containerWorld = nodeToWorld(imgContainer, byId);
-                        payload.parentId = imgContainer.id;
-                        payload.x = payload.x - containerWorld.x;
-                        payload.y = payload.y - containerWorld.y;
-                    }
-                    if (collabConnected) {
-                        collabCreateNode({ ...payload, createdBy: user?.id ?? null });
-                    } else {
-                        const res = await insertNode(spaceId, payload, user?.id);
-                        if (res.success) useWhiteboardStore.getState().addNode(payload);
-                    }
-                } else {
-                    const sizeStr = file.size != null ? (file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`) : '';
-                    const payload = getDefaultNodePayload('file', wx, wy);
-                    Object.assign(payload.data, { url: result.url, filename: file.name, size: sizeStr });
-                    if (container) {
-                        const containerWorld = nodeToWorld(container, byId);
-                        payload.parentId = container.id;
-                        payload.x = wx - containerWorld.x;
-                        payload.y = wy - containerWorld.y;
-                    }
-                    if (collabConnected) {
-                        collabCreateNode({ ...payload, createdBy: user?.id ?? null });
-                    } else {
-                        const res = await insertNode(spaceId, payload, user?.id);
-                        if (res.success) useWhiteboardStore.getState().addNode(payload);
-                    }
-                }
-            }
-        },
-        [viewportForChildren, spaceId, user?.id, createNodeAt, collabCreateNode, collabConnected, guardNodeLimit, addToast]
-    );
+    const {
+        handleContextMenu,
+        handleContextMenuCreate,
+        handleContextMenuUploadImage,
+        handleContextMenuUploadFile,
+        handleDragOver,
+        handleDrop,
+    } = useCanvasContextMenu({
+        spaceId,
+        containerRef,
+        contextMenuPosition,
+        setContextMenuPosition,
+        pendingUploadWorldPositionRef,
+        openImagePickerRef,
+        openFilePickerRef,
+        rightMousePanRef,
+        viewportRef,
+        user,
+        addToast,
+        guardNodeLimit,
+        collabCreateNode,
+        collabConnected,
+        activeTool,
+        guidesVisible,
+        createNodeAt,
+        viewportForChildren,
+        openSelectionContextMenu,
+    });
 
     return (
         <>

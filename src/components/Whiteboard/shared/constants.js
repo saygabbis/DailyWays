@@ -14,3 +14,5 @@ export const CREATION_TOOLS = [
     'file',
 ];
 
+/** Tipos de nó que podem existir no documento (criação por clique/arraste, colar, drop). */
+export const NODE_TYPES_ALLOWED = ['sticky_note', 'text', 'shape', 'frame', 'image', 'comment', 'link', 'todo_list', 'file_card', 'drawing', 'table'];

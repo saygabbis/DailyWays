@@ -62,7 +62,11 @@ export function setClipboardFromNodes(store, nodes) {
 
 /** Duplica ou cola nós; retorna ids criados. */
 async function insertClonedNodes(nodes, offset, ctx) {
-    const { spaceId, userId, collabCreateNode, collabConnected, addNode, store, allNodes } = ctx;
+    const { spaceId, userId, collabCreateNode, collabConnected, store } = ctx;
+    // Sem collab (fallback), o nó gravado no banco precisa entrar na store local. Antes o ctx do canvas
+    // não trazia addNode/allNodes e colar/duplicar offline quebrava com "addNode is not a function".
+    const addNode = ctx.addNode ?? ((n) => store?.getState().addNode(n));
+    const allNodes = ctx.allNodes ?? store?.getState().nodes ?? [];
     if (!spaceId || !nodes?.length) return [];
     const byId = buildNodesById(allNodes || []);
 
