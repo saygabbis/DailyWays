@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
 import { screenToWorldWithContainer } from '../../interaction/viewport/viewportUtils';
 import './RulersOverlay.css';
 

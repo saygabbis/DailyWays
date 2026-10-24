@@ -1,4 +1,4 @@
-import React, { useId, memo } from 'react';
+import { useId, memo } from 'react';
 import { useSpaceAssetUrl } from '../../../hooks/useSpaceAssetUrl';
 import { useWhiteboardViewportZoom } from '../interaction/viewport/WhiteboardViewportContext.jsx';
 import {

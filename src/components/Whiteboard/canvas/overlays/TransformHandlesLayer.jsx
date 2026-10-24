@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { useWhiteboardDocumentStore } from '../../../../stores/whiteboardDocumentStore';
 import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
 import { getNodePageId } from '../../core/pages/whiteboardPages';

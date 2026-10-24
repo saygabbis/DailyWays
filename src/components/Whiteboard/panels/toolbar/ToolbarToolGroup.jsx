@@ -1,8 +1,7 @@
-import React, { createElement, useState, useRef } from 'react';
+import { createElement, useState, useRef } from 'react';
 import { ChevronDown } from 'lucide-react';
 import ToolbarToolMenu from './ToolbarToolMenu.jsx';
 import { setToolDragData } from './ToolbarToolButton.jsx';
-import { TOOL_VARIANT_MIME } from './toolMenuRegistry.js';
 
 export default function ToolbarToolGroup({
     tool,

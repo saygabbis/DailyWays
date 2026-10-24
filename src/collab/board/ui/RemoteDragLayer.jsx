@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Circle, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../../../context/AppContext';

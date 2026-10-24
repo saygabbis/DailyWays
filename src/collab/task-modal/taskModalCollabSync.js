@@ -17,16 +17,3 @@ export function createRemoteSyncLock() {
   };
 }
 
-/** Campos que só entram via UPDATE_CARD (estado autoritativo), não via liveDraft. */
-const MODAL_STRUCTURE_FIELDS = new Set([
-  'priority',
-  'startDate',
-  'dueDate',
-  'recurrenceRule',
-  'isAllDay',
-  'myDay',
-  'dayCategory',
-  'estimatedMinutes',
-  'labels',
-  'cardColor',
-]);

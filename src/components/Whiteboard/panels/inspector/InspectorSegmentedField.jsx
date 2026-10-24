@@ -1,4 +1,3 @@
-import React from 'react';
 
 /** Rótulo + grupo de botões segmentados (substitui selects nativos). */
 export default function InspectorSegmentedField({ label, value, options, onChange }) {

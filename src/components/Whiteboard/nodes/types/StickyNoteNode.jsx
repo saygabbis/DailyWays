@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { TEXT } from '@dailyways/limits';
 import BaseNode from './BaseNode';
 import { useWhiteboardStore } from '../../../../stores/whiteboardStore';

@@ -9,7 +9,7 @@ import { useContextMenu } from '../Common/ContextMenu';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import BoardCard from './BoardCard';
 import BoardMultiDragStack from './BoardMultiDragStack';
-import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy, Settings2, CheckCircle } from 'lucide-react';
+import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Settings2, CheckCircle } from 'lucide-react';
 import { uuidv4 } from '../../utils/uuid';
 import { BOARD_UI_HOVER, boardUiHoverProps } from '../../collab/board/presence/boardUiHover.js';
 

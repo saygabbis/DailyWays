@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { isCreationTool } from '../../../../stores/whiteboardStore';
 import { useWhiteboardSelectionStore } from '../../../../stores/whiteboardSelectionStore';
 import { getNodeTransformStyle } from '../../core/nodeTransform';

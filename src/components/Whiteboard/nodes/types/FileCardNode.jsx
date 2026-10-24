@@ -1,4 +1,3 @@
-import React from 'react';
 import BaseNode from './BaseNode';
 import { FileText, Download } from 'lucide-react';
 

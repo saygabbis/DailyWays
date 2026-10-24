@@ -1,4 +1,3 @@
-import React from 'react';
 
 /** Campo de cor com swatch circular, hex e opacidade. */
 export default function InspectorColorField({

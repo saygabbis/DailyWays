@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link2, Unlink } from 'lucide-react';
 import InspectorSection from './InspectorSection.jsx';
 import { useInspectorStylePatch } from './useInspectorStylePatch.js';

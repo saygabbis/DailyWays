@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { useNodeDragTranslate } from '../../interaction/hooks/useNodeDragTranslate';
 import { clampViewportZoom } from '../../interaction/viewport/viewportLimits.js';
 import { WORLD_DIM_EPSILON } from '../../shared/vectorViewport.js';

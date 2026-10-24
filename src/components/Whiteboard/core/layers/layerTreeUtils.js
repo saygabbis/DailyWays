@@ -1,4 +1,3 @@
-import { CONTAINER_NODE_TYPES } from '../../interaction/viewport/viewportUtils';
 import { getNodePageId } from '../pages/whiteboardPages';
 
 /** Irmãos no mesmo parentId, ordenados por zIndex (baixo → alto). */

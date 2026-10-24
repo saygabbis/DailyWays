@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 import { useCollabPatch } from '../../../collab/space/ops/SpaceCollabOpsContext.jsx';
 import { alignSelectedNodes } from '../core/align/whiteboardAlign';

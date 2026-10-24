@@ -3,7 +3,12 @@ const GC_INTERVAL_MS = 60_000;
 
 const MAX_OPS_PER_SEC = Number(process.env.COLLAB_MAX_OPS_PER_SEC || 120);
 const MAX_POSITION_OPS_PER_SEC = Number(process.env.COLLAB_MAX_POSITION_OPS_PER_SEC || 300);
+// Por IP (várias abas/contas atrás do mesmo IP somam). Antes a janela por IP usava os limites por usuário.
 const MAX_OPS_PER_IP_PER_SEC = Number(process.env.COLLAB_MAX_OPS_PER_IP_PER_SEC || 240);
+const MAX_POSITION_OPS_PER_IP_PER_SEC = Number(process.env.COLLAB_MAX_POSITION_OPS_PER_IP_PER_SEC || MAX_POSITION_OPS_PER_SEC * 2);
+const USER_LIMITS = { ops: MAX_OPS_PER_SEC, position: MAX_POSITION_OPS_PER_SEC };
+const IP_LIMITS = { ops: MAX_OPS_PER_IP_PER_SEC, position: MAX_POSITION_OPS_PER_IP_PER_SEC };
+
 const MAX_CONNECTIONS_PER_USER = Number(process.env.COLLAB_MAX_CONNECTIONS_PER_USER || 10);
 const MAX_AUTH_FAILS_PER_IP_PER_MIN = Number(process.env.COLLAB_MAX_AUTH_FAILS_PER_IP || 60);
 
@@ -65,7 +70,7 @@ export function releaseUserConnection(userId) {
   else userConnections.set(userId, count - 1);
 }
 
-function bumpWindow(map, key, isPositionOp) {
+function bumpWindow(map, key, isPositionOp, limits) {
   const now = Date.now();
   let entry = map.get(key);
   if (!entry || now - entry.windowStart > WINDOW_MS) {
@@ -74,18 +79,18 @@ function bumpWindow(map, key, isPositionOp) {
   }
   if (isPositionOp) {
     entry.positionOpCount += 1;
-    return entry.positionOpCount <= MAX_POSITION_OPS_PER_SEC;
+    return entry.positionOpCount <= limits.position;
   }
   entry.opCount += 1;
-  return entry.opCount <= MAX_OPS_PER_SEC;
+  return entry.opCount <= limits.ops;
 }
 
 export function checkOpRateLimit(userId, isPositionOp, clientIp) {
   if (!userId) return { ok: false, reason: 'Rate limit' };
-  if (!bumpWindow(userOpWindows, userId, isPositionOp)) {
+  if (!bumpWindow(userOpWindows, userId, isPositionOp, USER_LIMITS)) {
     return { ok: false, reason: 'Rate limit' };
   }
-  if (clientIp && !bumpWindow(ipOpWindows, clientIp, isPositionOp)) {
+  if (clientIp && !bumpWindow(ipOpWindows, clientIp, isPositionOp, IP_LIMITS)) {
     return { ok: false, reason: 'Rate limit' };
   }
   return { ok: true };

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import '../styles/DraggablePanel.css';
 
 const STORAGE_KEY = 'dailyways_panel_positions';

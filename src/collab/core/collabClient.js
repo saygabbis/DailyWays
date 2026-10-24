@@ -1,5 +1,5 @@
 import { io } from 'socket.io-client';
-import { CLIENT_EVENTS, SERVER_EVENTS } from '@dailyways/collab-protocol';
+import { CLIENT_EVENTS } from '@dailyways/collab-protocol';
 import { getCollabServerUrl, isLocalOrLanHost } from './collabConfig.js';
 import { getBoardCollabMountGen } from '../board/sync/boardCollabSession.js';
 import { isBoardPrankFrozen, isBoardPrankHeld } from '../board/dev/boardDevPrank.js';

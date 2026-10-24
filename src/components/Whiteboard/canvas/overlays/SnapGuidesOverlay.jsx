@@ -1,4 +1,3 @@
-import React from 'react';
 import './SnapGuidesOverlay.css';
 
 const EXTENT = 20000;

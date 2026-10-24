@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { validateWhiteboardNodeCount, isImageFile } from '@dailyways/limits';
 import { resolveLimitError } from '../../../limits/messages.js';
 import { useToast } from '../../../context/ToastContext';
@@ -22,7 +22,6 @@ import {
 import { useWhiteboardUndo } from '../interaction/hooks/useWhiteboardUndo';
 import { useCanvasShortcuts } from '../interaction/hooks/useCanvasShortcuts';
 import {
-    CREATION_DRAG_TOOLS,
     CREATE_DRAG_THRESHOLD_PX,
     CREATE_MIN_SIZE,
     creationToolToNodeType,

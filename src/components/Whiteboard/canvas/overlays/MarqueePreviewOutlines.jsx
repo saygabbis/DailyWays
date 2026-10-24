@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { useWhiteboardDocumentStore } from '../../../../stores/whiteboardDocumentStore';
 import { resolveMarqueeSelectionIds } from '../../core/selection/whiteboardSelectionUtils';
 import { buildNodesById } from '../../core/ops/whiteboardNodeOps';

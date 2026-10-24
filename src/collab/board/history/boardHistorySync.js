@@ -1,6 +1,6 @@
 import { fetchBoardUndoStack, upsertBoardUndoStack } from '../../../services/boardService.js';
 import storageService from '../../../services/storageService.js';
-import { BOARD_HISTORY_MAX, mergeHistoryStacks } from './boardHistoryStore.js';
+import { mergeHistoryStacks } from './boardHistoryStore.js';
 
 function storageKey(userId) {
     return `dailyways_board_history_v1_${userId}`;

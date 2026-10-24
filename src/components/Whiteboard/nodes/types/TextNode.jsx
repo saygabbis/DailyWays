@@ -1,4 +1,3 @@
-import React from 'react';
 import BaseNode from './BaseNode';
 import { TEXT } from '@dailyways/limits';
 import { useEditableNodeField } from '../../interaction/hooks/useEditableNodeField';

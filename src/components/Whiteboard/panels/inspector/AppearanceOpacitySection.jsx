@@ -1,4 +1,3 @@
-import React from 'react';
 import InspectorSection from './InspectorSection.jsx';
 import { useInspectorStylePatch } from './useInspectorStylePatch.js';
 

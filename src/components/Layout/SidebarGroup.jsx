@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { Folder, FolderOpen, MoreHorizontal, Check, Music, Box, Star, Tag, Briefcase, BookOpen } from 'lucide-react';
 

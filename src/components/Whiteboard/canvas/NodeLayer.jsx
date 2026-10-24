@@ -1,4 +1,4 @@
-import React, { useMemo, memo, useState, useLayoutEffect } from 'react';
+import { useMemo, memo, useState, useLayoutEffect } from 'react';
 import { useWhiteboardDocumentStore } from '../../../stores/whiteboardDocumentStore';
 import { useWhiteboardSelectionStore } from '../../../stores/whiteboardSelectionStore';
 import {

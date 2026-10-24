@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import InspectorSection from './InspectorSection.jsx';
 import InspectorColorField from './InspectorColorField.jsx';

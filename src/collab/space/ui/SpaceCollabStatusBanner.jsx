@@ -1,4 +1,3 @@
-import React from 'react';
 import { useCollab } from '../../core/CollabContext.jsx';
 import { useWhiteboardDocumentStore } from '../../../stores/whiteboardDocumentStore';
 import './SpaceCollabStatusBanner.css';

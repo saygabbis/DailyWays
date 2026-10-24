@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 import { useAuth } from '../../../context/AuthContext';
 import { insertComment } from '../../../services/whiteboardService';

@@ -1,10 +1,24 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
-    LayoutDashboard, CheckCircle2, AlertCircle,
-    BarChart2, Calendar, ChevronDown, ChevronUp,
-    Tag, Layers, ListChecks, TrendingUp, Star, Zap,
-    Target, AlertTriangle, Flag, Inbox, Repeat, Link2
+    LayoutDashboard,
+    CheckCircle2,
+    AlertCircle,
+    BarChart2,
+    Calendar,
+    ChevronDown,
+    ChevronUp,
+    Tag,
+    Layers,
+    ListChecks,
+    Star,
+    Zap,
+    Target,
+    AlertTriangle,
+    Flag,
+    Inbox,
+    Repeat,
+    Link2,
 } from 'lucide-react';
 import { format, isTomorrow, isThisWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

@@ -1,4 +1,4 @@
-import React, { useId, useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import BaseNode from './BaseNode';
 import { useSpaceAssetUrl } from '../../../../hooks/useSpaceAssetUrl';
 import { getImageObjectFit } from '../../interaction/transform/imageResize';

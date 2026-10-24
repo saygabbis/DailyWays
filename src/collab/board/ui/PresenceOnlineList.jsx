@@ -1,4 +1,3 @@
-import React from 'react';
 import { usePresenceStore } from '../presence/presenceStore';
 import { useCollab } from '../../core/CollabContext.jsx';
 import { initialFromName } from '../../../utils/userColor';

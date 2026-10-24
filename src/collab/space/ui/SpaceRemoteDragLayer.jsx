@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { useCollab } from '../../core/CollabContext.jsx';
 import { usePresenceStore } from '../../board/presence/presenceStore.js';
 import './SpaceRemoteDragLayer.css';

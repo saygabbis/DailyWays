@@ -1,9 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import {
-    Search, X, Filter, Calendar, Star, Tag, Clock,
-    ArrowRight, CheckCircle2
-} from 'lucide-react';
+import { Search, X, Star, Clock, ArrowRight, CheckCircle2 } from 'lucide-react';
 import './SearchOverlay.css';
 
 export default function SearchOverlay({ onClose, onCardClick }) {

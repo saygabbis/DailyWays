@@ -3,7 +3,7 @@ import { applyBoardAction } from '@dailyways/collab-protocol';
 import { COUNT } from '@dailyways/limits';
 import { uuidv4 } from '../../utils/uuid';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
-import { LABEL_COLORS, DEFAULT_BOARD_COLORS } from './appDefaults';
+import { DEFAULT_BOARD_COLORS } from './appDefaults';
 import { persistLastBoardId } from '../../utils/restoreNavigation.js';
 
 const BOARD_APPLY_ACTION_TYPES = new Set([

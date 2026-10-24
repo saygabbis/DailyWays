@@ -1,4 +1,3 @@
-import React from 'react';
 import { TOOL_VARIANT_MIME } from './toolMenuRegistry.js';
 
 export default function ToolbarToolButton({

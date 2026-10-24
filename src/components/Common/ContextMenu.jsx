@@ -5,7 +5,7 @@ import './ContextMenu.css';
 
 const ContextMenuContext = createContext(null);
 const VIEWPORT_MARGIN = 8;
-const SUBMENU_GAP = 4;
+
 const SUBMENU_HOVER_DELAY_MS = 120;
 
 function hexToRgb(hex) {

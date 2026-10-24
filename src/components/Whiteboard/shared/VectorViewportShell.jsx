@@ -1,4 +1,3 @@
-import React from 'react';
 import { useWhiteboardViewportZoom } from '../interaction/viewport/WhiteboardViewportContext.jsx';
 import { getSharpSvgLayout, WORLD_DIM_EPSILON } from './vectorViewport.js';
 

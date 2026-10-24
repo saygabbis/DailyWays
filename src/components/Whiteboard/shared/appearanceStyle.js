@@ -3,11 +3,6 @@ import { effectiveStrokeScreenPx, strokeWidthInWorld } from './vectorViewport.js
 export const APPEARANCE_NODE_TYPES = new Set(['shape', 'frame']);
 export const IMAGE_APPEARANCE_NODE_TYPES = new Set(['image']);
 
-const STROKE_ALIGN_OPTIONS = ['inside', 'center', 'outside'];
-const STROKE_DASH_OPTIONS = ['solid', 'dashed', 'dotted'];
-const IMAGE_OUTLINE_STYLE_OPTIONS = ['solid', 'soft', 'glow', 'double'];
-const FILL_TYPE_OPTIONS = ['color', 'image'];
-
 const DEFAULT_APPEARANCE = {
     opacity: 100,
     cornersLinked: true,

@@ -31,8 +31,3 @@ export const NODE_COMPONENTS = Object.fromEntries(
     NODE_REGISTRY.map((e) => [e.type, e.component])
 );
 
-const TOOL_ITEMS = NODE_REGISTRY.filter((e) => e.tool).map((e) => ({
-    id: e.tool,
-    label: e.label,
-    type: e.type,
-}));

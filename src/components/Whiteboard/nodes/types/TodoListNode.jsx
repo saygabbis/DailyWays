@@ -1,4 +1,3 @@
-import React from 'react';
 import BaseNode from './BaseNode';
 import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
 import { useCollabPatch } from '../../../../collab/space/ops/SpaceCollabOpsContext.jsx';

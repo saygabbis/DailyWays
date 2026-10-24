@@ -1,6 +1,6 @@
 import { useApp } from '../../context/AppContext';
 import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
-import { Sun, Star, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Star, AlertTriangle, TrendingUp } from 'lucide-react';
 import SmartTaskItem from './SmartTaskItem';
 import SmartRecentCompletions from './SmartRecentCompletions';
 import { updatesToggleImportant } from '../../utils/cardImportant';

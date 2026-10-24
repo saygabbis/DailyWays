@@ -2,6 +2,7 @@ import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
+import react from 'eslint-plugin-react'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
@@ -22,9 +23,15 @@ export default defineConfig([
         sourceType: 'module',
       },
     },
+    plugins: { react },
     rules: {
-      // `catch {}` / `catch (_)` vazios são intencionais (best-effort); args com `_` = ignorados de propósito; Maiúsculos são componentes usados em JSX (o core do ESLint não enxerga).
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^(_|[A-Z])', caughtErrors: 'none' }],
+      // Faz o ESLint enxergar uso de variáveis dentro do JSX (<Icon />), então nomes Maiúsculos
+      // não precisam mais de exceção: componente/ícone importado e não usado agora é acusado.
+      'react/jsx-uses-vars': 'error',
+      // Componente usado no JSX sem estar declarado/importado (o no-undef do core não vê JSX).
+      'react/jsx-no-undef': 'error',
+      // `catch {}` / `catch (_)` vazios são intencionais (best-effort); args/vars com `_` = ignorados de propósito.
+      'no-unused-vars': ['error', { varsIgnorePattern: '^_', argsIgnorePattern: '^_', caughtErrors: 'none' }],
       'no-empty': ['error', { allowEmptyCatch: true }],
       // Regras de "prontidão pro React Compiler" (o projeto não usa o compiler): ficam como aviso
       // para guiar refactors, sem bloquear. rules-of-hooks/purity/immutability continuam como erro.

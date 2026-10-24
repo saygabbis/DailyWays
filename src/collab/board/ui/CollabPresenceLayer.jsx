@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { usePresenceStore } from '../presence/presenceStore';
 import { useCollab } from '../../core/CollabContext.jsx';

@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import { memo } from 'react';
 import BaseNode from './BaseNode';
 import AppearanceRenderer from '../../shared/AppearanceRenderer.jsx';
 import { sameNodeVisual } from '../../shared/appearanceStyle.js';

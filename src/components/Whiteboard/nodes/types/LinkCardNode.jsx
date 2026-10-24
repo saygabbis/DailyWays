@@ -1,4 +1,3 @@
-import React from 'react';
 import BaseNode from './BaseNode';
 import { Link2 } from 'lucide-react';
 import { useEditableNodeField } from '../../interaction/hooks/useEditableNodeField';

@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import LeftToolbar from './LeftToolbar';
 import ViewportControlsBar from './ViewportControlsBar';
 import './WhiteboardBottomChrome.css';

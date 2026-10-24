@@ -12,10 +12,27 @@ import SpaceDetailsModal from '../Sidebar/SpaceDetailsModal';
 import SidebarGroup from './SidebarGroup';
 import GroupDetailsModal from './GroupDetailsModal';
 import {
-    Sun, Star, CalendarDays, LayoutGrid, Plus, LogOut,
-    ChevronLeft, Settings, HelpCircle,
-    Edit3, Trash2, Copy, Palette, Focus, LayoutDashboard,
-    MoreHorizontal, Music, Box, FolderPlus, Check, Folder, Settings2, Users
+    Sun,
+    Star,
+    CalendarDays,
+    LayoutGrid,
+    Plus,
+    LogOut,
+    ChevronLeft,
+    Settings,
+    HelpCircle,
+    Edit3,
+    Trash2,
+    Copy,
+    Focus,
+    LayoutDashboard,
+    MoreHorizontal,
+    Music,
+    Box,
+    FolderPlus,
+    Check,
+    Settings2,
+    Users,
 } from 'lucide-react';
 import { useContextMenu } from '../Common/ContextMenu';
 import logoWhite from '../../assets/Logo - Branco.png';

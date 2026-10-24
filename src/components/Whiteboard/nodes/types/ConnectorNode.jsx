@@ -1,4 +1,3 @@
-import React from 'react';
 import BaseNode from './BaseNode';
 
 export default function ConnectorNode({ node, onNodePointerDown, onNodeContextMenu }) {

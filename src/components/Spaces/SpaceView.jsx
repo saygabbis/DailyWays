@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import { useRef, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { getInspectorInsetPx, CanvasEngine } from '../Whiteboard';

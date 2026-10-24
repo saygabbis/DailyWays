@@ -1,4 +1,3 @@
-import React from 'react';
 import { worldBoxFromAnchorWithModifiers } from '../../interaction/transform/createDragBounds';
 import { worldToScreenWithContainer } from '../../interaction/viewport/viewportUtils';
 import MarqueePreviewOutlines from './MarqueePreviewOutlines';

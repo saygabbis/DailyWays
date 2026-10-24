@@ -1,4 +1,3 @@
-import React from 'react';
 import BaseNode from './BaseNode';
 import VectorViewportShell from '../../shared/VectorViewportShell.jsx';
 import { useWhiteboardViewportZoom } from '../../interaction/viewport/WhiteboardViewportContext.jsx';

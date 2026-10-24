@@ -1,4 +1,3 @@
-import React from 'react';
 import './RulerGuidesOverlay.css';
 
 const EXTENT = 20000;
