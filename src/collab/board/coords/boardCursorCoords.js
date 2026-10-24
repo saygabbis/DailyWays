@@ -9,7 +9,7 @@ import { pointerCoordsFromEvent, screenCoordsToFixedLayer } from './pointerViewp
 const BOARD_CURSOR_NUDGE = { x: 20, y: 20 };
 
 /** Posição de exibição = ponto de conteúdo + nudge; ponta alinhada via transform-origin no CSS */
-export function boardCursorDisplayPoint(contentPoint) {
+function boardCursorDisplayPoint(contentPoint) {
   if (!contentPoint) return null;
   return {
     x: contentPoint.x + BOARD_CURSOR_NUDGE.x,

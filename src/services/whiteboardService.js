@@ -123,40 +123,10 @@ export async function insertNode(spaceId, node, userId = null) {
     return { success: true };
 }
 
-export async function updateNode(nodeId, patch) {
-    if (!nodeId) return { success: false, error: 'Missing nodeId' };
-    const dbUpdates = {};
-    if (patch.x !== undefined) dbUpdates.x = patch.x;
-    if (patch.y !== undefined) dbUpdates.y = patch.y;
-    if (patch.width !== undefined) dbUpdates.width = patch.width;
-    if (patch.height !== undefined) dbUpdates.height = patch.height;
-    if (patch.rotation !== undefined) dbUpdates.rotation = patch.rotation;
-    if (patch.scale !== undefined) dbUpdates.scale = patch.scale;
-    if (patch.data !== undefined) dbUpdates.data_json = patch.data;
-    if (patch.style !== undefined) dbUpdates.style_json = patch.style;
-    if (patch.parentId !== undefined) dbUpdates.parent_id = patch.parentId;
-    if (patch.zIndex !== undefined) dbUpdates.z_index = patch.zIndex;
-    if (Object.keys(dbUpdates).length === 0) return { success: true };
-    const { error } = await supabase.from('space_nodes').update(dbUpdates).eq('id', nodeId);
-    if (error) return { success: false, error: error.message };
-    return { success: true };
-}
-
 export async function deleteNode(nodeId) {
     if (!nodeId) return { success: false, error: 'Missing nodeId' };
     const { error } = await supabase.from('space_nodes').delete().eq('id', nodeId);
     if (error) return { success: false, error: error.message };
-    return { success: true };
-}
-
-export async function bulkUpdateNodes(patches) {
-    if (!patches?.length) return { success: true };
-    const errors = [];
-    for (const p of patches) {
-        const { error } = await updateNode(p.id, p.patch);
-        if (error) errors.push({ id: p.id, error });
-    }
-    if (errors.length) return { success: false, errors };
     return { success: true };
 }
 
@@ -183,24 +153,6 @@ export async function insertConnector(spaceId, connector) {
     const { data, error } = await supabase.from('space_connectors').insert(row).select('id').single();
     if (error) return { success: false, error: error.message };
     return { success: true, id: data?.id };
-}
-
-export async function updateConnector(connectorId, patch) {
-    if (!connectorId) return { success: false, error: 'Missing connectorId' };
-    const dbUpdates = {};
-    if (patch.controlPoints !== undefined) dbUpdates.control_points = patch.controlPoints;
-    if (patch.style !== undefined) dbUpdates.style_json = patch.style;
-    if (Object.keys(dbUpdates).length === 0) return { success: true };
-    const { error } = await supabase.from('space_connectors').update(dbUpdates).eq('id', connectorId);
-    if (error) return { success: false, error: error.message };
-    return { success: true };
-}
-
-export async function deleteConnector(connectorId) {
-    if (!connectorId) return { success: false, error: 'Missing connectorId' };
-    const { error } = await supabase.from('space_connectors').delete().eq('id', connectorId);
-    if (error) return { success: false, error: error.message };
-    return { success: true };
 }
 
 // ── COMMENTS ──────────────────────────────────────────────────────
@@ -237,17 +189,6 @@ export async function insertComment(spaceId, comment, authorId) {
     const { data, error } = await supabase.from('space_comments').insert(row).select('id').single();
     if (error) return { success: false, error: error.message };
     return { success: true, id: data?.id };
-}
-
-export async function fetchReplies(commentId) {
-    if (!commentId) return { data: [], error: null };
-    const { data, error } = await supabase
-        .from('space_comments')
-        .select('*')
-        .eq('parent_id', commentId)
-        .order('created_at', { ascending: true });
-    if (error) return { data: [], error: error.message };
-    return { data: (data || []).map(rowToComment), error: null };
 }
 
 // ── RULER GUIDES ──────────────────────────────────────────────────
@@ -311,13 +252,6 @@ export async function updateRulerGuide(guideId, patch) {
     return { success: true };
 }
 
-export async function deleteRulerGuide(guideId) {
-    if (!guideId) return { success: false, error: 'Missing guideId' };
-    const { error } = await supabase.from('space_ruler_guides').delete().eq('id', guideId);
-    if (error) return { success: false, error: error.message };
-    return { success: true };
-}
-
 export async function deleteRulerGuides(guideIds) {
     if (!guideIds?.length) return { success: true };
     const { error } = await supabase.from('space_ruler_guides').delete().in('id', guideIds);
@@ -355,9 +289,3 @@ export async function uploadSpaceAsset(spaceId, file, userId = null) {
     return { success: true, url, path, storagePath: path };
 }
 
-export async function deleteSpaceAsset(spaceId, storagePath) {
-    if (!spaceId || !storagePath) return { success: false, error: 'Missing params' };
-    await supabase.storage.from(SPACE_ASSETS_BUCKET).remove([storagePath]);
-    await supabase.from('space_assets').delete().eq('space_id', spaceId).eq('storage_path', storagePath);
-    return { success: true };
-}

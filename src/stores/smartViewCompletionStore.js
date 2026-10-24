@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import storageService from '../services/storageService.js';
 
-export const RECENT_COMPLETION_LIMIT = 15;
+const RECENT_COMPLETION_LIMIT = 15;
 
 function storageKey(userId) {
     return `dailyways_smart_recent_completions_v1_${userId}`;

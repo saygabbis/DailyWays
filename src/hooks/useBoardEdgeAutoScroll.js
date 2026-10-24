@@ -1,7 +1,7 @@
 import { useRef, useCallback } from 'react';
 
-export const BOARD_EDGE_ZONE_PX = 40;
-export const BOARD_MAX_EDGE_SCROLL_SPEED = 18;
+const BOARD_EDGE_ZONE_PX = 40;
+const BOARD_MAX_EDGE_SCROLL_SPEED = 18;
 
 /**
  * Scroll horizontal suave do `.board-scroller` quando o ponteiro encosta nas bordas.

@@ -1,6 +1,6 @@
 import { supabaseAdmin } from '../db/supabase.js';
 
-export const PRIMARY_DEV_EMAIL = 'gaffonsoxx@gmail.com';
+const PRIMARY_DEV_EMAIL = 'gaffonsoxx@gmail.com';
 
 const DEFAULT_CONFIG = { prankEnabled: true, additionalDevs: [] };
 const CACHE_MS = 30_000;
@@ -40,7 +40,7 @@ export function isDevPrankHandlerEnabled() {
   return process.env.COLLAB_DEV_PRANK !== '0';
 }
 
-export async function getDevToolConfig() {
+async function getDevToolConfig() {
   if (cachedConfig && Date.now() - cacheAt < CACHE_MS) {
     return cachedConfig;
   }
@@ -63,12 +63,7 @@ export async function getDevToolConfig() {
   return cachedConfig;
 }
 
-export function invalidateDevToolConfigCache() {
-  cachedConfig = null;
-  cacheAt = 0;
-}
-
-export function accountMatchesDev(userId, email, config) {
+function accountMatchesDev(userId, email, config) {
   if (!userId) return false;
   const envIds = getEnvDevUserIds();
   if (envIds.has(userId)) return true;

@@ -1,6 +1,5 @@
 import { uuidv4 } from '../../../../utils/uuid';
 import {
-    deleteRulerGuide,
     deleteRulerGuides,
     insertRulerGuide,
     updateRulerGuide,
@@ -73,6 +72,3 @@ export async function createGuideInDb(spaceId, guide) {
     return insertRulerGuide(spaceId, guide);
 }
 
-export async function removeGuideFromDb(guideId) {
-    return deleteRulerGuide(guideId);
-}

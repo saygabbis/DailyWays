@@ -6,7 +6,7 @@ export function useRadio() {
     return useContext(RadioContext);
 }
 
-export const RADIO_STATIONS = [
+const RADIO_STATIONS = [
     {
         id: 'lofi-hiphop',
         name: 'Lofi Hip Hop',

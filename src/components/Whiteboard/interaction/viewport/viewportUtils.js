@@ -15,17 +15,6 @@ export function intersectsViewport(node, viewport) {
     );
 }
 
-/**
- * World to screen (for toolbar position etc.) - viewport div is centered, so origin at center.
- */
-export function worldToScreen(x, y, viewport) {
-    if (!viewport) return { x, y };
-    return {
-        x: x * viewport.zoom + viewport.panX,
-        y: y * viewport.zoom + viewport.panY,
-    };
-}
-
 /** World to client coords using container rect (transform origin at center of container). */
 export function worldToScreenWithContainer(worldX, worldY, containerRect, viewport) {
     if (!viewport || !containerRect) return { x: worldX, y: worldY };
@@ -34,23 +23,6 @@ export function worldToScreenWithContainer(worldX, worldY, containerRect, viewpo
     return {
         x: cx + viewport.panX + worldX * viewport.zoom,
         y: cy + viewport.panY + worldY * viewport.zoom,
-    };
-}
-
-/** Converte coordenadas de cliente (getBoundingClientRect) para o espaço local do container. */
-export function clientToContainerLocal(clientX, clientY, containerRect) {
-    if (!containerRect) return { x: clientX, y: clientY };
-    return {
-        x: clientX - containerRect.left,
-        y: clientY - containerRect.top,
-    };
-}
-
-export function screenToWorld(screenX, screenY, viewport) {
-    if (!viewport) return { x: screenX, y: screenY };
-    return {
-        x: (screenX - viewport.panX) / viewport.zoom,
-        y: (screenY - viewport.panY) / viewport.zoom,
     };
 }
 
@@ -67,7 +39,7 @@ export function screenToWorldWithContainer(clientX, clientY, containerRect, view
 
 import { clampViewportZoom } from './viewportLimits.js';
 
-export { clampViewportZoom, formatViewportZoomPercent, VIEWPORT_ZOOM_MIN, VIEWPORT_ZOOM_MAX } from './viewportLimits.js';
+;
 
 /** Aplica zoom mantendo o ponto do cursor fixo no mundo (origem no centro do container). */
 export function zoomViewportAtClient(pan, zoom, clientX, clientY, containerRect, zoomFactor) {

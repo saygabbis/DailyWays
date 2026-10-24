@@ -1,6 +1,6 @@
 import { screenCoordsToFixedLayer } from './pointerViewport.js';
 
-export function getBoardListsEl(scrollerEl) {
+function getBoardListsEl(scrollerEl) {
   return scrollerEl?.querySelector?.('.board-lists') ?? null;
 }
 
@@ -59,7 +59,7 @@ export function isBoardListsPointInScrollView(scrollerEl, contentX, contentY, pa
 }
 
 /** @deprecated Preferir isBoardListsPointInScrollView no board kanban */
-export function isContentPointInScrollView(scrollEl, contentX, contentY, pad = 2) {
+function isContentPointInScrollView(scrollEl, contentX, contentY, pad = 2) {
   if (!scrollEl || typeof contentX !== 'number' || typeof contentY !== 'number') return false;
   const sl = scrollEl.scrollLeft;
   const st = scrollEl.scrollTop;

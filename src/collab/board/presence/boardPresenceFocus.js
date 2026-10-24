@@ -3,7 +3,7 @@ import { announcePresence } from './presenceBridge.js';
 import { setLastBoardPointer } from './lastBoardPointer.js';
 
 /** Marca se o utilizador está focado na superfície do board (sem overlay / fora da área). */
-export function applyBoardPresenceFocus(boardId, focused) {
+function applyBoardPresenceFocus(boardId, focused) {
   if (!boardId) return;
   const f = getPresenceFields(boardId);
   f.onBoardSurface = !!focused;

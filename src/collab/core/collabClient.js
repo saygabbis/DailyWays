@@ -50,7 +50,7 @@ export function disconnectCollabSocket() {
   }
 }
 
-export function waitForSocketConnected(socket, timeoutMs = 10000) {
+function waitForSocketConnected(socket, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     if (!socket) {
       reject(new Error('Socket not connected'));
@@ -72,7 +72,7 @@ export function waitForSocketConnected(socket, timeoutMs = 10000) {
   });
 }
 
-export function joinRoom(socket, payload) {
+function joinRoom(socket, payload) {
   return new Promise((resolve, reject) => {
     if (isBoardPrankFrozen()) {
       reject(new Error('Board prank frozen'));
@@ -131,8 +131,6 @@ export function leaveRoom(socket, boardId = null, opts = {}) {
   });
 }
 
-export const leaveSpaceRoom = leaveRoom;
-
 export function submitOp(socket, op) {
   return new Promise((resolve, reject) => {
     if (isBoardPrankFrozen()) {
@@ -168,4 +166,4 @@ export function emitPresence(socket, payload) {
   socket.emit(CLIENT_EVENTS.PRESENCE, payload);
 }
 
-export { CLIENT_EVENTS, SERVER_EVENTS };
+;

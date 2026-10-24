@@ -10,7 +10,7 @@ export function formatFileSizeBytes(bytes) {
 }
 
 /** Lê largura/altura nativa do arquivo de imagem antes do upload. */
-export function readImageFileDimensions(file) {
+function readImageFileDimensions(file) {
     return new Promise((resolve, reject) => {
         if (!file?.type?.startsWith('image/')) {
             reject(new Error('Not an image file'));

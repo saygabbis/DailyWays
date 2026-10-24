@@ -2,10 +2,6 @@ import { HelpCircle, ExternalLink } from 'lucide-react';
 import { openAppHelp } from '../../Help/AppHelpWidget';
 import DiaryGlassCard from './DiaryGlassCard';
 
-export function openDiaryReflectionWidget() {
-    openAppHelp('reflection');
-}
-
 export default function DiaryReflectionTeaser() {
     return (
         <DiaryGlassCard className="diary-reflection-teaser">

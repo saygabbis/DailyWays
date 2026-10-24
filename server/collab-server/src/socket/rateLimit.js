@@ -1,11 +1,11 @@
 const WINDOW_MS = 1000;
 const GC_INTERVAL_MS = 60_000;
 
-export const MAX_OPS_PER_SEC = Number(process.env.COLLAB_MAX_OPS_PER_SEC || 120);
-export const MAX_POSITION_OPS_PER_SEC = Number(process.env.COLLAB_MAX_POSITION_OPS_PER_SEC || 300);
-export const MAX_OPS_PER_IP_PER_SEC = Number(process.env.COLLAB_MAX_OPS_PER_IP_PER_SEC || 240);
-export const MAX_CONNECTIONS_PER_USER = Number(process.env.COLLAB_MAX_CONNECTIONS_PER_USER || 10);
-export const MAX_AUTH_FAILS_PER_IP_PER_MIN = Number(process.env.COLLAB_MAX_AUTH_FAILS_PER_IP || 60);
+const MAX_OPS_PER_SEC = Number(process.env.COLLAB_MAX_OPS_PER_SEC || 120);
+const MAX_POSITION_OPS_PER_SEC = Number(process.env.COLLAB_MAX_POSITION_OPS_PER_SEC || 300);
+const MAX_OPS_PER_IP_PER_SEC = Number(process.env.COLLAB_MAX_OPS_PER_IP_PER_SEC || 240);
+const MAX_CONNECTIONS_PER_USER = Number(process.env.COLLAB_MAX_CONNECTIONS_PER_USER || 10);
+const MAX_AUTH_FAILS_PER_IP_PER_MIN = Number(process.env.COLLAB_MAX_AUTH_FAILS_PER_IP || 60);
 
 const userOpWindows = new Map();
 const ipOpWindows = new Map();

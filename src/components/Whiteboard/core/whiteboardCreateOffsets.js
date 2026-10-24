@@ -1,7 +1,7 @@
 import { getZoomAwareCreateOffset } from '../interaction/viewport/viewportCreation.js';
 
 /** @deprecated Preferir getNodeCreateOffset(type, zoom). Mantido para zoom 1. */
-export const NODE_CREATE_OFFSETS = {
+const NODE_CREATE_OFFSETS = {
     sticky_note: [75, 50],
     text: [100, 20],
     shape: [50, 50],

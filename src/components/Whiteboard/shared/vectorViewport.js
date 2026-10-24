@@ -1,13 +1,13 @@
 import { clampViewportZoom, screenPxToWorld } from '../interaction/viewport/viewportLimits.js';
 
 /** Zoom usado só para rasterizar SVG/texto nítido (evita layout 1e10 px). */
-export const RENDER_ZOOM_MIN = 1 / 512;
-export const RENDER_ZOOM_MAX = 512;
+const RENDER_ZOOM_MIN = 1 / 512;
+const RENDER_ZOOM_MAX = 512;
 
 /** Dimensão mínima em mundo — abaixo disto o browser perde subpixel. */
 export const WORLD_DIM_EPSILON = 1e-9;
 
-export function getRenderZoom(zoom) {
+function getRenderZoom(zoom) {
     const z = clampViewportZoom(zoom);
     return Math.min(RENDER_ZOOM_MAX, Math.max(RENDER_ZOOM_MIN, z));
 }
@@ -26,7 +26,7 @@ export function effectiveStrokeScreenPx(stroke) {
  * Escala de 1 unidade do viewBox SVG → px de ecrã (AppearanceRenderer com layout sharp).
  * layoutW = viewW * renderZ, CSS scale(1/renderZ), canvas scale(zoom).
  */
-export function viewBoxUnitToScreenScale(zoom, viewBoxWidth) {
+function viewBoxUnitToScreenScale(zoom, viewBoxWidth) {
     const z = clampViewportZoom(zoom);
     const renderZ = getRenderZoom(zoom);
     const vbW = Math.max(Number(viewBoxWidth) || 0, WORLD_DIM_EPSILON);

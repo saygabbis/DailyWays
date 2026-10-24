@@ -1,6 +1,6 @@
 /** Agrupa undo de texto (título/descrição) — um passo por palavra/frase, não por letra. */
 
-export const HISTORY_COALESCE_MS = 2500;
+const HISTORY_COALESCE_MS = 2500;
 
 const TEXT_CARD_FIELDS = new Set(['title', 'description']);
 const TEXT_SUBTASK_FIELDS = new Set(['title']);
@@ -10,23 +10,23 @@ function cloneJson(value) {
     return JSON.parse(JSON.stringify(value));
 }
 
-export function getUpdateCardDeltaKeys(action) {
+function getUpdateCardDeltaKeys(action) {
     if (action?.type !== 'UPDATE_CARD') return [];
     return Object.keys(action.payload?.updates || {}).filter((k) => k !== 'updatedAt');
 }
 
-export function getUpdateSubtaskDeltaKeys(action) {
+function getUpdateSubtaskDeltaKeys(action) {
     if (action?.type !== 'UPDATE_SUBTASK') return [];
     return Object.keys(action.payload?.updates || {}).filter(
         (k) => k !== 'updatedAt' && k !== 'position',
     );
 }
 
-export function isTextOnlyCardDelta(keys) {
+function isTextOnlyCardDelta(keys) {
     return keys.length > 0 && keys.every((k) => TEXT_CARD_FIELDS.has(k));
 }
 
-export function isTextOnlySubtaskDelta(keys) {
+function isTextOnlySubtaskDelta(keys) {
     return keys.length > 0 && keys.every((k) => TEXT_SUBTASK_FIELDS.has(k));
 }
 
@@ -112,7 +112,7 @@ export function mergeCoalescedForward(lastEntry, forward) {
     return forward;
 }
 
-export function mergeTextHistoryForward(pendingForward, nextAction) {
+function mergeTextHistoryForward(pendingForward, nextAction) {
     return mergeCoalescedForward({ forward: pendingForward }, nextAction);
 }
 

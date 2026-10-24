@@ -1,7 +1,4 @@
-/** Caixa em coordenadas mundo a partir de dois cantos (âncora = ponto do primeiro clique). */
-export function worldBoxFromAnchor(anchor, current, minSize = 0) {
-    return worldBoxFromAnchorWithModifiers(anchor, current, { minSize });
-}
+
 
 /**
  * Caixa de criação por arrasto com modificadores (Shift = aspect ratio, Alt = expandir do centro).

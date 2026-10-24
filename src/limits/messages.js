@@ -1,18 +1,18 @@
 import { TEXT, COUNT, LIMIT_ERROR, formatMaxFileSize } from '@dailyways/limits';
 
-export function textTooLong(fieldLabel, max) {
+function textTooLong(fieldLabel, max) {
   return `${fieldLabel} deve ter no máximo ${max} caracteres.`;
 }
 
-export function fileTooLarge(specKey) {
+function fileTooLarge(specKey) {
   return `O arquivo excede o limite de ${formatMaxFileSize(specKey)}.`;
 }
 
-export function fileTypeNotAllowed() {
+function fileTypeNotAllowed() {
   return 'Tipo de arquivo não permitido.';
 }
 
-export function countLimitReached(what, max) {
+function countLimitReached(what, max) {
   return `Limite atingido: no máximo ${max} ${what}.`;
 }
 

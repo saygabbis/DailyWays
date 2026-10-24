@@ -1,7 +1,7 @@
 import { getToolMenuConfig } from '../../panels/toolbar/toolMenuRegistry.js';
 import { useWhiteboardSelectionStore } from '../../../../stores/whiteboardSelectionStore.js';
 
-export function getToolVariant(toolId) {
+function getToolVariant(toolId) {
     const config = getToolMenuConfig(toolId);
     if (!config) return null;
     const stored = useWhiteboardSelectionStore.getState().toolVariants?.[toolId];

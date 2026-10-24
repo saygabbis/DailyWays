@@ -15,7 +15,7 @@ function rowToProgress(row) {
 }
 
 /** @returns {string} YYYY-MM-DD in user timezone */
-export function getTodayDateKey(timezone = TIMEZONE_FALLBACK) {
+function getTodayDateKey(timezone = TIMEZONE_FALLBACK) {
     try {
         return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date());
     } catch {
@@ -49,7 +49,7 @@ export async function fetchTodayProgress(userId, timezone) {
     return { data: rowToProgress(data), error: null };
 }
 
-export async function fetchProgressHistory(userId, daysBack = 60, timezone) {
+async function fetchProgressHistory(userId, daysBack = 60, timezone) {
     if (!userId) return { data: [], error: null };
     const end = getTodayDateKey(timezone);
     const startDate = new Date(`${end}T12:00:00`);
@@ -71,7 +71,7 @@ export async function fetchProgressHistory(userId, daysBack = 60, timezone) {
     return { data: (data || []).map(rowToProgress), error: null };
 }
 
-export async function upsertDailyProgress(userId, patch, timezone) {
+async function upsertDailyProgress(userId, patch, timezone) {
     if (!userId) return { data: null, error: 'Usuário não autenticado.' };
     const activityDate = getTodayDateKey(timezone);
 
@@ -137,7 +137,7 @@ export async function recordTaskCompletion(userId, card, timezone) {
     }, timezone);
 }
 
-export function computeStreakFromHistory(historyRows, timezone) {
+function computeStreakFromHistory(historyRows, timezone) {
     const qualifying = new Set(
         (historyRows || [])
             .filter(dayQualifiesForStreak)

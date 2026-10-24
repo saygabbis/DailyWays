@@ -1,10 +1,4 @@
-/**
- * Coordenadas unificadas (mouse + touch via Pointer Events).
- * @param {PointerEvent | MouseEvent} e
- */
-export function clientXY(e) {
-  return { x: e.clientX, y: e.clientY };
-}
+
 
 /**
  * Distância entre dois toques (pinch).

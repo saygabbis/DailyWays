@@ -58,13 +58,6 @@ export function pruneHierarchyIds(ids, nodes) {
     );
 }
 
-export function canNestInside(dragId, targetId, nodes) {
-    if (!dragId || !targetId || dragId === targetId) return false;
-    if (isDescendantOf(dragId, targetId, nodes)) return false;
-    const target = nodes.find((n) => n.id === targetId);
-    return target && CONTAINER_NODE_TYPES.includes(target.type);
-}
-
 export function layerDisplayName(node) {
     if (node._isVirtualGroup || node.type === 'group') {
         return String(node.data?.nodeGroupName || 'Grupo').slice(0, 48);

@@ -658,7 +658,7 @@ export async function declineInvitation(inviteId, kind = 'board') {
 }
 
 /** Valores válidos em board_members.role (incl. admin). */
-export function normalizeBoardMemberRole(role) {
+function normalizeBoardMemberRole(role) {
   if (role === 'owner') return 'owner';
   if (role === 'admin') return 'admin';
   if (role === 'editor') return 'editor';

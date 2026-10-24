@@ -11,16 +11,6 @@ export function buildTaskModalLiveDraft({
   };
 }
 
-export function hasTaskModalLiveDraft(draft) {
-  if (!draft || typeof draft !== 'object') return false;
-  return Object.values(draft).some((v) => v != null && (typeof v !== 'object' || v.length > 0));
-}
-
-export function liveDraftMetaSig(draft) {
-  if (!draft) return '';
-  return JSON.stringify(draft);
-}
-
 /**
  * Preview ao vivo só de texto (evita briga de cor/prioridade/datas entre dois editores).
  * Campos estruturais vêm do UPDATE_CARD remoto + sync do liveCard.

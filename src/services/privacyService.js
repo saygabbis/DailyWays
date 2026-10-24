@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
 
-export const PRIVACY_DEFAULTS = {
+const PRIVACY_DEFAULTS = {
   allow_contact_requests: 'everyone',
   discoverable_by_email: true,
   discoverable_by_username: true,

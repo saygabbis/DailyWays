@@ -6,8 +6,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-export const COLLAB_ENV_PATH = path.resolve(ROOT, 'server/collab-server/.env');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const COLLAB_ENV_PATH = path.resolve(ROOT, 'server/collab-server/.env');
 export const VITE_PORT = 5174;
 
 export function getCollabPort() {

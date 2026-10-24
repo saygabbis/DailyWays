@@ -10,7 +10,7 @@ import { normalizeFrameConstraints } from '../frame/frameConstraints.js';
 
 const PASTE_STEP = 20;
 
-export { getSiblings };
+;
 
 /** Patch para aninhar nó em container mantendo posição visual (mundo → local). */
 export function buildNestInContainerPatch(node, container, nodes) {

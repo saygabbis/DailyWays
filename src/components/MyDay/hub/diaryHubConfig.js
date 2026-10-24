@@ -22,7 +22,7 @@ export const MOTIVATIONAL_PHRASES = [
 
 export const STREAK_ENCOURAGEMENT = 'Mesmo nos dias difíceis, você continuou';
 
-export const REFLECTION_PROMPTS = [
+const REFLECTION_PROMPTS = [
     { id: 'feeling', label: 'Como você está se sentindo?', prefix: '**Como estou me sentindo:**\n\n' },
     { id: 'proud', label: 'O que te deixou orgulhosa hoje?', prefix: '**Orgulho de hoje:**\n\n' },
     { id: 'hard', label: 'O que foi difícil?', prefix: '**Foi difícil:**\n\n' },

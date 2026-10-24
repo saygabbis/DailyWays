@@ -196,4 +196,3 @@ export function useSpaceCollabOps() {
   };
 }
 
-export default useSpaceCollabOps;

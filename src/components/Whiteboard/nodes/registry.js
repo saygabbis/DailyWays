@@ -12,7 +12,7 @@ import DrawingNode from './types/DrawingNode.jsx';
 import TableNode from './types/TableNode.jsx';
 
 /** Tabela única: tipo → componente, ferramenta, metadados. */
-export const NODE_REGISTRY = [
+const NODE_REGISTRY = [
     { type: 'sticky_note', component: StickyNoteNode, tool: 'sticky_note', label: 'Nota' },
     { type: 'text', component: TextNode, tool: 'text', label: 'Texto' },
     { type: 'shape', component: ShapeNode, tool: 'shape', label: 'Forma' },
@@ -31,7 +31,7 @@ export const NODE_COMPONENTS = Object.fromEntries(
     NODE_REGISTRY.map((e) => [e.type, e.component])
 );
 
-export const TOOL_ITEMS = NODE_REGISTRY.filter((e) => e.tool).map((e) => ({
+const TOOL_ITEMS = NODE_REGISTRY.filter((e) => e.tool).map((e) => ({
     id: e.tool,
     label: e.label,
     type: e.type,

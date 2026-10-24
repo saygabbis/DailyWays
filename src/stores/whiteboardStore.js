@@ -5,10 +5,10 @@
 import { useWhiteboardDocumentStore } from './whiteboardDocumentStore';
 import { useWhiteboardSelectionStore } from './whiteboardSelectionStore';
 
-export { createHistoryEntry } from './whiteboardDocumentStore';
+;
 export { getDefaultNodePayload, isCreationTool } from '../components/Whiteboard/core/nodeDefaults';
-export { useWhiteboardDocumentStore } from './whiteboardDocumentStore';
-export { useWhiteboardSelectionStore } from './whiteboardSelectionStore';
+;
+;
 
 function getMergedState() {
     return {

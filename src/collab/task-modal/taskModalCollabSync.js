@@ -18,7 +18,7 @@ export function createRemoteSyncLock() {
 }
 
 /** Campos que só entram via UPDATE_CARD (estado autoritativo), não via liveDraft. */
-export const MODAL_STRUCTURE_FIELDS = new Set([
+const MODAL_STRUCTURE_FIELDS = new Set([
   'priority',
   'startDate',
   'dueDate',

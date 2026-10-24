@@ -7,20 +7,20 @@ import { buildNodesById, nodeToWorld } from '../ops/whiteboardNodeOps';
 import { normalizeFrameConstraints } from '../frame/frameConstraints.js';
 
 /** ID lógico de grupo no canvas (não cria nó container). */
-export const NODE_GROUP_KEY = 'nodeGroupId';
-export const NODE_GROUP_NAME_KEY = 'nodeGroupName';
-export const NODE_GROUP_PARENT_KEY = 'nodeGroupParentId';
-export const VIRTUAL_GROUP_PREFIX = '__group__';
+const NODE_GROUP_KEY = 'nodeGroupId';
+const NODE_GROUP_NAME_KEY = 'nodeGroupName';
+const NODE_GROUP_PARENT_KEY = 'nodeGroupParentId';
+const VIRTUAL_GROUP_PREFIX = '__group__';
 
 export function getNodeGroupId(node) {
     return node?.data?.[NODE_GROUP_KEY] ?? null;
 }
 
-export function getNodeGroupName(node) {
+function getNodeGroupName(node) {
     return node?.data?.[NODE_GROUP_NAME_KEY] ?? 'Grupo';
 }
 
-export function getNodeGroupParentId(node) {
+function getNodeGroupParentId(node) {
     return node?.data?.[NODE_GROUP_PARENT_KEY] ?? null;
 }
 
@@ -35,7 +35,7 @@ export function getSelectionContextFlags(nodes, selectedIds) {
     return { canGroup, canUngroup };
 }
 
-export function virtualGroupId(groupId) {
+function virtualGroupId(groupId) {
     return `${VIRTUAL_GROUP_PREFIX}${groupId}`;
 }
 
@@ -48,12 +48,12 @@ export function isVirtualGroupRow(id) {
     return id?.startsWith(VIRTUAL_GROUP_PREFIX) ?? false;
 }
 
-export function getNodesInGroup(nodes, groupId) {
+function getNodesInGroup(nodes, groupId) {
     if (!groupId) return [];
     return nodes.filter((n) => getNodeGroupId(n) === groupId);
 }
 
-export function getGroupMemberIds(nodes, groupId) {
+function getGroupMemberIds(nodes, groupId) {
     return getNodesInGroup(nodes, groupId).map((n) => n.id);
 }
 
@@ -95,7 +95,7 @@ function getParentGroupId(groupId, nodes) {
  * Cadeia de seleção para drill-down: [grupo raiz, …, subgrupos, nó].
  * Cada entrada é a lista de ids selecionados naquele nível.
  */
-export function getGroupDrillSteps(nodeId, nodes) {
+function getGroupDrillSteps(nodeId, nodes) {
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) return [[nodeId]];
 
@@ -148,7 +148,7 @@ function patchDataGroup(node, groupId, groupName, { parentGroupId = null, clearP
     return { data };
 }
 
-export function wouldCreateGroupCycle(nodes, childGroupId, parentGroupId) {
+function wouldCreateGroupCycle(nodes, childGroupId, parentGroupId) {
     if (!childGroupId || !parentGroupId || childGroupId === parentGroupId) return true;
     let pid = parentGroupId;
     const visited = new Set();
@@ -273,7 +273,7 @@ export function resolveLayerClickSelection(
  * Agrupa seleção (Ctrl+G): mesma nodeGroupId, sem frame.
  */
 /** IDs que recebem nodeGroupId ao agrupar (inclui filhos de containers selecionados). */
-export function collectIdsForGrouping(nodes, selectedIds) {
+function collectIdsForGrouping(nodes, selectedIds) {
     const expanded = expandIdsToNodeGroups(nodes, selectedIds);
     const topLevelIds = pruneHierarchyIds(expanded, nodes);
     const ids = new Set(topLevelIds);

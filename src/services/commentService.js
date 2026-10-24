@@ -45,20 +45,6 @@ export async function createComment(cardId, body, authorId) {
   return { success: true, data };
 }
 
-export async function updateComment(commentId, body) {
-  const textCheck = validateCardComment(body ?? '');
-  if (!textCheck.ok) return { success: false, error: resolveLimitError(textCheck) };
-  const { data, error } = await supabase
-    .from('card_comments')
-    .update({ body, updated_at: new Date().toISOString() })
-    .eq('id', commentId)
-    .select('*')
-    .single();
-
-  if (error) return { success: false, error: error.message || 'Erro ao atualizar comentário.' };
-  return { success: true, data };
-}
-
 export async function softDeleteComment(commentId) {
   const { error } = await supabase
     .from('card_comments')

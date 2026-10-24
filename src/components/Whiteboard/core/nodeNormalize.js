@@ -1,5 +1,5 @@
 /** Normaliza nós legados ao carregar/hidratar o documento. */
-export function normalizeNode(node) {
+function normalizeNode(node) {
     if (!node) return node;
     if (node.type === 'column') {
         return {

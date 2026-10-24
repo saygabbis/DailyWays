@@ -29,7 +29,7 @@ export async function ensureBoardHistoryHydrated(userId, boardId) {
 }
 
 /** Carrega histórico remoto e funde com local para um board. */
-export async function hydrateBoardHistory(userId, boardId) {
+async function hydrateBoardHistory(userId, boardId) {
     if (!userId || !boardId) return null;
 
     const allLocal = storageService.load(storageKey(userId)) || {};

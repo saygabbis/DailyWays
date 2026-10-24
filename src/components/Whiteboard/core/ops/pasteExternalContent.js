@@ -11,7 +11,7 @@ const URL_PATTERN = /^https?:\/\/[^\s]+$/i;
 const WWW_PATTERN = /^www\.[^\s]+$/i;
 const CLIPBOARD_TEXT_SKIP = new Set(['text/plain', 'text/html', 'text/uri-list']);
 
-export function normalizeClipboardUrl(text) {
+function normalizeClipboardUrl(text) {
     const raw = text?.trim();
     if (!raw) return null;
     if (URL_PATTERN.test(raw)) return raw;
@@ -139,7 +139,7 @@ async function readClipboardText(clipboardData) {
 /**
  * Classifica o conteúdo colado: imagem | arquivo | link | texto | nós internos.
  */
-export async function resolveClipboardPayload(clipboardData = null, internalNodes = null) {
+async function resolveClipboardPayload(clipboardData = null, internalNodes = null) {
     const fromFiles = resolveFilePayload(collectFilesFromDataTransfer(clipboardData));
     if (fromFiles) return fromFiles;
 

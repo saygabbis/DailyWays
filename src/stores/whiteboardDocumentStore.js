@@ -14,10 +14,6 @@ import { useWhiteboardSelectionStore } from './whiteboardSelectionStore';
 
 const MAX_HISTORY = 600;
 
-export function createHistoryEntry(type, payload) {
-    return { type, payload, timestamp: Date.now() };
-}
-
 function applyNodesReplace(nodes, items) {
     if (!items?.length) return nodes;
     const byId = new Map(items.map((i) => [i.id, i.node]));

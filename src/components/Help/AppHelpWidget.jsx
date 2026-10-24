@@ -29,11 +29,6 @@ export function openAppHelp(sectionId = null) {
     );
 }
 
-/** @deprecated use openAppHelp */
-export function openDiaryReflectionWidget() {
-    openAppHelp('reflection');
-}
-
 function HelpKbd({ keys }) {
     return (
         <span className="app-help-kbd-group">

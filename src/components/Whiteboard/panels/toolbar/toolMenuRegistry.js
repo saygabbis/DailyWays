@@ -6,7 +6,7 @@ export const TOOL_VARIANT_MIME = 'application/x-whiteboard-tool-variant';
  * Registo de ferramentas com submenu de variantes.
  * Adicionar novas entradas aqui — a toolbar e a criação consomem automaticamente.
  */
-export const TOOL_MENU_REGISTRY = {
+const TOOL_MENU_REGISTRY = {
     shape: {
         toolId: 'shape',
         defaultVariant: 'rectangle',
@@ -32,10 +32,3 @@ export function getToolMenuConfig(toolId) {
     return TOOL_MENU_REGISTRY[toolId] ?? null;
 }
 
-export function hasToolMenu(toolId) {
-    return Boolean(TOOL_MENU_REGISTRY[toolId]);
-}
-
-export function getDefaultToolVariant(toolId) {
-    return TOOL_MENU_REGISTRY[toolId]?.defaultVariant ?? null;
-}

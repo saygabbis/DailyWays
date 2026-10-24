@@ -3,10 +3,10 @@ import { effectiveStrokeScreenPx, strokeWidthInWorld } from './vectorViewport.js
 export const APPEARANCE_NODE_TYPES = new Set(['shape', 'frame']);
 export const IMAGE_APPEARANCE_NODE_TYPES = new Set(['image']);
 
-export const STROKE_ALIGN_OPTIONS = ['inside', 'center', 'outside'];
-export const STROKE_DASH_OPTIONS = ['solid', 'dashed', 'dotted'];
-export const IMAGE_OUTLINE_STYLE_OPTIONS = ['solid', 'soft', 'glow', 'double'];
-export const FILL_TYPE_OPTIONS = ['color', 'image'];
+const STROKE_ALIGN_OPTIONS = ['inside', 'center', 'outside'];
+const STROKE_DASH_OPTIONS = ['solid', 'dashed', 'dotted'];
+const IMAGE_OUTLINE_STYLE_OPTIONS = ['solid', 'soft', 'glow', 'double'];
+const FILL_TYPE_OPTIONS = ['color', 'image'];
 
 const DEFAULT_APPEARANCE = {
     opacity: 100,
@@ -199,11 +199,6 @@ export function colorWithOpacity(color, opacityPct) {
         return `rgba(${r}, ${g}, ${b}, ${pct / 100})`;
     }
     return color;
-}
-
-/** Pontos de polígono regular inscrito no retângulo w×h (origem 0,0). */
-export function polygonPoints(sides, width, height) {
-    return polygonPointsInRect(sides, 0, 0, width, height);
 }
 
 /** Pontos de polígono regular inscrito em retângulo arbitrário. */

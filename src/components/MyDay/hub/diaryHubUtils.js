@@ -1,5 +1,4 @@
 import { isToday } from 'date-fns';
-import { isCardImportant } from '../../../utils/cardImportant';
 import {
     CATEGORY_ORDER,
     DAY_CATEGORIES,
@@ -7,7 +6,7 @@ import {
     PRIORITY_ORDER,
 } from './diaryHubConfig';
 
-export function normalizeDayCategory(category) {
+function normalizeDayCategory(category) {
     if (category && DAY_CATEGORIES[category]) return category;
     return 'essential';
 }
@@ -95,6 +94,3 @@ export function calcOverallDayProgress(cards) {
     return Math.round((done / all.length) * 100);
 }
 
-export function isImportantMyDayCard(card) {
-    return isCardImportant(card);
-}

@@ -89,4 +89,4 @@ export default function ToolbarToolGroup({
     );
 }
 
-export { TOOL_VARIANT_MIME };
+;

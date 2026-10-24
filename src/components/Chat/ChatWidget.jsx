@@ -30,10 +30,6 @@ const MIN_PANEL_HEIGHT = 360;
 const MAX_PANEL_HEIGHT = 720;
 const DEFAULT_PANEL_W = 400;
 
-export function openAppChat(detail = {}) {
-  window.dispatchEvent(new CustomEvent('app-chat-open', { detail }));
-}
-
 function AvatarTiny({ profile }) {
   const photo = profile?.photo_url || null;
   const fallback = profile?.avatar || profile?.name?.[0] || '?';

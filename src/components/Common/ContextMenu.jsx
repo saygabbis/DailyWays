@@ -354,7 +354,7 @@ export const useContextMenu = () => {
 
 // ── Hook for long-press (mobile) — mais longo que o gesto de drag do DnD; move leve não cancela ──
 // `disabled`: ex. cards com DnD em touch — usar só o botão ⋮ para o menu
-export const MOVE_CANCEL_PX = 12;
+const MOVE_CANCEL_PX = 12;
 
 export function useLongPressSelect({ onSelect, elementRef, disabled = false, onPendingChange }) {
     const timerRef = useRef(null);
@@ -444,78 +444,3 @@ export function useLongPressSelect({ onSelect, elementRef, disabled = false, onP
     };
 }
 
-export function useLongPress(callback, ms, { disabled = false } = {}) {
-    const timerRef = useRef(null);
-    const posRef = useRef({ x: 0, y: 0 });
-    const callbackRef = useRef(callback);
-    callbackRef.current = callback;
-
-    const resolveMs = useCallback(() => {
-        if (ms != null) return ms;
-        if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) return 880;
-        return 550;
-    }, [ms]);
-
-    const cancel = useCallback(() => {
-        if (timerRef.current) {
-            clearTimeout(timerRef.current);
-            timerRef.current = null;
-        }
-    }, []);
-
-    const start = useCallback((e) => {
-        if (disabled) return;
-        const touch = e.touches?.[0];
-        if (touch) {
-            posRef.current = { x: touch.clientX, y: touch.clientY };
-        } else {
-            posRef.current = { x: e.clientX, y: e.clientY };
-        }
-        const delay = resolveMs();
-        timerRef.current = setTimeout(() => {
-            callbackRef.current({
-                preventDefault: () => {},
-                stopPropagation: () => {},
-                clientX: posRef.current.x,
-                clientY: posRef.current.y,
-                pageX: posRef.current.x,
-                pageY: posRef.current.y,
-            });
-        }, delay);
-    }, [disabled, resolveMs]);
-
-    const onTouchMove = useCallback((e) => {
-        if (disabled) return;
-        const touch = e.touches?.[0];
-        if (!touch || !timerRef.current) return;
-        const dx = touch.clientX - posRef.current.x;
-        const dy = touch.clientY - posRef.current.y;
-        if (dx * dx + dy * dy > MOVE_CANCEL_PX * MOVE_CANCEL_PX) cancel();
-    }, [cancel, disabled]);
-
-    const onTouchEndWrap = useCallback(() => {
-        cancel();
-    }, [cancel]);
-
-    const onTouchCancelWrap = useCallback(() => {
-        cancel();
-    }, [cancel]);
-
-    if (disabled) {
-        return {
-            cancel,
-            onTouchStart: undefined,
-            onTouchEnd: undefined,
-            onTouchMove: undefined,
-            onTouchCancel: undefined,
-        };
-    }
-
-    return {
-        cancel,
-        onTouchStart: start,
-        onTouchEnd: onTouchEndWrap,
-        onTouchMove: onTouchMove,
-        onTouchCancel: onTouchCancelWrap,
-    };
-}

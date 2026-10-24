@@ -15,15 +15,6 @@ export function captureNodesSnapshot(store, ids) {
         .filter(Boolean);
 }
 
-export function nodeToCollabPatch(node) {
-    if (!node) return {};
-    const patch = { ...node };
-    delete patch.id;
-    delete patch.createdAt;
-    delete patch.updatedAt;
-    return patch;
-}
-
 /** Ops separadas para sync collab (patchToOps num nó completo perde x/y/data por early-return). */
 export function nodeToCollabOps(node) {
     if (!node?.id) return [];

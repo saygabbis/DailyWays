@@ -1,18 +1,18 @@
 /** Evita sobreposição da board toolbar com o dropdown de perfil (viewport). */
 
 /** Respiro fixo entre a zona do menu e a toolbar. */
-export const PROFILE_MENU_CLEAR_GAP = 12;
+const PROFILE_MENU_CLEAR_GAP = 12;
 
 /** Padding extra na caixa de colisão do menu. */
-export const PROFILE_MENU_HIT_PAD_X = 8;
-export const PROFILE_MENU_HIT_PAD_TOP = 4;
-export const PROFILE_MENU_HIT_PAD_BOTTOM = 12;
+const PROFILE_MENU_HIT_PAD_X = 8;
+const PROFILE_MENU_HIT_PAD_TOP = 4;
+const PROFILE_MENU_HIT_PAD_BOTTOM = 12;
 
-export function rectsIntersect(a, b) {
+function rectsIntersect(a, b) {
     return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
 }
 
-export function menuCollisionZone(menuRect) {
+function menuCollisionZone(menuRect) {
     return {
         left: menuRect.left - PROFILE_MENU_HIT_PAD_X,
         right: menuRect.right + PROFILE_MENU_HIT_PAD_X,

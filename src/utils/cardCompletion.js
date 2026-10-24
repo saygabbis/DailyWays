@@ -1,9 +1,9 @@
 
-export function getFirstCompletionList(board) {
+function getFirstCompletionList(board) {
     return board?.lists?.find((l) => l.isCompletionList) ?? null;
 }
 
-export function getFirstActiveList(board) {
+function getFirstActiveList(board) {
     return board?.lists?.find((l) => !l.isCompletionList) ?? board?.lists?.[0] ?? null;
 }
 

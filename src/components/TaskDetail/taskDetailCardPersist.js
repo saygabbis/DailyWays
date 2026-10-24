@@ -1,6 +1,6 @@
 /** Delta de campos do card para persistência / undo por ação no modal de tarefa. */
 
-export const TASK_CARD_PERSIST_FIELDS = [
+const TASK_CARD_PERSIST_FIELDS = [
     'title',
     'description',
     'priority',

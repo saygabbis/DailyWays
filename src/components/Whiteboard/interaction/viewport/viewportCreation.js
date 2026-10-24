@@ -2,7 +2,7 @@ import { getDefaultNodePayload } from '../../core/nodeDefaults.js';
 import { clampViewportZoom } from './viewportLimits.js';
 
 /** Tamanho mínimo visível ao arrastar criar (pixels de tela → mundo). */
-export const MIN_CREATE_SCREEN_PX = 32;
+const MIN_CREATE_SCREEN_PX = 32;
 
 /**
  * Dimensões padrão de criação em coordenadas mundo para o zoom atual.

@@ -14,7 +14,7 @@ export function isDeleteConfirmPermanent(result) {
     return false;
 }
 
-export function serializeCardForClipboard(card) {
+function serializeCardForClipboard(card) {
     return JSON.parse(JSON.stringify(card));
 }
 
@@ -51,7 +51,7 @@ export function buildDuplicateCardPayload(card, listId, boardId) {
     };
 }
 
-export function buildPasteCardPayload(card, listId, boardId) {
+function buildPasteCardPayload(card, listId, boardId) {
     const copy = serializeCardForClipboard(card);
     return {
         type: 'ADD_CARD',

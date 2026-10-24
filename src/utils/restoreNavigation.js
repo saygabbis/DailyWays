@@ -1,6 +1,6 @@
 import storageService, { STORAGE_KEYS } from '../services/storageService';
 
-export const ACTIVE_VIEW_KEY = 'dailyways_active_view';
+const ACTIVE_VIEW_KEY = 'dailyways_active_view';
 const SESSION_NAV_KEY = 'dailyways_session_nav';
 
 const GENERAL_VIEWS = new Set(['dashboard', 'myday', 'important', 'planned', 'help']);
@@ -15,7 +15,7 @@ function parseStoredString(raw) {
   }
 }
 
-export function readPersistedView() {
+function readPersistedView() {
   try {
     const session = readSessionNavigation();
     if (session?.view) return session.view;
@@ -26,7 +26,7 @@ export function readPersistedView() {
   }
 }
 
-export function persistView(view) {
+function persistView(view) {
   if (!view || view === 'settings') return;
   try {
     localStorage.setItem(ACTIVE_VIEW_KEY, view);
@@ -35,7 +35,7 @@ export function persistView(view) {
   }
 }
 
-export function persistActiveBoardId(boardId) {
+function persistActiveBoardId(boardId) {
   if (boardId) {
     storageService.save(STORAGE_KEYS.ACTIVE_BOARD, boardId);
   } else {
@@ -43,7 +43,7 @@ export function persistActiveBoardId(boardId) {
   }
 }
 
-export function readSessionNavigation() {
+function readSessionNavigation() {
   try {
     const raw = sessionStorage.getItem(SESSION_NAV_KEY);
     if (!raw) return null;
@@ -58,7 +58,7 @@ export function readSessionNavigation() {
   }
 }
 
-export function persistSessionNavigation(view, boardId) {
+function persistSessionNavigation(view, boardId) {
   try {
     sessionStorage.setItem(
       SESSION_NAV_KEY,
@@ -129,10 +129,6 @@ export function resolveRestoredNavigation({ boards = [], spaces = [], activeBoar
   }
 
   return { view: 'dashboard', boardId: null };
-}
-
-export function isGeneralView(view) {
-  return GENERAL_VIEWS.has(view);
 }
 
 export function isWorkspaceDataReady({ userId, boards, boardsLoadError }) {

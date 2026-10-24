@@ -1,12 +1,12 @@
 import { supabase } from './supabaseClient';
 import { fetchMyInvitations } from './boardService';
 
-export function getReadIdsKey(userId) {
+function getReadIdsKey(userId) {
     return userId ? `dailyways_notifications_read_${userId}` : null;
 }
 
 /** @deprecated use getReadIdsKey */
-export function getReadIdsKeyLegacy(userId) {
+function getReadIdsKeyLegacy(userId) {
     return userId ? `dailyways_invite_read_${userId}` : null;
 }
 

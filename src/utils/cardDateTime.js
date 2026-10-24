@@ -20,18 +20,6 @@ export function parseCardDate(value) {
   return isValidDate(parsed) ? parsed : null;
 }
 
-export function formatCardDate(value, options = {}) {
-  const date = parseCardDate(value);
-  if (!date) return '';
-
-  const {
-    pattern = 'dd MMM',
-    locale = ptBR,
-  } = options;
-
-  return format(date, pattern, { locale });
-}
-
 export function formatCardDateTime(value, isAllDay = true) {
   const date = parseCardDate(value);
   if (!date) return '';
@@ -55,12 +43,12 @@ export function isCardDueToday(card) {
   return Boolean(dueDate && isToday(dueDate));
 }
 
-export function isCardDueTomorrow(card) {
+function isCardDueTomorrow(card) {
   const dueDate = parseCardDate(card?.dueDate);
   return Boolean(dueDate && isTomorrow(dueDate));
 }
 
-export function isCardDueThisWeek(card) {
+function isCardDueThisWeek(card) {
   const dueDate = parseCardDate(card?.dueDate);
   if (!dueDate) return false;
   return isThisWeek(dueDate, { weekStartsOn: 1 });

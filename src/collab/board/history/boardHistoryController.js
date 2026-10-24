@@ -1,4 +1,3 @@
-import { applyBoardAction } from '@dailyways/collab-protocol';
 import { shouldRecordBoardAction } from './boardHistoryPolicy.js';
 import {
     canCoalesceWithLastEntry,
@@ -6,7 +5,6 @@ import {
 } from './boardHistoryCoalesce.js';
 import {
     buildInverseAction,
-    buildBatchInverse,
     flattenHistoryActions,
 } from './boardHistoryInvert.js';
 import { createHistoryEntry, useBoardHistoryStore } from './boardHistoryStore.js';
@@ -19,58 +17,8 @@ export function registerTextHistoryFlush(fn) {
 }
 
 let batchDepth = 0;
-let batchBoardId = null;
-let batchStartBoard = null;
+
 let batchForwards = [];
-
-export function isApplyingBoardHistory() {
-    return applyingHistory;
-}
-
-export function beginBoardHistoryBatch(boardId, getBoardSnapshot) {
-    if (batchDepth === 0) {
-        batchBoardId = boardId;
-        batchStartBoard = getBoardSnapshot(boardId);
-        batchForwards = [];
-    }
-    batchDepth += 1;
-}
-
-export function endBoardHistoryBatch() {
-    if (batchDepth <= 0) return;
-    batchDepth -= 1;
-    if (batchDepth > 0) return;
-
-    const boardId = batchBoardId;
-    const startBoard = batchStartBoard;
-    const forwards = batchForwards.slice();
-    batchBoardId = null;
-    batchStartBoard = null;
-    batchForwards = [];
-
-    if (!boardId || !startBoard || !forwards.length) return;
-
-    const inverse = buildBatchInverse(startBoard, forwards);
-    if (!inverse) return;
-
-    const forward = forwards.length === 1
-        ? forwards[0]
-        : { type: 'BATCH', payload: { boardId, actions: forwards } };
-
-    useBoardHistoryStore.getState().pushEntry(
-        boardId,
-        createHistoryEntry(boardId, forward, inverse),
-    );
-}
-
-export function runWithBoardHistoryBatch(boardId, getBoardSnapshot, fn) {
-    beginBoardHistoryBatch(boardId, getBoardSnapshot);
-    try {
-        fn();
-    } finally {
-        endBoardHistoryBatch();
-    }
-}
 
 function tryCoalesceHistoryEntry(boardId, forward) {
     const store = useBoardHistoryStore.getState();
@@ -175,11 +123,3 @@ export async function performBoardRedo(boardId, getBoardSnapshot, collabDispatch
     return true;
 }
 
-/** Valida se o redo/undo ainda é aplicável (evita erro grosseiro se o board mudou muito). */
-export function previewApply(board, action) {
-    try {
-        return applyBoardAction(board, action);
-    } catch {
-        return board;
-    }
-}

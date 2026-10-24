@@ -45,7 +45,7 @@ function applySeededCursor(boardId, seeded) {
 }
 
 /** Atualiza cursor do board a partir de clientX/Y (após fechar modal com rato no board). */
-export function applyBoardCursorFromClient(boardId, clientX, clientY) {
+function applyBoardCursorFromClient(boardId, clientX, clientY) {
   const scroller = typeof document !== 'undefined' ? document.querySelector('.board-scroller') : null;
   if (!scroller || !boardId) return false;
   const content = boardListsContentPointFromClient(scroller, clientX, clientY);

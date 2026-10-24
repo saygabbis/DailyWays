@@ -17,7 +17,7 @@ export function getMorphologyRadius(stroke, zoom) {
 }
 
 /** Blur em unidades do viewBox, proporcional à espessura em px de ecrã. */
-export function getOutlineBlurStdDev(stroke, zoom, baseRadiusWorld) {
+function getOutlineBlurStdDev(stroke, zoom, baseRadiusWorld) {
     const style = stroke.outlineStyle ?? stroke.dash ?? 'solid';
     let smoothness = Math.max(0, Math.min(100, Number(stroke.smoothness ?? 35)));
     if (style === 'soft') smoothness = Math.max(smoothness, 55);

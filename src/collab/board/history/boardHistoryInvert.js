@@ -1,10 +1,9 @@
-import { applyBoardAction } from '@dailyways/collab-protocol';
 
 function cloneJson(value) {
     return JSON.parse(JSON.stringify(value));
 }
 
-export function findCardOnBoard(board, cardId) {
+function findCardOnBoard(board, cardId) {
     if (!board?.lists || !cardId) return null;
     for (const list of board.lists) {
         const card = list.cards.find((c) => c.id === cardId);
@@ -220,7 +219,7 @@ export function buildInverseAction(board, forward) {
     }
 }
 
-export function wrapBatch(boardId, actions) {
+function wrapBatch(boardId, actions) {
     const filtered = actions.filter(Boolean);
     if (!filtered.length) return null;
     if (filtered.length === 1) return filtered[0];
@@ -228,28 +227,6 @@ export function wrapBatch(boardId, actions) {
         type: 'BATCH',
         payload: { boardId, actions: filtered },
     };
-}
-
-/** Inversos de um lote (estado = antes do lote). */
-export function buildBatchInverse(startBoard, forwards) {
-    if (!startBoard || !forwards?.length) return null;
-    const boardId = forwards[0]?.payload?.boardId || startBoard.id;
-    let simulated = cloneJson(startBoard);
-    const inverses = [];
-
-    for (let i = forwards.length - 1; i >= 0; i -= 1) {
-        const inv = buildInverseAction(simulated, forwards[i]);
-        if (inv) {
-            if (inv.type === 'BATCH') {
-                inverses.unshift(...inv.payload.actions);
-            } else {
-                inverses.unshift(inv);
-            }
-        }
-        simulated = applyBoardAction(simulated, forwards[i]);
-    }
-
-    return wrapBatch(boardId, inverses);
 }
 
 export function flattenHistoryActions(action) {

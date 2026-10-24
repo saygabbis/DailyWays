@@ -158,16 +158,6 @@ export async function checkUserOnline(userId) {
   return !!data;
 }
 
-export async function fetchConversationParticipants(conversationId) {
-  if (!conversationId) return { data: [], error: null };
-  const { data, error } = await supabase
-    .from('conversation_participants')
-    .select('user_id, created_at')
-    .eq('conversation_id', conversationId);
-  if (error) return { data: [], error: error.message };
-  return { data: data || [], error: null };
-}
-
 export async function fetchDmRequestMessages(requestId) {
   if (!requestId) return { data: [], error: null };
   const { data, error } = await supabase.rpc('list_dm_request_messages', { p_request_id: requestId });
@@ -254,11 +244,3 @@ export function subscribeToDmRequest(requestId, onChange) {
   return () => supabase.removeChannel(channel);
 }
 
-// Legacy aliases
-export const fetchMessages = fetchChatMessages;
-export async function sendMessage(conversationId, body, options = {}) {
-  if (options.recipientId) return sendDmMessage(options.recipientId, body);
-  return sendChatMessage(conversationId, { body });
-}
-export const subscribeToMessages = (conversationId, onChange) =>
-  subscribeToChatMessages(conversationId, { onInsert: onChange, onUpdate: onChange });

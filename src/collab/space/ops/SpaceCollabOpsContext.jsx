@@ -13,14 +13,6 @@ export function SpaceCollabOpsProvider({ children }) {
   );
 }
 
-export function useSpaceCollabOpsContext() {
-  const ctx = useContext(SpaceCollabOpsContext);
-  if (!ctx) {
-    throw new Error('useSpaceCollabOpsContext must be used within SpaceCollabOpsProvider');
-  }
-  return ctx;
-}
-
 /** Safe fallback when collab is disabled — uses local store only. */
 export function useCollabPatch() {
   const ctx = useContext(SpaceCollabOpsContext);

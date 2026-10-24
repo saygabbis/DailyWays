@@ -1,7 +1,7 @@
 import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
 
 /** Tipos que voltam à ferramenta selecionar após criar (salvo Ctrl). */
-export const NODE_TYPES_REVERT_TO_SELECT = new Set([
+const NODE_TYPES_REVERT_TO_SELECT = new Set([
     'frame',
     'shape',
     'text',
@@ -11,7 +11,7 @@ export const NODE_TYPES_REVERT_TO_SELECT = new Set([
 ]);
 
 /** Tipos que entram em edição de texto logo após criar. */
-export const NODE_TYPES_EDIT_ON_CREATE = new Set(['text', 'sticky_note', 'link']);
+const NODE_TYPES_EDIT_ON_CREATE = new Set(['text', 'sticky_note', 'link']);
 
 /**
  * Após criar um nó: selecionar, opcionalmente voltar ao cursor e abrir edição de texto.

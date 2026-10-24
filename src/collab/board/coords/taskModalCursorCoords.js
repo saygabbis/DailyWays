@@ -2,7 +2,7 @@ import { pointerCoordsFromEvent } from './pointerViewport.js';
 import { contentPointFromClient, viewportFromContentPoint } from './scrollContentCoords.js';
 
 /** Região com scroll independente dentro do modal da task. */
-export function findTaskModalScrollRegion(target, modalRoot) {
+function findTaskModalScrollRegion(target, modalRoot) {
   if (!modalRoot || !target) return null;
   const body = target.closest?.('.task-detail-body');
   if (body && modalRoot.contains(body)) return { region: 'body', el: body };

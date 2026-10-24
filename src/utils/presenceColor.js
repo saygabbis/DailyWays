@@ -26,7 +26,7 @@ function enhanceColor(hex) {
   return rgbToHex(r, g, b);
 }
 
-export function getCachedPhotoPresenceColor(userId) {
+function getCachedPhotoPresenceColor(userId) {
   return userPhotoColorCache.get(userId) || null;
 }
 

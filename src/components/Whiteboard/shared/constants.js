@@ -14,7 +14,7 @@ export const CREATION_TOOLS = [
     'file',
 ];
 
-export const NODE_TYPES_ALLOWED = [
+const NODE_TYPES_ALLOWED = [
     'sticky_note',
     'text',
     'shape',

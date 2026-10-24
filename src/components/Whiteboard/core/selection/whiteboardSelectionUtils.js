@@ -4,11 +4,8 @@ import { filterNodesByPage } from '../pages/whiteboardPages';
 import { buildNodesById, nodeToWorld, worldTopLeftToNodePatch } from '../ops/whiteboardNodeOps';
 import { rectIntersects } from '../../interaction/viewport/viewportUtils';
 
-/** @deprecated Use pruneHierarchyIds — mantido para imports existentes. */
-export const pruneNestedDragIds = pruneHierarchyIds;
-
 /** Expande grupos lógicos salvo drill-down ou seleção isolada (Ctrl). */
-export function shouldExpandSelectionGroups({ groupDrill = null, isolateSelection = false } = {}) {
+function shouldExpandSelectionGroups({ groupDrill = null, isolateSelection = false } = {}) {
     return !groupDrill && !isolateSelection;
 }
 

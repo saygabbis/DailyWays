@@ -29,16 +29,8 @@ export function isBoardPrankFrozen() {
     return useBoardDevPrankStore.getState().frozen;
 }
 
-export function setBoardPrankFrozen(value) {
-    useBoardDevPrankStore.getState().setFrozen(Boolean(value));
-}
-
 export function isBoardPrankHeld() {
     return useBoardDevPrankStore.getState().held;
-}
-
-export function setBoardPrankHeld(value) {
-    useBoardDevPrankStore.getState().setHeld(Boolean(value));
 }
 
 export const useBoardDevPrankStore = create((set, get) => ({

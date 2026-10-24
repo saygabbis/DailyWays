@@ -17,7 +17,7 @@ import {
     normalizeNodesForClipboard,
 } from '../nodeGeometry.js';
 
-export { buildNodesById, nodeToWorld, worldTopLeftToNodePatch, normalizeNodesForClipboard };
+export { buildNodesById, nodeToWorld, worldTopLeftToNodePatch,  };
 
 const PASTE_STEP = 20;
 
@@ -61,7 +61,7 @@ export function setClipboardFromNodes(store, nodes) {
 }
 
 /** Duplica ou cola nós; retorna ids criados. */
-export async function insertClonedNodes(nodes, offset, ctx) {
+async function insertClonedNodes(nodes, offset, ctx) {
     const { spaceId, userId, collabCreateNode, collabConnected, addNode, store, allNodes } = ctx;
     if (!spaceId || !nodes?.length) return [];
     const byId = buildNodesById(allNodes || []);

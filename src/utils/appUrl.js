@@ -1,4 +1,4 @@
-export function normalizeOrigin(input) {
+function normalizeOrigin(input) {
   if (!input || typeof input !== 'string') return '';
   const trimmed = input.trim();
   if (!trimmed) return '';

@@ -26,7 +26,7 @@ function draggingCursorSig(state) {
 }
 
 /** IDs do grupo quando o peer arrasta um card que faz parte da seleção dele. */
-export function getRemoteMultiDragIds(peer) {
+function getRemoteMultiDragIds(peer) {
   const selected = Array.isArray(peer?.selectedCardIds) ? peer.selectedCardIds : [];
   const lead = peer?.draggingCardId;
   if (lead && selected.includes(lead) && selected.length > 1) {

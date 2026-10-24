@@ -15,7 +15,7 @@ const STORAGE_OBJECT_MARKERS = [
 ];
 
 /** Extrai storage path de URL pública, assinada ou autenticada do Supabase. */
-export function extractStoragePathFromLegacyUrl(url) {
+function extractStoragePathFromLegacyUrl(url) {
   if (!url || typeof url !== 'string') return null;
   for (const marker of STORAGE_OBJECT_MARKERS) {
     const idx = url.indexOf(marker);

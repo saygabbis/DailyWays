@@ -1,6 +1,6 @@
 /** Zoom do canvas — faixa amplia estilo PureRef, limitada para precisão float/CSS. */
-export const VIEWPORT_ZOOM_MIN = 1e-4;
-export const VIEWPORT_ZOOM_MAX = 1e4;
+const VIEWPORT_ZOOM_MIN = 1e-4;
+const VIEWPORT_ZOOM_MAX = 1e4;
 
 /** Tamanho mínimo de imagem no mundo (quase zero; evita width/height === 0). */
 export const IMAGE_RESIZE_MIN_WORLD = 1e-8;
