@@ -66,11 +66,7 @@ export function BoardCollabProvider({ children }) {
 
   useEffect(() => {
     if (!user?.id || !activeBoardId) return;
-    let cancelled = false;
-    (async () => {
-      await ensureBoardHistoryHydrated(user.id, activeBoardId);
-    })();
-    return () => { cancelled = true; };
+    void ensureBoardHistoryHydrated(user.id, activeBoardId);
   }, [user?.id, activeBoardId]);
 
   const getBoardSnapshot = useCallback((boardId) => {
@@ -120,10 +116,8 @@ export function BoardCollabProvider({ children }) {
       for (let attempt = 0; attempt <= OP_RETRY_ATTEMPTS; attempt += 1) {
         try {
           if (!socket?.connected) throw new Error('Socket not connected');
+          // Aceito pelo servidor → ele persiste. Nada de salvar o board inteiro daqui.
           await submitOp(socket, opPayload);
-          if (shouldBackupBoardActionToSupabase(action)) {
-            persistBoard(boardId, { force: true, ensureSave: true });
-          }
           return true;
         } catch (err) {
           if (attempt < OP_RETRY_ATTEMPTS) {
@@ -138,8 +132,11 @@ export function BoardCollabProvider({ children }) {
       console.warn('[boardCollab] op failed', err.message);
       const msg = err.message?.includes('Rate limit')
         ? 'Muitas alterações ao mesmo tempo. Aguarde um instante.'
-        : 'Alteração no board não foi sincronizada. Salvando localmente…';
+        : socket?.connected
+          ? 'Alteração no board não foi aceita pelo servidor. Recarregue o board se algo parecer errado.'
+          : 'Alteração no board não foi sincronizada. Salvando localmente…';
       toastCollabError(addToast, msg);
+      // Fallback: só grava pelo navegador se a sala não estiver mais ao vivo (o AppContext decide).
       persistBoard(boardId, { force: true, ensureSave: true });
       return false;
     } finally {

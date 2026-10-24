@@ -112,7 +112,7 @@ export default memo(function AppearanceRenderer({
     const radii = getCornerRadii(appearance);
     const stroke = appearance.stroke ?? {};
     const { x, y, w: iw, h: ih } = insetForAlign(stroke.align, stroke, w, h, zoom);
-    const pad = strokeViewportPad(stroke, zoom, w, h);
+    const pad = strokeViewportPad(stroke, zoom);
     const viewBoxWidth = w + pad * 2;
     const strokeProps = strokePaint(appearance, zoom, w, h, viewBoxWidth);
     const fill = fillPaint(appearance, baseId, imageSrc);

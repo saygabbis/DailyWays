@@ -145,7 +145,7 @@ export function copyCardsToClipboard(cards, boardId, sourceListId, setClipboard)
     });
 }
 
-export async function cutCardsToClipboard(cards, boardId, sourceListId, setClipboard, collabDispatch, getBoardSnapshot) {
+export async function cutCardsToClipboard(cards, boardId, sourceListId, setClipboard, collabDispatch) {
     setClipboard({
         mode: 'cut',
         boardId,
@@ -171,7 +171,7 @@ export function pasteCardsFromClipboard(clipboard, targetListId, boardId, collab
  * Move cards to destList starting at dropIndex, preserving selection order.
  * primaryCardId lands at dropIndex; earlier items in the group go before it.
  */
-export function bulkMoveCardsToIndex(cards, destListId, dropIndex, primaryCardId, getBoard, collabDispatch, getBoardSnapshot) {
+export function bulkMoveCardsToIndex(cards, destListId, dropIndex, primaryCardId, getBoard, collabDispatch) {
     if (!destListId || !cards.length) return;
 
     const board = typeof getBoard === 'function' ? getBoard() : getBoard;
@@ -220,7 +220,7 @@ export function bulkMoveCardsToIndex(cards, destListId, dropIndex, primaryCardId
     }
 }
 
-export function bulkMoveCardsToList(cards, destListId, getBoard, collabDispatch, getBoardSnapshot) {
+export function bulkMoveCardsToList(cards, destListId, getBoard, collabDispatch) {
     if (!destListId) return;
     let destIndexOffset = 0;
     const boardRef = typeof getBoard === 'function' ? getBoard() : getBoard;

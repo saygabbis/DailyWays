@@ -155,7 +155,6 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const coverPanelRef = useRef(null);
     const labelPopoverRef = useRef(null);
 
-    const board = state.boards.find((item) => item.id === boardId);
     const coverAttachment = attachments.find((item) => item.id === liveCard.coverAttachmentId) || null;
     const imageAttachments = attachments.filter((item) => item.kind === 'image' && item.publicUrl);
     const visibleComments = comments.filter((item) => !item.deletedAt);

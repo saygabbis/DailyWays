@@ -26,7 +26,7 @@ function getDefaultPos(widgetW = DEFAULT_SIZE.width, widgetH = DEFAULT_SIZE.heig
 export default function RadioWidget() {
     const {
         isOpen, isMinimized, isPlaying, isLoading, lastError, currentStation, volume, setVolume,
-        setIsOpen, togglePlay, nextStation, prevStation, toggleMinimize, closeRadio
+        togglePlay, nextStation, prevStation, toggleMinimize, closeRadio
     } = useRadio();
 
     const [position, setPosition] = useState(() => getDefaultPos(DEFAULT_SIZE.width, DEFAULT_SIZE.height));

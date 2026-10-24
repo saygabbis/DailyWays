@@ -292,7 +292,7 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
 
 
-    const performJoin = async (reason) => {
+    const performJoin = async (_reason) => {
 
       const joinGen = ++joinGenRef.current;
 

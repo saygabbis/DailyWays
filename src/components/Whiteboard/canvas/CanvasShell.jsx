@@ -33,7 +33,7 @@ import PresenceLayer from '../../../collab/board/ui/PresenceLayer.jsx';
 import { useCollabPatch } from '../../../collab/space/ops/SpaceCollabOpsContext.jsx';
 import { useCollabPresence } from '../../../collab/board/presence/useCollabPresence.js';
 import SpaceRemoteDragLayer from '../../../collab/space/ui/SpaceRemoteDragLayer.jsx';
-import { screenToWorldWithContainer, worldToScreenWithContainer, rectIntersects, findContainerAt } from '../interaction/viewport/viewportUtils';
+import { screenToWorldWithContainer, findContainerAt } from '../interaction/viewport/viewportUtils';
 import { IMAGE_RESIZE_MIN_WORLD } from '../interaction/viewport/viewportLimits.js';
 import {
     getZoomAwareCreateDims,
@@ -65,11 +65,9 @@ import {
     setClipboardFromNodes,
     duplicateSelectedNodes,
     pasteFromClipboard,
-    nudgeSelectedNodes,
     patchZIndexSelected,
 } from '../core/ops/whiteboardNodeOps';
 import { pasteClipboardContent } from '../core/ops/pasteExternalContent.js';
-import { computeViewportToFitNodes } from '../interaction/viewport/viewportFit';
 import ShortcutsHelp from '../panels/ShortcutsHelp';
 import SnapGuidesOverlay from './overlays/SnapGuidesOverlay';
 import InspectorPanel from '../panels/InspectorPanel';
@@ -99,7 +97,6 @@ import {
     computeMultiRotatePatches,
     getSelectionTransformCenter,
 } from '../interaction/transform/selectionTransform';
-import { getSelectionWorldBounds } from '../core/align/whiteboardAlign';
 import { contrastingTextColor } from '../../../utils/contrastingTextColor';
 import { recordNodesMutation } from '../core/history/whiteboardHistory';
 import ViewportControlsBar from '../panels/ViewportControlsBar';
@@ -498,7 +495,6 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     return;
                 }
                 const sizeStr = file.size != null ? (file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`) : '';
-                const type = 'file_card';
                 const defaultKey = 'file';
                 const offsetX = 110;
                 const offsetY = 40;

@@ -338,7 +338,7 @@ export async function uploadSpaceAsset(spaceId, file, userId = null) {
     if (!fileCheck.ok) return { success: false, error: resolveLimitError(fileCheck) };
     const ext = file.name.split('.').pop() || 'bin';
     const path = `${spaceId}/${uuidv4()}.${ext}`;
-    const { data, error } = await supabase.storage.from(SPACE_ASSETS_BUCKET).upload(path, file, {
+    const { error } = await supabase.storage.from(SPACE_ASSETS_BUCKET).upload(path, file, {
         cacheControl: '3600',
         upsert: false,
     });

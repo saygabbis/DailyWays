@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../services/supabaseClient';
-import { fetchContacts, searchContactTargets, sendContactRequest } from '../../services/contactsService';
+import { fetchContacts, searchContactTargets } from '../../services/contactsService';
 import {
   openDmChannel,
   fetchDmInbox,
@@ -203,20 +203,6 @@ export default function ChatWidget() {
       setSuggestions(data || []);
       setSuggestLoading(false);
     }, 220);
-  };
-
-  const sendRequestTo = async (targetId, targetLabel) => {
-    const { success, data, error: sErr } = await sendContactRequest(targetId);
-    if (!success) {
-      setError(sErr || 'Erro ao enviar solicitação.');
-      return;
-    }
-    if (data?.status === 'accepted') {
-      window.dispatchEvent(new CustomEvent('contacts-updated'));
-    }
-    setSearch('');
-    setSuggestions([]);
-    refreshContacts();
   };
 
   const startResize = (e) => {

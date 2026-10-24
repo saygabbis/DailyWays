@@ -325,18 +325,25 @@ export class RoomManager {
     return peers;
   }
 
-  clientJoined(roomId) {
+  /**
+   * Contagem por socket (idempotente): entrar/sair duas vezes com o mesmo socket não
+   * desbalanceia o contador — antes um erro de join ou a entrada via presença podiam
+   * descarregar a sala cedo (flush/evict com gente dentro) ou nunca.
+   */
+  clientJoined(roomId, socketId) {
     const room = this.rooms.get(roomId);
-    if (room) {
-      room.clientCount += 1;
-      room.lastActivity = Date.now();
-    }
+    if (!room || !socketId) return;
+    if (!room.clientSockets) room.clientSockets = new Set();
+    room.clientSockets.add(socketId);
+    room.clientCount = room.clientSockets.size;
+    room.lastActivity = Date.now();
   }
 
-  async clientLeft(roomId) {
+  async clientLeft(roomId, socketId) {
     const room = this.rooms.get(roomId);
-    if (!room) return;
-    room.clientCount = Math.max(0, room.clientCount - 1);
+    if (!room || !socketId || !room.clientSockets?.delete(socketId)) return;
+    room.clientCount = room.clientSockets.size;
+    room.lastActivity = Date.now();
     if (room.clientCount === 0) {
       try {
         await this.flushNow(roomId, { force: true });

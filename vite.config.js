@@ -19,6 +19,42 @@ function getCollabPort() {
   return 2529
 }
 
+/**
+ * Cabeçalhos de segurança lidos de public/_headers (fonte única, também usada por Netlify & cia).
+ * O `vite preview` (produção na VPS) passa a enviá-los. A CSP vai como Report-Only por padrão
+ * (só avisa no console) para não quebrar rádio/OAuth/imagens externas; DW_CSP_ENFORCE=1 aplica de verdade.
+ */
+function getSecurityHeaders() {
+  const headers = {}
+  try {
+    const raw = fs.readFileSync(path.resolve(__dirname, 'public/_headers'), 'utf8')
+    for (const line of raw.split('\n')) {
+      const m = line.match(/^\s+([A-Za-z-]+):\s*(.+)$/)
+      if (m) headers[m[1]] = m[2].trim()
+    }
+  } catch {
+    /* sem _headers → sem cabeçalhos extras */
+  }
+  const csp = headers['Content-Security-Policy']
+  if (csp && process.env.DW_CSP_ENFORCE !== '1') {
+    delete headers['Content-Security-Policy']
+    headers['Content-Security-Policy-Report-Only'] = csp
+  }
+  return headers
+}
+
+/** Separa as libs grandes em chunks próprios (cache melhor entre deploys). */
+function vendorChunk(id) {
+  if (!id.includes('node_modules')) return undefined
+  if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'vendor-react'
+  if (id.includes('@supabase')) return 'vendor-supabase'
+  if (id.includes('socket.io') || id.includes('engine.io')) return 'vendor-socket'
+  if (id.includes('@hello-pangea')) return 'vendor-dnd'
+  if (id.includes('lucide-react')) return 'vendor-icons'
+  if (id.includes('date-fns')) return 'vendor-date'
+  return undefined
+}
+
 const collabPort = getCollabPort()
 const collabTarget = `http://127.0.0.1:${collabPort}`
 
@@ -91,15 +127,18 @@ export default defineConfig({
     allowedHosts: ['dailyways.saygabbis.cloud'],
     port: 5174,
     proxy: socketIoProxy,
+    headers: getSecurityHeaders(),
   },
 
   // ⚠️ IMPORTANTE: raiz do domínio
   base: '/',
 
   build: {
-    sourcemap: true,
+    // Sourcemaps públicos expõem o código-fonte inteiro; só gera se pedir (DW_SOURCEMAP=1).
+    sourcemap: process.env.DW_SOURCEMAP === '1',
 
     rollupOptions: {
+      output: { manualChunks: vendorChunk },
       plugins: [
         strip({
           include: ['**/*.{js,jsx,mjs,cjs,ts,tsx}'],

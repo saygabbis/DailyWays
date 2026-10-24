@@ -12,14 +12,14 @@ export default function AppearanceFillSection({ node, spaceId }) {
     const { user } = useAuth();
     const fileRef = useRef(null);
     const { appearance, patchAppearance } = useInspectorStylePatch(node);
-    if (!appearance) return null;
-
-    const fill = appearance.fill ?? {};
+    const fill = appearance?.fill ?? {};
+    // Hook antes de qualquer return: chamado sempre, na mesma ordem.
     const previewUrl = useSpaceAssetUrl(
         fill.type === 'image'
             ? { storagePath: fill.imageStoragePath, url: fill.imageUrl }
             : null,
     );
+    if (!appearance) return null;
     const hexColor = fill.color?.startsWith('#') ? fill.color : '#ffffff';
 
     const patchFill = (partial) => patchAppearance({ fill: { ...fill, ...partial } });

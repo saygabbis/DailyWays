@@ -1,5 +1,5 @@
 import React, { useRef, useCallback, useEffect } from 'react';
-import { useWhiteboardStore, isCreationTool } from '../../../../stores/whiteboardStore';
+import { isCreationTool } from '../../../../stores/whiteboardStore';
 import { useWhiteboardSelectionStore } from '../../../../stores/whiteboardSelectionStore';
 import { getNodeTransformStyle } from '../../core/nodeTransform';
 import { pointerDownUpdateSelection } from '../../interaction/selection/nodeSelectionPointer';

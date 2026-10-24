@@ -51,16 +51,6 @@ export default function CustomAccentPopover({ anchorRef, value, onApply, onClose
         return () => document.removeEventListener('mousedown', handler);
     }, [onClose, anchorRef]);
 
-    const applySolid = () => {
-        const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
-        onApply({ type: 'solid', color: hex });
-    };
-
-    const applyGradient = () => {
-        const sorted = [...stops].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-        onApply({ type: 'gradient', stops: sorted });
-    };
-
     const handleSolidColorChange = (e) => {
         const hex = e.target.value;
         setSolidColor(hex);

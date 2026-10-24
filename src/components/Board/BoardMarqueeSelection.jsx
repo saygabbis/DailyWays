@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useBoardSelectionStore } from '../../stores/boardSelectionStore';
 import { useBoardEdgeAutoScroll } from '../../hooks/useBoardEdgeAutoScroll';
 

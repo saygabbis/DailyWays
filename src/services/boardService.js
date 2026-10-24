@@ -202,8 +202,6 @@ function cardToRowSafe(card, listId, position, hasPosition) {
 export async function fetchBoards(userId) {
   if (!userId) return { data: [], error: null };
 
-  const t0 = Date.now();
-
   const hasPosition = await cardsHasPositionColumn();
 
   const { data: owned, error: ownedErr } = await supabase
@@ -269,7 +267,6 @@ export async function fetchBoards(userId) {
   const boardIds = boardsData.map(b => b.id);
 
   // ── Lists ──
-  const tLists0 = Date.now();
   const { data: listsData, error: listsError } = await supabase
     .from('lists')
     .select('id, board_id, title, color, position, is_completion_list')
@@ -291,7 +288,6 @@ export async function fetchBoards(userId) {
   } else {
     cardsQuery = cardsQuery.order('created_at', { ascending: true });
   }
-  const tCards0 = Date.now();
   const { data: cardsData, error: cardsError } = await cardsQuery;
   if (cardsError) {
     console.error('[boardService] fetchBoards cards error', cardsError);
@@ -302,7 +298,6 @@ export async function fetchBoards(userId) {
   const cardIds = (cardsData ?? []).map(c => c.id);
   let subtasksData = [];
   if (cardIds.length > 0) {
-    const tSub0 = Date.now();
     const { data: stData, error: stErr } = await supabase
       .from('subtasks')
       .select('id, card_id, title, done, position, link_url, link_label, created_at, updated_at')
@@ -638,49 +633,12 @@ export async function clearMyInvitationHistory() {
 export async function acceptInvitation(inviteId, kind = 'board') {
   if (!inviteId) return { success: false, error: 'Convite inválido.' };
 
-  const { data: sessData } = await supabase.auth.getSession();
-  const userId = sessData?.session?.user?.id;
-
-  let inviteRow = null;
-  try {
-    if (kind === 'space') {
-      const { data: r, error: rErr } = await supabase
-        .from('space_invitations')
-        .select('id, space_id, invitee_user_id, status')
-        .eq('id', inviteId)
-        .maybeSingle();
-      if (!rErr && r) inviteRow = { board_id: r.space_id, ...r };
-    } else {
-      const { data: r, error: rErr } = await supabase
-        .from('board_invitations')
-        .select('id, board_id, invitee_user_id, status')
-        .eq('id', inviteId)
-        .maybeSingle();
-      if (!rErr && r) inviteRow = r;
-    }
-  } catch (_) { }
-
   const rpcName = kind === 'space' ? 'accept_space_invitation' : 'accept_board_invitation';
   const { error } = await supabase.rpc(rpcName, { p_invite_id: inviteId });
   if (error) {
     console.error('[boardService] acceptInvitation error', error);
     return { success: false, error: error.message || 'Erro ao aceitar convite.' };
   }
-
-  let membersCountAfter = null;
-  try {
-    const resourceId = kind === 'space' ? inviteRow?.space_id : inviteRow?.board_id;
-    const table = kind === 'space' ? 'space_members' : 'board_members';
-    const idCol = kind === 'space' ? 'space_id' : 'board_id';
-    if (resourceId && userId) {
-      const { data: bmRows, error: bmErr } = await supabase
-        .from(table)
-        .select('user_id')
-        .eq(idCol, resourceId)
-        .eq('user_id', userId);
-      if (!bmErr) membersCountAfter = (bmRows || []).length;
-    }
-  } catch (_) { }
 
   return { success: true };
 }
@@ -918,7 +876,6 @@ export async function saveBoards(userId, boards) {
       console.error('[boardService] saveBoards fetchBoards failed, aborting save', fetchError);
       return { success: false, error: fetchError };
     }
-    const currentIds = new Set(current.map(b => b.id));
     const payloadIds = new Set(boards.map(b => b.id));
 
     // Deletar boards que não estão mais no payload

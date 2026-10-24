@@ -1,5 +1,4 @@
 import { useApp } from '../../context/AppContext';
-import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
 import { useSmartViewCardCompletion } from '../../hooks/useSmartViewCardCompletion';
 import { isCardActive } from '../../utils/cardSmartView';
 import {
@@ -15,7 +14,6 @@ export default function SmartTaskItem({
     card, board, list, onClick, onToggleMyDay, onToggleImportant, onRemoveFromPlanned, showLocation = true,
 }) {
     const { LABEL_COLORS } = useApp();
-    const { collabDispatch } = useBoardCollabDispatch(board.id);
     const { toggleCardCompletion } = useSmartViewCardCompletion();
 
     const handleToggleComplete = (e) => {

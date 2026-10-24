@@ -1,21 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import ErrorBoundary from './components/Common/ErrorBoundary';
 import { useAuth } from './context/AuthContext';
 import { useApp } from './context/AppContext';
 import { useTheme } from './context/ThemeContext';
-import AuthPage from './components/Auth/AuthPage';
 import Sidebar from './components/Layout/Sidebar';
 import Header from './components/Layout/Header';
 import MobileBottomNav from './components/Layout/MobileBottomNav';
 import BoardView from './components/Board/BoardView';
-import MyDayView from './components/MyDay/MyDayView';
-import ImportantView from './components/SmartViews/ImportantView';
-import PlannedView from './components/SmartViews/PlannedView';
-import DashboardView from './components/Dashboard/DashboardView';
-import ContactsView from './components/Contacts/ContactsView';
-import TaskDetailModal from './components/TaskDetail/TaskDetailModal';
-import SettingsModal from './components/Settings/SettingsView';
-import SearchOverlay from './components/Search/SearchOverlay';
-import SpaceView from './components/Spaces/SpaceView';
 import BoardCollabBridge from './collab/board/sync/BoardCollabBridge.jsx';
 import BoardCollabSync from './collab/board/sync/BoardCollabSync.jsx';
 import { isCollabEnabled } from './collab/core/collabConfig.js';
@@ -25,7 +16,6 @@ import { useCollab } from './collab/core/CollabContext.jsx';
 import { setLastBoardPointer } from './collab/board/presence/lastBoardPointer.js';
 import { pointerCoordsFromBoardEvent } from './collab/board/coords/boardCursorCoords.js';
 import { BoardCollabProvider, useBoardCollabDispatch } from './collab/board/ops/BoardCollabContext.jsx';
-import PasswordResetPage from './components/Auth/PasswordResetPage';
 import {
   persistNavigation,
   resolveRestoredNavigation,
@@ -48,6 +38,35 @@ import { LayoutDashboard, Sun, Star, CalendarDays, Search, Settings, PanelLeft, 
 import './styles/global.css';
 import './App.css';
 
+// Telas carregadas sob demanda (code-splitting): o bundle inicial fica só com o shell + board.
+const AuthPage = lazy(() => import('./components/Auth/AuthPage'));
+const MyDayView = lazy(() => import('./components/MyDay/MyDayView'));
+const ImportantView = lazy(() => import('./components/SmartViews/ImportantView'));
+const PlannedView = lazy(() => import('./components/SmartViews/PlannedView'));
+const DashboardView = lazy(() => import('./components/Dashboard/DashboardView'));
+const ContactsView = lazy(() => import('./components/Contacts/ContactsView'));
+const TaskDetailModal = lazy(() => import('./components/TaskDetail/TaskDetailModal'));
+const SettingsModal = lazy(() => import('./components/Settings/SettingsView'));
+const SearchOverlay = lazy(() => import('./components/Search/SearchOverlay'));
+const SpaceView = lazy(() => import('./components/Spaces/SpaceView'));
+const PasswordResetPage = lazy(() => import('./components/Auth/PasswordResetPage'));
+
+
+function readLocalFlag(key) {
+  try { return window.localStorage.getItem(key) === '1'; } catch { return false; }
+}
+
+/** Reset de senha iniciado há menos de 10 min (marcado no localStorage pelo fluxo de recuperação). */
+function isPwResetPendingValid() {
+  try {
+    if (!readLocalFlag('dailyways_pw_reset_pending')) return false;
+    const ts = Number(window.localStorage.getItem('dailyways_pw_reset_pending_ts') || '0');
+    return !!ts && Date.now() - ts < 10 * 60 * 1000;
+  } catch {
+    return false;
+  }
+}
+
 function AppContent() {
   const { user, profile } = useAuth();
 
@@ -56,9 +75,7 @@ function AppContent() {
   }, [user, profile]);
   const {
     getActiveBoard,
-    confirmConfig,
     dispatch,
-    getAllCards,
     state,
     updateBoardsOrder,
     suppressRealtime,
@@ -518,6 +535,8 @@ function AppContent() {
           <div className="app-content" onClick={() => {
             if (state.selectedItems?.length > 0 && !state.isDraggingBulk) dispatch({ type: 'CLEAR_SELECTION' });
           }}>
+            <ErrorBoundary label="view" resetKey={`${activeView}:${activeBoard?.id ?? ''}`}>
+            <Suspense fallback={<div className="app-view-loading" aria-busy="true" />}>
             {navReady && activeView === 'dashboard' && <DashboardView key="dashboard" />}
             {navReady && activeView === 'myday' && <MyDayView key="myday" onCardClick={handleCardClick} />}
             {navReady && activeView === 'important' && <ImportantView key="important" onCardClick={handleCardClick} />}
@@ -552,19 +571,27 @@ function AppContent() {
                 </button>
               </div>
             )}
+            </Suspense>
+            </ErrorBoundary>
           </div>
         </main>
 
         {/* Settings floating modal */}
         {showSettings && (
+          <Suspense fallback={null}>
           <SettingsModal
             onClose={() => setShowSettings(false)}
             initialTab={settingsInitialTab}
           />
+          </Suspense>
         )}
 
         {/* Search floating modal */}
-        {showSearch && <SearchOverlay onClose={() => setShowSearch(false)} onCardClick={handleCardClick} />}
+        {showSearch && (
+          <Suspense fallback={null}>
+            <SearchOverlay onClose={() => setShowSearch(false)} onCardClick={handleCardClick} />
+          </Suspense>
+        )}
 
         {/* Pomodoro Focus Timer */}
         <PomodoroTimer />
@@ -593,12 +620,14 @@ function AppContent() {
 
         {/* Task detail floating modal */}
         {selectedCard && (
+          <Suspense fallback={null}>
           <TaskDetailModal
             card={selectedCard.card}
             boardId={selectedCard.boardId}
             listId={selectedCard.listId}
             onClose={() => setSelectedCard(null)}
           />
+          </Suspense>
         )}
 
 
@@ -653,9 +682,8 @@ export default function App() {
     return hasAccessRefresh && hasRecoveryKeyword;
   })();
 
-  const pwResetPending = window.localStorage.getItem('dailyways_pw_reset_pending') === '1';
-  const pwResetPendingTs = Number(window.localStorage.getItem('dailyways_pw_reset_pending_ts') || '0');
-  const pwResetPendingValid = pwResetPending && !!pwResetPendingTs && (Date.now() - pwResetPendingTs) < 10 * 60 * 1000;
+  const pwResetPending = readLocalFlag('dailyways_pw_reset_pending');
+  const pwResetPendingValid = isPwResetPendingValid();
 
   const urlHasAccessRefresh =
     (combined.includes('access_token') || combined.includes('access_token=')) &&
@@ -688,9 +716,9 @@ export default function App() {
 
   // Segurança: na recuperação de senha, não mostrar o app principal.
   // Forçamos uma página dedicada para digitar a nova senha.
-  if (shouldForcePasswordReset) return <PasswordResetPage />;
+  if (shouldForcePasswordReset) return <Suspense fallback={null}><PasswordResetPage /></Suspense>;
 
-  if (!user) return <AuthPage />;
+  if (!user) return <Suspense fallback={null}><AuthPage /></Suspense>;
 
   return (
     <BoardCollabProvider>

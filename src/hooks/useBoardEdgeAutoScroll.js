@@ -19,7 +19,8 @@ export function useBoardEdgeAutoScroll(scrollerRef) {
         }
     }, []);
 
-    const scrollLoop = useCallback(() => {
+    // Função nomeada: o rAF agenda a si mesma sem depender da const ainda não inicializada.
+    const scrollLoop = useCallback(function loop() {
         const scroller = scrollerRef.current;
         if (!scroller || !activeRef.current) {
             stopScrollLoop();
@@ -27,7 +28,7 @@ export function useBoardEdgeAutoScroll(scrollerRef) {
         }
 
         if (scroller.scrollWidth <= scroller.clientWidth + 1) {
-            rafRef.current = requestAnimationFrame(scrollLoop);
+            rafRef.current = requestAnimationFrame(loop);
             return;
         }
 
@@ -36,7 +37,7 @@ export function useBoardEdgeAutoScroll(scrollerRef) {
 
         // Só auto-scroll quando o cursor está na faixa vertical do board
         if (y < rect.top - 48 || y > rect.bottom + 48) {
-            rafRef.current = requestAnimationFrame(scrollLoop);
+            rafRef.current = requestAnimationFrame(loop);
             return;
         }
 
@@ -53,7 +54,7 @@ export function useBoardEdgeAutoScroll(scrollerRef) {
             scroller.scrollLeft += delta;
         }
 
-        rafRef.current = requestAnimationFrame(scrollLoop);
+        rafRef.current = requestAnimationFrame(loop);
     }, [scrollerRef, stopScrollLoop]);
 
     const startEdgeScroll = useCallback(() => {

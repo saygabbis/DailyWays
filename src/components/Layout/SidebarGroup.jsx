@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useMemo } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { Folder, FolderOpen, MoreHorizontal, Check, Music, Box, Star, Tag, Briefcase, BookOpen } from 'lucide-react';
 
-export default function SidebarGroup({ group, index, items, activeView, activeBoard, onContextMenu, onToggleSelection, selectedItems = [], isDraggingBulk = false, onRename, onClickItem, onHeaderClick, renderItem, editingGroupId, editGroupTitle, setEditGroupTitle, onRenameSubmit, isLastGroup = false, isJustReordered = false }) {
+export default function SidebarGroup({ group, index, items, onContextMenu, onToggleSelection, selectedItems = [], onRename, onClickItem, onHeaderClick, renderItem, editingGroupId, editGroupTitle, setEditGroupTitle, onRenameSubmit, isLastGroup = false, isJustReordered = false }) {
     // Folders should always be toggleable. We just consider it "visually closed" if it's explicitly collapsed.
     const effectiveIsExpanded = Boolean(group.isExpanded);
     const isEditing = editingGroupId === group.id;

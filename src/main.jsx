@@ -9,9 +9,11 @@ import { RadioProvider } from './context/RadioContext'
 import { ToastProvider } from './context/ToastContext'
 import CollabProviderRoot from './collab/core/CollabProviderRoot.jsx'
 import App from './App.jsx'
+import ErrorBoundary from './components/Common/ErrorBoundary'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
+    <ErrorBoundary label="root" fullScreen>
     <ThemeProvider>
       <AuthProvider>
         <ToastProvider>
@@ -29,5 +31,6 @@ createRoot(document.getElementById('root')).render(
         </ToastProvider>
       </AuthProvider>
     </ThemeProvider>
+    </ErrorBoundary>
   </StrictMode>,
 )

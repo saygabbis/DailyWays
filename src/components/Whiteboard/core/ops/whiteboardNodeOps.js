@@ -8,7 +8,6 @@ import {
     expandIdsToNodeGroups,
     getNodeGroupId,
 } from '../layers/whiteboardGroupOps';
-import { filterNodesByPage } from '../pages/whiteboardPages';
 import { getSiblings } from '../layers/layerTreeUtils';
 
 import {

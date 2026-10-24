@@ -71,10 +71,8 @@ export function resetPresenceFields(roomId) {
 /** Fan-out presence emit to all hooks registered for this room (e.g. after join). */
 export function announcePresence(roomId) {
   if (!roomId) return;
-  let count = 0;
   for (const entry of sendersByRoom) {
     if (entry.roomId === roomId) {
-      count += 1;
       entry.flushFn();
     }
   }

@@ -222,7 +222,7 @@ export function polygonPointsInRect(sides, x, y, w, h) {
 }
 
 /** Padding extra do viewBox SVG para a borda não ser cortada (center/outside). */
-export function strokeViewportPad(stroke, zoom = 1, viewW = 1, viewH = 1) {
+export function strokeViewportPad(stroke, zoom = 1) {
     if (!stroke?.visible) return 0;
     const screenW = effectiveStrokeScreenPx(stroke);
     if (screenW <= 0) return 0;

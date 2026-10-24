@@ -19,7 +19,7 @@ export function useCardCoverImage(cardId, coverAttachmentId) {
   useEffect(() => {
     let active = true;
 
-    async function loadCover(reason) {
+    async function loadCover() {
       if (!cardId || !coverAttachmentId) {
         if (active) setCoverUrl(null);
         return;

@@ -1,4 +1,4 @@
-import { supabaseAdmin, isServiceKeyLikelyValid } from '../db/supabase.js';
+import { isServiceKeyLikelyValid } from '../db/supabase.js';
 
 const DASHBOARD_API =
   'https://supabase.com/dashboard/project/vdehmvwnpoabcobixgpo/settings/api';

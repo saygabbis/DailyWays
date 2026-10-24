@@ -16,7 +16,6 @@ import {
     unnestLogicalGroupToRoot,
     isVirtualGroupRow,
     parseVirtualGroupId,
-    getGroupMemberIds,
     getGroupMemberIdsDeep,
     getGroupDisplayName,
 } from '../core/layers/whiteboardGroupOps';
@@ -259,12 +258,11 @@ function LayerRow({
     );
 }
 
-export default function LayersTab({ spaceId, spaceTitle }) {
+export default function LayersTab({ spaceId }) {
     const { user } = useAuth();
     const {
         nodes,
         selectedNodeIds,
-        setSelection,
         spacePages,
         activePageId,
         setActivePageId,

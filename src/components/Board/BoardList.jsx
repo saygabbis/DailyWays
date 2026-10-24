@@ -9,7 +9,6 @@ import { useContextMenu } from '../Common/ContextMenu';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import BoardCard from './BoardCard';
 import BoardMultiDragStack from './BoardMultiDragStack';
-import ListDetailsModal from './ListDetailsModal';
 import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Copy, Settings2, CheckCircle } from 'lucide-react';
 import { uuidv4 } from '../../utils/uuid';
 import { BOARD_UI_HOVER, boardUiHoverProps } from '../../collab/board/presence/boardUiHover.js';
@@ -19,7 +18,6 @@ export default function BoardList({
     boardId,
     boardLists = [],
     onCardClick,
-    index,
     onOpenListDetails,
     dragHandleProps,
     isDropped,
@@ -97,19 +95,12 @@ export default function BoardList({
         if (confirmed) {
             collabDispatch({ type: 'DELETE_LIST', payload: { boardId, listId: list.id } });
         }
-        setShowMenu(false);
     };
 
     const handleRenameList = (e) => {
         e.preventDefault();
         collabDispatch({ type: 'UPDATE_LIST', payload: { boardId, listId: list.id, updates: { title: editTitle } } });
         setEditing(false);
-    };
-
-    const handleSaveListDetails = (updates) => {
-        collabDispatch({ type: 'UPDATE_LIST', payload: { boardId, listId: list.id, updates } });
-        if (updates.title !== undefined) setEditTitle(updates.title);
-        setShowListDetails(false);
     };
 
     // Context menu items for the list

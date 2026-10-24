@@ -53,7 +53,6 @@ export async function dispatchToggleCardCompletion({
     markComplete,
     collabDispatch,
     collabDispatchForBoard,
-    getBoardSnapshot,
     restoreListId = null,
 }) {
     const emit = collabDispatchForBoard

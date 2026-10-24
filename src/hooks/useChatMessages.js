@@ -189,7 +189,6 @@ export function useChatMessages(conversationId, { enabled = true, myId, onNewMes
       onInsert: (row) => {
         appendOrUpdate(row);
         markConversationDelivered(conversationId);
-        const last = messagesRef.current[messagesRef.current.length - 1];
         if (row?.id && row.sender_id !== myId) {
           markMessagesRead(conversationId, row.id);
         }

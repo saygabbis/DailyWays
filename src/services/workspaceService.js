@@ -32,7 +32,7 @@ export async function fetchGroups(userId) {
 }
 
 export async function insertGroup(userId, group) {
-    const { data, error } = await supabase.from('groups').insert({
+    const { error } = await supabase.from('groups').insert({
         id: group.id,
         owner_id: userId,
         title: group.title,
@@ -238,7 +238,7 @@ export async function leaveSpace(spaceId, userId) {
 }
 
 export async function insertSpace(userId, space) {
-    const { data, error } = await supabase.from('spaces').insert({
+    const { error } = await supabase.from('spaces').insert({
         id: space.id,
         owner_id: userId,
         title: space.title,
@@ -278,7 +278,7 @@ export async function deleteSpace(spaceId) {
 
 // ── COMMON BULK UPDATE ──────────────────────────────────────────────
 
-export async function updateEntitiesOrder(table, payloads, isSpace = false) {
+export async function updateEntitiesOrder(table, payloads) {
     // payloads: [{ id, position, groupId (optional) }]
     if (!payloads?.length) return { success: true };
     const errors = [];

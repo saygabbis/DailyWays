@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { createElement, useState, useRef } from 'react';
 import { ChevronDown } from 'lucide-react';
 import ToolbarToolMenu from './ToolbarToolMenu.jsx';
 import { setToolDragData } from './ToolbarToolButton.jsx';
@@ -41,7 +41,8 @@ export default function ToolbarToolGroup({
                 draggable
                 onDragStart={(e) => setToolDragData(e, tool.id, variant)}
             >
-                <ActiveIcon size={20} />
+                {/* createElement: ActiveIcon é um ícone já existente (lucide), não um componente criado no render */}
+                {createElement(ActiveIcon, { size: 20 })}
             </button>
             <button
                 ref={chevronRef}

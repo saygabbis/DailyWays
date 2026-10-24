@@ -244,7 +244,6 @@ export async function clonePageNodes(store, fromPageId, toPageId, ctx) {
     const sources = filterNodesByPage(state.nodes, fromPageId);
     if (!sources.length) return [];
 
-    const roots = sources.filter((n) => !n.parentId || !sources.some((p) => p.id === n.parentId));
     const sourceIds = new Set(sources.map((n) => n.id));
     const byId = buildNodesById(state.nodes);
     const idMap = new Map();

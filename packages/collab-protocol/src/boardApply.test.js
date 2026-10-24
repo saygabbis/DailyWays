@@ -92,7 +92,6 @@ describe('applyBoardAction ADD_SUBTASK', () => {
 
 describe('applyBoardAction UPDATE_CARD', () => {
   it('atualiza updatedAt', () => {
-    const card = baseBoard.lists[0].cards[0];
     const next = applyBoardAction(baseBoard, {
       type: 'UPDATE_CARD',
       payload: {

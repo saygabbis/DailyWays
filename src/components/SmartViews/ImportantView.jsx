@@ -3,7 +3,7 @@ import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContex
 import { Sun, Star, AlertTriangle, TrendingUp } from 'lucide-react';
 import SmartTaskItem from './SmartTaskItem';
 import SmartRecentCompletions from './SmartRecentCompletions';
-import { isCardImportant, updatesToggleImportant } from '../../utils/cardImportant';
+import { updatesToggleImportant } from '../../utils/cardImportant';
 import './SmartViews.css';
 
 export default function ImportantView({ onCardClick }) {

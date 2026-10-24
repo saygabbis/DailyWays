@@ -5,7 +5,6 @@ import {
     insertRulerGuide,
     updateRulerGuide,
 } from '../../../../services/whiteboardService';
-import { createHistoryEntry } from '../../../../stores/whiteboardDocumentStore';
 import { useWhiteboardSelectionStore } from '../../../../stores/whiteboardSelectionStore';
 import { pruneLockedGuideIds } from './rulerGuideLocks';
 import { cloneGuide } from './rulerGuides';

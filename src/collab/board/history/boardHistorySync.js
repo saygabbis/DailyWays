@@ -6,14 +6,6 @@ function storageKey(userId) {
     return `dailyways_board_history_v1_${userId}`;
 }
 
-function normalizeStack(raw) {
-    if (!raw || typeof raw !== 'object') return { entries: [], index: -1 };
-    const entries = Array.isArray(raw.entries) ? raw.entries.slice(-BOARD_HISTORY_MAX) : [];
-    let index = Number.isInteger(raw.index) ? raw.index : entries.length - 1;
-    index = Math.max(-1, Math.min(index, entries.length - 1));
-    return { entries, index };
-}
-
 function pickRicherStack(a, b) {
     return mergeHistoryStacks(a, b);
 }

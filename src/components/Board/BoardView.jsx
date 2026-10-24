@@ -49,7 +49,7 @@ import './Board.css';
 import { computeProfileMenuAvoidance } from './boardToolbarProfileAvoid';
 
 function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false }, ref) {
-    const { state, getActiveBoard, dispatch, isSavingBoard, showBoardToolbar, profileMenuOpen, showConfirm } = useApp();
+    const { state, getActiveBoard, dispatch, showBoardToolbar, profileMenuOpen, showConfirm } = useApp();
     const { user, profile } = useAuth();
     const collab = useCollab();
     const [addingList, setAddingList] = useState(false);
@@ -730,16 +730,6 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         getBoardSnapshot,
     ]);
 
-    if (!board) {
-        return (
-            <div className="empty-state">
-                <div className="empty-state-icon">📋</div>
-                <h2>Nenhum board selecionado</h2>
-                <p>Selecione ou crie um board na sidebar para começar</p>
-            </div>
-        );
-    }
-
     const handleBoardPointerMove = useCallback((e) => {
         if (!onBoardSurface) return;
         const el = scrollerRef.current;
@@ -781,6 +771,16 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
     const handlePresenceHoverEnd = useCallback(() => {
         clearHoverTarget();
     }, [clearHoverTarget]);
+
+    if (!board) {
+        return (
+            <div className="empty-state">
+                <div className="empty-state-icon">📋</div>
+                <h2>Nenhum board selecionado</h2>
+                <p>Selecione ou crie um board na sidebar para começar</p>
+            </div>
+        );
+    }
 
     const addListBtnHover = boardUiHoverProps(hoverByUiKey, BOARD_UI_HOVER.addList, 'board-add-list-btn');
 

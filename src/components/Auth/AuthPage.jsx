@@ -63,7 +63,6 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotMessage, setForgotMessage] = useState('');
-  const [pendingEmailConfirmation, setPendingEmailConfirmation] = useState(false);
   const [showAccountCreatedRedirecting, setShowAccountCreatedRedirecting] = useState(false);
   const [showMfaStep, setShowMfaStep] = useState(false);
   const [showOtpModal, setShowOtpModal] = useState(false);

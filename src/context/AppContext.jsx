@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, useState, useEffect, useRef, useCallback } from 'react';
 import storageService, { STORAGE_KEYS } from '../services/storageService';
-import { fetchBoards, saveBoards, insertBoardFull, updateBoardFull, updateBoardsOrder } from '../services/boardService';
+import { fetchBoards, saveBoards, updateBoardFull, updateBoardsOrder } from '../services/boardService';
 import { fetchGroups, fetchSpaces } from '../services/workspaceService';
 import { useAuth } from './AuthContext';
 import { supabase } from '../services/supabaseClient';
@@ -597,6 +597,18 @@ export function AppProvider({ children }) {
     const setCollabBoardRoomLive = useCallback((live) => {
         collabBoardRoomLiveRef.current = !!live;
     }, []);
+
+    // Com a sala de collab do board ao vivo, o servidor collab é a fonte da verdade e
+    // persiste sozinho. O navegador NÃO pode mandar o board inteiro (upsert_board_full
+    // apaga o que não está no payload → uma aba desatualizada apagaria edições de outros).
+    // O save pelo navegador fica só como fallback (sem socket / fora da sala).
+    const isBoardServerAuthoritative = useCallback((boardId) => (
+        isCollabEnabled()
+        && !!boardId
+        && collabActiveBoardIdRef.current === boardId
+        && collabConnectedRef.current
+        && collabBoardRoomLiveRef.current
+    ), []);
     // Timestamp até quando aguardar antes de fazer HTTP (após TOKEN_REFRESHED).
     // O Supabase client tem um lock interno durante o refresh que trava requisições HTTP.
     // Após TOKEN_REFRESHED, aguardamos 2s para o lock ser liberado.
@@ -678,7 +690,6 @@ export function AppProvider({ children }) {
         }
         loadInProgressRef.current = true;
         let cancelled = false;
-        const localKey = STORAGE_KEYS.BOARDS + '_' + userId;
 
         const applyBoards = (boards, source) => {
             if (!cancelled && boards?.length > 0) {
@@ -816,6 +827,10 @@ export function AppProvider({ children }) {
 
     const executeBoardPersistNow = useCallback(async (boardId) => {
         if (!userId || !initialLoadDone.current || !boardId) return;
+        if (isBoardServerAuthoritative(boardId)) {
+            dispatch({ type: 'SET_PENDING_BOARD', payload: { boardId, pending: false } });
+            return;
+        }
 
         if (saveInProgressRef.current[boardId]) {
             saveInProgressRef.current[boardId] = 'queued';
@@ -907,7 +922,7 @@ export function AppProvider({ children }) {
         dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
         delete saveTimeoutRef.current[boardId];
         delete saveInProgressRef.current[boardId];
-    }, [userId, suppressRealtime, getFreshUserId, dispatch]);
+    }, [userId, suppressRealtime, getFreshUserId, dispatch, isBoardServerAuthoritative]);
 
     const flushBoardPersist = useCallback(async (boardId) => {
         if (!userId || !initialLoadDone.current || !boardId) return;
@@ -927,6 +942,7 @@ export function AppProvider({ children }) {
     const persistBoard = useCallback(async (boardId, options = {}) => {
         if (isBoardPrankFrozen()) return;
         if (!userId || !initialLoadDone.current || !boardId) return;
+        if (isBoardServerAuthoritative(boardId)) return;
         if (!options.ensureSave && !shouldPersistBoard(boardId, options)) return;
 
         const timeouts = saveTimeoutRef.current || {};
@@ -942,7 +958,7 @@ export function AppProvider({ children }) {
         }, options.force ? 0 : 180);
 
         saveTimeoutRef.current = timeouts;
-    }, [userId, suppressRealtime, shouldPersistBoard, dispatch, executeBoardPersistNow]);
+    }, [userId, suppressRealtime, shouldPersistBoard, dispatch, executeBoardPersistNow, isBoardServerAuthoritative]);
 
     // Salva todos os boards com debounce pendente imediatamente (usado pelo botão flutuante)
     const saveAllPending = useCallback(async () => {
@@ -1060,8 +1076,6 @@ export function AppProvider({ children }) {
                 setTimeout(waitAndSubscribe, 200);
                 return;
             }
-
-            const localKey = STORAGE_KEYS.BOARDS + '_' + userId;
 
             const handleChange = (payload) => {
                 const table = payload?.table;
@@ -1302,7 +1316,8 @@ export function AppProvider({ children }) {
             return;
         }
         const board = stateRef.current.boards.find(b => b.id === boardId);
-        if (!board) {
+        if (!board || isBoardServerAuthoritative(boardId)) {
+            // Sala ao vivo: o servidor collab já tem e persiste o estado atual.
             dispatch({ type: 'DISMISS_SAVE_ERROR', payload: boardId });
             return;
         }
@@ -1327,7 +1342,7 @@ export function AppProvider({ children }) {
             if (activeSavesRef.current === 0) suppressRealtime(500);
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId, saving: false } });
         }
-    }, [getFreshUserId, suppressRealtime]);
+    }, [getFreshUserId, suppressRealtime, isBoardServerAuthoritative]);
 
     /**
      * Descarta as alterações locais e recarrega a página para restaurar o estado

@@ -51,7 +51,6 @@ export function useBoardPresenceHighlights() {
   const myId = collab?.userId;
 
   return useMemo(() => {
-    const remoteCursors = usePresenceStore.getState().remoteCursors;
     const hoverByCardId = {};
     const hoverByListId = {};
     const hoverByUiKey = {};

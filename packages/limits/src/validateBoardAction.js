@@ -13,10 +13,6 @@ function countLimit(field) {
   return { code: LIMIT_ERROR.COUNT_LIMIT, field };
 }
 
-function textLimit(field) {
-  return { code: LIMIT_ERROR.TEXT_TOO_LONG, field, max: TEXT[field] ?? TEXT.cardTitle };
-}
-
 /**
  * @returns {{ code: string, field?: string, max?: number } | null}
  */

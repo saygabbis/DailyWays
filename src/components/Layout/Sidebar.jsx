@@ -119,7 +119,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
     const {
         state, dispatch, getMyDayCards, getImportantCards, getPlannedCards,
         DEFAULT_BOARD_COLORS,
-        updateBoardsOrder, persistBoard, getActiveBoard, isSavingBoard, suppressRealtime,
+        suppressRealtime,
         showConfirm, reloadBoards, lastReorderedIds = [], setLastReorderedIds,
     } = useApp();
     const t = useI18n();

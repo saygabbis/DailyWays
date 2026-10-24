@@ -206,3 +206,7 @@
   color: var(--text-primary);
   margin: 0;
 }
+/* Placeholder enquanto uma view carregada sob demanda baixa (mantém o layout estável). */
+.app-view-loading {
+  min-height: 40vh;
+}

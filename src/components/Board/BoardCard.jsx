@@ -180,7 +180,6 @@ export default function BoardCard({
     ];
 
     const getBulkContextMenuItems = () => {
-        const count = selectionCount;
         const allMyDay = selectedCards.every(({ card: c }) => c.myDay);
         const allImportant = selectedCards.every(({ card: c }) => c.priority === 'high');
         const bulkMoveSubmenu = buildMoveToListMenuItems(boardLists, null, (destListId) => {

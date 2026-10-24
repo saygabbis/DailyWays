@@ -3,7 +3,6 @@ import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
 import { useWhiteboardSelectionStore } from '../../../../stores/whiteboardSelectionStore';
 import { computeViewportToFitNodes } from '../viewport/viewportFit';
 import {
-    copyNodesToClipboard,
     nudgeSelectedNodes,
     patchZIndexSelected,
 } from '../../core/ops/whiteboardNodeOps';

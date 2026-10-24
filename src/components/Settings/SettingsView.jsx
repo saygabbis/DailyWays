@@ -397,7 +397,7 @@ const SecurityPanel = memo(function SecurityPanel({ user, getLinkedIdentities, l
 const ITEMS_PER_PAGE = 10; // 2 rows × 5 columns
 
 const AppearancePanel = memo(function AppearancePanel({
-    theme, toggleTheme, setTheme, THEME_PRESETS, accentId, setAccent, ACCENT_PRESETS,
+    theme, setTheme, THEME_PRESETS, accentId, setAccent, ACCENT_PRESETS,
     customAccentValue, setCustomAccent, fontId, setFont, FONT_PRESETS, animStyle, setAnimStyle,
     user, updateProfile, t,
 }) {
@@ -750,7 +750,7 @@ function formatInviteDate(iso) {
     }
 }
 
-const InvitationsPanel = memo(function InvitationsPanel({ t }) {
+const InvitationsPanel = memo(function InvitationsPanel() {
     const { reloadBoards } = useApp();
     const [loadingPending, setLoadingPending] = useState(true);
     const [loadingHistory, setLoadingHistory] = useState(true);
@@ -979,7 +979,7 @@ const LanguagePanel = memo(function LanguagePanel({ language, setLanguage, t }) 
 // ─────────────────────────────────────────────
 // CONTACTS PANEL (settings)
 // ─────────────────────────────────────────────
-const ContactsPanel = memo(function ContactsPanel({ user, t }) {
+const ContactsPanel = memo(function ContactsPanel({ user }) {
     const [loading, setLoading] = useState(true);
     const [contactsCount, setContactsCount] = useState(0);
     const [incoming, setIncoming] = useState([]);
@@ -1334,7 +1334,7 @@ export default function SettingsModal({ onClose, initialTab = 'account' }) {
                                 t={t}
                             />
                         )}
-                        {activeTab === 'contacts' && <ContactsPanel user={user} t={t} />}
+                        {activeTab === 'contacts' && <ContactsPanel user={user} />}
                         {activeTab === 'privacy' && <PrivacyPanel user={user} />}
                         {activeTab === 'appearance' && (
                             <AppearancePanel
@@ -1349,7 +1349,7 @@ export default function SettingsModal({ onClose, initialTab = 'account' }) {
                             />
                         )}
                         {activeTab === 'app' && <AppPanel t={t} />}
-                        {activeTab === 'invitations' && <InvitationsPanel t={t} />}
+                        {activeTab === 'invitations' && <InvitationsPanel />}
                         {activeTab === 'language' && (
                             <LanguagePanel language={language} setLanguage={setLanguage} t={t} />
                         )}

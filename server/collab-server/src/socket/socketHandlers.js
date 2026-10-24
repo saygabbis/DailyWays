@@ -48,11 +48,11 @@ function userHasAnotherSocketInRoom(io, roomId, userId, exceptSocketId) {
   return false;
 }
 
-async function rollbackPartialJoin(socket, roomId, joinedRoom) {
-  if (!roomId) return;
-  if (joinedRoom) {
+async function rollbackPartialJoin(socket, roomId) {
+  if (roomId) {
     socket.leave(roomId);
-    await roomManager.clientLeft(roomId);
+    // Idempotente: só decrementa se este socket realmente tinha entrado.
+    await roomManager.clientLeft(roomId, socket.id);
   }
   socket.data.roomId = null;
   socket.data.canWrite = false;
@@ -131,6 +131,7 @@ function registerDevPrankHandler(io, socket) {
       const prevRoom = targetSock.data.roomId;
       if (prevRoom) {
         targetSock.leave(prevRoom);
+        void roomManager.clientLeft(prevRoom, sid);
         roomManager.untrackSocket(prevRoom, targetUserId, sid);
         finalizeLeavePresence(io, prevRoom, targetUserId, sid);
       }
@@ -226,12 +227,12 @@ export function registerSocketHandlers(io) {
         }
 
         const prevRoomId = socket.data.roomId;
-        const alreadyInRoom = prevRoomId === roomId;
 
         if (prevRoomId && prevRoomId !== roomId) {
           socket.leave(prevRoomId);
-          await roomManager.clientLeft(prevRoomId);
+          await roomManager.clientLeft(prevRoomId, socket.id);
           roomManager.removePresence(prevRoomId, socket.data.userId, socket.id);
+          socket.data.roomId = null;
         }
 
         let room = await roomManager.getOrLoad(roomId, {
@@ -260,9 +261,7 @@ export function registerSocketHandlers(io) {
           });
         }
         socket.join(roomId);
-        if (!alreadyInRoom) {
-          roomManager.clientJoined(roomId);
-        }
+        roomManager.clientJoined(roomId, socket.id);
 
         const state = roomManager.getRoomState(room);
         const stub = await enrichPresenceFromProfile(
@@ -279,7 +278,7 @@ export function registerSocketHandlers(io) {
         socket.to(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, syncPayload);
       } catch (err) {
         console.error('[collab-server] join error', err);
-        await rollbackPartialJoin(socket, socket.data.roomId, true);
+        await rollbackPartialJoin(socket, socket.data.roomId);
         ack?.({ ok: false, error: err.message });
       }
     });
@@ -296,7 +295,7 @@ export function registerSocketHandlers(io) {
       }
       const peers = finalizeLeavePresence(io, roomId, socket.data.userId, socket.id);
       socket.leave(roomId);
-      await roomManager.clientLeft(roomId);
+      await roomManager.clientLeft(roomId, socket.id);
       socket.data.roomId = null;
       ack?.({ ok: true, peers });
     });
@@ -362,6 +361,7 @@ export function registerSocketHandlers(io) {
           const prev = socket.data.roomId;
           if (prev && prev !== targetRoom) {
             socket.leave(prev);
+            await roomManager.clientLeft(prev, socket.id);
             roomManager.removePresence(prev, socket.data.userId, socket.id);
           }
           const presenceRoom = await roomManager.getOrLoad(targetRoom, {
@@ -380,7 +380,7 @@ export function registerSocketHandlers(io) {
             });
           }
           socket.join(targetRoom);
-          roomManager.clientJoined(targetRoom);
+          roomManager.clientJoined(targetRoom, socket.id);
           roomId = targetRoom;
           const state = roomManager.getRoomState(presenceRoom);
           socket.emit(SERVER_EVENTS.STATE, { ...state, peers: roomManager.getPresenceList(presenceRoom) });
@@ -411,7 +411,7 @@ export function registerSocketHandlers(io) {
       if (!roomId) return;
       socket.data.roomId = null;
       finalizeLeavePresence(io, roomId, socket.data.userId, socket.id);
-      await roomManager.clientLeft(roomId);
+      await roomManager.clientLeft(roomId, socket.id);
     });
   });
 }

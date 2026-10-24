@@ -133,14 +133,14 @@ export default function PomodoroTimer() {
                 const delta = Math.max(dx, dy);
 
                 if (isMinimized) {
-                    setMiniSize(prev => {
+                    setMiniSize(() => {
                         const ratio = resizeStart.current.width / resizeStart.current.height;
                         const newW = Math.min(450, Math.max(80, resizeStart.current.width + delta));
                         const targetRatio = Math.max(1.8, Math.min(2.4, ratio + delta / 500));
                         return { width: newW, height: newW / targetRatio };
                     });
                 } else {
-                    setSize(prev => {
+                    setSize(() => {
                         const newW = Math.min(480, Math.max(200, resizeStart.current.width + delta));
                         return { width: newW };
                     });
