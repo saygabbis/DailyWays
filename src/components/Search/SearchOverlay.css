@@ -80,7 +80,7 @@
 .search-filter-pill.active {
     background: var(--accent-gradient);
     border-color: transparent;
-    color: white;
+    color: var(--dw-on-accent);
 }
 
 /* Results */

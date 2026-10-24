@@ -216,7 +216,7 @@ button.dp-month-btn:hover {
 
 .dp-cell.selected {
     background: var(--accent-gradient);
-    color: #fff !important;
+    color: var(--dw-on-accent) !important;
     font-weight: 700;
     box-shadow: var(--accent-glow);
     transform: scale(1.12);
@@ -307,7 +307,7 @@ button.dp-month-btn:hover {
 
 .dp-year-cell.selected {
     background: var(--accent-gradient);
-    color: #fff;
+    color: var(--dw-on-accent);
     font-weight: 700;
     box-shadow: var(--accent-glow);
 }

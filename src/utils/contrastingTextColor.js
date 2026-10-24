@@ -34,3 +34,19 @@ export function contrastingTextColor(backgroundColor, fallback = '#1f2937') {
     if (!rgb) return fallback;
     return relativeLuminance(rgb) > 0.55 ? '#111827' : '#f9fafb';
 }
+
+const contrastRatio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+const INK = '#111118';
+
+/**
+ * Branco ou quase-preto: o que tiver mais contraste (WCAG) com TODAS as cores dadas (as pontas de
+ * um gradiente, por exemplo). Usado para o texto sobre a cor de destaque.
+ */
+export function readableTextOn(...colors) {
+    const lums = colors.map(parseHex).filter(Boolean).map(relativeLuminance);
+    if (!lums.length) return '#ffffff';
+    const inkLum = relativeLuminance(parseHex(INK));
+    const white = Math.min(...lums.map((l) => contrastRatio(l, 1)));
+    const ink = Math.min(...lums.map((l) => contrastRatio(l, inkLum)));
+    return white >= ink ? '#ffffff' : INK;
+}

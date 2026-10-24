@@ -9,20 +9,12 @@
  *
  * Chromium: usa o do Playwright; PW_CHROMIUM=caminho/chrome.exe para outro.
  */
-import { spawn, execSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
-import { startFakeSupabase } from './fakeSupabase.mjs';
+import { APP, log, startStack, waitFor } from './stack.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repo = join(here, '..');
-const SUPA_PORT = 54321;
-const COLLAB_PORT = 2599;
-const APP_PORT = 4173;
-const APP = `http://127.0.0.1:${APP_PORT}`;
 
 const U1 = { id: '00000000-0000-4000-8000-0000000000a1', username: 'gabbis-e2e', name: 'Gabbis E2E', email: 'gabbis@e2e.test' };
 const U2 = { id: '00000000-0000-4000-8000-0000000000b2', username: 'amiga-e2e', name: 'Amiga E2E', email: 'amiga@e2e.test' };
@@ -37,62 +29,6 @@ const SEED = `
 `;
 
 const results = [];
-const log = (...a) => console.log('[e2e]', ...a);
-
-function findChromium() {
-  if (process.env.PW_CHROMIUM) return process.env.PW_CHROMIUM;
-  const base = join(homedir(), 'AppData/Local/ms-playwright');
-  if (!existsSync(base)) return undefined;
-  const dirs = readdirSync(base).filter((d) => /^chromium-\d+$/.test(d)).sort().reverse();
-  for (const d of dirs) {
-    for (const sub of ['chrome-win64/chrome.exe', 'chrome-win/chrome.exe', 'chrome-linux/chrome']) {
-      const p = join(base, d, sub);
-      if (existsSync(p)) return p;
-    }
-  }
-  return undefined;
-}
-
-function startProcess(name, cmd, args, env) {
-  const child = spawn(cmd, args, { cwd: repo, env: { ...process.env, ...env }, shell: process.platform === 'win32' });
-  child.stdout.on('data', (d) => { if (process.env.E2E_VERBOSE) process.stdout.write(`[${name}] ${d}`); });
-  child.stderr.on('data', (d) => { if (process.env.E2E_VERBOSE) process.stderr.write(`[${name}] ${d}`); });
-  return child;
-}
-
-async function waitHttp(url, ms = 30000) {
-  const start = Date.now();
-  for (;;) {
-    try {
-      const r = await fetch(url);
-      if (r.ok) return;
-    } catch { /* ainda subindo */ }
-    if (Date.now() - start > ms) throw new Error(`timeout: ${url}`);
-    await new Promise((r) => setTimeout(r, 200));
-  }
-}
-
-function killTree(child) {
-  if (!child || child.exitCode !== null) return;
-  if (process.platform === 'win32') {
-    try { execSync(`taskkill /pid ${child.pid} /T /F`, { stdio: 'ignore' }); } catch { /* já saiu */ }
-  } else {
-    child.kill('SIGTERM');
-  }
-}
-
-async function waitFor(fn, ms = 8000, label = 'condição') {
-  const start = Date.now();
-  let last;
-  for (;;) {
-    try {
-      last = await fn();
-      if (last) return last;
-    } catch (err) { last = err; }
-    if (Date.now() - start > ms) throw new Error(`timeout esperando ${label}${last instanceof Error ? `: ${last.message}` : ''}`);
-    await new Promise((r) => setTimeout(r, 100));
-  }
-}
 
 async function check(name, fn) {
   const t0 = Date.now();
@@ -106,66 +42,12 @@ async function check(name, fn) {
   }
 }
 
-const startCollab = () => startProcess('collab', 'node', ['server/collab-server/src/index.js'], {
-  SUPABASE_URL: `http://127.0.0.1:${SUPA_PORT}`,
-  SUPABASE_ANON_KEY: 'e2e-anon',
-  SUPABASE_SERVICE_ROLE_KEY: 'e2e-'.padEnd(160, 'x'),
-  PORT: String(COLLAB_PORT),
-  CORS_ORIGIN: APP,
-  NODE_ENV: 'development',
-  COLLAB_FLUSH_MS: '300',
-});
-
 async function main() {
-  const supa = await startFakeSupabase({ port: SUPA_PORT, users: [U1, U2], seed: SEED });
-  log('Supabase falso em', supa.url);
-
-  if (!process.argv.includes('--no-build')) {
-    log('build do app (dist-e2e)…');
-    execSync('npx vite build --outDir dist-e2e --emptyOutDir', {
-      cwd: repo,
-      stdio: process.env.E2E_VERBOSE ? 'inherit' : 'ignore',
-      env: {
-        ...process.env,
-        VITE_SUPABASE_URL: supa.url,
-        VITE_SUPABASE_ANON_KEY: 'e2e-anon',
-        VITE_COLLAB_SERVER_URL: `http://127.0.0.1:${COLLAB_PORT}`,
-        VITE_PUBLIC_SITE_URL: APP,
-      },
-    });
-  }
-
-  let collab = startCollab();
-  // Mesmo .env do build: a CSP (aplicada) libera o Supabase e o collab configurados.
-  const preview = startProcess('app', 'npx', ['vite', 'preview', '--outDir', 'dist-e2e', '--port', String(APP_PORT), '--host', '127.0.0.1', '--strictPort'], {
-    VITE_SUPABASE_URL: supa.url,
-    VITE_COLLAB_SERVER_URL: `http://127.0.0.1:${COLLAB_PORT}`,
-  });
-  const browsers = [];
+  const stack = await startStack({ users: [U1, U2], seed: SEED, build: !process.argv.includes('--no-build') });
+  const { supa } = stack;
   try {
-    await waitHttp(`http://127.0.0.1:${COLLAB_PORT}/health`);
-    await waitHttp(APP);
-    log('collab e app no ar');
-
-    const executablePath = findChromium();
-    const launch = () => chromium.launch({ headless: !process.env.E2E_HEADED, executablePath });
-
     const openAs = async (user) => {
-      const browser = await launch();
-      browsers.push(browser);
-      const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-      const session = await supa.sessionFor(user.id);
-      await context.addInitScript(([s]) => {
-        localStorage.setItem('sb-127-auth-token', JSON.stringify(s));
-      }, [session]);
-      const page = await context.newPage();
-      page.errors = [];
-      page.consoleLines = [];
-      page.on('pageerror', (e) => page.errors.push(e.message));
-      page.on('console', (m) => {
-        page.consoleLines.push(`${m.type()}: ${m.text()}`);
-        if (m.type() === 'error' && /Content Security Policy/.test(m.text())) page.errors.push(`CSP: ${m.text()}`);
-      });
+      const page = await stack.openAs(user);
       await page.goto(APP);
       try {
         await page.locator('.sidebar', { hasText: 'Board E2E' }).getByText('Board E2E').first().click({ timeout: 20000 });
@@ -226,13 +108,12 @@ async function main() {
     });
 
     await check('collab cai: A continua editando, o navegador grava (fallback) e ao voltar B vê', async () => {
-      killTree(collab);
+      stack.stopCollab();
       await new Promise((r) => setTimeout(r, 800));
       await addCard(a, 'Lista A', 'Feito offline');
       await waitFor(() => sees(a, 'Feito offline'), 3000, 'A ver o próprio card');
       await waitFor(() => dbCard('Feito offline'), 15000, 'fallback gravar no banco');
-      collab = startCollab();
-      await waitHttp(`http://127.0.0.1:${COLLAB_PORT}/health`);
+      await stack.restartCollab();
       await b.reload();
       await b.locator('.board-list-title', { hasText: 'Lista A' }).first().waitFor({ timeout: 20000 });
       await waitFor(() => sees(b, 'Feito offline'), 15000, 'B ver depois de recarregar');
@@ -247,10 +128,7 @@ async function main() {
       if (errs.length) throw new Error(errs.slice(0, 3).join(' | '));
     });
   } finally {
-    for (const br of browsers) await br.close().catch(() => {});
-    killTree(collab);
-    killTree(preview);
-    await supa.close();
+    await stack.close();
   }
 
   const failed = results.filter((r) => !r.ok);

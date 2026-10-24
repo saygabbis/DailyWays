@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef, useMemo } from 'react';
-import { Droppable, Draggable } from '@hello-pangea/dnd';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useApp } from '../../context/useApp';
 import { useAuth } from '../../context/useAuth';
 import BoardList from './BoardList';
@@ -36,18 +37,33 @@ import { uuidv4 } from '../../utils/uuid';
 import { useBoardSelectionStore } from '../../stores/boardSelectionStore';
 import { useBoardRemoteSelection } from '../../hooks/useBoardRemoteSelection';
 import BoardMarqueeSelection from './BoardMarqueeSelection';
-import BoardDragEdgeScroll from './BoardDragEdgeScroll';
-import { resolveSelectedCards } from './boardCardBulkOps';
 import './Board.css';
 import { useRemoteDragMaps } from './hooks/useRemoteDragMaps';
 import { useBoardPanning } from './hooks/useBoardPanning';
-import { useBoardDragEnd } from './hooks/useBoardDragEnd';
+import { useBoardDnd } from './hooks/useBoardDnd.jsx';
 import { useBoardToolbarDrag } from './hooks/useBoardToolbarDrag';
 import { useBoardKeyboardShortcuts } from './hooks/useBoardKeyboardShortcuts';
 
 const COLLAB_CONNECT_GRACE_MS = 4000;
 
-function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false }, ref) {
+/** Coluna arrastável: o cabeçalho é a alça (o resto da coluna continua rolando/clicável). */
+function SortableColumn({ list, className, style, children }) {
+    const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+        id: list.id,
+        data: { kind: 'list', listId: list.id, title: list.title },
+    });
+    return (
+        <div
+            ref={setNodeRef}
+            className={`${className} dw-sortable ${isDragging ? 'dw-drag-source list-dragging' : ''}`}
+            style={{ ...style, transform: CSS.Translate.toString(transform), transition }}
+        >
+            {children({ attributes, listeners, setActivatorNodeRef })}
+        </div>
+    );
+}
+
+function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false }) {
     const { state, getActiveBoard, dispatch, showBoardToolbar, profileMenuOpen, showConfirm } = useApp();
     const { user, profile } = useAuth();
     const collab = useCollab();
@@ -136,14 +152,6 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
     const anchorListId = useBoardSelectionStore((s) => s.anchorListId);
     const multiDragCardIds = useBoardSelectionStore((s) => s.multiDragCardIds);
     const { remoteSelectionByCardId } = useBoardRemoteSelection();
-
-    const multiDragCardPreviews = useMemo(() => {
-        if (!board || multiDragCardIds.length < 2) return [];
-        return resolveSelectedCards(board, multiDragCardIds).map(({ card }) => ({
-            id: card.id,
-            title: card.title,
-        }));
-    }, [board, multiDragCardIds]);
 
     useEffect(() => {
         if (board?.id) setBoardSelection(board.id);
@@ -285,20 +293,13 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         clearSelection,
     });
 
-    const {
-        handleDragEnd,
-    } = useBoardDragEnd({
-        state,
-        getActiveBoard,
-        setDroppedListId,
+    const { lists: shownLists } = useBoardDnd({
+        board,
         collabDispatch,
-        getBoardSnapshot,
+        collab,
+        auth: { user, profile },
+        setDroppedListId,
     });
-
-    // Expose handleDragEnd so the parent App can call it from a unified DragDropContext
-    useImperativeHandle(ref, () => ({
-        handleDragEnd,
-    }), [handleDragEnd]);
 
     const handleSaveListDetails = (updates) => {
         if (!listDetails) return;
@@ -557,7 +558,6 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
             )}
 
             <BoardMarqueeSelection scrollerRef={scrollerRef} />
-            <BoardDragEdgeScroll scrollerRef={scrollerRef} />
 
             <div
                 className={`board-scroller ${isPanning ? 'is-panning' : ''} ${collabHydrating ? 'board-scroller--hydrating' : ''}`}
@@ -573,121 +573,104 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
                     </div>
                 )}
                 <>
-                    <Droppable droppableId="board" direction="horizontal" type="list">
-                        {(provided) => (
-                            <div
-                                className="board-lists"
-                                ref={provided.innerRef}
-                                {...provided.droppableProps}
-                            >
-                                {(() => {
-                                    // Stagger dinâmico: janela total = min(n * 55ms, 275ms).
-                                    // 55ms entre cada lista → painel vazio visível por menos tempo,
-                                    // mas ainda percetível a cascata (2 listas = 0/55ms, 6 = 0..275ms).
-                                    const n = board.lists.length;
-                                    const staggerWindow = Math.min(n * 55, 275);
-                                    const step = n > 1 ? staggerWindow / (n - 1) : 0;
-                                    const addListDelay = staggerWindow + 40;
+                    <SortableContext items={shownLists.map((l) => l.id)} strategy={horizontalListSortingStrategy}>
+                        <div className="board-lists">
+                            {(() => {
+                                // Cascata de entrada: janela total = min(n * 55ms, 275ms).
+                                const n = shownLists.length;
+                                const staggerWindow = Math.min(n * 55, 275);
+                                const step = n > 1 ? staggerWindow / (n - 1) : 0;
+                                const addListDelay = staggerWindow + 40;
 
-                                    return (
-                                        <>
-                                            {board.lists.map((list, index) => {
-                                                const isRemoteListDragging = remoteDraggingListIds.has(list.id);
-                                                const remoteListDragPeer = remoteDragByListId[list.id];
-                                                return (
-                                                <Draggable key={list.id} draggableId={list.id} index={index}>
-                                                    {(provided, snapshot) => (
-                                                        <div
-                                                            ref={provided.innerRef}
-                                                            {...provided.draggableProps}
-                                                            className={[
-                                                                'board-list-wrapper',
-                                                                snapshot.isDragging ? 'list-dragging' : '',
-                                                                isRemoteListDragging ? 'board-list-remote-drag-source' : '',
-                                                            ].filter(Boolean).join(' ')}
-                                                            style={{
-                                                                ...provided.draggableProps.style,
-                                                                ...(isRemoteListDragging && remoteListDragPeer?.color
-                                                                    ? { '--presence-color': remoteListDragPeer.color }
-                                                                    : {}),
-                                                            }}
-                                                        >
-                                                            <BoardList
-                                                                list={list}
-                                                                boardId={board.id}
-                                                                boardLists={board.lists}
-                                                                onCardClick={onCardClick}
-                                                                editingByCardId={editorsByCardId}
-                                                                hoverByCardId={hoverByCardId}
-                                                                hoverByListId={hoverByListId}
-                                                                hoverByUiKey={hoverByUiKey}
-                                                                onUiHover={handleUiHover}
-                                                                remoteDraggingCardIds={remoteDraggingCardIds}
-                                                                remoteDragByCardId={remoteDragByCardId}
-                                                                remoteDragPeerByCardId={remoteDragPeerByCardId}
-                                                                remoteSelectionByCardId={remoteSelectionByCardId}
-                                                                multiDragCardIds={multiDragCardIds}
-                                                                multiDragCardPreviews={multiDragCardPreviews}
-                                                                remoteMultiDragCompanionIds={remoteMultiDragCompanionIds}
-                                                                shiftSelecting={shiftSelecting}
-                                                                onCardHover={handleCardHover}
-                                                                onCardHoverEnd={handleCardHoverEnd}
-                                                                onListHover={handleListHover}
-                                                                onPresenceHoverEnd={handlePresenceHoverEnd}
-                                                                index={index}
-                                                                onOpenListDetails={setListDetails}
-                                                                dragHandleProps={provided.dragHandleProps}
-                                                                isDropped={list.id === droppedListId}
-                                                                entryDelay={list.isNew ? 0 : Math.round(index * step)}
-                                                            />
-                                                        </div>
-                                                    )}
-                                                </Draggable>
-                                                );
-                                            })}
-                                            {provided.placeholder}
-
-                                            {/* Add List Placeholder */}
-                                            <div
-                                                className="board-add-list"
-                                                style={{ animationDelay: `${addListDelay}ms` }}
-                                            >
-                                                {addingList ? (
-                                                    <form onSubmit={handleAddList} className="board-add-list-form animate-scale-in">
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Nome da lista..."
-                                                            value={newListTitle}
-                                                            maxLength={TEXT.listTitle}
-                                                            onChange={e => setNewListTitle(e.target.value)}
-                                                            autoFocus
-                                                            onBlur={() => { if (!newListTitle.trim()) setAddingList(false); }}
+                                return (
+                                    <>
+                                        {shownLists.map((list, index) => {
+                                            const isRemoteListDragging = remoteDraggingListIds.has(list.id);
+                                            const remoteListDragPeer = remoteDragByListId[list.id];
+                                            return (
+                                                <SortableColumn
+                                                    key={list.id}
+                                                    list={list}
+                                                    className={[
+                                                        'board-list-wrapper',
+                                                        isRemoteListDragging ? 'board-list-remote-drag-source' : '',
+                                                    ].filter(Boolean).join(' ')}
+                                                    style={isRemoteListDragging && remoteListDragPeer?.color
+                                                        ? { '--presence-color': remoteListDragPeer.color }
+                                                        : undefined}
+                                                >
+                                                    {(listDrag) => (
+                                                        <BoardList
+                                                            list={list}
+                                                            boardId={board.id}
+                                                            boardLists={board.lists}
+                                                            onCardClick={onCardClick}
+                                                            editingByCardId={editorsByCardId}
+                                                            hoverByCardId={hoverByCardId}
+                                                            hoverByListId={hoverByListId}
+                                                            hoverByUiKey={hoverByUiKey}
+                                                            onUiHover={handleUiHover}
+                                                            remoteDraggingCardIds={remoteDraggingCardIds}
+                                                            remoteDragByCardId={remoteDragByCardId}
+                                                            remoteDragPeerByCardId={remoteDragPeerByCardId}
+                                                            remoteSelectionByCardId={remoteSelectionByCardId}
+                                                            multiDragCardIds={multiDragCardIds}
+                                                            remoteMultiDragCompanionIds={remoteMultiDragCompanionIds}
+                                                            shiftSelecting={shiftSelecting}
+                                                            onCardHover={handleCardHover}
+                                                            onCardHoverEnd={handleCardHoverEnd}
+                                                            onListHover={handleListHover}
+                                                            onPresenceHoverEnd={handlePresenceHoverEnd}
+                                                            index={index}
+                                                            onOpenListDetails={setListDetails}
+                                                            listDrag={listDrag}
+                                                            isDropped={list.id === droppedListId}
+                                                            entryDelay={list.isNew ? 0 : Math.round(index * step)}
                                                         />
-                                                        <div className="board-add-list-actions">
-                                                            <button type="submit" className="btn btn-primary btn-sm">Adicionar</button>
-                                                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAddingList(false)}>Cancelar</button>
-                                                        </div>
-                                                    </form>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        className={addListBtnHover.className}
-                                                        style={addListBtnHover.style}
-                                                        onMouseEnter={() => handleUiHover(BOARD_UI_HOVER.addList)}
-                                                        onMouseLeave={handlePresenceHoverEnd}
-                                                        onClick={() => setAddingList(true)}
-                                                    >
-                                                        <Plus size={18} />
-                                                        <span>Adicionar lista</span>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </>
-                                    );
-                                })()}
-                            </div>
-                        )}
-                    </Droppable>
+                                                    )}
+                                                </SortableColumn>
+                                            );
+                                        })}
+
+                                        <div
+                                            className="board-add-list"
+                                            style={{ animationDelay: `${addListDelay}ms` }}
+                                        >
+                                            {addingList ? (
+                                                <form onSubmit={handleAddList} className="board-add-list-form animate-scale-in">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Nome da lista..."
+                                                        value={newListTitle}
+                                                        maxLength={TEXT.listTitle}
+                                                        onChange={e => setNewListTitle(e.target.value)}
+                                                        autoFocus
+                                                        onBlur={() => { if (!newListTitle.trim()) setAddingList(false); }}
+                                                    />
+                                                    <div className="board-add-list-actions">
+                                                        <button type="submit" className="btn btn-primary btn-sm">Adicionar</button>
+                                                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAddingList(false)}>Cancelar</button>
+                                                    </div>
+                                                </form>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    className={addListBtnHover.className}
+                                                    style={addListBtnHover.style}
+                                                    onMouseEnter={() => handleUiHover(BOARD_UI_HOVER.addList)}
+                                                    onMouseLeave={handlePresenceHoverEnd}
+                                                    onClick={() => setAddingList(true)}
+                                                >
+                                                    <Plus size={18} />
+                                                    <span>Adicionar lista</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </>
+                                );
+                            })()}
+                        </div>
+                    </SortableContext>
                     {!focusedCardId && !listDetails && (
                         <CollabPresenceLayer
                             mode="screen"
@@ -722,4 +705,4 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
 }
 
 
-export default forwardRef(BoardView);
+export default BoardView;

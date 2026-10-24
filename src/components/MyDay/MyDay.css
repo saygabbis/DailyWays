@@ -243,7 +243,7 @@
 
 .btn-icon-add:hover {
     background: var(--accent-primary);
-    color: white;
+    color: var(--dw-on-accent);
 }
 
 /* ── Mobile ── */
@@ -420,7 +420,7 @@
     padding: 6px 16px;
     border-radius: 999px;
     background: var(--accent-gradient);
-    color: #fff;
+    color: var(--dw-on-accent);
     border: none;
     font-size: var(--font-size-xs);
     cursor: pointer;
@@ -745,7 +745,7 @@
 
 .diary-period-chip.active {
     background: var(--accent-primary);
-    color: #fff;
+    color: var(--dw-on-accent);
 }
 
 .diary-quick-form {
@@ -1061,7 +1061,7 @@
     border-radius: 999px;
     font-size: var(--font-size-sm);
     font-weight: 700;
-    color: #fff !important;
+    color: var(--dw-on-accent) !important;
     background: var(--accent-gradient);
     box-shadow: var(--accent-glow), 0 2px 12px rgba(0, 0, 0, 0.2);
     cursor: pointer;

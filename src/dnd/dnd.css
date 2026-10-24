@@ -1,0 +1,49 @@
+/* Arrastar e soltar: a mesma sensação em todo o app (pegar → levantar, soltar → assentar). */
+
+.dw-drag-overlay {
+  cursor: grabbing;
+  pointer-events: none;
+}
+
+/* "Levantar": leve inclinação, escala e sombra com mola; some suave ao soltar (drop animation). */
+.dw-drag-lift {
+  transform-origin: 30% 30%;
+  animation: dw-lift var(--dw-dur-4) var(--dw-ease-spring) both;
+  filter: drop-shadow(0 18px 28px color-mix(in oklab, var(--dw-shadow-ink) 30%, transparent));
+}
+
+@keyframes dw-lift {
+  from { transform: scale(1) rotate(0deg); }
+  to { transform: scale(1.03) rotate(1.6deg); }
+}
+
+/* Item original enquanto arrasta: vira o "buraco" onde ele vai cair. */
+.dw-drag-source {
+  opacity: 0.32;
+  filter: saturate(0.6);
+}
+
+/* Itens que dão espaço para o arrastado deslizam com mola (o dnd-kit aplica o transform). */
+.dw-sortable {
+  transition: transform var(--dw-dur-3) var(--dw-ease-spring);
+  touch-action: manipulation;
+}
+
+/* Alvo de soltar ativo (zona da sidebar, pasta, lista vazia). */
+.dw-drop-target {
+  outline: 2px dashed var(--dw-accent-line);
+  outline-offset: -2px;
+  background: var(--dw-accent-softer);
+  transition: background var(--dw-dur-2) var(--dw-ease-out), outline-color var(--dw-dur-2) var(--dw-ease-out);
+}
+
+body.dnd-dragging,
+body.dnd-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+/* Ao soltar, o item no destino "assenta". */
+.dw-just-dropped {
+  animation: dw-drop-settle var(--dw-dur-5) var(--dw-ease-jelly);
+}

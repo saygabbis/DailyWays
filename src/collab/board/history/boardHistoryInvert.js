@@ -161,7 +161,19 @@ export function buildInverseAction(board, forward) {
         }
 
         case 'TOGGLE_SUBTASK':
-            return forward;
+            // Normalizado vira "marcar como X" (done): desfazer é marcar o oposto.
+            return typeof p.done === 'boolean'
+                ? { ...forward, payload: { ...p, done: !p.done } }
+                : forward;
+
+        case 'REORDER_LIST_CARDS': {
+            const found = findListOnBoard(board, p.listId);
+            if (!found) return null;
+            return {
+                type: 'REORDER_LIST_CARDS',
+                payload: { boardId, listId: p.listId, cardIds: found.list.cards.map((c) => c.id) },
+            };
+        }
 
         case 'ADD_SUBTASK':
             return {

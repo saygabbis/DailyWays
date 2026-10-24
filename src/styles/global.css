@@ -1,6 +1,7 @@
 /* ===== TaskFlow Global Styles ===== */
 
 @import './variables.css';
+@import './tokens.css';
 
 /* ── Reset ── */
 *,
@@ -89,7 +90,6 @@ button {
     font-family: var(--font-family);
     cursor: pointer;
     border: none;
-    outline: none;
     background: none;
     color: var(--text-primary);
     font-size: var(--font-size-base);
@@ -109,7 +109,7 @@ button {
 
 .btn-primary {
     background: var(--accent-gradient);
-    color: white;
+    color: var(--dw-on-accent);
     box-shadow: var(--accent-glow);
 }
 

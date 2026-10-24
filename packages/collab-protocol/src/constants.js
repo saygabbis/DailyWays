@@ -4,7 +4,7 @@ export const ENTITIES = ['node', 'connector', 'comment', 'board'];
 /** Reducer action types allowed for board sync */
 export const BOARD_ACTION_TYPES = new Set([
   'MOVE_CARD', 'UPDATE_CARD', 'ADD_CARD', 'DELETE_CARD',
-  'ADD_LIST', 'UPDATE_LIST', 'DELETE_LIST', 'MOVE_LIST',
+  'ADD_LIST', 'UPDATE_LIST', 'DELETE_LIST', 'MOVE_LIST', 'REORDER_LIST_CARDS',
   'TOGGLE_SUBTASK', 'ADD_SUBTASK', 'UPDATE_SUBTASK', 'DELETE_SUBTASK',
   'UPDATE_BOARD',
 ]);

@@ -1,0 +1,307 @@
+/* ═══════════════════════════════════════════════════════════════════════════════════════════
+   DailyWays — design system (tokens semânticos, motion, acessibilidade)
+
+   Tudo deriva de poucas fontes: as cores-base de cada tema (variables.css) e a cor de destaque
+   escolhida (ThemeContext → --accent-primary/--accent-secondary/--accent-contrast). Nada de cor
+   "jogada": hover/seleção/sombra/foco são misturas dessas bases (color-mix), então trocar o tema
+   ou o destaque muda tudo junto.
+
+   Componentes novos usam os tokens --dw-*. Os nomes antigos (--bg-*, --text-*, --shadow-*) ficam
+   apontando para cá, para o CSS antigo acompanhar durante o redesign.
+   ═══════════════════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Superfícies (do tema) ── */
+  --dw-bg: var(--bg-primary);
+  --dw-surface: var(--bg-secondary);
+  --dw-surface-2: var(--bg-tertiary);
+  --dw-surface-3: var(--bg-elevated);
+  --dw-sidebar: var(--bg-sidebar, var(--bg-secondary));
+
+  /* ── Texto ── */
+  --dw-text: var(--text-primary);
+  --dw-text-2: var(--text-secondary);
+  --dw-text-3: color-mix(in oklab, var(--text-secondary) 72%, var(--bg-secondary));
+
+  /* ── Linhas ── */
+  --dw-line: color-mix(in oklab, var(--text-primary) 9%, transparent);
+  --dw-line-strong: color-mix(in oklab, var(--text-primary) 16%, transparent);
+
+  /* ── Interação neutra (hover/pressionado vêm do texto, não do destaque) ── */
+  --dw-hover: color-mix(in oklab, var(--text-primary) 6%, transparent);
+  --dw-press: color-mix(in oklab, var(--text-primary) 10%, transparent);
+
+  /* ── Destaque (escolhido pelo usuário) ── */
+  --dw-accent: var(--accent-primary);
+  --dw-accent-2: var(--accent-secondary);
+  --dw-accent-fill: var(--accent-gradient, var(--accent-primary));
+  --dw-on-accent: var(--accent-contrast, #fff);
+  --dw-accent-soft: color-mix(in oklab, var(--accent-primary) 16%, transparent);
+  --dw-accent-softer: color-mix(in oklab, var(--accent-primary) 9%, transparent);
+  --dw-accent-line: color-mix(in oklab, var(--accent-primary) 38%, transparent);
+  /* texto em cor de destaque sobre a superfície (legível em tema claro e escuro) */
+  --dw-accent-text: color-mix(in oklab, var(--accent-primary) 82%, var(--text-primary));
+
+  /* ── Estados ── */
+  --dw-success: var(--success, #10b981);
+  --dw-warning: var(--warning, #f59e0b);
+  --dw-danger: var(--danger, #ef4444);
+  --dw-info: var(--info, #3b82f6);
+  --dw-success-soft: color-mix(in oklab, var(--dw-success) 15%, transparent);
+  --dw-warning-soft: color-mix(in oklab, var(--dw-warning) 16%, transparent);
+  --dw-danger-soft: color-mix(in oklab, var(--dw-danger) 14%, transparent);
+
+  /* ── Prioridade ── */
+  --dw-prio-urgent: var(--priority-urgent, #ef4444);
+  --dw-prio-high: var(--priority-high, #f97316);
+  --dw-prio-medium: var(--priority-medium, #f59e0b);
+  --dw-prio-low: var(--priority-low, #9ca3af);
+
+  /* ── Foco (teclado) ── */
+  --dw-focus: color-mix(in oklab, var(--accent-primary) 70%, var(--text-primary));
+  --dw-focus-ring: 0 0 0 2px var(--dw-bg), 0 0 0 4px var(--dw-focus);
+
+  /* ── Sombras neutras (a tinta escurece no tema escuro) ── */
+  --dw-shadow-ink: #0b1020;
+  --dw-shadow-1: 0 1px 2px color-mix(in oklab, var(--dw-shadow-ink) 8%, transparent),
+                 0 1px 1px color-mix(in oklab, var(--dw-shadow-ink) 4%, transparent);
+  --dw-shadow-2: 0 4px 14px -2px color-mix(in oklab, var(--dw-shadow-ink) 12%, transparent),
+                 0 2px 4px color-mix(in oklab, var(--dw-shadow-ink) 6%, transparent);
+  --dw-shadow-3: 0 18px 48px -12px color-mix(in oklab, var(--dw-shadow-ink) 28%, transparent),
+                 0 6px 16px -6px color-mix(in oklab, var(--dw-shadow-ink) 14%, transparent);
+  --dw-shadow-lift: 0 22px 44px -14px color-mix(in oklab, var(--dw-shadow-ink) 34%, transparent),
+                    0 0 0 1px color-mix(in oklab, var(--accent-primary) 22%, transparent);
+
+  /* ── Forma ── */
+  --dw-r-xs: 6px;
+  --dw-r-sm: 9px;
+  --dw-r-md: 12px;
+  --dw-r-lg: 16px;
+  --dw-r-xl: 22px;
+  --dw-r-full: 999px;
+
+  /* ── Espaço (escala de 4) ── */
+  --dw-s-1: 4px;
+  --dw-s-2: 8px;
+  --dw-s-3: 12px;
+  --dw-s-4: 16px;
+  --dw-s-5: 20px;
+  --dw-s-6: 24px;
+  --dw-s-8: 32px;
+  --dw-s-10: 40px;
+
+  /* ── Tipografia ── */
+  --dw-font: var(--font-family);
+  --dw-fs-xs: 0.72rem;
+  --dw-fs-sm: 0.8125rem;
+  --dw-fs-md: 0.875rem;
+  --dw-fs-lg: 1rem;
+  --dw-fs-xl: 1.25rem;
+  --dw-fs-2xl: 1.6rem;
+  --dw-fs-3xl: 2.1rem;
+  --dw-lh: 1.5;
+
+  /* ── Alvos de toque ── */
+  --dw-hit: 36px;
+
+  /* ═══ Motion ═══════════════════════════════════════════════════════════════════════════════
+     Um sistema só. Durações curtas; "spring" é uma mola de verdade (linear() com overshoot leve)
+     e "jelly" balança um pouco mais (entradas, soltar no DnD). Navegadores sem linear() caem no
+     cubic-bezier equivalente. Quem pede menos movimento (SO ou Configurações) recebe só fades. */
+  --dw-dur-1: 90ms;   /* feedback imediato: hover, pressionar */
+  --dw-dur-2: 160ms;  /* micro: toggles, chips */
+  --dw-dur-3: 240ms;  /* padrão: menus, popovers */
+  --dw-dur-4: 360ms;  /* painéis, modais */
+  --dw-dur-5: 520ms;  /* entradas com mola */
+
+  --dw-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dw-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dw-ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --dw-ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --dw-ease-jelly: cubic-bezier(0.34, 1.7, 0.5, 1);
+
+  --dw-z-sticky: 20;
+  --dw-z-sidebar: 100;
+  --dw-z-dropdown: 150;
+  --dw-z-overlay: 190;
+  --dw-z-modal: 210;
+  --dw-z-toast: 260;
+  --dw-z-tooltip: 300;
+  --dw-z-drag: 400;
+
+  /* ── Nomes antigos → tokens (o CSS antigo acompanha o tema e o destaque) ── */
+  --bg-hover: var(--dw-hover);
+  --bg-active: var(--dw-accent-softer);
+  --accent-light: var(--dw-accent-soft);
+  --glass-border: var(--dw-line);
+  --border-color: var(--dw-line);
+  --border-color-strong: var(--dw-line-strong);
+  --shadow-sm: var(--dw-shadow-1);
+  --shadow-md: var(--dw-shadow-2);
+  --shadow-lg: var(--dw-shadow-3);
+  --shadow-card: var(--dw-shadow-1);
+  --shadow-card-hover: var(--dw-shadow-2);
+  --accent-glow: 0 6px 18px -6px color-mix(in oklab, var(--accent-primary) 55%, transparent);
+  --sidebar-active-bg: var(--dw-accent-soft);
+  --sidebar-active-text: var(--dw-accent-text);
+}
+
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    /* mola amortecida (~1 balanço) e gelatina (2 balanços pequenos) */
+    --dw-ease-spring: linear(0, 0.009, 0.035 2.1%, 0.141 4.4%, 0.723 12.9%, 0.938 16.7%, 1.017 19.4%,
+      1.067, 1.099 24.3%, 1.108 26%, 1.1, 1.083 30.9%, 1.002 41.8%, 0.987 46.4%, 0.987 49.9%,
+      0.999 61.7%, 1.003 68.1%, 1);
+    --dw-ease-jelly: linear(0, 0.017 1.7%, 0.276 10.1%, 0.854 20.4%, 1.084 26.6%, 1.152 31.6%,
+      1.11 36.2%, 0.976 47.1%, 0.957 51.9%, 1.008 64.4%, 1.012 69.5%, 0.999 82.2%, 1);
+  }
+}
+
+/* Temas escuros: sombra mais densa, linhas um pouco mais visíveis */
+[data-theme="dark"],
+[data-theme="midnight"],
+[data-theme="dim"],
+[data-theme="oled"] {
+  --dw-shadow-ink: #000;
+  --dw-line: color-mix(in oklab, var(--text-primary) 10%, transparent);
+  --dw-hover: color-mix(in oklab, var(--text-primary) 7%, transparent);
+}
+
+/* ═══ Movimento reduzido: SO ou Configurações → Animações → "Reduzidas" ═══ */
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-anim="full"]) {
+    --dw-dur-1: 1ms;
+    --dw-dur-2: 1ms;
+    --dw-dur-3: 120ms;
+    --dw-dur-4: 160ms;
+    --dw-dur-5: 160ms;
+    --dw-ease-spring: var(--dw-ease-out);
+    --dw-ease-jelly: var(--dw-ease-out);
+  }
+  :root:not([data-anim="full"]) *,
+  :root:not([data-anim="full"]) *::before,
+  :root:not([data-anim="full"]) *::after {
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+[data-anim="reduced"] {
+  --dw-dur-1: 1ms;
+  --dw-dur-2: 1ms;
+  --dw-dur-3: 120ms;
+  --dw-dur-4: 160ms;
+  --dw-dur-5: 160ms;
+  --dw-ease-spring: var(--dw-ease-out);
+  --dw-ease-jelly: var(--dw-ease-out);
+}
+
+/* ═══ Acessibilidade ═══════════════════════════════════════════════════════════════════════ */
+
+/* Foco visível só para teclado (o reset antigo tirava o outline de todos os botões). */
+:focus-visible {
+  outline: 2px solid var(--dw-focus);
+  outline-offset: 2px;
+  border-radius: var(--dw-r-xs);
+}
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="menuitem"]:focus-visible,
+[role="option"]:focus-visible {
+  outline: 2px solid var(--dw-focus);
+  outline-offset: 2px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--dw-focus);
+  outline-offset: 0;
+}
+
+.dw-sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.dw-skip-link {
+  position: fixed;
+  top: var(--dw-s-2);
+  left: var(--dw-s-2);
+  z-index: var(--dw-z-tooltip);
+  padding: var(--dw-s-2) var(--dw-s-4);
+  border-radius: var(--dw-r-sm);
+  background: var(--dw-accent);
+  color: var(--dw-on-accent);
+  font-weight: 600;
+  transform: translateY(-160%);
+  transition: transform var(--dw-dur-3) var(--dw-ease-out);
+}
+.dw-skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+/* Telas de toque: alvos mínimos de 44px nos controles marcados */
+@media (pointer: coarse) {
+  :root {
+    --dw-hit: 44px;
+  }
+}
+
+/* Alto contraste do Windows */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid CanvasText;
+  }
+}
+
+/* ═══ Motion: utilitários ══════════════════════════════════════════════════════════════════ */
+@keyframes dw-pop-in {
+  from { opacity: 0; transform: scale(0.94) translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes dw-rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes dw-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dw-drop-settle {
+  0% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+@keyframes dw-shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
+/* Entrada com mola; em listas, `style={{ '--dw-i': index }}` dá a cascata. */
+.dw-pop {
+  animation: dw-pop-in var(--dw-dur-5) var(--dw-ease-spring) both;
+  animation-delay: calc(min(var(--dw-i, 0), 8) * 28ms);
+}
+.dw-rise {
+  animation: dw-rise-in var(--dw-dur-4) var(--dw-ease-out) both;
+  animation-delay: calc(min(var(--dw-i, 0), 10) * 32ms);
+}
+.dw-fade {
+  animation: dw-fade-in var(--dw-dur-3) var(--dw-ease-out) both;
+}
+.dw-settle {
+  animation: dw-drop-settle var(--dw-dur-5) var(--dw-ease-jelly);
+}
+.dw-skeleton {
+  background: linear-gradient(90deg, var(--dw-surface-2) 25%, var(--dw-surface-3) 37%, var(--dw-surface-2) 63%);
+  background-size: 400% 100%;
+  animation: dw-shimmer 1.4s ease infinite;
+  border-radius: var(--dw-r-sm);
+}

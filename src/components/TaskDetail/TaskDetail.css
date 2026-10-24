@@ -648,7 +648,7 @@
     border-radius: 999px;
     border: none;
     background: var(--accent-primary);
-    color: white;
+    color: var(--dw-on-accent);
     display: flex;
     align-items: center;
     justify-content: center;

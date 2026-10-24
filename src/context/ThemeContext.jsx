@@ -4,6 +4,7 @@ import { supabase } from '../services/supabaseClient';
 import logoFaviconLight from '../assets/logo.png';
 import logoFaviconDark from '../assets/Logo - Branco.png';
 import { ThemeContext } from './useTheme';
+import { readableTextOn } from '../utils/contrastingTextColor';
 
 
 
@@ -71,13 +72,29 @@ const THEME_PRESETS = [
 ];
 
 const FONT_PRESETS = [
-    { id: 'poppins', name: 'Poppins', family: "'Poppins', sans-serif" },
-    { id: 'inter', name: 'Inter', family: "'Inter', sans-serif" },
-    { id: 'nunito', name: 'Nunito', family: "'Nunito', sans-serif" },
-    { id: 'outfit', name: 'Outfit', family: "'Outfit', sans-serif" },
-    { id: 'dm-sans', name: 'DM Sans', family: "'DM Sans', sans-serif" },
-    { id: 'raleway', name: 'Raleway', family: "'Raleway', sans-serif" },
+    { id: 'poppins', name: 'Poppins', family: "'Poppins'", google: 'Poppins' },
+    { id: 'inter', name: 'Inter', family: "'Inter'", google: 'Inter' },
+    { id: 'nunito', name: 'Nunito', family: "'Nunito'", google: 'Nunito' },
+    { id: 'outfit', name: 'Outfit', family: "'Outfit'", google: 'Outfit' },
+    { id: 'dm-sans', name: 'DM Sans', family: "'DM Sans'", google: 'DM+Sans' },
+    { id: 'raleway', name: 'Raleway', family: "'Raleway'", google: 'Raleway' },
 ];
+
+function loadFontFamily(font) {
+    if (typeof document === 'undefined' || !font?.google) return;
+    const id = 'dw-font-link';
+    const href = `https://fonts.googleapis.com/css2?family=${font.google}:wght@400;500;600;700&display=swap`;
+    let link = document.getElementById(id);
+    if (link?.getAttribute('href') === href) return;
+    if (!link) {
+        link = document.createElement('link');
+        link.id = id;
+        link.rel = 'stylesheet';
+        document.head.appendChild(link);
+    }
+    link.setAttribute('href', href);
+}
+
 
 
 
@@ -184,28 +201,17 @@ export function ThemeProvider({ children }) {
         root.style.setProperty('--accent-secondary', accent.secondary);
         root.style.setProperty('--accent-gradient', grad);
         root.style.setProperty('--accent-gradient-hover', `linear-gradient(135deg, ${accent.color}dd 0%, ${accent.color} 100%)`);
-        root.style.setProperty('--accent-glow', `0 4px 16px ${accent.color}40`);
-
-        // Light-specific accent derivatives
-        const isLightTheme = ['light', 'latte', 'ocean', 'nord'].includes(theme);
-        if (isLightTheme) {
-            root.style.setProperty('--accent-light', `${accent.color}18`);
-            root.style.setProperty('--bg-hover', `${accent.color}0d`);
-            root.style.setProperty('--bg-active', `${accent.color}1a`);
-            root.style.setProperty('--glass-border', `${accent.color}1a`);
-        } else {
-            root.style.setProperty('--accent-light', `${accent.color}26`);
-            root.style.setProperty('--bg-hover', `${accent.color}14`);
-            root.style.setProperty('--bg-active', `${accent.color}26`);
-            root.style.setProperty('--glass-border', `${accent.color}1f`);
-        }
-
+        // Texto sobre o destaque: o que der mais contraste (WCAG). Branco fixo ficava ilegível em
+        // destaques claros (dourado, lima, pêssego). Hover/seleção/sombras derivam do destaque no
+        // CSS (styles/tokens.css) — sem hex fixo por tema aqui.
+        root.style.setProperty('--accent-contrast', readableTextOn(accent.color, accent.secondary));
         storageService.save('dailyways_accent', accentId);
-    }, [accent, accentId, theme]);
+    }, [accent, accentId]);
 
-    // Apply font to DOM
+    // Fonte: só a escolhida é baixada (antes o CSS importava 6 famílias × 6 pesos em todo acesso).
     useEffect(() => {
-        document.documentElement.style.setProperty('--font-family', font.family);
+        document.documentElement.style.setProperty('--font-family', `${font.family}, system-ui, -apple-system, 'Segoe UI', sans-serif`);
+        loadFontFamily(font);
         storageService.save('dailyways_font', fontId);
     }, [font, fontId]);
 

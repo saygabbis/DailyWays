@@ -49,6 +49,11 @@ function validateBoardAction(action) {
       if (title != null && title.length > TEXT.listTitle) return 'List title too large';
       break;
     }
+    case 'REORDER_LIST_CARDS': {
+      if (!Array.isArray(p.cardIds) || p.cardIds.length > 12000) return 'Invalid card order';
+      if (p.cardIds.some((id) => typeof id !== 'string')) return 'Invalid card order';
+      break;
+    }
     case 'UPDATE_BOARD': {
       const title = p.updates?.title;
       if (title != null && title.length > TEXT.boardTitle) return 'Board title too large';

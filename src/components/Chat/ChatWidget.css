@@ -24,7 +24,7 @@
   padding: 0 4px;
   border-radius: 999px;
   background: var(--accent-primary);
-  color: #fff;
+  color: var(--dw-on-accent);
   font-size: 10px;
   font-weight: 700;
   display: flex;
@@ -468,7 +468,7 @@
   padding: 0 4px;
   border-radius: 999px;
   background: var(--accent-primary);
-  color: #fff;
+  color: var(--dw-on-accent);
   font-size: 9px;
   font-weight: 700;
 }

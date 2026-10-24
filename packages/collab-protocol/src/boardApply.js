@@ -158,6 +158,23 @@ export function applyBoardAction(board, action) {
         lists: board.lists.filter((l) => l.id !== action.payload.listId),
       };
 
+    case 'REORDER_LIST_CARDS': {
+      // Nova ordem dos cards de uma lista (ex.: ordenar por prioridade). Ids desconhecidos são
+      // ignorados; cards que não vieram na lista (alguém acabou de criar) ficam no fim.
+      const { boardId, listId, cardIds } = action.payload || {};
+      if (board.id !== boardId || !Array.isArray(cardIds)) return board;
+      return {
+        ...board,
+        lists: board.lists.map((l) => {
+          if (l.id !== listId) return l;
+          const byId = new Map(l.cards.map((c) => [c.id, c]));
+          const ordered = cardIds.map((id) => byId.get(id)).filter(Boolean);
+          const seen = new Set(ordered.map((c) => c.id));
+          return { ...l, cards: [...ordered, ...l.cards.filter((c) => !seen.has(c.id))] };
+        }),
+      };
+    }
+
     case 'MOVE_LIST': {
       const { boardId, sourceIndex, destIndex, listId: movingListId } = action.payload || {};
       if (board.id !== boardId) return board;

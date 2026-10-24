@@ -279,7 +279,7 @@
     justify-content: center;
     font-weight: 700;
     font-size: var(--font-size-sm);
-    color: white;
+    color: var(--dw-on-accent);
     flex-shrink: 0;
     overflow: hidden;
     position: relative;
@@ -345,7 +345,7 @@
     justify-content: center;
     font-weight: 700;
     font-size: 1.1rem;
-    color: white;
+    color: var(--dw-on-accent);
     flex-shrink: 0;
     overflow: hidden;
 }

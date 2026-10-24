@@ -1,67 +1,89 @@
-import { useState } from 'react';
-import { useAuth } from '../../context/useAuth';
-import { useApp } from '../../context/useApp';
-import { useBoardCollabContext } from '../../collab/board/ops/useBoardCollab';
-
-import { usePomodoro } from '../../context/usePomodoro';
-import { useRadio } from '../../context/useRadio';
-import { Droppable, Draggable } from '@hello-pangea/dnd';
-import BoardDetailsModal from '../Board/BoardDetailsModal';
-import SpaceDetailsModal from '../Spaces/SpaceDetailsModal';
-import SidebarGroup from './SidebarGroup';
-import GroupDetailsModal from './GroupDetailsModal';
+import { useMemo, useState } from 'react';
+import { useDroppable } from '@dnd-kit/core';
 import {
     Sun,
     Star,
     CalendarDays,
-    LayoutGrid,
-    Plus,
-    LogOut,
-    ChevronLeft,
+    Home,
+    ChevronsLeft,
     Settings,
     HelpCircle,
-    Focus,
-    LayoutDashboard,
-    MoreHorizontal,
-    Music,
-    Box,
-    FolderPlus,
-    Check,
+    Timer,
+    Radio,
     Users,
+    Search,
 } from 'lucide-react';
+import { useAuth } from '../../context/useAuth';
+import { useApp } from '../../context/useApp';
+import { useBoardCollabContext } from '../../collab/board/ops/useBoardCollab';
+import { usePomodoro } from '../../context/usePomodoro';
+import { useRadio } from '../../context/useRadio';
 import { useContextMenu } from '../Common/useContextMenu';
+import { useI18n, useTheme } from '../../context/useTheme';
+import { useDndHandlers } from '../../dnd/dndRegistry.js';
+import { isCardImportant } from '../../utils/cardImportant';
+import BoardDetailsModal from '../Board/BoardDetailsModal';
+import SpaceDetailsModal from '../Spaces/SpaceDetailsModal';
+import GroupDetailsModal from './GroupDetailsModal';
+import SidebarTree from './SidebarTree';
+import { useResizableSidebar } from './useResizableSidebar';
+import { useSidebarActions } from './useSidebarActions';
 import logoWhite from '../../assets/Logo - Branco.png';
 import logoBlack from '../../assets/Logo - Preto.png';
 import './Sidebar.css';
-import { useI18n, useTheme } from '../../context/useTheme';
-import BulkDragFollowers from './BulkDragFollowers';
-import { useResizableSidebar } from './useResizableSidebar';
-import { useSidebarActions } from './useSidebarActions';
 
-export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isDesktop }) {
+const LIGHT_THEMES = ['light', 'latte', 'ocean', 'nord'];
+const cardCount = (board) => board.lists.reduce((acc, l) => acc + l.cards.length, 0);
+
+/** Item do "Hoje". Diário/Importante/Planejado também recebem cards arrastados do board. */
+function TodayLink({ item, active, onClick }) {
+    const { setNodeRef, isOver, active: dragActive } = useDroppable({
+        id: `zone:${item.id}`,
+        data: { kind: 'zone', zone: item.id },
+        disabled: !item.drop,
+    });
+    const cardOver = isOver && dragActive?.data?.current?.kind === 'card';
+    return (
+        <li ref={setNodeRef}>
+            <button
+                type="button"
+                className={`sb-nav ${active ? 'is-active' : ''} ${cardOver ? 'dw-drop-target is-drop' : ''}`}
+                aria-current={active ? 'page' : undefined}
+                onClick={() => onClick(item.id)}
+            >
+                <item.icon size={17} className="sb-nav-icon" aria-hidden />
+                <span className="sb-item-title">{item.label}</span>
+                {cardOver ? (
+                    <span className="sb-drop-hint">{item.dropHint}</span>
+                ) : (
+                    item.count > 0 && <span className="sb-count" aria-label={`${item.count} tarefas`}>{item.count}</span>
+                )}
+            </button>
+        </li>
+    );
+}
+
+/**
+ * Navegação lateral. Três partes:
+ *  1. Hoje — Início, Diário, Importante, Planejado (os 3 últimos aceitam cards arrastados);
+ *  2. Seus boards e spaces — pastas e itens, reordenáveis por arraste, com criação rápida;
+ *  3. Rodapé FIXO — ferramentas (Foco, Rádio) e Contatos, Configurações, Ajuda.
+ */
+export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isDesktop, onOpenSearch, onPlannedDrop }) {
     const { user, logout } = useAuth();
     const boardCollab = useBoardCollabContext();
     const {
         state, dispatch, getMyDayCards, getImportantCards, getPlannedCards,
-        DEFAULT_BOARD_COLORS,
-        suppressRealtime,
-        showConfirm, reloadBoards, lastReorderedIds = [], setLastReorderedIds,
+        DEFAULT_BOARD_COLORS, suppressRealtime, showConfirm, reloadBoards,
+        lastReorderedIds = [], setLastReorderedIds, updateWorkspaceOrder,
     } = useApp();
     const t = useI18n();
     const { theme } = useTheme();
-    const isLightTheme = ['light', 'latte', 'ocean', 'nord'].includes(theme);
-    const logoImg = isLightTheme ? logoBlack : logoWhite;
-    const { toggleOpen: togglePomodoro } = usePomodoro();
-    const { toggleOpen: toggleRadio } = useRadio();
+    const { toggleOpen: togglePomodoro, isOpen: pomodoroOpen } = usePomodoro();
+    const { toggleOpen: toggleRadio, isOpen: radioOpen } = useRadio();
     const { showContextMenu } = useContextMenu();
+    const { collabDispatchForBoard } = boardCollab || {};
 
-    const [showNewBoard, setShowNewBoard] = useState(false);
-    const [newBoardTitle, setNewBoardTitle] = useState('');
-    const [showNewSpace, setShowNewSpace] = useState(false);
-    const [newSpaceTitle, setNewSpaceTitle] = useState('');
-    const [showNewFolder, setShowNewFolder] = useState(false);
-    const [newFolderTitle, setNewFolderTitle] = useState('');
-    const [folderContextType, setFolderContextType] = useState('board');
     const [editingBoardId, setEditingBoardId] = useState(null);
     const [editBoardTitle, setEditBoardTitle] = useState('');
     const [editingGroupId, setEditingGroupId] = useState(null);
@@ -71,98 +93,147 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
     const [groupDetailsTarget, setGroupDetailsTarget] = useState(null);
     const [detailsBoard, setDetailsBoard] = useState(null);
     const [detailsSpace, setDetailsSpace] = useState(null);
-
     const { sidebarRef, sidebarWidth, handleMouseDown } = useResizableSidebar();
 
-    const generalItems = [
-        { id: 'dashboard', label: t.dashboard, icon: LayoutDashboard },
-        { id: 'myday', label: t.myday, icon: Sun, count: getMyDayCards().length, droppableId: 'sidebar-myday' },
-        { id: 'important', label: t.important, icon: Star, count: getImportantCards().length, droppableId: 'sidebar-important' },
-        { id: 'planned', label: t.planned, icon: CalendarDays, count: getPlannedCards().length, droppableId: 'sidebar-planned' },
-    ];
+    const boards = state.boards || [];
+    const spaces = state.spaces || [];
+    const groups = state.groups || [];
+    const selectedIds = state.selectedItems || [];
+    const selectionMode = selectedIds.length > 0;
 
-    const othersItems = [
-        { id: 'contacts', label: 'Contatos', icon: Users },
-        { id: 'settings', label: t.settings, icon: Settings },
-        { id: 'help', label: t.help, icon: HelpCircle },
-    ];
-
-    const activeBoards = state.boards || [];
-    const activeSpaces = state.spaces || [];
-    const allItems = [...activeBoards, ...activeSpaces];
-    const activeGroups = state.groups || [];
-
-    // Board groupings — boards com group_id da pasta de OUTRO utilizador (ex.: dono do board partilhado)
-    // não têm essa pasta no nosso state.groups → tratamos como "raiz" para aparecerem na sidebar.
-    const boardGroups = activeGroups.filter(g => g.type === 'board').sort((a, b) => a.position - b.position);
-    const boardFolderIds = new Set(boardGroups.map((g) => g.id));
-    const rootBoards = activeBoards
-        .filter((b) => !b.groupId || !boardFolderIds.has(b.groupId))
-        .sort((a, b) => a.position - b.position);
-
-    // Space groupings (mesma lógica)
-    const spaceGroups = activeGroups.filter(g => g.type === 'space').sort((a, b) => a.position - b.position);
-    const spaceFolderIds = new Set(spaceGroups.map((g) => g.id));
-    const rootSpaces = activeSpaces
-        .filter((s) => !s.groupId || !spaceFolderIds.has(s.groupId))
-        .sort((a, b) => a.position - b.position);
+    const tree = useMemo(() => {
+        const build = (type, items) => {
+            const folders = groups.filter((g) => g.type === type).sort((a, b) => a.position - b.position);
+            const folderIds = new Set(folders.map((g) => g.id));
+            // Item com pasta de OUTRO usuário (board compartilhado) aparece na raiz.
+            const normalized = items.map((i) => (i.groupId && !folderIds.has(i.groupId) ? { ...i, groupId: null } : i));
+            const root = normalized.filter((i) => !i.groupId).sort((a, b) => a.position - b.position);
+            return { folders, items: normalized, root };
+        };
+        return { board: build('board', boards), space: build('space', spaces) };
+    }, [boards, spaces, groups]);
 
     const {
-        handleAddBoard,
-        handleAddFolder,
-        handleStartGroupRename,
-        handleGroupRenameSubmit,
-        handleGroupExpandToggle,
-        handleGroupHeaderClick,
-        handleAddSpace,
-        handleBoardClick,
-        handleSpaceClick,
-        handleNavClick,
-        handleLogout,
-        handleStartRename,
-        handleRenameSubmit,
-        handleGroupCheckboxClick,
-        handleSpaceContextMenu,
-        handleGroupContextMenu,
-        handleBoardContextMenu,
+        createBoard, createFolder, createSpace,
+        handleStartGroupRename, handleGroupRenameSubmit, handleGroupHeaderClick,
+        handleBoardClick, handleSpaceClick, handleNavClick,
+        handleStartRename, handleRenameSubmit,
+        handleSpaceContextMenu, handleGroupContextMenu, handleBoardContextMenu,
     } = useSidebarActions({
-        onViewChange,
-        onClose,
-        isDesktop,
-        user,
-        logout,
-        boardCollab,
-        state,
-        dispatch,
-        DEFAULT_BOARD_COLORS,
-        suppressRealtime,
-        showConfirm,
-        reloadBoards,
-        setLastReorderedIds,
-        t,
-        showContextMenu,
-        setShowNewBoard,
-        newBoardTitle,
-        setNewBoardTitle,
-        setShowNewSpace,
-        newSpaceTitle,
-        setNewSpaceTitle,
-        setShowNewFolder,
-        newFolderTitle,
-        setNewFolderTitle,
-        folderContextType,
-        setEditingBoardId,
-        editBoardTitle,
-        setEditBoardTitle,
-        setEditingGroupId,
-        editGroupTitle,
-        setEditGroupTitle,
-        setRecentlyAddedId,
-        setGroupDetailsOpen,
-        setGroupDetailsTarget,
-        setDetailsBoard,
-        setDetailsSpace,
+        onViewChange, onClose, isDesktop, user, logout, boardCollab, state, dispatch,
+        DEFAULT_BOARD_COLORS, suppressRealtime, showConfirm, reloadBoards, setLastReorderedIds,
+        t, showContextMenu,
+        setEditingBoardId, editBoardTitle, setEditBoardTitle,
+        setEditingGroupId, editGroupTitle, setEditGroupTitle,
+        setRecentlyAddedId, setGroupDetailsOpen, setGroupDetailsTarget, setDetailsBoard, setDetailsSpace,
     });
+
+    const todayItems = [
+        { id: 'dashboard', label: t.dashboard || 'Início', icon: Home },
+        { id: 'myday', label: t.myday, icon: Sun, count: getMyDayCards().length, drop: true, dropHint: 'Para hoje' },
+        { id: 'important', label: t.important, icon: Star, count: getImportantCards().length, drop: true, dropHint: 'Importante' },
+        { id: 'planned', label: t.planned, icon: CalendarDays, count: getPlannedCards().length, drop: true, dropHint: 'Escolher data' },
+    ];
+
+    // ── Arrastar na sidebar (reordenar/mover para pasta) e soltar cards nas zonas do "Hoje" ──
+    const findCard = (cardId) => {
+        for (const b of boards) {
+            for (const l of b.lists) {
+                const card = l.cards.find((c) => c.id === cardId);
+                if (card) return { card, boardId: b.id, listId: l.id };
+            }
+        }
+        return null;
+    };
+
+    useDndHandlers({
+        zone: {
+            accepts: (activeData) => activeData?.kind === 'card',
+            onDrop: (activeData, overData) => {
+                const found = findCard(activeData.cardId);
+                if (!found) return;
+                const { card, boardId, listId } = found;
+                const update = (updates) => collabDispatchForBoard?.(boardId, {
+                    type: 'UPDATE_CARD',
+                    payload: { boardId, listId, cardId: card.id, updates },
+                });
+                if (overData.zone === 'myday' && !card.myDay) update({ myDay: true });
+                if (overData.zone === 'important' && !isCardImportant(card)) update({ priority: 'high' });
+                if (overData.zone === 'planned') onPlannedDrop?.({ card, boardId, listId });
+            },
+        },
+        'nav-item': {
+            onEnd: ({ active, over }) => {
+                const from = active.data.current;
+                const to = over?.data?.current;
+                if (!to) return;
+                const branch = tree[from.itemType];
+                const listName = from.itemType === 'board' ? 'boards' : 'spaces';
+                const containerItems = (groupId) => (groupId
+                    ? branch.items.filter((i) => i.groupId === groupId).sort((a, b) => a.position - b.position)
+                    : branch.root);
+                let destGroupId;
+                let destIndex;
+                if (to.kind === 'nav-item') {
+                    if (to.itemId === from.itemId) return;
+                    destGroupId = to.groupId ?? null;
+                    destIndex = Math.max(0, containerItems(destGroupId).findIndex((i) => i.id === to.itemId));
+                } else if (to.kind === 'nav-folder' || to.kind === 'nav-root') {
+                    destGroupId = to.groupId ?? null;
+                    destIndex = containerItems(destGroupId).filter((i) => i.id !== from.itemId).length;
+                } else {
+                    return;
+                }
+                if ((from.groupId ?? null) === destGroupId
+                    && containerItems(destGroupId).findIndex((i) => i.id === from.itemId) === destIndex) return;
+                updateWorkspaceOrder(listName, from.itemId, from.groupId ?? null, destGroupId, destIndex);
+            },
+            renderOverlay: (data) => (
+                <div className="sb-drag-chip">
+                    <span aria-hidden>{data.emoji || '•'}</span>
+                    <span className="sb-item-title">{data.title}</span>
+                    {selectedIds.includes(data.itemId) && selectedIds.length > 1 && (
+                        <span className="sb-count is-strong">+{selectedIds.length - 1}</span>
+                    )}
+                </div>
+            ),
+            announce: (type, a, o) => ({
+                start: `Pegou ${a?.title}.`,
+                over: o?.kind === 'nav-folder' ? `Sobre a pasta ${o.title}.` : o?.title ? `Perto de ${o.title}.` : undefined,
+                end: `${a?.title} reposicionado.`,
+                cancel: 'Movimento cancelado.',
+            })[type],
+        },
+        'nav-folder': {
+            onEnd: ({ active, over }) => {
+                const from = active.data.current;
+                const to = over?.data?.current;
+                if (to?.kind !== 'nav-folder' || to.groupId === from.groupId) return;
+                const all = [...groups].sort((a, b) => a.position - b.position);
+                const destIndex = all.findIndex((g) => g.id === to.groupId);
+                if (destIndex >= 0) updateWorkspaceOrder('groups', from.groupId, null, null, destIndex);
+            },
+            renderOverlay: (data) => (
+                <div className="sb-drag-chip is-folder"><span className="sb-item-title">📁 {data.title}</span></div>
+            ),
+        },
+    });
+
+    const renamingBoard = {
+        id: editingBoardId,
+        value: editBoardTitle,
+        onChange: setEditBoardTitle,
+        onSubmit: handleRenameSubmit,
+        onCancel: () => setEditingBoardId(null),
+    };
+    const renamingFolder = {
+        id: editingGroupId,
+        value: editGroupTitle,
+        onChange: setEditGroupTitle,
+        onSubmit: handleGroupRenameSubmit,
+    };
+    const toggleSelect = (type) => (item) => dispatch({ type: 'TOGGLE_SELECTION', payload: { id: item.id, type } });
+    const isLight = LIGHT_THEMES.includes(theme);
 
     return (
         <>
@@ -174,501 +245,128 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                         if (!groupDetailsTarget?.id) return;
                         const groupId = groupDetailsTarget.id;
                         dispatch({ type: 'UPDATE_GROUP', payload: { id: groupId, updates } });
-                        dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: true } });
                         if (suppressRealtime) suppressRealtime(2000);
-                        try {
-                            const { updateGroup } = await import('../../services/workspaceService');
-                            await updateGroup(groupId, updates);
-                        } finally {
-                            dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: false } });
-                        }
+                        const { updateGroup } = await import('../../services/workspaceService');
+                        await updateGroup(groupId, updates);
                     }}
                 />
             )}
-            {isOpen && !isDesktop && <div className="sidebar-overlay" onClick={onClose} />}
+            {isOpen && !isDesktop && <div className="sb-scrim" onClick={onClose} aria-hidden />}
             <aside
                 ref={sidebarRef}
-                className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}
+                className={`sidebar sb ${isOpen ? 'sidebar-open is-open' : ''}`}
                 style={isDesktop ? { width: sidebarWidth } : undefined}
+                aria-label="Navegação principal"
                 onClick={(e) => {
-                    // Clear selection when clicking empty sidebar space (NOT during drag)
-                    if (state.selectedItems?.length > 0 && !state.isDraggingBulk) {
-                        const target = e.target;
-                        const isInteractive = target.closest('.sidebar-item, .board-item, .sidebar-board-checkbox, .sidebar-group-header, .sidebar-section-btn, .sidebar-new-form, .sidebar-rename-form, .sidebar-section-label, input');
-                        if (!isInteractive) {
-                            dispatch({ type: 'CLEAR_SELECTION' });
-                        }
+                    if (selectionMode && !state.isDraggingBulk && !e.target.closest('.sb-item, .sb-folder, input, button')) {
+                        dispatch({ type: 'CLEAR_SELECTION' });
                     }
                 }}
             >
-                {/* Header */}
-                <div className="sidebar-header">
-                    <div className="sidebar-logo">
-                        <img src={logoImg} alt="DailyWays" className="sidebar-logo-img" />
-                        <span className="sidebar-logo-name">DailyWays</span>
+                <div className="sb-top">
+                    <div className="sb-brand">
+                        <img src={isLight ? logoBlack : logoWhite} alt="" className="sb-brand-logo" />
+                        <span className="sb-brand-name">DailyWays</span>
                     </div>
-                    <button className="btn-icon sidebar-close" onClick={onClose}>
-                        <ChevronLeft size={20} />
+                    <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="Recolher navegação" title="Recolher (Ctrl+B)">
+                        <ChevronsLeft size={18} />
                     </button>
                 </div>
 
-                <div className="sidebar-body">
-                    {/* GENERAL section */}
-                    <nav className="sidebar-nav">
-                        <div className="sidebar-section-label">{t.general}</div>
-                        {generalItems.map(item => (
-                            item.droppableId ? (
-                                <Droppable key={item.id} droppableId={item.droppableId} type="card" isDropDisabled={false}>
-                                    {(provided, snapshot) => (
-                                        <div ref={provided.innerRef} {...provided.droppableProps}>
-                                            <button
-                                                className={`sidebar-item ${activeView === item.id ? 'sidebar-item-active' : ''} ${snapshot.isDraggingOver ? 'sidebar-item-drop-active' : ''}`}
-                                                onClick={() => handleNavClick(item.id)}
-                                            >
-                                                <span className="sidebar-item-icon">
-                                                    <item.icon size={18} />
-                                                </span>
-                                                <span>{item.label}</span>
-                                                {snapshot.isDraggingOver && <span className="sidebar-drop-hint">Soltar aqui</span>}
-                                                {!snapshot.isDraggingOver && item.count > 0 && <span className="sidebar-badge">{item.count}</span>}
-                                            </button>
-                                            <div style={{ display: 'none' }}>{provided.placeholder}</div>
-                                        </div>
-                                    )}
-                                </Droppable>
-                            ) : (
+                <button type="button" className="sb-search" onClick={() => { onOpenSearch?.(); if (!isDesktop) onClose?.(); }}>
+                    <Search size={15} aria-hidden />
+                    <span>Buscar</span>
+                    <kbd>Ctrl K</kbd>
+                </button>
+
+                <div className="sb-scroll">
+                    <nav aria-label="Hoje" className="sb-today">
+                        <ul className="sb-list">
+                            {todayItems.map((item) => (
+                                <TodayLink key={item.id} item={item} active={activeView === item.id} onClick={handleNavClick} />
+                            ))}
+                        </ul>
+                    </nav>
+
+                    <SidebarTree
+                        itemType="board"
+                        title={t.boards || 'Boards'}
+                        groups={tree.board.folders}
+                        items={tree.board.items}
+                        rootItems={tree.board.root}
+                        activeId={activeView === 'board' ? state.activeBoard : null}
+                        selectedIds={selectedIds}
+                        selectionMode={selectionMode && state.selectionType === 'board'}
+                        recentlyAddedId={recentlyAddedId || lastReorderedIds[0]}
+                        countFor={cardCount}
+                        renaming={renamingBoard}
+                        folderRenaming={renamingFolder}
+                        onOpenItem={handleBoardClick}
+                        onToggleSelect={toggleSelect('board')}
+                        onItemMenu={handleBoardContextMenu}
+                        onFolderMenu={handleGroupContextMenu}
+                        onFolderToggle={(g, e) => (e ? handleGroupHeaderClick(e, g) : handleGroupHeaderClick({}, g))}
+                        onStartRename={(item) => isDesktop && handleStartRename(item)}
+                        onCreateItem={(name, groupId) => createBoard(name, groupId)}
+                        onCreateFolder={(name) => createFolder(name, 'board')}
+                    />
+
+                    <SidebarTree
+                        itemType="space"
+                        title="Spaces"
+                        groups={tree.space.folders}
+                        items={tree.space.items}
+                        rootItems={tree.space.root}
+                        activeId={activeView.startsWith('space-') ? activeView.slice(6) : null}
+                        selectedIds={selectedIds}
+                        selectionMode={selectionMode && state.selectionType === 'space'}
+                        recentlyAddedId={recentlyAddedId}
+                        folderRenaming={renamingFolder}
+                        onOpenItem={handleSpaceClick}
+                        onToggleSelect={toggleSelect('space')}
+                        onItemMenu={handleSpaceContextMenu}
+                        onFolderMenu={handleGroupContextMenu}
+                        onFolderToggle={(g, e) => (e ? handleGroupHeaderClick(e, g) : handleGroupHeaderClick({}, g))}
+                        onCreateItem={(name, groupId) => createSpace(name, groupId)}
+                        onCreateFolder={(name) => createFolder(name, 'space')}
+                    />
+                </div>
+
+                <footer className="sb-foot">
+                    <div className="sb-tools" role="group" aria-label="Ferramentas">
+                        <button type="button" className={`sb-tool ${pomodoroOpen ? 'is-on' : ''}`} aria-pressed={Boolean(pomodoroOpen)} onClick={togglePomodoro}>
+                            <Timer size={15} aria-hidden /> <span>{t.focusMode || 'Foco'}</span>
+                        </button>
+                        <button type="button" className={`sb-tool ${radioOpen ? 'is-on' : ''}`} aria-pressed={Boolean(radioOpen)} onClick={toggleRadio}>
+                            <Radio size={15} aria-hidden /> <span>{t.radio || 'Rádio'}</span>
+                        </button>
+                    </div>
+                    <ul className="sb-list">
+                        {[
+                            { id: 'contacts', label: 'Contatos', icon: Users },
+                            { id: 'settings', label: t.settings, icon: Settings },
+                            { id: 'help', label: t.help || 'Ajuda', icon: HelpCircle },
+                        ].map((item) => (
+                            <li key={item.id}>
                                 <button
-                                    key={item.id}
-                                    className={`sidebar-item ${activeView === item.id ? 'sidebar-item-active' : ''}`}
+                                    type="button"
+                                    className={`sb-nav is-quiet ${activeView === item.id ? 'is-active' : ''}`}
+                                    aria-current={activeView === item.id ? 'page' : undefined}
                                     onClick={() => handleNavClick(item.id)}
                                 >
-                                    <span className="sidebar-item-icon">
-                                        <item.icon size={18} />
-                                    </span>
-                                    <span>{item.label}</span>
-                                    {item.count > 0 && <span className="sidebar-badge">{item.count}</span>}
+                                    <item.icon size={16} className="sb-nav-icon" aria-hidden />
+                                    <span className="sb-item-title">{item.label}</span>
                                 </button>
-                            )
+                            </li>
                         ))}
-                    </nav>
+                    </ul>
+                </footer>
 
-                    {/* Boards section */}
-                    <div className="sidebar-boards-section">
-                        <div className="sidebar-section-header">
-                            <span className="sidebar-section-label">
-                                <LayoutGrid size={13} /> {t.boards}
-                            </span>
-                            <div style={{ display: 'flex', gap: '4px' }}>
-                                <button className="btn-icon btn-sm" onClick={() => { setFolderContextType('board'); setShowNewFolder(true); }} title="Nova Pasta">
-                                    <FolderPlus size={16} />
-                                </button>
-                                <button className="btn-icon btn-sm" onClick={() => setShowNewBoard(true)} title={t.newBoard}>
-                                    <Plus size={16} />
-                                </button>
-                            </div>
-                        </div>
-
-                        {showNewFolder && folderContextType === 'board' && (
-                            <form onSubmit={handleAddFolder} className="sidebar-new-board animate-slide-up">
-                                <input
-                                    type="text"
-                                    placeholder="Nome da pasta..."
-                                    value={newFolderTitle}
-                                    onChange={e => setNewFolderTitle(e.target.value)}
-                                    autoFocus
-                                    onBlur={() => { if (!newFolderTitle.trim()) setShowNewFolder(false); }}
-                                    onKeyDown={e => { if (e.key === 'Escape') { setShowNewFolder(false); setNewFolderTitle(''); } }}
-                                />
-                            </form>
-                        )}
-
-                        {showNewBoard && (
-                            <form onSubmit={handleAddBoard} className="sidebar-new-board animate-slide-up">
-                                <input
-                                    type="text"
-                                    placeholder="Nome do board..."
-                                    value={newBoardTitle}
-                                    onChange={e => setNewBoardTitle(e.target.value)}
-                                    autoFocus
-                                    onBlur={() => { if (!newBoardTitle.trim()) setShowNewBoard(false); }}
-                                    onKeyDown={e => { if (e.key === 'Escape') { setShowNewBoard(false); setNewBoardTitle(''); } }}
-                                />
-                            </form>
-                        )}
-
-                        <div className="sidebar-boards-lists-wrap">
-                            <Droppable droppableId="groups-board" type="board-group">
-                                {(provided) => (
-                                    <div className="sidebar-board-list" {...provided.droppableProps} ref={provided.innerRef} style={boardGroups.length === 0 ? { minHeight: 0 } : undefined}>
-                                        {boardGroups.map((group, index) => (
-                                            <SidebarGroup
-                                                key={group.id}
-                                                group={{ ...group, _isNew: recentlyAddedId === group.id }}
-                                                index={index}
-                                                items={activeBoards.filter(b => b.groupId === group.id).sort((a, b) => a.position - b.position)}
-                                                activeView={activeView}
-                                                activeBoard={state.activeBoard}
-                                                onContextMenu={handleGroupContextMenu}
-                                                onToggleSelection={(e) => handleGroupCheckboxClick(e, group, activeBoards.filter(b => b.groupId === group.id))}
-                                                selectedItems={state.selectedItems}
-                                                editingGroupId={editingGroupId}
-                                                editGroupTitle={editGroupTitle}
-                                                setEditGroupTitle={setEditGroupTitle}
-                                                onRenameSubmit={handleGroupRenameSubmit}
-                                                onRename={handleStartGroupRename}
-                                                onHeaderClick={handleGroupHeaderClick}
-                                                onClickItem={handleGroupExpandToggle}
-                                                isLastGroup={index === boardGroups.length - 1 && rootBoards.length > 0}
-                                                isJustReordered={lastReorderedIds.includes(group.id)}
-                                                renderItem={(board, bIndex) => (
-                                                    <Draggable key={board.id} draggableId={board.id} index={bIndex}>
-                                                        {(provided, snapshot) => (
-                                                            <div
-                                                                ref={provided.innerRef}
-                                                                {...provided.draggableProps}
-                                                                className={`sidebar-item board-item ${state.selectedItems?.includes(board.id) ? 'selected' : ''} ${activeView === 'board' && state.activeBoard === board.id ? 'sidebar-item-active' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(board.id) && !snapshot.isDragging ? 'bulk-hidden' : ''} ${recentlyAddedId === board.id ? 'animate-slide-up-jelly' : ''}`}
-                                                                onClick={(e) => handleBoardClick(e, board.id)}
-                                                                onContextMenu={(e) => handleBoardContextMenu(e, board)}
-                                                                onDoubleClick={() => isDesktop && handleStartRename(board)}
-                                                            >
-                                                                <div className={`sidebar-item-inner ${lastReorderedIds.includes(board.id) ? 'sidebar-jelly-reorder' : ''}`}>
-                                                                <div {...provided.dragHandleProps} className="sidebar-board-drag-handle">
-                                                                <div
-                                                                    className={`sidebar-board-checkbox ${state.selectedItems?.includes(board.id) ? 'selected' : ''}`}
-                                                                    title="Selecionar"
-                                                                    onClick={(e) => { e.stopPropagation(); dispatch({ type: 'TOGGLE_SELECTION', payload: { id: board.id, type: 'board' } }); }}
-                                                                >
-                                                                    {state.selectedItems?.includes(board.id) && <Check size={10} strokeWidth={4} />}
-                                                                </div>
-                                                                <span className="sidebar-board-dot" style={{ background: board.color }} />
-                                                                {editingBoardId === board.id ? (
-                                                                    <form onSubmit={(e) => handleRenameSubmit(e, board.id)} className="sidebar-rename-form">
-                                                                        <input autoFocus value={editBoardTitle} onChange={e => setEditBoardTitle(e.target.value)} onBlur={(e) => handleRenameSubmit(e, board.id)} onKeyDown={e => e.key === 'Escape' && setEditingBoardId(null)} />
-                                                                    </form>
-                                                                ) : (
-                                                                    <span className="truncate">{board.emoji} {board.title}</span>
-                                                                )}
-                                                                </div>
-                                                                <div className="board-item-end">
-                                                                    <span className="sidebar-badge-subtle">{board.lists.reduce((acc, l) => acc + l.cards.length, 0)}</span>
-                                                                    <button className="board-item-menu-btn" onClick={(e) => { e.stopPropagation(); handleBoardContextMenu(e, board); }} title="Opções">
-                                                                        <MoreHorizontal size={13} className="rotate-90" />
-                                                                    </button>
-                                                                </div>
-                                                                {state.isDraggingBulk && snapshot.isDragging && (
-                                                                    <BulkDragFollowers count={state.selectedItems.length} items={allItems.filter(i => state.selectedItems.includes(i.id) && i.id !== board.id)} />
-                                                                )}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </Draggable>
-                                                )}
-                                            />
-                                        ))}
-                                        {provided.placeholder}
-                                    </div>
-                                )}
-                            </Droppable>
-
-                            <Droppable droppableId="boards-root" type="board">
-                                {(provided) => {
-                                    const hasFolders = boardGroups.length > 0;
-                                    const hasRootItems = rootBoards.length > 0;
-                                    return (
-                                        <div
-                                            className={`sidebar-board-list ${hasFolders ? `sidebar-root-drop-zone ${hasRootItems ? 'sidebar-root-drop-zone--has-items' : 'sidebar-root-drop-zone--empty'}` : ''}`}
-                                            {...provided.droppableProps}
-                                            ref={provided.innerRef}
-                                            style={{
-                                                minHeight: hasFolders ? (hasRootItems ? 0 : 4) : 10,
-                                                paddingBottom: hasFolders && hasRootItems ? 8 : 0
-                                            }}
-                                        >
-                                            {rootBoards.map((board, index) => (
-                                                <Draggable key={board.id} draggableId={board.id} index={index}>
-                                                    {(provided, snapshot) => (
-                                                        <div
-                                                            ref={provided.innerRef}
-                                                            {...provided.draggableProps}
-                                                            className={`sidebar-item board-item ${activeView === 'board' && state.activeBoard === board.id ? 'sidebar-item-active' : ''} ${state.selectedItems?.includes(board.id) ? 'selected' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(board.id) && !snapshot.isDragging ? 'bulk-hidden' : ''} ${recentlyAddedId === board.id ? 'animate-slide-up-jelly' : ''}`}
-                                                            onClick={(e) => handleBoardClick(e, board.id)}
-                                                            onContextMenu={(e) => handleBoardContextMenu(e, board)}
-                                                            onDoubleClick={() => isDesktop && handleStartRename(board)}
-                                                        >
-                                                            <div className={`sidebar-item-inner ${lastReorderedIds.includes(board.id) ? 'sidebar-jelly-reorder' : ''}`}>
-                                                            <div {...provided.dragHandleProps} className="sidebar-board-drag-handle">
-                                                            <div
-                                                                className={`sidebar-board-checkbox ${state.selectedItems?.includes(board.id) ? 'selected' : ''}`}
-                                                                title="Selecionar"
-                                                                onClick={(e) => { e.stopPropagation(); dispatch({ type: 'TOGGLE_SELECTION', payload: { id: board.id, type: 'board' } }); }}
-                                                            >
-                                                                {state.selectedItems?.includes(board.id) && <Check size={10} strokeWidth={4} />}
-                                                            </div>
-                                                            <span className="sidebar-board-dot" style={{ background: board.color }} />
-                                                            {editingBoardId === board.id ? (
-                                                                <form onSubmit={(e) => handleRenameSubmit(e, board.id)} className="sidebar-rename-form">
-                                                                    <input autoFocus value={editBoardTitle} onChange={e => setEditBoardTitle(e.target.value)} onBlur={(e) => handleRenameSubmit(e, board.id)} onKeyDown={e => e.key === 'Escape' && setEditingBoardId(null)} />
-                                                                </form>
-                                                            ) : (
-                                                                <span className="truncate">{board.emoji} {board.title}</span>
-                                                            )}
-                                                            </div>
-                                                            <div className="board-item-end">
-                                                                <span className="sidebar-badge-subtle">{board.lists.reduce((acc, l) => acc + l.cards.length, 0)}</span>
-                                                                <button className="board-item-menu-btn" onClick={(e) => { e.stopPropagation(); handleBoardContextMenu(e, board); }} title="Opções">
-                                                                    <MoreHorizontal size={13} className="rotate-90" />
-                                                                </button>
-                                                            </div>
-                                                            {state.isDraggingBulk && snapshot.isDragging && (
-                                                                <BulkDragFollowers count={state.selectedItems.length} items={allItems.filter(i => state.selectedItems.includes(i.id) && i.id !== board.id)} />
-                                                            )}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </Draggable>
-                                            ))}
-                                            {provided.placeholder}
-                                        </div>
-                                    );
-                                }}
-                            </Droppable>
-                        </div>
-                    </div>
-
-                    {/* Spaces section */}
-                    <div className="sidebar-boards-section" style={{ marginTop: '18px' }}>
-                        <div className="sidebar-section-header">
-                            <span className="sidebar-section-label">
-                                <Box size={13} /> Spaces
-                            </span>
-                            <div style={{ display: 'flex', gap: '4px' }}>
-                                <button className="btn-icon btn-sm" onClick={() => { setFolderContextType('space'); setShowNewFolder(true); }} title="Nova Pasta">
-                                    <FolderPlus size={16} />
-                                </button>
-                                <button className="btn-icon btn-sm" onClick={() => setShowNewSpace(true)} title="Novo Space">
-                                    <Plus size={16} />
-                                </button>
-                            </div>
-                        </div>
-
-                        {showNewFolder && folderContextType === 'space' && (
-                            <form onSubmit={handleAddFolder} className="sidebar-new-board animate-slide-up">
-                                <input
-                                    type="text"
-                                    placeholder="Nome da pasta..."
-                                    value={newFolderTitle}
-                                    onChange={e => setNewFolderTitle(e.target.value)}
-                                    autoFocus
-                                    onBlur={() => { if (!newFolderTitle.trim()) setShowNewFolder(false); }}
-                                    onKeyDown={e => { if (e.key === 'Escape') { setShowNewFolder(false); setNewFolderTitle(''); } }}
-                                />
-                            </form>
-                        )}
-
-                        {showNewSpace && (
-                            <form onSubmit={handleAddSpace} className="sidebar-new-board animate-slide-up">
-                                <input
-                                    type="text"
-                                    placeholder="Nome do space..."
-                                    value={newSpaceTitle}
-                                    onChange={e => setNewSpaceTitle(e.target.value)}
-                                    autoFocus
-                                    onBlur={() => { if (!newSpaceTitle.trim()) setShowNewSpace(false); }}
-                                    onKeyDown={e => { if (e.key === 'Escape') { setShowNewSpace(false); setNewSpaceTitle(''); } }}
-                                />
-                            </form>
-                        )}
-
-                        <div className="sidebar-boards-lists-wrap">
-                            <Droppable droppableId="groups-space" type="space-group">
-                                {(provided) => (
-                                    <div className="sidebar-board-list" {...provided.droppableProps} ref={provided.innerRef} style={spaceGroups.length === 0 ? { minHeight: 0 } : undefined}>
-                                        {spaceGroups.map((group, index) => (
-                                            <SidebarGroup
-                                                key={group.id}
-                                                group={{ ...group, _isNew: recentlyAddedId === group.id }}
-                                                index={index}
-                                                items={activeSpaces.filter(s => s.groupId === group.id).sort((a, b) => a.position - b.position)}
-                                                activeView={activeView}
-                                                activeBoard={state.activeBoard}
-                                                onContextMenu={(e, g) => handleGroupContextMenu(e, g)}
-                                                onToggleSelection={(e) => handleGroupCheckboxClick(e, group, activeSpaces.filter(s => s.groupId === group.id))}
-                                                selectedItems={state.selectedItems}
-                                                editingGroupId={editingGroupId}
-                                                editGroupTitle={editGroupTitle}
-                                                setEditGroupTitle={setEditGroupTitle}
-                                                onRenameSubmit={handleGroupRenameSubmit}
-                                                onRename={handleStartGroupRename}
-                                                onHeaderClick={handleGroupHeaderClick}
-                                                onClickItem={handleGroupExpandToggle}
-                                                isLastGroup={index === spaceGroups.length - 1 && rootSpaces.length > 0}
-                                                isJustReordered={lastReorderedIds.includes(group.id)}
-                                                renderItem={(space, sIndex) => (
-                                                    <Draggable key={space.id} draggableId={space.id} index={sIndex}>
-                                                        {(provided, snapshot) => (
-                                                            <div
-                                                                ref={provided.innerRef}
-                                                                {...provided.draggableProps}
-                                                                className={`sidebar-item board-item ${state.selectedItems?.includes(space.id) ? 'selected' : ''} ${activeView === `space-${space.id}` ? 'sidebar-item-active' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(space.id) && !snapshot.isDragging ? 'bulk-hidden' : ''} ${recentlyAddedId === space.id ? 'animate-slide-up-jelly' : ''}`}
-                                                                onClick={(e) => handleSpaceClick(e, space.id)}
-                                                                onContextMenu={(e) => handleSpaceContextMenu(e, space)}
-                                                            >
-                                                                <div className={`sidebar-item-inner ${lastReorderedIds.includes(space.id) ? 'sidebar-jelly-reorder' : ''}`}>
-                                                                <div {...provided.dragHandleProps} className="sidebar-board-drag-handle">
-                                                                <div
-                                                                    className={`sidebar-board-checkbox ${state.selectedItems?.includes(space.id) ? 'selected' : ''}`}
-                                                                    title="Selecionar"
-                                                                    onClick={(e) => { e.stopPropagation(); dispatch({ type: 'TOGGLE_SELECTION', payload: { id: space.id, type: 'space' } }); }}
-                                                                >
-                                                                    {state.selectedItems?.includes(space.id) && <Check size={10} strokeWidth={4} />}
-                                                                </div>
-                                                                <span className="sidebar-board-dot" style={{ background: space.color || '#9b59b6' }} />
-                                                                <span className="truncate">{space.emoji} {space.title}</span>
-                                                                </div>
-                                                                <div className="board-item-end">
-                                                                    <button className="board-item-menu-btn" onClick={(e) => { e.stopPropagation(); handleSpaceContextMenu(e, space); }} title="Opções">
-                                                                        <MoreHorizontal size={13} />
-                                                                    </button>
-                                                                </div>
-                                                                {state.isDraggingBulk && snapshot.isDragging && (
-                                                                    <BulkDragFollowers count={state.selectedItems.length} items={allItems.filter(i => state.selectedItems.includes(i.id) && i.id !== space.id)} />
-                                                                )}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </Draggable>
-                                                )}
-                                            />
-                                        ))}
-                                        {provided.placeholder}
-                                    </div>
-                                )}
-                            </Droppable>
-
-                            <Droppable droppableId="spaces-root" type="space">
-                                {(provided) => {
-                                    const hasFolders = spaceGroups.length > 0;
-                                    const hasRootItems = rootSpaces.length > 0;
-                                    return (
-                                        <div
-                                            className={`sidebar-board-list ${hasFolders ? `sidebar-root-drop-zone ${hasRootItems ? 'sidebar-root-drop-zone--has-items' : 'sidebar-root-drop-zone--empty'}` : ''}`}
-                                            {...provided.droppableProps}
-                                            ref={provided.innerRef}
-                                            style={{
-                                                minHeight: hasFolders ? (hasRootItems ? 0 : 4) : 10,
-                                                paddingBottom: hasFolders && hasRootItems ? 8 : 0
-                                            }}
-                                        >
-                                            {rootSpaces.map((space, index) => (
-                                                <Draggable key={space.id} draggableId={space.id} index={index}>
-                                                    {(provided, snapshot) => (
-                                                        <div
-                                                            ref={provided.innerRef}
-                                                            {...provided.draggableProps}
-                                                            className={`sidebar-item board-item ${activeView === `space-${space.id}` ? 'sidebar-item-active' : ''} ${state.selectedItems?.includes(space.id) ? 'selected' : ''} ${snapshot.isDragging ? 'dragging' : ''} ${state.isDraggingBulk && snapshot.isDragging ? 'dragging-bulk-stack' : ''} ${state.isDraggingBulk && state.selectedItems?.includes(space.id) && !snapshot.isDragging ? 'bulk-hidden' : ''} ${recentlyAddedId === space.id ? 'animate-slide-up-jelly' : ''}`}
-                                                            onClick={(e) => handleSpaceClick(e, space.id)}
-                                                            onContextMenu={(e) => handleSpaceContextMenu(e, space)}
-                                                        >
-                                                            <div className={`sidebar-item-inner ${lastReorderedIds.includes(space.id) ? 'sidebar-jelly-reorder' : ''}`}>
-                                                            <div {...provided.dragHandleProps} className="sidebar-board-drag-handle">
-                                                            <div
-                                                                className={`sidebar-board-checkbox ${state.selectedItems?.includes(space.id) ? 'selected' : ''}`}
-                                                                title="Selecionar"
-                                                                onClick={(e) => { e.stopPropagation(); dispatch({ type: 'TOGGLE_SELECTION', payload: { id: space.id, type: 'space' } }); }}
-                                                            >
-                                                                {state.selectedItems?.includes(space.id) && <Check size={10} strokeWidth={4} />}
-                                                            </div>
-                                                            <span className="sidebar-board-dot" style={{ background: space.color || '#9b59b6' }} />
-                                                            <span className="truncate">{space.emoji} {space.title}</span>
-                                                            </div>
-                                                            <div className="board-item-end">
-                                                                <button className="board-item-menu-btn" onClick={(e) => { e.stopPropagation(); handleSpaceContextMenu(e, space); }} title="Opções">
-                                                                    <MoreHorizontal size={13} />
-                                                                </button>
-                                                            </div>
-                                                            {state.isDraggingBulk && snapshot.isDragging && (
-                                                                <BulkDragFollowers count={state.selectedItems.length} items={allItems.filter(i => state.selectedItems.includes(i.id) && i.id !== space.id)} />
-                                                            )}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </Draggable>
-                                            ))}
-                                            {provided.placeholder}
-                                        </div>
-                                    );
-                                }}
-                            </Droppable>
-                        </div>
-                    </div>
-
-                    {/* RECURSOS section */}
-                    <nav className="sidebar-nav" style={{ marginTop: '18px' }}>
-                        <div className="sidebar-section-label">{t.resources}</div>
-                        <button
-                            className="sidebar-item"
-                            onClick={togglePomodoro}
-                        >
-                            <span className="sidebar-item-icon">
-                                <Focus size={18} />
-                            </span>
-                            <span>{t.focusMode}</span>
-                        </button>
-                        <button
-                            className="sidebar-item"
-                            onClick={toggleRadio}
-                        >
-                            <span className="sidebar-item-icon">
-                                <Music size={18} />
-                            </span>
-                            <span>{t.radio}</span>
-                        </button>
-                    </nav>
-
-                    {/* OTHERS section */}
-                    <nav className="sidebar-nav sidebar-others">
-                        <div className="sidebar-section-label">{t.others}</div>
-                        {othersItems.map(item => (
-                            <button
-                                key={item.id}
-                                className={`sidebar-item ${activeView === item.id ? 'sidebar-item-active' : ''}`}
-                                onClick={() => handleNavClick(item.id)}
-                            >
-                                <span className="sidebar-item-icon">
-                                    <item.icon size={18} />
-                                </span>
-                                <span>{item.label}</span>
-                            </button>
-                        ))}
-
-                        {/* Logout */}
-                        <button className="sidebar-item sidebar-logout" onClick={handleLogout}>
-                            <span className="sidebar-item-icon">
-                                <LogOut size={18} />
-                            </span>
-                            <span>{t.logout}</span>
-                        </button>
-                    </nav>
-                </div>
-                {/* Resize handle */}
-                {isDesktop && (
-                    <div className="sidebar-resize-handle" onMouseDown={handleMouseDown} />
-                )}
+                {isDesktop && <div className="sb-resize" onMouseDown={handleMouseDown} role="separator" aria-orientation="vertical" aria-label="Largura da navegação" />}
             </aside>
 
-            {/* Board details modal */}
-            {detailsBoard && (
-                <BoardDetailsModal
-                    board={detailsBoard}
-                    onClose={() => setDetailsBoard(null)}
-                />
-            )}
-            {detailsSpace && (
-                <SpaceDetailsModal
-                    space={detailsSpace}
-                    onClose={() => setDetailsSpace(null)}
-                />
-            )}
+            {detailsBoard && <BoardDetailsModal board={detailsBoard} onClose={() => setDetailsBoard(null)} />}
+            {detailsSpace && <SpaceDetailsModal space={detailsSpace} onClose={() => setDetailsSpace(null)} />}
         </>
     );
 }

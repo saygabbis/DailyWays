@@ -20,16 +20,6 @@ export function useSidebarActions(ctx) {
         setLastReorderedIds,
         t,
         showContextMenu,
-        setShowNewBoard,
-        newBoardTitle,
-        setNewBoardTitle,
-        setShowNewSpace,
-        newSpaceTitle,
-        setNewSpaceTitle,
-        setShowNewFolder,
-        newFolderTitle,
-        setNewFolderTitle,
-        folderContextType,
         setEditingBoardId,
         editBoardTitle,
         setEditBoardTitle,
@@ -43,15 +33,16 @@ export function useSidebarActions(ctx) {
         setDetailsSpace,
     } = ctx;
 
-    const handleAddBoard = async (e) => {
-        e.preventDefault();
-        if (!newBoardTitle.trim()) return;
+    /** Cria um board (com as 3 listas padrão), opcionalmente já dentro de uma pasta. */
+    const createBoard = async (title, groupId = null) => {
+        if (!title?.trim()) return;
 
         // Criar o board com IDs definitivos (mesmo id que vai ao Supabase)
         const newBoard = {
             id: uuidv4(),
             ownerId: user.id,
-            title: newBoardTitle.trim(),
+            title: title.trim(),
+            groupId,
             color: DEFAULT_BOARD_COLORS[Math.floor(Math.random() * DEFAULT_BOARD_COLORS.length)],
             emoji: '📋',
             createdAt: new Date().toISOString(),
@@ -67,8 +58,6 @@ export function useSidebarActions(ctx) {
         dispatch({ type: 'SET_ACTIVE_BOARD', payload: newBoard.id });
         setRecentlyAddedId(newBoard.id);
         setTimeout(() => setRecentlyAddedId(null), 700);
-        setNewBoardTitle('');
-        setShowNewBoard(false);
         onViewChange('board', newBoard.id);
 
         // Ativa o floating save durante a operação no servidor
@@ -87,16 +76,16 @@ export function useSidebarActions(ctx) {
         }
     };
 
-    const handleAddFolder = async (e) => {
-        if (e) e.preventDefault();
-        if (!newFolderTitle.trim()) return;
+    /** Cria uma pasta de boards ou de spaces (os itens selecionados do mesmo tipo vão para ela). */
+    const createFolder = async (title, folderContextType) => {
+        if (!title?.trim()) return;
 
         const newGroup = {
             id: uuidv4(),
-            title: newFolderTitle.trim(),
+            title: title.trim(),
             type: folderContextType,
             position: 0,
-            isExpanded: false
+            isExpanded: true
         };
 
         // Shift existing groups of the same type down by 1
@@ -120,8 +109,6 @@ export function useSidebarActions(ctx) {
             dispatch({ type: 'CLEAR_SELECTION' });
         }
 
-        setNewFolderTitle('');
-        setShowNewFolder(false);
 
         dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__folder_ops__', saving: true } });
         if (suppressRealtime) suppressRealtime(3000);
@@ -182,17 +169,16 @@ export function useSidebarActions(ctx) {
         handleGroupExpandToggle(g);
     };
 
-    const handleAddSpace = async (e) => {
-        if (e) e.preventDefault();
-        if (!newSpaceTitle.trim()) return;
+    const createSpace = async (title, groupId = null) => {
+        if (!title?.trim()) return;
 
         const newSpace = {
             id: uuidv4(),
-            title: newSpaceTitle.trim(),
+            title: title.trim(),
             color: DEFAULT_BOARD_COLORS[Math.floor(Math.random() * DEFAULT_BOARD_COLORS.length)],
             emoji: '🌌',
             position: state.spaces.length,
-            groupId: null,
+            groupId,
             ownerId: user.id,
             panX: 0,
             panY: 0,
@@ -203,11 +189,8 @@ export function useSidebarActions(ctx) {
         dispatch({ type: 'ADD_SPACE', payload: newSpace });
         setRecentlyAddedId(newSpace.id);
         setTimeout(() => setRecentlyAddedId(null), 700);
-        setNewSpaceTitle('');
-        setShowNewSpace(false);
-        onViewChange('space');
-        // Actually the active view logic for spaces might need to set activeSpace?
-        // We'll manage active space ID via AppContext later...
+        onViewChange(`space-${newSpace.id}`);
+        if (!isDesktop) onClose?.();
 
         const { insertSpace } = await import('../../services/workspaceService');
         await insertSpace(user.id, newSpace);
@@ -420,13 +403,13 @@ export function useSidebarActions(ctx) {
 
 
     return {
-        handleAddBoard,
-        handleAddFolder,
+        createBoard,
+        createFolder,
         handleStartGroupRename,
         handleGroupRenameSubmit,
         handleGroupExpandToggle,
         handleGroupHeaderClick,
-        handleAddSpace,
+        createSpace,
         handleBoardClick,
         handleSpaceClick,
         handleNavClick,
