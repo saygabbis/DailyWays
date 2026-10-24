@@ -153,3 +153,17 @@ Teste de segurança completo do app (é meu, está autorizado): tentar invadir, 
 7. Redesign tela por tela (Visão Geral e Spaces primeiro).
 8. Novas funções e onboarding.
 9. Relatório e push.
+
+## Meu pedido original, palavra por palavra
+
+> Vc deu uma melhoria na UX e UI, design, layout e tals? Eu queria q vc desse uma melhorada, to achando tudo muito... exagerado sabe? tipo, em todo site (o principal é o Geral e o Spaces, dá pra fazer mt melhor, mas TODO O SITE/APP TAMBÉM!) Adaptar tudo corretamente pro mobile e outros formatos, etc, pode dar um redesign em tudo, mellhoria, limpeza, reorganizada, outro layout/ui pro site mas mantendo a essencia e estrutura desse (a estrutura eu acho sim boa, mas uma PÉSSIMA execução..!), e tem que pensar na acessibilidade pro redesign também!!, então refaz tudo fazendo favor, inclusive nas cores, os temas estão bons, mas as vezes tem cores jogadas dentro dos temas que n fazem sentido com a escolha, tem que fazer melhoria nas animações, AMO o estilo das animações do site, MAS elas são muito bugadinhas, ou fogem um pouco, ou falta, ou algo do tipo. gosto de TUDO muito animadinho fluido jelly sweet suave e tals
+> Velocidade do site em syncar (devia ser 100% rapido e instantaneo né) e tals, MUITA informação numa unica tela, contra intuitivo, falta de tutoriais interativos e tals muita coisa duplicada em design ou em lugares ruins, falta de pensamento do usuário, mandei imagem aí do Objetivos ali,ultima imagem, ela quero mostrar tanto o design da barra lateral, exagerada, pouco intuitiva ou não muito chamativa ou descritiva, facilmente confundivel, (pick up ou drag n drop do site INTEIRO MUITO BUGADO E FORA DO PADRÃO, É TIPO, UMAS DAS COISAS MAIS BUGADAS DO SITE!), outro design/ui horrendo pra  mudar, além de todos, mas to falando só pra vc n se perder, mas É TUDO DO SITE INTEIRO! é o de detalhes de tarefas e outros, e configurações, menus rapidos com o direito ou de expandir (inclusive nas configs tem coisa que tá duplicada, fora do lugar, ou falta coisa nas configurações)
+> A 5 imagem eu fiz uma edição pq aq só me permitem upar 5 imagens, mas a metade de baixo é do spaces, tanto redesign/re ui/ux quanto melhoria em funcionamento
+>
+> E agora sobre a 5 imagem, lá tem muitas notas nossas falando de bugs e outros, checa e corrige todos, TESTA TUDO, adiciona o que falta (e outros, tipo, tudo que vc achar suficiente, ARRUME POR FAVOR!!!), adiciona novas funções pro site em todas as categorias que vc julgue bom, remova coisas excessivas sem objetivo (tipo o streak, tá excesso ali, e alguma outra coisa q tu ache, OS WIDGETS NÃO SÃO EXCESSO!, nem contatos, apesar de ter que fazer uma reestrutura, redesign, re ui/ux, re tudo nele, além de estar bem quebrado), lento e todos problemas existentes.
+>
+> E também faz um teste de cybersegurança do app, testa todas as vulnerablidades, tenta invadir e hackear o site, e conseguindo se vai corrigindo pro site ficar protegido e seguro.
+
+Pedido anterior (ainda vale):
+
+> Faz tudo! que falta, que tá pela metade, que precisa e limpa o codigo, reorganiza as pastas e arquivos, deleta o excesso, otimiza, etc etc, é pra fazer tudo e subir no github!! atualizar TUDO, estrutura, organização, arquitetura, n pode faltar nada!!
