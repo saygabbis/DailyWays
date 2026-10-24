@@ -18,7 +18,8 @@
     "test": "vitest run && npm run test -w @dailyways/collab-protocol && npm run test -w @dailyways/collab-server",
     "preview": "vite preview",
     "db:validate-migrations": "node scripts/validate-migrations.mjs",
-    "db:idempotent-migrations": "node scripts/idempotent-migrations.mjs"
+    "db:idempotent-migrations": "node scripts/idempotent-migrations.mjs",
+    "test:e2e": "node e2e/run.mjs"
   },
   "dependencies": {
     "@dailyways/collab-protocol": "file:packages/collab-protocol",
@@ -44,6 +45,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "playwright": "^1.56.1",
     "vite": "^7.3.1",
     "vitest": "^3.2.7"
   }

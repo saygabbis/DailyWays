@@ -6,9 +6,9 @@ import react from 'eslint-plugin-react'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', '**/dist', 'supabase/.temp']),
+  globalIgnores(['dist', '**/dist', 'dist-e2e', 'e2e/out', 'supabase/.temp']),
   {
-    files: ['**/*.{js,jsx}'],
+    files: ['**/*.{js,jsx,mjs}'],
     extends: [
       js.configs.recommended,
       reactHooks.configs.flat.recommended,
@@ -43,7 +43,7 @@ export default defineConfig([
   },
   {
     // Código que roda no Node (servidor collab, scripts, pacotes compartilhados).
-    files: ['server/**/*.{js,mjs,cjs}', 'scripts/**/*.{js,mjs,cjs}', 'packages/**/*.{js,mjs,cjs}', '*.config.{js,cjs,mjs}'],
+    files: ['server/**/*.{js,mjs,cjs}', 'scripts/**/*.{js,mjs,cjs}', 'packages/**/*.{js,mjs,cjs}', 'e2e/**/*.{js,mjs}', 'supabase/tests/**/*.js', '*.config.{js,cjs,mjs}'],
     languageOptions: { globals: { ...globals.node } },
   },
 ])

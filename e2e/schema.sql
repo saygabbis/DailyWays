@@ -1,0 +1,50 @@
+-- Espelho de TODAS as tabelas de public (colunas + chaves) para o teste ponta a ponta no PGlite.
+-- Gerado de produção em 2026-10-24 (information_schema, só leitura). Sem RLS/funções: o Supabase
+-- falso (e2e/fakeSupabase.mjs) atende como o PostgREST e aplica só as funções que o app usa.
+-- Não é migration: não rode no Supabase.
+
+CREATE ROLE anon NOLOGIN;
+CREATE ROLE authenticated NOLOGIN;
+CREATE ROLE service_role NOLOGIN;
+CREATE SCHEMA auth;
+CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
+  SELECT nullif(current_setting('request.jwt.claims', true)::jsonb->>'sub', '')::uuid
+$$;
+
+CREATE TABLE public.blocked_users (user_id uuid, blocked_user_id uuid, created_at timestamptz DEFAULT now(), PRIMARY KEY (user_id, blocked_user_id));
+CREATE TABLE public.board_invitations (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, board_id uuid, inviter_id uuid, invitee_email text, invitee_user_id uuid, role text DEFAULT 'reader', status text DEFAULT 'pending', created_at timestamptz DEFAULT now(), expires_at timestamptz, history_dismissed_at timestamptz);
+CREATE TABLE public.board_members (board_id uuid, user_id uuid, role text DEFAULT 'editor', PRIMARY KEY (board_id, user_id));
+CREATE TABLE public.board_undo_stacks (user_id uuid, board_id uuid, stack jsonb DEFAULT '{"index": -1, "entries": []}', updated_at timestamptz DEFAULT now(), PRIMARY KEY (user_id, board_id));
+CREATE TABLE public.boards (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, owner_id uuid, title text DEFAULT 'Novo Board', color text, emoji text DEFAULT '📋', created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now(), "position" integer DEFAULT 0, group_id uuid);
+CREATE TABLE public.card_activity_logs (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, card_id uuid, actor_id uuid, event_type text, payload jsonb DEFAULT '{}', created_at timestamptz DEFAULT now());
+CREATE TABLE public.card_assignees (card_id uuid, user_id uuid, assigned_by uuid, created_at timestamptz DEFAULT now(), PRIMARY KEY (card_id, user_id));
+CREATE TABLE public.card_attachments (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, card_id uuid, kind text, storage_path text, file_name text, mime_type text, size_bytes bigint, link_url text, link_label text, created_by uuid, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
+CREATE TABLE public.card_comments (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, card_id uuid, author_id uuid, body text, deleted_at timestamptz, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
+CREATE TABLE public.cards (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, list_id uuid, title text DEFAULT 'Nova Tarefa', description text DEFAULT '', priority text DEFAULT 'none', due_date timestamptz, my_day boolean DEFAULT false, labels jsonb DEFAULT '[]', created_at timestamptz DEFAULT now(), "position" integer DEFAULT 0, completed boolean DEFAULT false, color text, start_date timestamptz, is_all_day boolean DEFAULT true, recurrence_rule text, cover_attachment_id uuid, updated_at timestamptz DEFAULT now(), day_category text, estimated_minutes integer);
+CREATE TABLE public.contact_requests (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, from_user_id uuid DEFAULT auth.uid(), to_user_id uuid, status text DEFAULT 'pending', created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
+CREATE TABLE public.contacts (user_id uuid, contact_user_id uuid, nickname text, pinned boolean DEFAULT false, last_interaction_at timestamptz, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now(), notify_messages boolean DEFAULT true, muted_until timestamptz, PRIMARY KEY (user_id, contact_user_id));
+CREATE TABLE public.conversation_participants (conversation_id uuid, user_id uuid, created_at timestamptz DEFAULT now(), last_read_at timestamptz, last_read_message_id uuid, PRIMARY KEY (conversation_id, user_id));
+CREATE TABLE public.conversations (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, type text DEFAULT 'dm', created_at timestamptz DEFAULT now(), last_message_at timestamptz);
+CREATE TABLE public.daily_progress (user_id uuid, activity_date date, tasks_completed integer DEFAULT 0, focus_seconds integer DEFAULT 0, important_task_done boolean DEFAULT false, minimal_goal_met boolean DEFAULT false, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now(), PRIMARY KEY (user_id, activity_date));
+CREATE TABLE public.dev_tool_config (id text DEFAULT 'global' PRIMARY KEY, config jsonb DEFAULT '{"prankEnabled": true, "additionalDevs": []}', updated_at timestamptz DEFAULT now(), updated_by uuid);
+CREATE TABLE public.dm_message_requests (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, sender_id uuid, recipient_id uuid, status text DEFAULT 'pending', created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
+CREATE TABLE public.dm_request_messages (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, request_id uuid, sender_id uuid, body text, created_at timestamptz DEFAULT now());
+CREATE TABLE public.groups (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, owner_id uuid, title text, type text, "position" integer DEFAULT 0, is_expanded boolean DEFAULT true, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now(), color text, icon text);
+CREATE TABLE public.journal_notes (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, user_id uuid, title text DEFAULT '', content text DEFAULT '', pinned boolean DEFAULT false, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
+CREATE TABLE public.lists (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, board_id uuid, title text DEFAULT 'Nova Lista', "position" integer DEFAULT 0, color text, is_completion_list boolean DEFAULT false);
+CREATE TABLE public.message_reactions (message_id uuid, user_id uuid, emoji text, created_at timestamptz DEFAULT now(), PRIMARY KEY (message_id, user_id, emoji));
+CREATE TABLE public.message_receipts (message_id uuid, user_id uuid, delivered_at timestamptz, read_at timestamptz, PRIMARY KEY (message_id, user_id));
+CREATE TABLE public.message_user_state (message_id uuid, user_id uuid, hidden_at timestamptz DEFAULT now(), PRIMARY KEY (message_id, user_id));
+CREATE TABLE public.messages (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, conversation_id uuid, sender_id uuid DEFAULT auth.uid(), body text, created_at timestamptz DEFAULT now(), edited_at timestamptz, message_type text DEFAULT 'text', attachment_url text, attachment_meta jsonb, deleted_at timestamptz, reply_to_id uuid);
+CREATE TABLE public.privacy_settings (user_id uuid PRIMARY KEY, allow_contact_requests text DEFAULT 'everyone', discoverable_by_email boolean DEFAULT true, discoverable_by_username boolean DEFAULT true, allow_dm_from text DEFAULT 'everyone', show_online_status boolean DEFAULT true, read_receipts boolean DEFAULT true, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now(), read_receipts_enabled boolean DEFAULT true);
+CREATE TABLE public.profiles (id uuid PRIMARY KEY, username text, name text, avatar text, bio text, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now(), has_password boolean DEFAULT false, photo_url text, theme text DEFAULT 'dark', accent text DEFAULT 'purple', font_id text DEFAULT 'poppins', language text DEFAULT 'pt-br', anim_style text DEFAULT 'default', presence_color text, presence_color_auto boolean DEFAULT true);
+CREATE TABLE public.space_assets (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, space_id uuid, storage_path text, url text, filename text, created_at timestamptz DEFAULT now(), created_by uuid);
+CREATE TABLE public.space_comments (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, space_id uuid, node_id uuid, x double precision, y double precision, author_id uuid, message text, parent_id uuid, created_at timestamptz DEFAULT now());
+CREATE TABLE public.space_connectors (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, space_id uuid, from_node_id uuid, to_node_id uuid, control_points jsonb DEFAULT '[]', style_json jsonb DEFAULT '{}', created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
+CREATE TABLE public.space_invitations (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, space_id uuid, inviter_id uuid, invitee_email text, invitee_user_id uuid, role text DEFAULT 'reader', status text DEFAULT 'pending', created_at timestamptz DEFAULT now(), expires_at timestamptz, history_dismissed_at timestamptz);
+CREATE TABLE public.space_members (space_id uuid, user_id uuid, role text DEFAULT 'editor', created_at timestamptz DEFAULT now(), PRIMARY KEY (space_id, user_id));
+CREATE TABLE public.space_nodes (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, space_id uuid, type text, x double precision DEFAULT 0, y double precision DEFAULT 0, width double precision DEFAULT 100, height double precision DEFAULT 100, rotation double precision DEFAULT 0, scale double precision DEFAULT 1, data_json jsonb DEFAULT '{}', style_json jsonb DEFAULT '{}', parent_id uuid, z_index integer DEFAULT 0, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now(), created_by uuid);
+CREATE TABLE public.space_ruler_guides (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, space_id uuid, page_id text DEFAULT 'page-main', axis text, "position" double precision, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
+CREATE TABLE public.spaces (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, owner_id uuid, title text, color text, emoji text DEFAULT '🌌', "position" integer DEFAULT 0, group_id uuid, pan_x double precision DEFAULT 0, pan_y double precision DEFAULT 0, zoom double precision DEFAULT 1, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
+CREATE TABLE public.subtasks (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, card_id uuid, title text, done boolean DEFAULT false, "position" integer DEFAULT 0, link_url text, link_label text, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
+CREATE TABLE public.user_presence (user_id uuid PRIMARY KEY, last_seen_at timestamptz DEFAULT now());

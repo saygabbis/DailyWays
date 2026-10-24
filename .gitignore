@@ -30,3 +30,7 @@ dist-ssr
 
 # Supabase CLI (estado local, não versionar)
 supabase/.temp
+
+# Teste ponta a ponta (build e capturas)
+dist-e2e
+e2e/out
