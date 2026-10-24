@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import BoardList from './BoardList';
 import ListDetailsModal from './ListDetailsModal';
-import BoardDetailsModal from '../Sidebar/BoardDetailsModal';
+import BoardDetailsModal from './BoardDetailsModal';
 import { Plus, Loader2, X, GripVertical, Share2 } from 'lucide-react';
 import { TEXT } from '@dailyways/limits';
 import { fetchBoardMembers, sortBoardMembersOwnerFirst } from '../../services/boardService';

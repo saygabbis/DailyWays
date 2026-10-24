@@ -3,7 +3,7 @@ import ErrorBoundary from './components/Common/ErrorBoundary';
 import { useAuth } from './context/AuthContext';
 import { useApp } from './context/AppContext';
 import { useTheme } from './context/ThemeContext';
-import Sidebar from './components/Layout/Sidebar';
+import Sidebar from './components/Sidebar/Sidebar';
 import Header from './components/Layout/Header';
 import MobileBottomNav from './components/Layout/MobileBottomNav';
 import BoardView from './components/Board/BoardView';

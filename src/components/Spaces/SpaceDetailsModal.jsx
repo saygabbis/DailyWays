@@ -13,8 +13,8 @@ import {
     updateSpace,
 } from '../../services/workspaceService';
 import { TEXT } from '@dailyways/limits';
-import { RoleSelect } from './BoardDetailsModal';
-import './BoardDetailsModal.css';
+import { RoleSelect } from '../Board/BoardDetailsModal';
+import '../Board/BoardDetailsModal.css';
 
 export default function SpaceDetailsModal({ space, onClose, initialTab = 'details' }) {
     const { state, dispatch, showConfirm } = useApp();
