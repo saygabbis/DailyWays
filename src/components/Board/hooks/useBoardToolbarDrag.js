@@ -89,6 +89,7 @@ export function useBoardToolbarDrag(ctx) {
 
     useLayoutEffect(() => {
         if (!profileMenuOpen || !showBoardToolbar) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- medição de layout do DOM antes do paint
             setProfileAvoidTranslate({ x: 0, y: 0 });
             return undefined;
         }

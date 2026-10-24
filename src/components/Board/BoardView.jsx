@@ -86,12 +86,8 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         return () => mo.disconnect();
     }, []);
 
-    // Reset position when shown
-    useEffect(() => {
-        if (!showBoardToolbar) {
-            setToolbarPos(null);
-        }
-    }, [showBoardToolbar]);
+    // Reset position when hidden
+    if (!showBoardToolbar && toolbarPos !== null) setToolbarPos(null);
 
     useEffect(() => {
         const mq = window.matchMedia('(max-width: 768px)');
@@ -102,6 +98,7 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
     }, []);
 
     const board = getActiveBoard();
+    const activeBoardId = board?.id;
     const editorsByCardId = useMergedBoardEditors(focusedCardId, board?.id);
     const boardCollab = useBoardCollabContext();
     const { collabDispatch, connected: collabConnected } = useBoardCollabDispatch(board?.id);
@@ -171,6 +168,7 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         const closedModal = hadModal && !focusedCardId;
         prevFocusedCardIdRef.current = focusedCardId;
         if (!closedModal) return undefined;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- faz parte da sequência de presença ao fechar o modal (socket + timers)
         setHoldBoardSurface(true);
         restoreBoardPresenceAfterModal(board.id);
         announcePresence(board.id);
@@ -355,8 +353,8 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         const el = scrollerRef.current;
         if (!el) return;
         const coords = pointerCoordsFromBoardEvent(e, el);
-        if (board?.id) {
-            setLastBoardPointer(board.id, {
+        if (activeBoardId) {
+            setLastBoardPointer(activeBoardId, {
                 x: coords.x,
                 y: coords.y,
                 cursorScreen: coords.cursorScreen,
@@ -366,7 +364,7 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
             ...coords,
             selectedCardId: null,
         });
-    }, [updateBoardCursor, board?.id, onBoardSurface]);
+    }, [updateBoardCursor, activeBoardId, onBoardSurface]);
 
     const handleCardHover = useCallback((cardId) => {
         if (!onBoardSurface) return;

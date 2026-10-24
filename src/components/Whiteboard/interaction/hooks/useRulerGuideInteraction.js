@@ -79,6 +79,7 @@ export function useRulerGuideInteraction({ containerRef, viewportRef, spaceId })
 
     useEffect(() => {
         if (!guidesVisible || !snapEnabled) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- limpa as guias de snap quando réguas/snap são desligados
             clearGuideSnapGuides();
         }
     }, [guidesVisible, snapEnabled, clearGuideSnapGuides]);

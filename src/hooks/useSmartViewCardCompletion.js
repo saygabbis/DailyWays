@@ -10,6 +10,7 @@ import { useAuth } from '../context/useAuth';
 export function useSmartViewCardCompletion() {
     const { state, flushBoardPersist } = useApp();
     const { user } = useAuth();
+    const userId = user?.id;
     const ctx = useBoardCollabContext();
     const recordCompletion = useSmartViewCompletionStore((s) => s.record);
     const removeCompletion = useSmartViewCompletionStore((s) => s.remove);
@@ -36,8 +37,8 @@ export function useSmartViewCardCompletion() {
         const liveBoard = state.boards.find((b) => b.id === boardId);
         if (!liveBoard) return;
 
-        if (user?.id) {
-            await ensureBoardHistoryHydrated(user.id, boardId);
+        if (userId) {
+            await ensureBoardHistoryHydrated(userId, boardId);
         }
 
         const loc = findCardOnBoard(liveBoard, card.id);
@@ -74,7 +75,7 @@ export function useSmartViewCardCompletion() {
         }
     }, [
         state.boards,
-        user?.id,
+        userId,
         collabDispatchForBoard,
         getBoardSnapshot,
         recordCompletion,

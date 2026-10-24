@@ -40,11 +40,14 @@ export default function SpaceDetailsModal({ space, onClose, initialTab = 'detail
     const [shareError, setShareError] = useState('');
     const [shareSuccess, setShareSuccess] = useState('');
 
-    useEffect(() => {
+    const spaceFieldsKey = JSON.stringify([spaceId, currentSpace?.title, currentSpace?.emoji, currentSpace?.color]);
+    const [prevSpaceFieldsKey, setPrevSpaceFieldsKey] = useState(spaceFieldsKey);
+    if (spaceFieldsKey !== prevSpaceFieldsKey) {
+        setPrevSpaceFieldsKey(spaceFieldsKey);
         setTitle(currentSpace?.title || '');
         setEmoji(currentSpace?.emoji || '🌌');
         setColor(currentSpace?.color || null);
-    }, [spaceId, currentSpace?.title, currentSpace?.emoji, currentSpace?.color]);
+    }
 
     const loadMembers = useCallback(async () => {
         if (!spaceId) return;
@@ -57,6 +60,7 @@ export default function SpaceDetailsModal({ space, onClose, initialTab = 'detail
     }, [spaceId]);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- busca dados no Supabase ao montar/trocar a dependência (sincroniza com sistema externo)
         if (activeTab === 'share') loadMembers();
     }, [activeTab, loadMembers]);
 

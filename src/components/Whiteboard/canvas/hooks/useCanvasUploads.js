@@ -19,6 +19,7 @@ export function useCanvasUploads(ctx) {
         collabCreateNode,
         collabConnected,
     } = ctx;
+    const userId = user?.id;
 
     const getViewportCenterWorld = useCallback(() => {
         const rect = containerRef.current?.getBoundingClientRect();
@@ -38,7 +39,7 @@ export function useCanvasUploads(ctx) {
                 return;
             }
             try {
-                const result = await uploadSpaceAsset(spaceId, file, user?.id);
+                const result = await uploadSpaceAsset(spaceId, file, userId);
                 if (!result.url) {
                     addToast(result.error || 'Falha ao enviar imagem.', 'error');
                     return;
@@ -61,16 +62,16 @@ export function useCanvasUploads(ctx) {
                     zoom
                 );
                 if (collabConnected) {
-                    collabCreateNode({ ...payload, createdBy: user?.id ?? null });
+                    collabCreateNode({ ...payload, createdBy: userId ?? null });
                 } else {
-                    const res = await insertNode(spaceId, payload, user?.id);
+                    const res = await insertNode(spaceId, payload, userId);
                     if (res.success) useWhiteboardStore.getState().addNode(payload);
                 }
             } catch (err) {
                 console.error('[CanvasEngine] handleUploadImage error', err);
             }
         },
-        [spaceId, guardNodeLimit, user?.id, pendingUploadWorldPositionRef, viewportRef, collabConnected, addToast, getViewportCenterWorld, collabCreateNode]
+        [spaceId, guardNodeLimit, userId, pendingUploadWorldPositionRef, viewportRef, collabConnected, addToast, getViewportCenterWorld, collabCreateNode]
     );
 
     const handleUploadFile = useCallback(
@@ -78,7 +79,7 @@ export function useCanvasUploads(ctx) {
             if (!spaceId || !file) return;
             if (!guardNodeLimit(1)) return;
             try {
-                const result = await uploadSpaceAsset(spaceId, file, user?.id);
+                const result = await uploadSpaceAsset(spaceId, file, userId);
                 if (!result.url) {
                     addToast(result.error || 'Falha ao enviar arquivo.', 'error');
                     return;
@@ -103,9 +104,9 @@ export function useCanvasUploads(ctx) {
                         zoom
                     );
                     if (collabConnected) {
-                        collabCreateNode({ ...payload, createdBy: user?.id ?? null });
+                        collabCreateNode({ ...payload, createdBy: userId ?? null });
                     } else {
-                        const res = await insertNode(spaceId, payload, user?.id);
+                        const res = await insertNode(spaceId, payload, userId);
                         if (res.success) useWhiteboardStore.getState().addNode(payload);
                     }
                     return;
@@ -120,16 +121,16 @@ export function useCanvasUploads(ctx) {
                 const payload = getDefaultNodePayload(defaultKey, place.x, place.y);
                 Object.assign(payload.data, { url: result.url, filename: file.name, size: sizeStr });
                 if (collabConnected) {
-                    collabCreateNode({ ...payload, createdBy: user?.id ?? null });
+                    collabCreateNode({ ...payload, createdBy: userId ?? null });
                 } else {
-                    const res = await insertNode(spaceId, payload, user?.id);
+                    const res = await insertNode(spaceId, payload, userId);
                     if (res.success) useWhiteboardStore.getState().addNode(payload);
                 }
             } catch (err) {
                 console.error('[CanvasEngine] handleUploadFile error', err);
             }
         },
-        [spaceId, guardNodeLimit, user?.id, pendingUploadWorldPositionRef, collabConnected, addToast, getViewportCenterWorld, viewportRef, collabCreateNode]
+        [spaceId, guardNodeLimit, userId, pendingUploadWorldPositionRef, collabConnected, addToast, getViewportCenterWorld, viewportRef, collabCreateNode]
     );
 
     return {

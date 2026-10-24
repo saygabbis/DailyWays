@@ -53,11 +53,13 @@ export default function ListDetailsModal({ list, boardId, onSave, onClose }) {
         getCoords: getListPointerCoords,
     });
 
-    useEffect(() => {
+    const [prevList, setPrevList] = useState(list);
+    if (list !== prevList) {
+        setPrevList(list);
         setTitle(list?.title ?? '');
         setColor(list?.color ?? null);
         setIsCompletionList(list?.isCompletionList ?? false);
-    }, [list]);
+    }
 
     useEffect(() => {
         const onKey = (e) => {

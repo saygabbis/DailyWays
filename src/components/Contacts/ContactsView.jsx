@@ -107,6 +107,7 @@ export default function ContactsView() {
   }, [myId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- busca dados no Supabase ao montar/trocar a dependência (sincroniza com sistema externo)
     refresh();
   }, [refresh]);
 

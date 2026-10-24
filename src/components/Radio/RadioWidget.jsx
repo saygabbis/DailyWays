@@ -36,6 +36,7 @@ export default function RadioWidget() {
     // Ao abrir, traz o widget de volta se ficou fora da tela (ex.: janela redimensionada).
     useEffect(() => {
         if (!isOpen) return;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- reposiciona com base no tamanho da janela, medido só ao abrir
         setPosition((pos) => (
             pos.x > window.innerWidth - 80 || pos.y > window.innerHeight - 80
                 ? getDefaultPos(size.width, size.height)

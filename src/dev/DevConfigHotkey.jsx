@@ -6,12 +6,10 @@ import DevConfigOverlay from './DevConfigOverlay.jsx';
 export default function DevConfigHotkey() {
   const { canOpenDevMenu } = useDevAccess();
   const [open, setOpen] = useState(false);
+  if (!canOpenDevMenu && open) setOpen(false);
 
   useEffect(() => {
-    if (!canOpenDevMenu) {
-      setOpen(false);
-      return undefined;
-    }
+    if (!canOpenDevMenu) return undefined;
 
     const onKeyDown = (e) => {
       if (!e.ctrlKey || !e.shiftKey || e.altKey || e.metaKey) return;

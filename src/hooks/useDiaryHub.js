@@ -20,6 +20,7 @@ import { TIMEZONE_FALLBACK } from '../components/MyDay/hub/diaryHubConfig';
 export function useDiaryHub() {
     const { getMyDayCards, getMyDayCardsAll } = useApp();
     const { user } = useAuth();
+    const userId = user?.id;
     const [todayProgress, setTodayProgress] = useState(null);
     const [streak, setStreak] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -40,20 +41,21 @@ export function useDiaryHub() {
     const motivationalPhrase = useMemo(() => getDayMotivationalPhrase(), []);
 
     const refreshProgress = useCallback(async () => {
-        if (!user?.id) {
+        if (!userId) {
             setLoading(false);
             return;
         }
         const [{ data: today }, streakCount] = await Promise.all([
-            fetchTodayProgress(user.id, timezone),
-            computeStreak(user.id, timezone),
+            fetchTodayProgress(userId, timezone),
+            computeStreak(userId, timezone),
         ]);
         setTodayProgress(today);
         setStreak(streakCount);
         setLoading(false);
-    }, [user?.id, timezone]);
+    }, [userId, timezone]);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- busca dados no Supabase ao montar/trocar a dependência (sincroniza com sistema externo)
         setLoading(true);
         refreshProgress();
     }, [refreshProgress]);
@@ -65,10 +67,10 @@ export function useDiaryHub() {
     }, [refreshProgress]);
 
     const onTaskCompleted = useCallback(async (card) => {
-        if (!user?.id || !card?.myDay) return;
-        await recordTaskCompletion(user.id, card, timezone);
+        if (!userId || !card?.myDay) return;
+        await recordTaskCompletion(userId, card, timezone);
         await refreshProgress();
-    }, [user?.id, timezone, refreshProgress]);
+    }, [userId, timezone, refreshProgress]);
 
     const focusDisplay = formatFocusDuration(todayProgress?.focusSeconds ?? 0);
 

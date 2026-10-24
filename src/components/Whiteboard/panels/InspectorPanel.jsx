@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 import { useCollabPatch } from '../../../collab/space/ops/useCollabPatch';
 import { alignSelectedNodes } from '../core/align/whiteboardAlign';
@@ -314,23 +314,25 @@ function DesignTab({ selectedNodes, single, nodes, spaceId }) {
     const [sizeH, setSizeH] = useState('');
     const [rotation, setRotation] = useState('');
 
-    useEffect(() => {
+    // Campos espelham o nó selecionado; ressincroniza no render quando ele (ou a árvore) muda.
+    const [prevSync, setPrevSync] = useState(null);
+    if (prevSync?.single !== single || prevSync?.nodes !== nodes) {
+        setPrevSync({ single, nodes });
         if (!single) {
             setPosX('');
             setPosY('');
             setSizeW('');
             setSizeH('');
             setRotation('');
-            return;
+        } else {
+            const world = nodeToWorld(single, buildNodesById(nodes));
+            setPosX(String(Math.round(world.x)));
+            setPosY(String(Math.round(world.y)));
+            setSizeW(String(Math.round(single.width ?? 0)));
+            setSizeH(String(Math.round(single.height ?? 0)));
+            setRotation(String(Math.round(single.rotation ?? 0)));
         }
-        const byId = buildNodesById(nodes);
-        const world = nodeToWorld(single, byId);
-        setPosX(String(Math.round(world.x)));
-        setPosY(String(Math.round(world.y)));
-        setSizeW(String(Math.round(single.width ?? 0)));
-        setSizeH(String(Math.round(single.height ?? 0)));
-        setRotation(String(Math.round(single.rotation ?? 0)));
-    }, [single, nodes]);
+    }
 
     const applyPosition = () => {
         if (!single) return;

@@ -7,6 +7,7 @@ import { performBoardUndo, performBoardRedo } from '../collab/board/history/boar
 
 export function useBoardUndo(boardId) {
     const { user } = useAuth();
+    const userId = user?.id;
     const { state, persistBoard } = useApp();
     const ctx = useBoardCollabContext();
 
@@ -34,16 +35,16 @@ export function useBoardUndo(boardId) {
     }, [boardId, persistBoard]);
 
     const undo = useCallback(async () => {
-        if (!boardId || !user?.id) return false;
-        const ok = await performBoardUndo(boardId, getBoardSnapshot, collabDispatchForBoard, user.id);
+        if (!boardId || !userId) return false;
+        const ok = await performBoardUndo(boardId, getBoardSnapshot, collabDispatchForBoard, userId);
         return flushAfterHistory(ok);
-    }, [boardId, user?.id, getBoardSnapshot, collabDispatchForBoard, flushAfterHistory]);
+    }, [boardId, userId, getBoardSnapshot, collabDispatchForBoard, flushAfterHistory]);
 
     const redo = useCallback(async () => {
-        if (!boardId || !user?.id) return false;
-        const ok = await performBoardRedo(boardId, getBoardSnapshot, collabDispatchForBoard, user.id);
+        if (!boardId || !userId) return false;
+        const ok = await performBoardRedo(boardId, getBoardSnapshot, collabDispatchForBoard, userId);
         return flushAfterHistory(ok);
-    }, [boardId, user?.id, getBoardSnapshot, collabDispatchForBoard, flushAfterHistory]);
+    }, [boardId, userId, getBoardSnapshot, collabDispatchForBoard, flushAfterHistory]);
 
     return { undo, redo, canUndo, canRedo };
 }

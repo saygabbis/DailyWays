@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Ban, Trash2, UserMinus, X } from 'lucide-react';
 import { updateContact, removeContact } from '../../services/contactsService';
 import { blockUser } from '../../services/privacyService';
@@ -22,11 +22,13 @@ export default function ChatContactDrawer({
     profile?.name || (profile?.username ? `@${profile.username}` : 'Contato')
   ), [profile?.name, profile?.username]);
 
-  useEffect(() => {
+  const [prevSync, setPrevSync] = useState({ initialNickname, initialNotify, open });
+  if (prevSync.initialNickname !== initialNickname || prevSync.initialNotify !== initialNotify || prevSync.open !== open) {
+    setPrevSync({ initialNickname, initialNotify, open });
     setNickname(initialNickname || '');
     setNotify(initialNotify !== false);
     setErr('');
-  }, [initialNickname, initialNotify, open]);
+  }
 
   const save = async () => {
     if (!contactUserId) return;

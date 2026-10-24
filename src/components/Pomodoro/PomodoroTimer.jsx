@@ -37,13 +37,16 @@ export default function PomodoroTimer() {
     const [size, setSize] = useState(DEFAULT_SIZE);     // full mode
     const [miniSize, setMiniSize] = useState(DEFAULT_MINI_SIZE);    // minimized mode
 
-    useEffect(() => {
+    // Ao abrir, volta para posição e tamanhos padrão.
+    const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+    if (isOpen !== prevIsOpen) {
+        setPrevIsOpen(isOpen);
         if (isOpen) {
             setPosition(getDefaultPos(DEFAULT_SIZE.width, 320));
             setSize(DEFAULT_SIZE);
             setMiniSize(DEFAULT_MINI_SIZE);
         }
-    }, [isOpen]);
+    }
 
     // Reposiciona se a tela mudar (ex.: rotação / mobile address bar).
     useEffect(() => {

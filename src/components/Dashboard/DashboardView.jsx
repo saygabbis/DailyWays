@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useApp } from '../../context/useApp';
 import {
     LayoutDashboard,
@@ -137,15 +137,15 @@ function TaskList({ cards, emptyText, limit = 5, showAllLabel, ...itemProps }) {
 
 export default function DashboardView() {
     const { state, getMyDayCards, getMyDayCardsAll } = useApp();
-    const [animatedRate, setAnimatedRate] = useState(0);
-    const hasAnimated = useRef(false);
+    // O anel de progresso entra animado de 0 até o valor real; depois acompanha direto.
+    const [introDone, setIntroDone] = useState(false);
 
     const allCardsWithMeta = useMemo(() => state.boards.flatMap(b =>
         b.lists.flatMap(l => l.cards.map(c => ({ ...c, _list: l, _board: b })))
     ), [state.boards]);
 
     const isCompleted = c => c._list?.isCompletionList === true;
-    const activeCards = allCardsWithMeta.filter(c => !isCompleted(c));
+    const activeCards = useMemo(() => allCardsWithMeta.filter(c => c._list?.isCompletionList !== true), [allCardsWithMeta]);
     const completedCards = allCardsWithMeta.filter(isCompleted);
 
     const allSubtasks = useMemo(() => state.boards.flatMap(b =>
@@ -223,12 +223,10 @@ export default function DashboardView() {
     const criticalCount = urgentCards.length + overdueCards.length;
 
     useEffect(() => {
-        if (hasAnimated.current) { setAnimatedRate(completionRate); return; }
-        hasAnimated.current = true;
-        setAnimatedRate(0);
-        const t = setTimeout(() => setAnimatedRate(completionRate), 100);
+        const t = setTimeout(() => setIntroDone(true), 100);
         return () => clearTimeout(t);
-    }, [completionRate]);
+    }, []);
+    const animatedRate = introDone ? completionRate : 0;
 
     const now = new Date();
 

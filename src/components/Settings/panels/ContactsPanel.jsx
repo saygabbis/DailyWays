@@ -8,6 +8,7 @@ import '../AvatarCropper.css';
 // CONTACTS PANEL (settings)
 // ─────────────────────────────────────────────
 const ContactsPanel = memo(function ContactsPanel({ user }) {
+    const userId = user?.id;
     const [loading, setLoading] = useState(true);
     const [contactsCount, setContactsCount] = useState(0);
     const [incoming, setIncoming] = useState([]);
@@ -16,7 +17,7 @@ const ContactsPanel = memo(function ContactsPanel({ user }) {
     const [err, setErr] = useState('');
 
     const refresh = useCallback(async () => {
-        if (!user?.id) return;
+        if (!userId) return;
         setLoading(true);
         setErr('');
         const [{ data: contacts, error: cErr }, { data: reqs, error: rErr }, { data: blocks, error: bErr }] = await Promise.all([
@@ -26,14 +27,15 @@ const ContactsPanel = memo(function ContactsPanel({ user }) {
         ]);
         if (cErr || rErr || bErr) setErr(cErr || rErr || bErr || 'Erro ao carregar.');
         setContactsCount((contacts || []).length);
-        const inReq = (reqs || []).filter((r) => r.to_user_id === user.id && r.status === 'pending');
-        const outReq = (reqs || []).filter((r) => r.from_user_id === user.id && r.status === 'pending');
+        const inReq = (reqs || []).filter((r) => r.to_user_id === userId && r.status === 'pending');
+        const outReq = (reqs || []).filter((r) => r.from_user_id === userId && r.status === 'pending');
         setIncoming(inReq);
         setOutgoing(outReq);
         setBlocked(blocks || []);
         setLoading(false);
-    }, [user?.id]);
+    }, [userId]);
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- busca dados no Supabase ao montar/trocar a dependência (sincroniza com sistema externo)
     useEffect(() => { refresh(); }, [refresh]);
 
     const accept = async (id) => {

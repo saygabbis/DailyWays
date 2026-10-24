@@ -21,6 +21,7 @@ export default function StickyNoteNode({ node, onNodePointerDown, onNodeContextM
     useEffect(() => {
         if (!isEditing) return;
         if (editTypingSeed) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- consome o "typing seed" do store do whiteboard ao entrar em edição
             setEditValue((text || '') + editTypingSeed);
             setEditTypingSeed(null);
         } else {

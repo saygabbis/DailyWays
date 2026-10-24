@@ -58,13 +58,14 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/aaaa'
     }, [open]);
 
     // Sync view when value changes externally
-    useEffect(() => {
-        const d = parseLocalDate(value);
-        if (d) {
-            setViewYear(d.getFullYear());
-            setViewMonth(d.getMonth());
+    const [prevValue, setPrevValue] = useState(value);
+    if (value !== prevValue) {
+        setPrevValue(value);
+        if (selected) {
+            setViewYear(selected.getFullYear());
+            setViewMonth(selected.getMonth());
         }
-    }, [value]);
+    }
 
     const handleToggle = () => {
         setOpen(prev => !prev);

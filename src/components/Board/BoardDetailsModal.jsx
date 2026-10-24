@@ -112,6 +112,7 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
 
     useEffect(() => {
         if (activeTab === 'share') {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- busca dados no Supabase ao montar/trocar a dependência (sincroniza com sistema externo)
             loadMembers();
         }
     }, [activeTab, loadMembers]);

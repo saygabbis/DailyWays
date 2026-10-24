@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import './ConfirmModal.css';
 import { AlertTriangle, Info, X } from 'lucide-react';
 
@@ -13,13 +13,15 @@ export default function ConfirmModal({
     type = 'danger',
     checkbox = null,
 }) {
-    const [checkboxChecked, setCheckboxChecked] = useState(false);
-
-    useEffect(() => {
-        if (show && checkbox) {
-            setCheckboxChecked(!!checkbox.defaultChecked);
-        }
-    }, [show, checkbox]);
+    const [checkboxChecked, setCheckboxChecked] = useState(() => !!(show && checkbox?.defaultChecked));
+    // Ao (re)abrir ou trocar o checkbox, volta ao valor padrão — ajustado no render, sem effect.
+    const [prevShow, setPrevShow] = useState(show);
+    const [prevCheckbox, setPrevCheckbox] = useState(checkbox);
+    if (show !== prevShow || checkbox !== prevCheckbox) {
+        setPrevShow(show);
+        setPrevCheckbox(checkbox);
+        if (show && checkbox) setCheckboxChecked(!!checkbox.defaultChecked);
+    }
 
     if (!show) return null;
 

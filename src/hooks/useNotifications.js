@@ -34,8 +34,9 @@ function getPrimaryFaviconLink() {
 
 export function useNotifications() {
     const { user } = useAuth();
+    const userId = user?.id;
     const [items, setItems] = useState([]);
-    const [readIds, setReadIds] = useState(() => loadReadIds(user?.id));
+    const [readIds, setReadIds] = useState(() => loadReadIds(userId));
     const [loading, setLoading] = useState(true);
     const prevIdsRef = useRef(new Set());
     const notificationsReadyRef = useRef(false);
@@ -150,7 +151,7 @@ export function useNotifications() {
     }, []);
 
     const refresh = useCallback(async () => {
-        if (!user?.id) {
+        if (!userId) {
             setItems([]);
             setLoading(false);
             return;
@@ -164,9 +165,9 @@ export function useNotifications() {
             { data: chatMessages, error: msgErr },
         ] = await Promise.all([
             fetchNotificationInvitations(),
-            fetchIncomingContactRequests(user.id),
-            fetchOutgoingContactOutcomes(user.id),
-            fetchIncomingMessageNotifications(user.id),
+            fetchIncomingContactRequests(userId),
+            fetchOutgoingContactOutcomes(userId),
+            fetchIncomingMessageNotifications(userId),
         ]);
 
         if (!invErr && !crErr && !coErr && !msgErr) {
@@ -192,11 +193,11 @@ export function useNotifications() {
         setLoading(false);
         window.dispatchEvent(new CustomEvent('notifications-updated'));
         window.dispatchEvent(new CustomEvent('contacts-updated'));
-    }, [dispatchPopup, user?.id, playNotificationSound]);
+    }, [dispatchPopup, userId, playNotificationSound]);
 
     const handleIncomingContactRequestRow = useCallback(async (row) => {
-        if (!user?.id || !row) return;
-        if (row.status !== 'pending' || row.to_user_id !== user.id) return;
+        if (!userId || !row) return;
+        if (row.status !== 'pending' || row.to_user_id !== userId) return;
 
         const { data: profile } = await supabase
             .from('profiles')
@@ -216,20 +217,21 @@ export function useNotifications() {
             if (popupOnes.length > 0) playNotificationSound();
         }
         refresh();
-    }, [dispatchPopup, refresh, user?.id, playNotificationSound]);
+    }, [dispatchPopup, refresh, userId, playNotificationSound]);
 
     useEffect(() => {
-        setReadIds(loadReadIds(user?.id));
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- troca de usuário: recarrega as lidas (localStorage) e as notificações
+        setReadIds(loadReadIds(userId));
         prevIdsRef.current = new Set();
         notificationsReadyRef.current = false;
         refresh();
-    }, [user?.id, refresh]);
+    }, [userId, refresh]);
 
     useEffect(() => {
-        if (!user?.id) return undefined;
+        if (!userId) return undefined;
 
         const channel = supabase
-            .channel(`notifications-${user.id}`)
+            .channel(`notifications-${userId}`)
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'board_invitations' },
@@ -246,7 +248,7 @@ export function useNotifications() {
                     event: 'INSERT',
                     schema: 'public',
                     table: 'contact_requests',
-                    filter: `to_user_id=eq.${user.id}`,
+                    filter: `to_user_id=eq.${userId}`,
                 },
                 (payload) => {
                     void handleIncomingContactRequestRow(payload.new);
@@ -258,7 +260,7 @@ export function useNotifications() {
                     event: 'UPDATE',
                     schema: 'public',
                     table: 'contact_requests',
-                    filter: `to_user_id=eq.${user.id}`,
+                    filter: `to_user_id=eq.${userId}`,
                 },
                 (payload) => {
                     void handleIncomingContactRequestRow(payload.new);
@@ -270,7 +272,7 @@ export function useNotifications() {
                     event: 'UPDATE',
                     schema: 'public',
                     table: 'contact_requests',
-                    filter: `from_user_id=eq.${user.id}`,
+                    filter: `from_user_id=eq.${userId}`,
                 },
                 () => refresh()
             )
@@ -289,7 +291,7 @@ export function useNotifications() {
                     event: 'INSERT',
                     schema: 'public',
                     table: 'dm_message_requests',
-                    filter: `recipient_id=eq.${user.id}`,
+                    filter: `recipient_id=eq.${userId}`,
                 },
                 () => refresh()
             )
@@ -310,13 +312,13 @@ export function useNotifications() {
         };
         const onMarkRead = (e) => {
             const n = e.detail?.notification;
-            if (!n || !user?.id) return;
+            if (!n || !userId) return;
             const key = notificationReadKey(n);
             if (!key) return;
             setReadIds((prev) => {
                 const next = new Set(prev);
                 next.add(key);
-                saveReadIds(user.id, next);
+                saveReadIds(userId, next);
                 return next;
             });
         };
@@ -331,7 +333,7 @@ export function useNotifications() {
             window.removeEventListener('app-chat-active', onChatActive);
             window.removeEventListener('app-notification-mark-read', onMarkRead);
         };
-    }, [handleIncomingContactRequestRow, refresh, user?.id]);
+    }, [handleIncomingContactRequestRow, refresh, userId]);
 
     const unreadCount = items.filter((n) => !readIds.has(notificationReadKey(n))).length;
 
@@ -374,7 +376,7 @@ export function useNotifications() {
     }, []);
 
     const markRead = useCallback((idOrNotification) => {
-        if (!user?.id) return;
+        if (!userId) return;
         const key = typeof idOrNotification === 'object'
             ? notificationReadKey(idOrNotification)
             : idOrNotification;
@@ -382,17 +384,17 @@ export function useNotifications() {
         setReadIds((prev) => {
             const next = new Set(prev);
             next.add(key);
-            saveReadIds(user.id, next);
+            saveReadIds(userId, next);
             return next;
         });
-    }, [user?.id]);
+    }, [userId]);
 
     const markAllRead = useCallback(() => {
-        if (!user?.id) return;
+        if (!userId) return;
         const next = new Set(items.map((n) => notificationReadKey(n)));
         setReadIds(next);
-        saveReadIds(user.id, next);
-    }, [user?.id, items]);
+        saveReadIds(userId, next);
+    }, [userId, items]);
 
     const notifications = items.map((n) => {
         const read = readIds.has(notificationReadKey(n));

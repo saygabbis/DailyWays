@@ -114,6 +114,7 @@ export default function ChatWidget() {
   }, [ensureProfiles, myId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- busca dados no Supabase ao montar/trocar a dependência (sincroniza com sistema externo)
     refreshContacts();
     refreshInbox();
   }, [refreshContacts, refreshInbox]);
@@ -249,6 +250,7 @@ export default function ChatWidget() {
     const pad = 20;
     const left = Math.max(pad, window.innerWidth - DEFAULT_PANEL_W - pad);
     const top = Math.max(pad, window.innerHeight - panelHeight - (pad + 64));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- posição padrão depende do tamanho da janela, medido só ao abrir
     setPanelPos({ left, top });
   }, [isOpen, panelHeight, panelPos]);
 

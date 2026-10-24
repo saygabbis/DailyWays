@@ -154,9 +154,13 @@ export default function BoardList({
     }, []);
 
     // Animação de drop: re-aciona ao soltar a lista após drag
+    const [prevDropAnim, setPrevDropAnim] = useState({ isDropped, remoteListAnim });
+    if (prevDropAnim.isDropped !== isDropped || prevDropAnim.remoteListAnim !== remoteListAnim) {
+        setPrevDropAnim({ isDropped, remoteListAnim });
+        if (isDropped || remoteListAnim) setShouldAnimate(true);
+    }
     useEffect(() => {
         if (!isDropped && !remoteListAnim) return;
-        setShouldAnimate(true);
         const timer = setTimeout(() => setShouldAnimate(false), 900);
         return () => clearTimeout(timer);
     }, [isDropped, remoteListAnim]);

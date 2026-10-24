@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useNodeDragTranslate } from '../../interaction/hooks/useNodeDragTranslate';
 import { clampViewportZoom } from '../../interaction/viewport/viewportLimits.js';
 import { WORLD_DIM_EPSILON } from '../../shared/vectorViewport.js';
 import { worldToScreenWithContainer } from '../../interaction/viewport/viewportUtils';
+import { useElementRect } from '../../../../hooks/useElementRect';
 
 /** Tamanho visual e área de clique em pixels de ecrã. */
 const HANDLE_VISUAL_PX = 10;
@@ -22,31 +23,6 @@ const HANDLES = [
     { id: 'w', cursor: 'ew-resize', left: '0%', top: '50%' },
 ];
 
-function useContainerRect(containerRef) {
-    const [rect, setRect] = useState(null);
-
-    useEffect(() => {
-        const el = containerRef?.current;
-        if (!el) {
-            setRect(null);
-            return undefined;
-        }
-        const update = () => setRect(el.getBoundingClientRect());
-        update();
-        const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
-        ro?.observe(el);
-        window.addEventListener('scroll', update, true);
-        window.addEventListener('resize', update);
-        return () => {
-            ro?.disconnect();
-            window.removeEventListener('scroll', update, true);
-            window.removeEventListener('resize', update);
-        };
-    }, [containerRef]);
-
-    return rect;
-}
-
 export default function ResizeHandles({
     node,
     viewport,
@@ -55,7 +31,7 @@ export default function ResizeHandles({
     onRotateStart,
     unified = false,
 }) {
-    const containerRect = useContainerRect(containerRef);
+    const containerRect = useElementRect(containerRef);
     const dragTranslate = useNodeDragTranslate(node.id);
     const zoom = clampViewportZoom(viewport?.zoom ?? 1);
 

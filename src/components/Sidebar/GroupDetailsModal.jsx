@@ -30,11 +30,13 @@ export default function GroupDetailsModal({ group, onSave, onClose }) {
   const [color, setColor] = useState(group?.color ?? null);
   const [icon, setIcon] = useState(group?.icon ?? null);
 
-  useEffect(() => {
+  const [prevGroup, setPrevGroup] = useState(group);
+  if (group !== prevGroup) {
+    setPrevGroup(group);
     setTitle(group?.title ?? '');
     setColor(group?.color ?? null);
     setIcon(group?.icon ?? null);
-  }, [group]);
+  }
 
   useEffect(() => {
     const onKey = (e) => {

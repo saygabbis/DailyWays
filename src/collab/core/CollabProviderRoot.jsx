@@ -35,6 +35,7 @@ export default function CollabProviderRoot({ children }) {
   useEffect(() => {
     if (!isCollabEnabled() || !user?.id || authLoadingRef.current) {
       disconnectCollabSocket();
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- ciclo de vida do socket de collab: zera o estado ao desconectar
       setSocket(null);
       setConnected(false);
       return undefined;

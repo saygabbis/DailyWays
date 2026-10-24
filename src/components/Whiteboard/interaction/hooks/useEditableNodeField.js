@@ -16,6 +16,7 @@ export function useEditableNodeField(nodeId, field, { displayValue, emptySeedVal
         if (!isEditing) return;
         if (editTypingSeed) {
             const base = displayValue === emptySeedValue ? '' : (displayValue || '');
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- consome o "typing seed" do store do whiteboard ao entrar em edição
             setEditValue(base + editTypingSeed);
             setEditTypingSeed(null);
         } else {

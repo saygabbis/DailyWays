@@ -51,6 +51,7 @@ const InvitationsPanel = memo(function InvitationsPanel() {
     }, []);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- busca dados no Supabase ao montar/trocar a dependência (sincroniza com sistema externo)
         load();
     }, [load]);
 

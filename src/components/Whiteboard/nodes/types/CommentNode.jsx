@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import BaseNode from './BaseNode';
 import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
 import { useCollabPatch } from '../../../../collab/space/ops/useCollabPatch';
@@ -10,9 +10,11 @@ export default function CommentNode({ node, onNodePointerDown, onNodeContextMenu
     const { collabPatchNode } = useCollabPatch();
     const isEditing = editingNodeId === node.id;
     const [editValue, setEditValue] = useState(message);
-    useEffect(() => {
+    const [prevSync, setPrevSync] = useState({ isEditing, message });
+    if (prevSync.isEditing !== isEditing || prevSync.message !== message) {
+        setPrevSync({ isEditing, message });
         if (isEditing) setEditValue(message);
-    }, [isEditing, message]);
+    }
 
     const handleBlur = () => {
         if (editValue !== message) {

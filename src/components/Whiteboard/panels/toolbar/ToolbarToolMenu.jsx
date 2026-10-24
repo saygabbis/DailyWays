@@ -54,6 +54,7 @@ export default function ToolbarToolMenu({
 
     useLayoutEffect(() => {
         if (!open) return;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- medição de layout do DOM (âncora) antes do paint
         updatePosition();
     }, [open, updatePosition]);
 

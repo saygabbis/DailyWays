@@ -55,6 +55,7 @@ export default function BoardPrankSiteLock() {
   useEffect(() => {
     if (!held) {
       document.documentElement.classList.remove('dw-prank-held');
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- limpa o estado junto com a classe global do <html> (ferramenta de dev)
       setPuppetScreen(null);
       return undefined;
     }

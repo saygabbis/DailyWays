@@ -32,10 +32,11 @@ export default function DraggablePanel({ id, defaultPosition = { left: 0, top: 0
     const dragStart = useRef({ x: 0, y: 0 });
     const panelRef = useRef(null);
 
-    useEffect(() => {
-        const stored = loadPosition(id);
-        if (stored) setPosition(stored);
-    }, [id]);
+    const [prevId, setPrevId] = useState(id);
+    if (id !== prevId) {
+        setPrevId(id);
+        if (saved) setPosition(saved);
+    }
 
     const handleMouseDown = useCallback(
         (e) => {

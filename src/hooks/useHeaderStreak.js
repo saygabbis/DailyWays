@@ -9,6 +9,7 @@ import { TIMEZONE_FALLBACK } from '../components/MyDay/hub/diaryHubConfig';
 
 export function useHeaderStreak() {
     const { user } = useAuth();
+    const userId = user?.id;
     const [streak, setStreak] = useState(0);
     const [todayDone, setTodayDone] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -16,22 +17,23 @@ export function useHeaderStreak() {
     const timezone = user?.timezone || TIMEZONE_FALLBACK;
 
     const refresh = useCallback(async () => {
-        if (!user?.id) {
+        if (!userId) {
             setStreak(0);
             setTodayDone(false);
             setLoading(false);
             return;
         }
         const [{ data: today }, streakCount] = await Promise.all([
-            fetchTodayProgress(user.id, timezone),
-            computeStreak(user.id, timezone),
+            fetchTodayProgress(userId, timezone),
+            computeStreak(userId, timezone),
         ]);
         setTodayDone(dayQualifiesForStreak(today));
         setStreak(streakCount);
         setLoading(false);
-    }, [user?.id, timezone]);
+    }, [userId, timezone]);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- busca dados no Supabase ao montar/trocar a dependência (sincroniza com sistema externo)
         setLoading(true);
         refresh();
         const id = setInterval(refresh, 60_000);

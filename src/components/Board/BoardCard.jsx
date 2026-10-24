@@ -288,9 +288,13 @@ export default function BoardCard({
         return () => clearTimeout(timer);
     }, []);
 
+    const [prevRemoteAnim, setPrevRemoteAnim] = useState(remoteAnim);
+    if (remoteAnim !== prevRemoteAnim) {
+        setPrevRemoteAnim(remoteAnim);
+        if (remoteAnim) setShouldAnimate(true);
+    }
     useEffect(() => {
         if (!remoteAnim) return;
-        setShouldAnimate(true);
         const timer = setTimeout(() => setShouldAnimate(false), 700);
         return () => clearTimeout(timer);
     }, [remoteAnim]);

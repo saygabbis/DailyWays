@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
+import { useState, useRef, useCallback, useMemo, memo } from 'react';
 import { Sun, Moon, ZoomIn, ZoomOut, Cloud, ChevronLeft as ChevLeft, ChevronRight as ChevRight } from 'lucide-react';
 import { Plus } from 'lucide-react';
 import CustomAccentPopover from '../CustomAccentPopover';
@@ -12,6 +12,11 @@ import '../AvatarCropper.css';
 // ─────────────────────────────────────────────
 const ITEMS_PER_PAGE = 10;
 
+function accentPageOf(items, id) {
+    const idx = items.findIndex(p => p.id === id);
+    return idx >= 0 ? Math.floor(idx / ITEMS_PER_PAGE) : null;
+}
+
 const AppearancePanel = memo(function AppearancePanel({
     theme, setTheme, THEME_PRESETS, accentId, setAccent, ACCENT_PRESETS,
     customAccentValue, setCustomAccent, fontId, setFont, FONT_PRESETS, animStyle, setAnimStyle,
@@ -22,26 +27,31 @@ const AppearancePanel = memo(function AppearancePanel({
         user?.presence_color || PRESENCE_COLOR_PRESETS[0]
     );
 
-    useEffect(() => {
+    const presenceKey = `${user?.presence_color_auto}|${user?.presence_color}`;
+    const [prevPresenceKey, setPrevPresenceKey] = useState(presenceKey);
+    if (presenceKey !== prevPresenceKey) {
+        setPrevPresenceKey(presenceKey);
         setPresenceAuto(user?.presence_color_auto !== false);
         setPresenceColor(user?.presence_color || PRESENCE_COLOR_PRESETS[0]);
-    }, [user?.presence_color, user?.presence_color_auto]);
+    }
     const accentItemsWithCustom = useMemo(() => [...ACCENT_PRESETS, { id: CUSTOM_ACCENT_ID, isCustom: true }], [ACCENT_PRESETS]);
     const [zoom, setZoom] = useState(() => {
         const stored = localStorage.getItem('dailyways_zoom');
         return stored ? parseInt(stored) : 100;
     });
-    const [accentPage, setAccentPage] = useState(0);
+    const [accentPage, setAccentPage] = useState(() => accentPageOf(accentItemsWithCustom, accentId) ?? 0);
     const [customPopoverOpen, setCustomPopoverOpen] = useState(false);
     const customButtonRef = useRef(null);
     const totalPages = Math.ceil(accentItemsWithCustom.length / ITEMS_PER_PAGE);
     const pageItems = accentItemsWithCustom.slice(accentPage * ITEMS_PER_PAGE, (accentPage + 1) * ITEMS_PER_PAGE);
 
     // Jump to the page containing current accent
-    useEffect(() => {
-        const idx = accentItemsWithCustom.findIndex(p => p.id === accentId);
-        if (idx >= 0) setAccentPage(Math.floor(idx / ITEMS_PER_PAGE));
-    }, [accentId, accentItemsWithCustom]);
+    const [prevAccent, setPrevAccent] = useState({ accentId, accentItemsWithCustom });
+    if (prevAccent.accentId !== accentId || prevAccent.accentItemsWithCustom !== accentItemsWithCustom) {
+        setPrevAccent({ accentId, accentItemsWithCustom });
+        const page = accentPageOf(accentItemsWithCustom, accentId);
+        if (page != null) setAccentPage(page);
+    }
 
     const handleZoom = useCallback((value) => {
         const clamped = Math.min(150, Math.max(75, value));

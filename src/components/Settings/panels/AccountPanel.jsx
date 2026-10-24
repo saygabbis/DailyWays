@@ -22,14 +22,16 @@ const AccountPanel = memo(function AccountPanel({ user, updateProfile, confirmLo
     const [photoLoading, setPhotoLoading] = useState(false);
     const avatarMenuRef = useRef(null);
 
-    // Update from user prop changes  
-    useEffect(() => {
+    // Update from user prop changes
+    const [prevUser, setPrevUser] = useState(user);
+    if (user !== prevUser) {
+        setPrevUser(user);
         setName(user?.name || '');
         setUsername(user?.username || '');
         setAvatar(user?.avatar || '');
         setBio(user?.bio || '');
         setPhotoUrl(user?.photo_url || null);
-    }, [user]);
+    }
 
     // Close avatar menu on outside click
     useEffect(() => {

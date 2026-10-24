@@ -135,6 +135,7 @@ export function useChatMessages(conversationId, { enabled = true, myId, onNewMes
 
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- troca de conversa: limpa e recarrega as mensagens do Supabase
     setMessages([]);
     if (conversationId && enabled) loadInitial();
   }, [conversationId, enabled, loadInitial]);
