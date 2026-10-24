@@ -130,6 +130,11 @@ export default defineConfig({
     headers: getSecurityHeaders(),
   },
 
+  test: {
+    include: ['src/**/*.test.{js,jsx}'],
+    environment: 'node',
+  },
+
   // ⚠️ IMPORTANTE: raiz do domínio
   base: '/',
 

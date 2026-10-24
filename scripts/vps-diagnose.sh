@@ -9,7 +9,7 @@ if curl -sf "http://127.0.0.1:${PORT}/health" >/dev/null; then
   curl -s "http://127.0.0.1:${PORT}/health"
   echo ""
 else
-  echo "FALHA: collab não responde. Rode: npm run start:collab ou pm2 start ecosystem.config.cjs"
+  echo "FALHA: collab não responde. Rode: npm run start:vps (na screen DailyWays)"
 fi
 
 echo ""

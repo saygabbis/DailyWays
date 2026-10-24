@@ -54,17 +54,7 @@ npm run start:vps
 
 Sobe collab + Vite juntos.
 
-### Opção B — PM2 (recomendado, sobrevive ao logout)
-
-```bash
-cd ~/Bots/DailyWays
-npm install
-pm2 start ecosystem.config.cjs
-pm2 save
-pm2 status
-```
-
-### Opção C — dois terminais
+### Opção B — dois terminais
 
 Terminal 1:
 
@@ -147,6 +137,6 @@ proxy_buffering off;
 
 3. `sudo nginx -t && sudo systemctl reload nginx`
 
-4. Confirme **um único** collab: `pm2 list` ou `ss -tlnp | grep 2529`
+4. Confirme **um único** collab: `ss -tlnp | grep 2529`
 
 5. `CORS_ORIGIN` no collab `.env` deve incluir `https://dailyways.saygabbis.cloud`

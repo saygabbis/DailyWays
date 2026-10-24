@@ -13,7 +13,7 @@ CORS_ORIGIN=https://dailyways.saygabbis.cloud,http://31.97.90.13:5174,http://loc
 NODE_ENV=production
 ```
 
-Depois: `pm2 restart dailyways-collab` (ou reinicie o processo manual).
+Depois: reinicie a screen `DailyWays` (`npm run start:vps`).
 
 Teste rápido na VPS:
 
@@ -35,11 +35,11 @@ curl -s http://127.0.0.1:2529/health
 # → {"ok":true,"service":"dailyways-collab"}
 
 ss -tlnp | grep 2529
-pm2 list
+ss -tlnp | grep 2529
 # Só um dailyways-collab (ou um node na 2529)
 ```
 
-Se falhar: `cd ~/Bots/DailyWays && npm run start:collab` ou `pm2 start ecosystem.config.cjs --only dailyways-collab`
+Se falhar: `cd ~/Bots/DailyWays && npm run start:collab`
 
 ### 2. Arquivo `map` (obrigatório, uma vez)
 
@@ -124,7 +124,7 @@ Console: `[collab] connected` (e `responseSnippet` vazio no connect error).
 
 ```bash
 cd ~/Bots/DailyWays && bash scripts/vps-diagnose.sh
-pm2 logs dailyways-collab --lines 30
+screen -r DailyWays   # ver o log ao vivo (Ctrl+A D para sair)
 ```
 
 ## CORS no collab `.env`
@@ -135,7 +135,7 @@ NODE_ENV=production
 PORT=2529
 ```
 
-Reiniciar collab após mudar: `pm2 restart dailyways-collab`
+Reiniciar collab após mudar: reinicie a screen `DailyWays`
 
 ## Ignorar no console
 

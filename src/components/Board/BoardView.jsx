@@ -48,6 +48,8 @@ import {
 import './Board.css';
 import { computeProfileMenuAvoidance } from './boardToolbarProfileAvoid';
 
+const COLLAB_CONNECT_GRACE_MS = 4000;
+
 function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false }, ref) {
     const { state, getActiveBoard, dispatch, showBoardToolbar, profileMenuOpen, showConfirm } = useApp();
     const { user, profile } = useAuth();
@@ -109,11 +111,19 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         const b = state.boards.find((x) => x.id === boardId);
         return b ? JSON.parse(JSON.stringify(b)) : null;
     }, [state.boards]);
+    // Sem socket por alguns segundos (collab fora do ar) → mostra o board em modo fallback
+    // (save pelo navegador) em vez de ficar preso em "Sincronizando…" para sempre.
+    const [collabConnectGraceOver, setCollabConnectGraceOver] = useState(false);
+    useEffect(() => {
+        const t = setTimeout(() => setCollabConnectGraceOver(true), COLLAB_CONNECT_GRACE_MS);
+        return () => clearTimeout(t);
+    }, []);
     const collabHydrating = Boolean(
         isCollabEnabled()
         && board?.id
         && boardCollab
-        && !boardCollab.isBoardRoomReady(board.id),
+        && !boardCollab.isBoardRoomReady(board.id)
+        && (boardCollab.connected || !collabConnectGraceOver),
     );
     const {
         updateCursor: updateBoardCursor,
@@ -1079,5 +1089,6 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         </div>
     );
 }
+
 
 export default forwardRef(BoardView);

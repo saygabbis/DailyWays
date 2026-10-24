@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useState, useEffect, useRef, useCallback } from 'react';
+import { createContext, useContext, useReducer, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import storageService, { STORAGE_KEYS } from '../services/storageService';
 import { fetchBoards, saveBoards, updateBoardFull, updateBoardsOrder } from '../services/boardService';
 import { fetchGroups, fetchSpaces } from '../services/workspaceService';
@@ -9,6 +9,7 @@ import ConfirmModal from '../components/Common/ConfirmModal';
 import FloatingInvitationToast from '../components/Common/FloatingInvitationToast';
 import { logger } from '../utils/logger';
 import { isCollabEnabled } from '../collab/core/collabConfig.js';
+import { isBoardServerAuthoritative as isServerAuthoritativeFor } from '../collab/board/sync/persistAuthority.js';
 import { isBoardPrankFrozen } from '../collab/board/dev/boardDevPrank.js';
 import { applyBoardAction } from '@dailyways/collab-protocol';
 import { COUNT } from '@dailyways/limits';
@@ -598,17 +599,14 @@ export function AppProvider({ children }) {
         collabBoardRoomLiveRef.current = !!live;
     }, []);
 
-    // Com a sala de collab do board ao vivo, o servidor collab é a fonte da verdade e
-    // persiste sozinho. O navegador NÃO pode mandar o board inteiro (upsert_board_full
-    // apaga o que não está no payload → uma aba desatualizada apagaria edições de outros).
-    // O save pelo navegador fica só como fallback (sem socket / fora da sala).
-    const isBoardServerAuthoritative = useCallback((boardId) => (
-        isCollabEnabled()
-        && !!boardId
-        && collabActiveBoardIdRef.current === boardId
-        && collabConnectedRef.current
-        && collabBoardRoomLiveRef.current
-    ), []);
+    // Sala ao vivo → o servidor collab persiste; o navegador só grava como fallback.
+    const isBoardServerAuthoritative = useCallback((boardId) => isServerAuthoritativeFor({
+        collabEnabled: isCollabEnabled(),
+        boardId,
+        activeBoardId: collabActiveBoardIdRef.current,
+        connected: collabConnectedRef.current,
+        roomLive: collabBoardRoomLiveRef.current,
+    }), []);
     // Timestamp até quando aguardar antes de fazer HTTP (após TOKEN_REFRESHED).
     // O Supabase client tem um lock interno durante o refresh que trava requisições HTTP.
     // Após TOKEN_REFRESHED, aguardamos 2s para o lock ser liberado.
@@ -1159,7 +1157,7 @@ export function AppProvider({ children }) {
         };
     }, [userId]);
 
-    const updateWorkspaceOrder = async (itemType, itemId, sourceGroupId, destGroupId, destIndex) => {
+    const updateWorkspaceOrder = useCallback(async (itemType, itemId, sourceGroupId, destGroupId, destIndex) => {
         if (!userId) return;
 
         const currentSelected = stateRef.current.selectedItems || [];
@@ -1239,14 +1237,16 @@ export function AppProvider({ children }) {
         } finally {
             dispatch({ type: 'SET_SAVING_BOARD', payload: { boardId: '__workspace_order__', saving: false } });
         }
-    };
+    }, [userId, suppressRealtime]);
 
-    // Helpers
-    const getActiveBoard = () => state.boards.find(b => b.id === state.activeBoard);
+    // Helpers (estáveis enquanto os boards não mudam → o value do contexto pode ser memoizado)
+    const { boards, activeBoard } = state;
+    const getActiveBoard = useCallback(() => boards.find(b => b.id === activeBoard), [boards, activeBoard]);
 
-    const getAllCards = () => {
+    // Lista achatada de cards: calculada uma vez por mudança de boards (antes era a cada chamada).
+    const allCards = useMemo(() => {
         const cards = [];
-        state.boards.forEach(board => {
+        boards.forEach(board => {
             board.lists.forEach(list => {
                 list.cards.forEach(card => {
                     cards.push(enrichCardForSmartView(card, board, list));
@@ -1254,25 +1254,26 @@ export function AppProvider({ children }) {
             });
         });
         return cards;
-    };
+    }, [boards]);
+    const getAllCards = useCallback(() => allCards.slice(), [allCards]);
 
     /** Pendentes no Meu Dia (badges, foco, sugestões). */
-    const getMyDayCards = () => getAllCards().filter(isCardActiveMyDay);
+    const getMyDayCards = useCallback(() => allCards.filter(isCardActiveMyDay), [allCards]);
 
     /** Todas as missões do dia, inclusive concluídas (progresso no hub). */
-    const getMyDayCardsAll = () => getAllCards().filter(c => c.myDay);
+    const getMyDayCardsAll = useCallback(() => allCards.filter(c => c.myDay), [allCards]);
 
-    const getImportantCards = () => getAllCards().filter(isCardActiveImportant);
+    const getImportantCards = useCallback(() => allCards.filter(isCardActiveImportant), [allCards]);
 
-    const getPlannedCards = () => getAllCards().filter(isCardActivePlanned);
+    const getPlannedCards = useCallback(() => allCards.filter(isCardActivePlanned), [allCards]);
 
-    const searchCards = (query) => {
+    const searchCards = useCallback((query) => {
         if (!query) return [];
         const q = query.toLowerCase();
-        return getAllCards().filter(c =>
+        return allCards.filter(c =>
             c.title.toLowerCase().includes(q) || c.description?.toLowerCase().includes(q)
         );
-    };
+    }, [allCards]);
 
     // ── Unified Confirm Modal ──
     const showConfirm = useCallback(({ title, message, type = 'danger', confirmLabel, cancelLabel, checkbox }) => {
@@ -1374,47 +1375,83 @@ export function AppProvider({ children }) {
         }
     }, [userId]);
 
+    const contextValue = useMemo(() => ({
+        state,
+        dispatch,
+        getActiveBoard,
+        getAllCards,
+        getMyDayCards,
+        getMyDayCardsAll,
+        getImportantCards,
+        getPlannedCards,
+        searchCards,
+        updateBoardAndPersist,
+        updateBoardAndPersistImmediate,
+        updateBoardsOrder,
+        isSidebarOpen, setIsSidebarOpen,
+        confirmConfig, showConfirm,
+        recentlyAddedId, setRecentlyAddedId,
+        lastReorderedIds, setLastReorderedIds,
+        persistBoard,
+        flushBoardPersist,
+        saveAllPending,
+        suppressRealtime,
+        savingBoardIds: state.savingBoardIds,
+        pendingBoardIds: state.pendingBoardIds,
+        saveErrors: state.saveErrors,
+        retryFailedSave,
+        revertFailedSave,
+        showBoardToolbar: state.showBoardToolbar,
+        profileMenuOpen: state.profileMenuOpen,
+        boardsLoadError: state.boardsLoadError,
+        isSavingBoard,
+        hasUnsavedChanges,
+        LABEL_COLORS: state.labels,
+        DEFAULT_BOARD_COLORS,
+        updateWorkspaceOrder,
+        reloadBoards,
+        setCollabActiveBoardId,
+        setCollabConnectedForBoard,
+        setCollabBoardRoomLive,
+        shouldPersistBoard,
+    }), [
+        confirmConfig,
+        dispatch,
+        flushBoardPersist,
+        getActiveBoard,
+        getAllCards,
+        getImportantCards,
+        getMyDayCards,
+        getMyDayCardsAll,
+        getPlannedCards,
+        hasUnsavedChanges,
+        isSavingBoard,
+        isSidebarOpen,
+        lastReorderedIds,
+        persistBoard,
+        recentlyAddedId,
+        reloadBoards,
+        retryFailedSave,
+        revertFailedSave,
+        saveAllPending,
+        searchCards,
+        setCollabActiveBoardId,
+        setCollabBoardRoomLive,
+        setCollabConnectedForBoard,
+        setIsSidebarOpen,
+        setLastReorderedIds,
+        setRecentlyAddedId,
+        shouldPersistBoard,
+        showConfirm,
+        state,
+        suppressRealtime,
+        updateBoardAndPersist,
+        updateBoardAndPersistImmediate,
+        updateWorkspaceOrder,
+    ]);
+
     return (
-        <AppContext.Provider value={{
-            state,
-            dispatch,
-            getActiveBoard,
-            getAllCards,
-            getMyDayCards,
-            getMyDayCardsAll,
-            getImportantCards,
-            getPlannedCards,
-            searchCards,
-            updateBoardAndPersist,
-            updateBoardAndPersistImmediate,
-            updateBoardsOrder,
-            isSidebarOpen, setIsSidebarOpen,
-            confirmConfig, showConfirm,
-            recentlyAddedId, setRecentlyAddedId,
-            lastReorderedIds, setLastReorderedIds,
-            persistBoard,
-            flushBoardPersist,
-            saveAllPending,
-            suppressRealtime,
-            savingBoardIds: state.savingBoardIds,
-            pendingBoardIds: state.pendingBoardIds,
-            saveErrors: state.saveErrors,
-            retryFailedSave,
-            revertFailedSave,
-            showBoardToolbar: state.showBoardToolbar,
-            profileMenuOpen: state.profileMenuOpen,
-            boardsLoadError: state.boardsLoadError,
-            isSavingBoard,
-            hasUnsavedChanges,
-            LABEL_COLORS: state.labels,
-            DEFAULT_BOARD_COLORS,
-            updateWorkspaceOrder,
-            reloadBoards,
-            setCollabActiveBoardId,
-            setCollabConnectedForBoard,
-            setCollabBoardRoomLive,
-            shouldPersistBoard,
-        }}>
+        <AppContext.Provider value={contextValue}>
             {children}
             {/* Global Confirm Modal */}
             <ConfirmModal

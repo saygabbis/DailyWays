@@ -1,14 +1,16 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { X, CheckCircle, AlertCircle, Info } from 'lucide-react';
 import './Toast.css';
 
 const ToastContext = createContext(null);
+let toastSeq = 0;
 
 export function ToastProvider({ children }) {
     const [toasts, setToasts] = useState([]);
 
     const addToast = useCallback((message, type = 'info') => {
-        const id = Date.now();
+        // Contador (não Date.now): dois toasts no mesmo ms tinham a mesma key e sumiam juntos.
+        const id = ++toastSeq;
         setToasts(prev => [...prev, { id, message, type }]);
         setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id));
@@ -19,8 +21,11 @@ export function ToastProvider({ children }) {
         setToasts(prev => prev.filter(t => t.id !== id));
     };
 
+    // Value estável: adicionar um toast não re-renderiza todos que usam useToast().
+    const value = useMemo(() => ({ addToast }), [addToast]);
+
     return (
-        <ToastContext.Provider value={{ addToast }}>
+        <ToastContext.Provider value={value}>
             {children}
             <div className="toast-container">
                 {toasts.map(t => (

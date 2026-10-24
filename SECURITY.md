@@ -7,7 +7,7 @@ Este documento resume a postura de segurança da aplicação e o que **tu** deve
 | Medida | Onde |
 |--------|------|
 | Remoção de `console.log` / `debug` / `info` / `trace` e `debugger` no build de produção | [`vite.config.js`](vite.config.js) — `@rollup/plugin-strip` (mantém `console.warn` e `console.error`) |
-| Cabeçalhos HTTP (CSP, anti-clickjacking, etc.) | [`public/_headers`](public/_headers) (Netlify e similares), [`vercel.json`](vercel.json) (Vercel) |
+| Cabeçalhos HTTP (CSP, anti-clickjacking, etc.) | [`public/_headers`](public/_headers) — fonte única: o `vite preview` (VPS) envia esses cabeçalhos (CSP em modo *Report-Only*; `DW_CSP_ENFORCE=1` aplica), e Netlify & cia leem o arquivo direto |
 | Chave anónima do Supabase no cliente | Esperado — **nunca** commits com `service_role` |
 
 ## Checklist Supabase (produção)
@@ -40,7 +40,7 @@ Rever manualmente alterações que quebrem compatibilidade.
 
 ## Content-Security-Policy (CSP)
 
-A CSP incluída em `_headers` / `vercel.json` permite:
+A CSP incluída em `_headers` permite:
 
 - `connect-src`: `https://*.supabase.co`, `wss://*.supabase.co` (API + Realtime).
 
