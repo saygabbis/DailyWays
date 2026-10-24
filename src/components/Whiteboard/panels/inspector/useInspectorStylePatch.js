@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
-import { useCollabPatch } from '../../../../collab/space/ops/SpaceCollabOpsContext.jsx';
+import { useCollabPatch } from '../../../../collab/space/ops/useCollabPatch';
 import { patchNodeWithHistory } from '../../core/history/whiteboardHistory';
 import {
     getAppearanceFromNode,

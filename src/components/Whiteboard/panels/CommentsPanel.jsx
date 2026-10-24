@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
-import { useAuth } from '../../../context/AuthContext';
+import { useAuth } from '../../../context/useAuth';
 import { insertComment } from '../../../services/whiteboardService';
 import { MessageSquare, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';

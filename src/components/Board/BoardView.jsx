@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef, useMemo } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
-import { useApp } from '../../context/AppContext';
-import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/useApp';
+import { useAuth } from '../../context/useAuth';
 import BoardList from './BoardList';
 import ListDetailsModal from './ListDetailsModal';
 import BoardDetailsModal from './BoardDetailsModal';
@@ -17,7 +17,7 @@ import { isPeerOnBoardSurface } from '../../collab/board/presence/presenceVisibi
 import RemoteDragLayer from '../../collab/board/ui/RemoteDragLayer.jsx';
 import PresenceOnlineList from '../../collab/board/ui/PresenceOnlineList.jsx';
 import { setLastBoardPointer } from '../../collab/board/presence/lastBoardPointer.js';
-import { useCollab } from '../../collab/core/CollabContext.jsx';
+import { useCollab } from '../../collab/core/useCollab';
 import {
     scheduleBoardPresencePublish,
     prepareBoardSurfacePresence,
@@ -29,7 +29,7 @@ import { publishBoardPresenceFocus } from '../../collab/board/presence/boardPres
 import { announcePresence } from '../../collab/board/presence/presenceBridge.js';
 import { useBoardPresenceHighlights } from '../../hooks/useBoardPresenceHighlights';
 import { BOARD_UI_HOVER, boardUiHoverProps } from '../../collab/board/presence/boardUiHover.js';
-import { useBoardCollabDispatch, useBoardCollabContext } from '../../collab/board/ops/BoardCollabContext.jsx';
+import { useBoardCollabDispatch, useBoardCollabContext } from '../../collab/board/ops/useBoardCollab';
 import { isCollabEnabled } from '../../collab/core/collabConfig.js';
 import { useCollabPresence } from '../../collab/board/presence/useCollabPresence.js';
 import { uuidv4 } from '../../utils/uuid';

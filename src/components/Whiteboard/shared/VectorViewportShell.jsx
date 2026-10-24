@@ -1,4 +1,4 @@
-import { useWhiteboardViewportZoom } from '../interaction/viewport/WhiteboardViewportContext.jsx';
+import { useWhiteboardViewportZoom } from '../interaction/viewport/useWhiteboardViewportZoom';
 import { getSharpSvgLayout, WORLD_DIM_EPSILON } from './vectorViewport.js';
 
 /**

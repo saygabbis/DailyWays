@@ -1,13 +1,12 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { useAuth } from './AuthContext';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useAuth } from './useAuth';
 import { recordFocusSeconds } from '../services/dailyProgressService';
 import { DEFAULT_FOCUS_MINUTES, TIMEZONE_FALLBACK } from '../components/MyDay/hub/diaryHubConfig';
+import { PomodoroContext } from './usePomodoro';
 
-const PomodoroContext = createContext();
 
-export function usePomodoro() {
-    return useContext(PomodoroContext);
-}
+
+
 
 const DEFAULT_TIMES = {
     focus: 25 * 60,

@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Users, Mail, Shield, Trash2, ChevronDown, LogOut, Star } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
-import { useBoardCollabContext } from '../../collab/board/ops/BoardCollabContext.jsx';
-import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/useApp';
+import { useBoardCollabContext } from '../../collab/board/ops/useBoardCollab';
+import { useAuth } from '../../context/useAuth';
 import { fetchBoardMembers, inviteBoardMember, updateMemberRole, removeMember } from '../../services/boardSharingService';
 import { isBoardOwnerClient, sortBoardMembersOwnerFirst } from '../../services/boardMappers';
 import { TEXT } from '@dailyways/limits';

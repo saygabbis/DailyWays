@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import { useApp } from '../../../context/AppContext';
-import { useBoardCollabDispatch } from '../../../collab/board/ops/BoardCollabContext.jsx';
+import { useApp } from '../../../context/useApp';
+import { useBoardCollabDispatch } from '../../../collab/board/ops/useBoardCollab';
 import { uuidv4 } from '../../../utils/uuid';
 import { DAY_CATEGORIES } from './diaryHubConfig';
 import DiaryMissionTaskRow from './DiaryMissionTaskRow';

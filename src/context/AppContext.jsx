@@ -1,6 +1,6 @@
-import { createContext, useContext, useReducer, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useReducer, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { fetchBoards, updateBoardsOrder } from '../services/boardService';
-import { useAuth } from './AuthContext';
+import { useAuth } from './useAuth';
 import ConfirmModal from '../components/Common/ConfirmModal';
 import FloatingInvitationToast from '../components/Common/FloatingInvitationToast';
 import { logger } from '../utils/logger';
@@ -17,8 +17,9 @@ import {
     isCardActiveMyDay,
     isCardActivePlanned,
 } from '../utils/cardSmartView';
+import { AppContext } from './useApp';
 
-const AppContext = createContext(null);
+
 
 export function AppProvider({ children }) {
     const { user } = useAuth();
@@ -357,8 +358,4 @@ export function AppProvider({ children }) {
     );
 }
 
-export const useApp = () => {
-    const ctx = useContext(AppContext);
-    if (!ctx) throw new Error('useApp must be used within AppProvider');
-    return ctx;
-};
+

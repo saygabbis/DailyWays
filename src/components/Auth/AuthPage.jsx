@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 import { supabase } from '../../services/supabaseClient';
 import { getAppOrigin } from '../../utils/appUrl';
 import { ENABLE_MICROSOFT_LOGIN } from '../../config';
 import { Lock, Mail, User, ArrowRight, Chrome, Command, Github, Shield, Eye, EyeOff, X } from 'lucide-react';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../context/useTheme';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { TEXT } from '@dailyways/limits';
 import logoWhite from '../../assets/Logo - Branco.png';

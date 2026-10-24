@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useApp } from '../context/AppContext';
-import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/useApp';
+import { useAuth } from '../context/useAuth';
 import {
     computeStreak,
     fetchTodayProgress,

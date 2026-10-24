@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { useApp } from '../../context/AppContext';
-import { useBoardCollabContext } from '../../collab/board/ops/BoardCollabContext.jsx';
+import { useAuth } from '../../context/useAuth';
+import { useApp } from '../../context/useApp';
+import { useBoardCollabContext } from '../../collab/board/ops/useBoardCollab';
 
-import { usePomodoro } from '../../context/PomodoroContext';
-import { useRadio } from '../../context/RadioContext';
+import { usePomodoro } from '../../context/usePomodoro';
+import { useRadio } from '../../context/useRadio';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import BoardDetailsModal from '../Board/BoardDetailsModal';
 import SpaceDetailsModal from '../Spaces/SpaceDetailsModal';
@@ -29,11 +29,11 @@ import {
     Check,
     Users,
 } from 'lucide-react';
-import { useContextMenu } from '../Common/ContextMenu';
+import { useContextMenu } from '../Common/useContextMenu';
 import logoWhite from '../../assets/Logo - Branco.png';
 import logoBlack from '../../assets/Logo - Preto.png';
 import './Sidebar.css';
-import { useI18n, useTheme } from '../../context/ThemeContext';
+import { useI18n, useTheme } from '../../context/useTheme';
 import BulkDragFollowers from './BulkDragFollowers';
 import { useResizableSidebar } from './useResizableSidebar';
 import { useSidebarActions } from './useSidebarActions';

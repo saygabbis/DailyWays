@@ -1,4 +1,4 @@
-import { useBoardCollabDispatch } from '../../../collab/board/ops/BoardCollabContext.jsx';
+import { useBoardCollabDispatch } from '../../../collab/board/ops/useBoardCollab';
 import { useSmartViewCardCompletion } from '../../../hooks/useSmartViewCardCompletion';
 import { CheckCircle2, Circle, Clock, Star, X } from 'lucide-react';
 import { getEstimatedMinutes } from './diaryHubUtils';

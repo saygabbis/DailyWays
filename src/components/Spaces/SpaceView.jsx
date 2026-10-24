@@ -1,5 +1,5 @@
 import { useRef, useCallback } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp } from '../../context/useApp';
 import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { getInspectorInsetPx, CanvasEngine } from '../Whiteboard';
 import { SpaceCollabOpsProvider } from '../../collab/space/ops/SpaceCollabOpsContext.jsx';

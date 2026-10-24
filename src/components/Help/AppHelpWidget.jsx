@@ -23,11 +23,7 @@ const SECTION_ICONS = {
     reflection: BookOpen,
 };
 
-export function openAppHelp(sectionId = null) {
-    window.dispatchEvent(
-        new CustomEvent('app-help-open', { detail: sectionId ? { sectionId } : {} })
-    );
-}
+
 
 function HelpKbd({ keys }) {
     return (

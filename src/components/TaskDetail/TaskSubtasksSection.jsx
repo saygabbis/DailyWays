@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CheckSquare, Edit3, Trash2, Plus } from 'lucide-react';
 import { TEXT, COUNT } from '@dailyways/limits';
 import { LIMIT_MSG } from '../../limits/messages.js';
-import { useToast } from '../../context/ToastContext';
+import { useToast } from '../../context/useToast';
 import { ph } from './taskDetailConstants';
 
 export default function TaskSubtasksSection({ subtasks, boardId, listId, cardId, collabDispatch, hoverByEl }) {

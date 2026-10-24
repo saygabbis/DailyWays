@@ -1,10 +1,9 @@
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { RadioContext } from './useRadio';
 
-const RadioContext = createContext();
 
-export function useRadio() {
-    return useContext(RadioContext);
-}
+
+
 
 const RADIO_STATIONS = [
     {

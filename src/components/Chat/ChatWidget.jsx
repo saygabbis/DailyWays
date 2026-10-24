@@ -8,7 +8,7 @@ import {
   Users,
   Inbox,
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 import { supabase } from '../../services/supabaseClient';
 import { fetchContacts, searchContactTargets } from '../../services/contactsService';
 import {

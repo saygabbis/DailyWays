@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../context/useApp';
 import { useSmartViewCompletionStore } from '../stores/smartViewCompletionStore.js';
 
 export function useSmartViewRecentCompletions() {

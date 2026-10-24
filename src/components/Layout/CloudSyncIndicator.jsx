@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 
 import { Cloud, Loader2, RefreshCw, RotateCcw, AlertTriangle } from 'lucide-react';
 
-import { useApp } from '../../context/AppContext';
+import { useApp } from '../../context/useApp';
 
 import { useCloudSyncStatus } from '../../hooks/useCloudSyncStatus';
 

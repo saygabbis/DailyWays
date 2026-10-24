@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Circle, CheckCircle2 } from 'lucide-react';
-import { useApp } from '../../../context/AppContext';
+import { useApp } from '../../../context/useApp';
 import { useBoardPresenceHighlights } from '../../../hooks/useBoardPresenceHighlights';
 import { usePresenceStore } from '../presence/presenceStore';
 import { presenceLabelTextColor } from '../../../utils/presenceLabelContrast.js';

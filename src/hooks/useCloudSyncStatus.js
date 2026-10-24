@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { useApp } from '../context/AppContext';
-import { useBoardCollabContext } from '../collab/board/ops/BoardCollabContext.jsx';
+import { useApp } from '../context/useApp';
+import { useBoardCollabContext } from '../collab/board/ops/useBoardCollab';
 import { isCollabEnabled } from '../collab/core/collabConfig.js';
 
 /** Estado compacto da persistência (nuvem / Supabase). */

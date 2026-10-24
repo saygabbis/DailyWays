@@ -1,8 +1,8 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 import { useWhiteboardSelectionStore } from '../../../stores/whiteboardSelectionStore';
-import { useCollabPatch } from '../../../collab/space/ops/SpaceCollabOpsContext.jsx';
-import { useAuth } from '../../../context/AuthContext';
+import { useCollabPatch } from '../../../collab/space/ops/useCollabPatch';
+import { useAuth } from '../../../context/useAuth';
 import { layerDisplayName, renamePatchForNode } from '../core/layers/layerTreeUtils';
 import {
     buildLayerTreeWithGroups,

@@ -5,7 +5,7 @@ import {
   resolveRestoredNavigation,
   isWorkspaceDataReady,
 } from '../utils/restoreNavigation';
-import { useContextMenu } from '../components/Common/ContextMenu';
+import { useContextMenu } from '../components/Common/useContextMenu';
 
 export function useWorkspaceNavigation(ctx) {
   const {

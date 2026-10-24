@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useBoardDevPrankStore } from './boardDevPrank.js';
 import { boardScreenPointFromContent } from '../coords/scrollContentCoords.js';
-import { useAuth } from '../../../context/AuthContext.jsx';
+import { useAuth } from '../../../context/useAuth';
 import { resolvePresenceColor } from '../../../utils/presenceColor.js';
 import './BoardPrankSiteLock.css';
 

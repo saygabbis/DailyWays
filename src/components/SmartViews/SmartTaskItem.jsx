@@ -1,4 +1,4 @@
-import { useApp } from '../../context/AppContext';
+import { useApp } from '../../context/useApp';
 import { useSmartViewCardCompletion } from '../../hooks/useSmartViewCardCompletion';
 import { isCardActive } from '../../utils/cardSmartView';
 import {

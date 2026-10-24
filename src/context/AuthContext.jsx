@@ -1,11 +1,12 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { validateProfileName, validateProfileBio, validateUsername } from '@dailyways/limits';
 import { resolveLimitError } from '../limits/messages.js';
 import { supabase } from '../services/supabaseClient';
 import { getAppOrigin } from '../utils/appUrl';
 import { logger } from '../utils/logger';
+import { AuthContext } from './useAuth';
 
-const AuthContext = createContext(null);
+
 
 function buildUserData(authUser, profile) {
   if (!authUser) return null;
@@ -518,8 +519,4 @@ export function AuthProvider({ children }) {
   );
 }
 
-export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
-};
+

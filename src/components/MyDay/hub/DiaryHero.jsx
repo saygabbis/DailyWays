@@ -1,5 +1,5 @@
 import { CheckCircle2, Clock, Flame } from 'lucide-react';
-import { useAuth } from '../../../context/AuthContext';
+import { useAuth } from '../../../context/useAuth';
 import DiaryStatChip from './DiaryStatChip';
 import DiaryStreakBadge from './DiaryStreakBadge';
 

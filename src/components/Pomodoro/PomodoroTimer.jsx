@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { usePomodoro } from '../../context/PomodoroContext';
+import { usePomodoro } from '../../context/usePomodoro';
 import { Play, Pause, RotateCcw, X, Minimize2, Settings } from 'lucide-react';
 import { touchPairDistance } from '../../utils/pointerSession';
 import './PomodoroTimer.css';

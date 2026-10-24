@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useApp } from '../../../context/AppContext';
-import { useCollab } from '../../core/CollabContext.jsx';
+import { useApp } from '../../../context/useApp';
+import { useCollab } from '../../core/useCollab';
 import { SERVER_EVENTS } from '@dailyways/collab-protocol';
 import { notifyRemoteBoardAction } from '../ui/boardRemoteAnim.js';
 

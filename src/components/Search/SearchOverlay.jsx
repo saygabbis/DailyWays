@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp } from '../../context/useApp';
 import { Search, X, Star, Clock, ArrowRight, CheckCircle2 } from 'lucide-react';
 import './SearchOverlay.css';
 

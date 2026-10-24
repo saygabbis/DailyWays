@@ -1,5 +1,5 @@
 import { usePresenceStore } from '../presence/presenceStore';
-import { useCollab } from '../../core/CollabContext.jsx';
+import { useCollab } from '../../core/useCollab';
 import { initialFromName } from '../../../utils/userColor';
 import './PresenceLayer.css';
 

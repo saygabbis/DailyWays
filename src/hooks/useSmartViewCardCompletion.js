@@ -1,10 +1,10 @@
 import { useCallback } from 'react';
-import { useApp } from '../context/AppContext';
-import { useBoardCollabContext } from '../collab/board/ops/BoardCollabContext.jsx';
+import { useApp } from '../context/useApp';
+import { useBoardCollabContext } from '../collab/board/ops/useBoardCollab';
 import { dispatchToggleCardCompletion, findCardOnBoard } from '../utils/cardCompletion';
 import { useSmartViewCompletionStore } from '../stores/smartViewCompletionStore';
 import { ensureBoardHistoryHydrated } from '../collab/board/history/boardHistorySync.js';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 /** Concluir / desfazer conclusão nas smart views com persistência, collab e undo. */
 export function useSmartViewCardCompletion() {

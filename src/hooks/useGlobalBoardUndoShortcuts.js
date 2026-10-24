@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useApp } from '../context/AppContext';
-import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/useApp';
+import { useAuth } from '../context/useAuth';
 import { useBoardUndo } from './useBoardUndo';
 
 function isEditableTarget() {

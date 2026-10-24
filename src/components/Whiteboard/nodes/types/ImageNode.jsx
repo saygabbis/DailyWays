@@ -2,13 +2,11 @@ import { useId, useMemo } from 'react';
 import BaseNode from './BaseNode';
 import { useSpaceAssetUrl } from '../../../../hooks/useSpaceAssetUrl';
 import { getImageObjectFit } from '../../interaction/transform/imageResize';
-import { useWhiteboardViewportZoom } from '../../interaction/viewport/WhiteboardViewportContext.jsx';
+import { useWhiteboardViewportZoom } from '../../interaction/viewport/useWhiteboardViewportZoom';
 import { screenPxToWorld } from '../../interaction/viewport/viewportLimits.js';
 import { getAppearanceFromNode, colorWithOpacity } from '../../shared/appearanceStyle.js';
-import {
-    ImageOutlineFilterDef,
-    getMorphologyRadius,
-} from '../../shared/imageOutlineFilter.jsx';
+import { ImageOutlineFilterDef } from '../../shared/imageOutlineFilter.jsx';
+import { getMorphologyRadius } from '../../shared/imageOutlineMath';
 import { WORLD_DIM_EPSILON } from '../../shared/vectorViewport.js';
 import { resolveSpaceAssetStoragePath } from '../../../../services/spaceAssetService';
 

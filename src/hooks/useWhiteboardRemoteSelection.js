@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { usePresenceStore } from '../collab/board/presence/presenceStore';
-import { useCollab } from '../collab/core/CollabContext.jsx';
+import { useCollab } from '../collab/core/useCollab';
 import { initialFromName } from '../utils/userColor';
 
 export function useWhiteboardRemoteSelection() {

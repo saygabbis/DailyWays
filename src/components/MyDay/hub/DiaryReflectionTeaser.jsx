@@ -1,5 +1,5 @@
 import { HelpCircle, ExternalLink } from 'lucide-react';
-import { openAppHelp } from '../../Help/AppHelpWidget';
+import { openAppHelp } from '../../Help/appHelpEvents';
 import DiaryGlassCard from './DiaryGlassCard';
 
 export default function DiaryReflectionTeaser() {

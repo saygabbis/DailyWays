@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRadio } from '../../context/RadioContext';
+import { useRadio } from '../../context/useRadio';
 import { Play, Pause, SkipBack, SkipForward, X, Minimize2, Music, Volume2 } from 'lucide-react';
 import { touchPairDistance } from '../../utils/pointerSession';
 import './RadioWidget.css';

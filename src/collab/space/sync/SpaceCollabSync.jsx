@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { SERVER_EVENTS } from '@dailyways/collab-protocol';
 import { useWhiteboardDocumentStore } from '../../../stores/whiteboardDocumentStore';
 import { queuePresenceSync, flushPresenceSyncNow } from '../../shared/presence/queuePresenceSync.js';
-import { useCollab } from '../../core/CollabContext.jsx';
+import { useCollab } from '../../core/useCollab';
 import { joinSpaceRoom, leaveRoom } from '../../core/collabClient.js';
 import { isCollabEnabled } from '../../core/collabConfig.js';
 import {

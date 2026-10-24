@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { isToday, isTomorrow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronDown, Sparkles, Plus } from 'lucide-react';
-import { useApp } from '../../../context/AppContext';
-import { useBoardCollabDispatch } from '../../../collab/board/ops/BoardCollabContext.jsx';
+import { useApp } from '../../../context/useApp';
+import { useBoardCollabDispatch } from '../../../collab/board/ops/useBoardCollab';
 import DiaryGlassCard from './DiaryGlassCard';
 
 export default function DiarySuggestions({ onCardClick }) {

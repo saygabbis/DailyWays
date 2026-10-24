@@ -1,5 +1,5 @@
-import { useApp } from '../../context/AppContext';
-import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
+import { useApp } from '../../context/useApp';
+import { useBoardCollabDispatch } from '../../collab/board/ops/useBoardCollab';
 import { Star, AlertTriangle, TrendingUp } from 'lucide-react';
 import SmartTaskItem from './SmartTaskItem';
 import SmartRecentCompletions from './SmartRecentCompletions';

@@ -1,5 +1,5 @@
 import { Play, Target } from 'lucide-react';
-import { usePomodoro } from '../../../context/PomodoroContext';
+import { usePomodoro } from '../../../context/usePomodoro';
 import { getEstimatedMinutes } from './diaryHubUtils';
 import { DEFAULT_FOCUS_MINUTES } from './diaryHubConfig';
 import DiaryGlassCard from './DiaryGlassCard';

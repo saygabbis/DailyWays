@@ -1,6 +1,6 @@
 import BaseNode from './BaseNode';
 import VectorViewportShell from '../../shared/VectorViewportShell.jsx';
-import { useWhiteboardViewportZoom } from '../../interaction/viewport/WhiteboardViewportContext.jsx';
+import { useWhiteboardViewportZoom } from '../../interaction/viewport/useWhiteboardViewportZoom';
 import { strokeWidthInWorld, WORLD_DIM_EPSILON } from '../../shared/vectorViewport.js';
 import { screenPxToWorld } from '../../interaction/viewport/viewportLimits.js';
 

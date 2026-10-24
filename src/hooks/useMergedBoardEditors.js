@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { useBoardEditorsFromCollab } from './useBoardEditorsFromCollab';
 import { resolvePresenceDisplayName } from '../collab/board/presence/presencePayload.js';
 import { resolvePresenceColor } from '../utils/presenceColor';

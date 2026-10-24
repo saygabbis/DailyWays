@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { useCollabPatch } from '../../../../collab/space/ops/SpaceCollabOpsContext.jsx';
+import { useCollabPatch } from '../../../../collab/space/ops/useCollabPatch';
 import { performUndo, performRedo } from '../../core/history/undoController';
 
 export function useWhiteboardUndo() {

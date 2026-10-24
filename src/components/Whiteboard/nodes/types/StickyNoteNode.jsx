@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { TEXT } from '@dailyways/limits';
 import BaseNode from './BaseNode';
 import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
-import { useCollabPatch } from '../../../../collab/space/ops/SpaceCollabOpsContext.jsx';
+import { useCollabPatch } from '../../../../collab/space/ops/useCollabPatch';
 import { recordNodesMutation } from '../../core/history/whiteboardHistory';
 import { contrastingTextColor } from '../../../../utils/contrastingTextColor';
 import { getTextStyleFromNode, textStyleToCss } from '../../shared/textStyle';

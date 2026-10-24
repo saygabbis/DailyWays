@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useApp } from '../context/AppContext';
-import { useBoardCollabContext } from '../collab/board/ops/BoardCollabContext.jsx';
+import { useAuth } from '../context/useAuth';
+import { useApp } from '../context/useApp';
+import { useBoardCollabContext } from '../collab/board/ops/useBoardCollab';
 import { useBoardHistoryStore } from '../collab/board/history/boardHistoryStore.js';
 import { performBoardUndo, performBoardRedo } from '../collab/board/history/boardHistoryController.js';
 

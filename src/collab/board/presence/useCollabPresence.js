@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useEffect } from 'react';
-import { useAuth } from '../../../context/AuthContext';
+import { useAuth } from '../../../context/useAuth';
 import {
   resolvePresenceColor,
   extractDominantColorFromImage,
@@ -7,7 +7,7 @@ import {
 } from '../../../utils/presenceColor';
 import { emitPresence } from '../../core/collabClient.js';
 import { buildBoardPresencePayload, buildCursorPresencePayload } from './presencePayload.js';
-import { useCollab } from '../../core/CollabContext.jsx';
+import { useCollab } from '../../core/useCollab';
 import {
   getPresenceFields,
   registerPresenceSender,

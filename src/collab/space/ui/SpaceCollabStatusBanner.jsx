@@ -1,4 +1,4 @@
-import { useCollab } from '../../core/CollabContext.jsx';
+import { useCollab } from '../../core/useCollab';
 import { useWhiteboardDocumentStore } from '../../../stores/whiteboardDocumentStore';
 import './SpaceCollabStatusBanner.css';
 

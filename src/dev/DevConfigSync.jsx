@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useAuth } from '../context/AuthContext.jsx';
+import { useAuth } from '../context/useAuth';
 import { fetchDevToolConfig } from './devConfigService.js';
 import { useDevConfigStore } from './devConfigStore.js';
 import { DEFAULT_DEV_CONFIG } from './devAccess.js';

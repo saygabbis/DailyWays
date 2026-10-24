@@ -1,4 +1,4 @@
-import { useBoardCollabContext } from '../ops/BoardCollabContext.jsx';
+import { useBoardCollabContext } from '../ops/useBoardCollab';
 import './BoardCollabStatusBanner.css';
 
 export default function BoardCollabStatusBanner() {

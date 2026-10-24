@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { Search, Menu, X, Bell, Settings, User, LogOut, ChevronDown, Layout, Share2 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
-import { useApp } from '../../context/AppContext';
-import { useI18n } from '../../context/ThemeContext';
+import { useAuth } from '../../context/useAuth';
+import { useApp } from '../../context/useApp';
+import { useI18n } from '../../context/useTheme';
 import { useNotifications } from '../../hooks/useNotifications';
 import { acceptInvitation, declineInvitation } from '../../services/boardSharingService';
 import { respondToContactRequest } from '../../services/contactsService';

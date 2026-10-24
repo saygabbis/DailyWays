@@ -1,9 +1,9 @@
 import { validateBoardActionLimits } from '@dailyways/limits';
 import { resolveLimitError } from '../../../limits/messages.js';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useApp } from '../../../context/AppContext';
-import { useAuth } from '../../../context/AuthContext.jsx';
-import { useCollab } from '../../core/CollabContext.jsx';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useApp } from '../../../context/useApp';
+import { useAuth } from '../../../context/useAuth';
+import { useCollab } from '../../core/useCollab';
 import {
   recordBoardHistory,
   commitPendingTextHistory,
@@ -19,13 +19,14 @@ import { ensureBoardHistoryHydrated } from '../history/boardHistorySync.js';
 import { submitOp } from '../../core/collabClient.js';
 import { isCollabEnabled } from '../../core/collabConfig.js';
 import { uuidv4 } from '../../../utils/uuid';
-import { useToast } from '../../../context/ToastContext.jsx';
+import { useToast } from '../../../context/useToast';
 import { toastCollabError } from '../../core/collabToast.js';
 import {
   shouldDebounceBoardAction,
   shouldBackupBoardActionToSupabase,
 } from './boardActionPriority.js';
 import { isBoardPrankFrozen } from '../dev/boardDevPrank.js';
+import { BoardCollabContext } from './useBoardCollab';
 
 /**
  * Padrão único de mutação de board:
@@ -40,7 +41,7 @@ const OP_RETRY_DELAY_MS = 300;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const BoardCollabContext = createContext(null);
+
 
 export function BoardCollabProvider({ children }) {
   const { dispatch, persistBoard, flushBoardPersist, setCollabBoardRoomLive, state } = useApp();
@@ -421,57 +422,6 @@ export function BoardCollabProvider({ children }) {
   );
 }
 
-export function useBoardCollabContext() {
-  return useContext(BoardCollabContext);
-}
 
-export function useBoardCollabDispatch(boardId) {
-  const ctx = useBoardCollabContext();
-  const { dispatch } = useApp();
 
-  const resolvedBoardId = boardId ?? ctx?.activeBoardId;
 
-  const collabDispatch = useCallback(
-    (action, options) => {
-      if (ctx && resolvedBoardId) {
-        ctx.collabDispatchForBoard(resolvedBoardId, action, options);
-      } else if (ctx) {
-        ctx.collabDispatch(action, resolvedBoardId, options);
-      } else {
-        dispatch(action);
-      }
-    },
-    [ctx, resolvedBoardId, dispatch],
-  );
-
-  const updateBoardMeta = useCallback(
-    (updates) => {
-      if (!resolvedBoardId) return;
-      ctx?.collabDispatchForBoard(resolvedBoardId, {
-        type: 'UPDATE_BOARD',
-        payload: { id: resolvedBoardId, updates },
-      });
-    },
-    [ctx, resolvedBoardId],
-  );
-
-  if (!ctx) {
-    return {
-      collabDispatch: dispatch,
-      updateBoardMeta: () => {},
-      connected: false,
-      collabEnabled: false,
-      isBoardRoomReady: () => true,
-    };
-  }
-
-  return {
-    collabDispatch,
-    collabDispatchForBoard: ctx.collabDispatchForBoard,
-    updateBoardMeta,
-    connected: ctx.connected,
-    collabEnabled: ctx.collabEnabled,
-    activeBoardId: ctx.activeBoardId,
-    isBoardRoomReady: ctx.isBoardRoomReady,
-  };
-}

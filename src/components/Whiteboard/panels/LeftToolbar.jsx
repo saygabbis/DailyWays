@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import CommentsPanel from '../panels/CommentsPanel';
 import DraggablePanel from '../panels/DraggablePanel';
-import { useCollabPatch } from '../../../collab/space/ops/SpaceCollabOpsContext.jsx';
+import { useCollabPatch } from '../../../collab/space/ops/useCollabPatch';
 import { performUndo, performRedo } from '../core/history/undoController';
 import { getToolMenuConfig } from './toolbar/toolMenuRegistry.js';
 import ToolbarToolGroup from './toolbar/ToolbarToolGroup.jsx';

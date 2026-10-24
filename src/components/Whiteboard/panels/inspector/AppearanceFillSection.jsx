@@ -5,7 +5,7 @@ import InspectorColorField from './InspectorColorField.jsx';
 import InspectorSegmentedField from './InspectorSegmentedField.jsx';
 import { useInspectorStylePatch } from './useInspectorStylePatch.js';
 import { uploadSpaceAsset } from '../../../../services/whiteboardService';
-import { useAuth } from '../../../../context/AuthContext';
+import { useAuth } from '../../../../context/useAuth';
 import { useSpaceAssetUrl } from '../../../../hooks/useSpaceAssetUrl';
 
 export default function AppearanceFillSection({ node, spaceId }) {

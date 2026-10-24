@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { SERVER_EVENTS } from '@dailyways/collab-protocol';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 import { supabase } from '../../services/supabaseClient';
 import { useWhiteboardStore } from '../../stores/whiteboardStore';
 import { getCollabServerUrl, isCollabEnabled } from './collabConfig.js';
@@ -11,7 +11,7 @@ import {
 } from './collabClient.js';
 import { CollabProvider } from './CollabContext.jsx';
 import { applyRemoteOp } from '../space/ops/applyOp.js';
-import { useToast } from '../../context/ToastContext.jsx';
+import { useToast } from '../../context/useToast';
 import { toastCollabError } from './collabToast.js';
 import { applyVictimPuppetCursor, useBoardDevPrankStore } from '../board/dev/boardDevPrank.js';
 import {

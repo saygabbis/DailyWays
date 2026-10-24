@@ -1,7 +1,7 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { usePresenceStore } from '../presence/presenceStore';
-import { useCollab } from '../../core/CollabContext.jsx';
+import { useCollab } from '../../core/useCollab';
 import { presenceLabelTextColor } from '../../../utils/presenceLabelContrast.js';
 import { getPeerCursorVariant } from '../presence/presenceInteraction.js';
 import { screenCoordsToFixedLayer } from '../coords/pointerViewport.js';
@@ -15,7 +15,7 @@ import { getBoardPresenceLayerAnchor } from '../coords/scrollContentCoords.js';
 import { createRemoteCursorSmoother } from '../presence/remoteCursorSmoother.js';
 import { isBoardDevPrankEnabled, useBoardDevPrankStore } from '../dev/boardDevPrank.js';
 import { attachDevPrankToCursor } from '../dev/attachDevPrankToCursor.js';
-import { useContextMenu } from '../../../components/Common/ContextMenu.jsx';
+import { useContextMenu } from '../../../components/Common/useContextMenu';
 import './PresenceLayer.css';
 
 const POINTER_PATH = 'M2 2 L2 17 L7 12 L10.5 21 L13 19.5 L9.5 11.5 L16 11.5 Z';

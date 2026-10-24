@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useCollab } from '../../core/CollabContext.jsx';
+import { useCollab } from '../../core/useCollab';
 import { usePresenceStore } from '../../board/presence/presenceStore.js';
 import './SpaceRemoteDragLayer.css';
 

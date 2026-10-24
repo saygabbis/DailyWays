@@ -1,6 +1,6 @@
-import { createContext, useContext } from 'react';
+import { CollabContext } from './useCollab';
 
-const CollabContext = createContext(null);
+
 
 export function CollabProvider({ value, children }) {
   return (
@@ -10,7 +10,4 @@ export function CollabProvider({ value, children }) {
   );
 }
 
-export function useCollab() {
-  const ctx = useContext(CollabContext);
-  return ctx;
-}
+

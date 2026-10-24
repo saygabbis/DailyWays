@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useApp } from '../../context/AppContext';
-import { useAuth } from '../../context/AuthContext';
-import { useBoardCollabDispatch } from '../../collab/board/ops/BoardCollabContext.jsx';
+import { useApp } from '../../context/useApp';
+import { useAuth } from '../../context/useAuth';
+import { useBoardCollabDispatch } from '../../collab/board/ops/useBoardCollab';
 import { useBoardUndo } from '../../hooks/useBoardUndo';
 import { DELETE_TASK_CONFIRM_CHECKBOX, isDeleteConfirmPermanent } from '../Board/boardCardBulkOps';
 import {
@@ -20,7 +20,7 @@ import {
 } from '../../collab/board/presence/boardPresencePublish.js';
 import { isPeerInTaskModal } from '../../collab/board/presence/presenceVisibility.js';
 import CollabPresenceLayer from '../../collab/board/ui/CollabPresenceLayer.jsx';
-import { useCollab } from '../../collab/core/CollabContext.jsx';
+import { useCollab } from '../../collab/core/useCollab';
 import { usePresenceStore } from '../../collab/board/presence/presenceStore';
 import { useTaskModalPeerPresence } from '../../hooks/useTaskModalPeerPresence.js';
 import {
@@ -48,7 +48,7 @@ import './TaskDetail.css';
 import { uuidv4 } from '../../utils/uuid';
 import { TEXT, COUNT } from '@dailyways/limits';
 import { LIMIT_MSG } from '../../limits/messages.js';
-import { useToast } from '../../context/ToastContext';
+import { useToast } from '../../context/useToast';
 import TaskDateTimeField from '../Common/TaskDateTimeField';
 import { RECURRENCE_OPTIONS, PRIORITY_OPTIONS, ph } from './taskDetailConstants';
 import { useTaskCardDomains } from './hooks/useTaskCardDomains';

@@ -2,21 +2,21 @@ import { useEffect, useRef, useCallback } from 'react';
 
 import { SERVER_EVENTS } from '@dailyways/collab-protocol';
 
-import { useApp } from '../../../context/AppContext';
+import { useApp } from '../../../context/useApp';
 import {
   boardStructuralFingerprint,
   isStaleBoardSnapshot,
 } from './boardFingerprint.js';
 
-import { useAuth } from '../../../context/AuthContext';
+import { useAuth } from '../../../context/useAuth';
 
 import { usePresenceStore } from '../presence/presenceStore';
 
 import { queuePresenceSync, flushPresenceSyncNow } from '../../shared/presence/queuePresenceSync.js';
 
-import { useCollab } from '../../core/CollabContext.jsx';
+import { useCollab } from '../../core/useCollab';
 
-import { useBoardCollabContext } from '../ops/BoardCollabContext.jsx';
+import { useBoardCollabContext } from '../ops/useBoardCollab';
 
 import { joinBoardRoom, leaveRoom } from '../../core/collabClient.js';
 

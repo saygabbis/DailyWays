@@ -1,6 +1,6 @@
 import { useId, memo } from 'react';
 import { useSpaceAssetUrl } from '../../../hooks/useSpaceAssetUrl';
-import { useWhiteboardViewportZoom } from '../interaction/viewport/WhiteboardViewportContext.jsx';
+import { useWhiteboardViewportZoom } from '../interaction/viewport/useWhiteboardViewportZoom';
 import {
     getAppearanceFromNode,
     getCornerRadii,

@@ -10,7 +10,7 @@ import { applyTaskModalPresence } from '../../collab/board/presence/boardPresenc
 import { announcePresence } from '../../collab/board/presence/presenceBridge.js';
 import { isPeerInBoardOverlay } from '../../collab/board/presence/presenceVisibility.js';
 import CollabPresenceLayer from '../../collab/board/ui/CollabPresenceLayer.jsx';
-import { useCollab } from '../../collab/core/CollabContext.jsx';
+import { useCollab } from '../../collab/core/useCollab';
 import { isCollabEnabled } from '../../collab/core/collabConfig.js';
 import './ListDetailsModal.css';
 

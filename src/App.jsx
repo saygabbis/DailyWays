@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import ErrorBoundary from './components/Common/ErrorBoundary';
-import { useAuth } from './context/AuthContext';
-import { useApp } from './context/AppContext';
-import { useTheme } from './context/ThemeContext';
+import { useAuth } from './context/useAuth';
+import { useApp } from './context/useApp';
+import { useTheme } from './context/useTheme';
 import Sidebar from './components/Sidebar/Sidebar';
 import Header from './components/Layout/Header';
 import MobileBottomNav from './components/Layout/MobileBottomNav';
@@ -11,10 +11,11 @@ import BoardCollabBridge from './collab/board/sync/BoardCollabBridge.jsx';
 import BoardCollabSync from './collab/board/sync/BoardCollabSync.jsx';
 import { isCollabEnabled } from './collab/core/collabConfig.js';
 import { pushPresenceFields } from './collab/board/presence/presenceBridge.js';
-import { useCollab } from './collab/core/CollabContext.jsx';
+import { useCollab } from './collab/core/useCollab';
 import { setLastBoardPointer } from './collab/board/presence/lastBoardPointer.js';
 import { pointerCoordsFromBoardEvent } from './collab/board/coords/boardCursorCoords.js';
-import { BoardCollabProvider, useBoardCollabDispatch } from './collab/board/ops/BoardCollabContext.jsx';
+import { BoardCollabProvider } from './collab/board/ops/BoardCollabContext.jsx';
+import { useBoardCollabDispatch } from './collab/board/ops/useBoardCollab';
 import { persistNavigation } from './utils/restoreNavigation';
 
 import PomodoroTimer from './components/Pomodoro/PomodoroTimer';

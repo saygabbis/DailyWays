@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useAuth } from '../../context/AuthContext';
-import { useTheme, useI18n } from '../../context/ThemeContext';
+import { useAuth } from '../../context/useAuth';
+import { useTheme, useI18n } from '../../context/useTheme';
 import { User, Palette, Globe, Smartphone, ChevronRight, Shield, X, ShieldCheck, Users } from 'lucide-react';
 import logoWhite from '../../assets/Logo - Branco.png';
 import logoBlack from '../../assets/Logo - Preto.png';

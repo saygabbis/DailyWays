@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useAuth } from '../context/AuthContext.jsx';
+import { useAuth } from '../context/useAuth';
 import { useDevConfigStore } from './devConfigStore.js';
 import {
   isDevUser,

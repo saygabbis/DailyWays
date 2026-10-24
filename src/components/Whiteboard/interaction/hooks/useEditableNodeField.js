@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
-import { useCollabPatch } from '../../../../collab/space/ops/SpaceCollabOpsContext.jsx';
+import { useCollabPatch } from '../../../../collab/space/ops/useCollabPatch';
 import { recordNodesMutation } from '../../core/history/whiteboardHistory';
 
 /**
