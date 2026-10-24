@@ -159,7 +159,6 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
     const isDragCreationTool = (tool) => checkDragCreationTool(tool, NODE_TYPES_ALLOWED);
 
     const {
-        dragPreviewBorderFromNode,
         createNodeAt,
         applyCreateDragBox,
     } = useNodeCreation({
@@ -272,16 +271,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         // eslint-disable-next-line react-hooks/exhaustive-deps -- só ao trocar de space
     }, [spaceId]);
 
+    const setViewportState = viewportState.setViewport;
     useEffect(() => {
         if (!onRegisterViewportControl) return undefined;
-        const resetViewport = () => {
-            const pan = { x: 0, y: 0 };
-            const zoom = 1;
-            viewportState.setViewport(pan, zoom);
-        };
+        const resetViewport = () => setViewportState({ x: 0, y: 0 }, 1);
         onRegisterViewportControl({ resetViewport });
         return () => onRegisterViewportControl(null);
-    }, [onRegisterViewportControl, viewportState.setViewport]);
+    }, [onRegisterViewportControl, setViewportState]);
 
     useEffect(() => {
         updateSelection(selectedNodeIds);
@@ -377,7 +373,6 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         connectorFromNodeId,
         setConnectorFromNodeId,
         isDragCreationTool,
-        dragPreviewBorderFromNode,
         commitTextEdit,
         viewportForChildren,
     });

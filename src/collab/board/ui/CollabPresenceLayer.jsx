@@ -110,6 +110,37 @@ function resolvePeerCursorTarget(
 /**
  * Remote cursors: meta from peers (rare updates), positions from remoteCursors (per frame, isolated).
  */
+/** Aplica cor/nome/variante do cursor de um colega num nó de cursor já criado (DOM direto). */
+function applyCursorVariantToNode(el, peer) {
+  const variant = getPeerCursorVariant(peer);
+  el.dataset.cursorVariant = variant;
+  el.classList.toggle('collab-presence-cursor--pointer', variant === 'pointer');
+  el.classList.toggle('collab-presence-cursor--grabbing', variant === 'grabbing');
+  const label = el.querySelector('.collab-presence-label');
+  if (label) {
+    label.style.display = variant === 'grabbing' ? 'none' : '';
+  }
+  const path = el.querySelector('.collab-presence-pointer path');
+  if (!path) return;
+  const d = variant === 'grabbing' ? GRAB_PATH : (variant === 'pointer' ? HAND_POINTER_PATH : POINTER_PATH);
+  path.setAttribute('d', d);
+}
+
+function applyPeerMetaToNode(el, peer) {
+  const color = peer.color || '#7c3aed';
+  const displayName = peer.name || peer.avatarInitial || 'Usuário';
+  el.style.setProperty('--presence-color', color);
+  const label = el.querySelector('.collab-presence-label');
+  if (label) {
+    label.textContent = displayName;
+    label.style.background = color;
+    label.style.color = presenceLabelTextColor(color);
+  }
+  const path = el.querySelector('.collab-presence-pointer path');
+  if (path) path.setAttribute('fill', color);
+  applyCursorVariantToNode(el, peer);
+}
+
 export default function CollabPresenceLayer({
   mode = 'world',
   viewport,
@@ -165,36 +196,6 @@ export default function CollabPresenceLayer({
   }, [peers, myId, peerFilter, collab?.connected, devPrankHidden]);
 
   visibleMetaRef.current = visibleMeta;
-
-  const applyCursorVariantToNode = (el, peer) => {
-    const variant = getPeerCursorVariant(peer);
-    el.dataset.cursorVariant = variant;
-    el.classList.toggle('collab-presence-cursor--pointer', variant === 'pointer');
-    el.classList.toggle('collab-presence-cursor--grabbing', variant === 'grabbing');
-    const label = el.querySelector('.collab-presence-label');
-    if (label) {
-      label.style.display = variant === 'grabbing' ? 'none' : '';
-    }
-    const path = el.querySelector('.collab-presence-pointer path');
-    if (!path) return;
-    const d = variant === 'grabbing' ? GRAB_PATH : (variant === 'pointer' ? HAND_POINTER_PATH : POINTER_PATH);
-    path.setAttribute('d', d);
-  };
-
-  const applyPeerMetaToNode = (el, peer) => {
-    const color = peer.color || '#7c3aed';
-    const displayName = peer.name || peer.avatarInitial || 'Usuário';
-    el.style.setProperty('--presence-color', color);
-    const label = el.querySelector('.collab-presence-label');
-    if (label) {
-      label.textContent = displayName;
-      label.style.background = color;
-      label.style.color = presenceLabelTextColor(color);
-    }
-    const path = el.querySelector('.collab-presence-pointer path');
-    if (path) path.setAttribute('fill', color);
-    applyCursorVariantToNode(el, peer);
-  };
 
   const isNodeInLayer = (el, layer) => {
     if (!el || !layer) return false;

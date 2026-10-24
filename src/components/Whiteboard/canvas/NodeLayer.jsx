@@ -166,7 +166,7 @@ export default function NodeLayer({ onNodePointerDown, onNodeContextMenu, viewpo
         }).sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
 
         return filtered;
-    }, [roots, vp, pageNodes, selectedNodeIds, forcedRootIds, liveViewport, viewport, containerSize]);
+    }, [roots, vp, pageNodes, selectedNodeIds, forcedRootIds]);
 
     const renderNode = (node) => (
         <CanvasNode

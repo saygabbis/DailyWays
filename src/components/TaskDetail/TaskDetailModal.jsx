@@ -77,7 +77,6 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const [descFocused, setDescFocused] = useState(false);
     const [commentFocused, setCommentFocused] = useState(false);
     const remoteSync = useRef(createRemoteSyncLock()).current;
-    const lastSyncedCardAtRef = useRef(null);
 
     const liveCard = (() => {
         const board = state.boards.find(b => b.id === boardId);
@@ -87,7 +86,9 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         return list.cards.find(c => c.id === card.id) || card;
     })();
 
+    // O modal é montado com key={card.id}: trocar de card remonta, então os valores iniciais bastam.
     const lastPersistedRef = useRef(snapshotFromCard(liveCard));
+    const lastSyncedCardAtRef = useRef(liveCard.updatedAt ?? null);
 
     const [title, setTitle] = useState(liveCard.title);
     const [description, setDescription] = useState(liveCard.description || '');
@@ -158,10 +159,6 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         labels,
         cardColor,
     ]);
-
-    useEffect(() => {
-        lastPersistedRef.current = snapshotFromCard(liveCard);
-    }, [card.id]);
 
     const persistCardSnapshot = useCallback((fieldOverride = null) => {
         if (remoteSync.isLocked()) return;
@@ -266,28 +263,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
             setCardColor(liveCard.color ?? null);
             lastPersistedRef.current = snapshotFromCard(liveCard);
         });
-    }, [
-        liveCard.updatedAt,
-        liveCard.title,
-        liveCard.description,
-        liveCard.priority,
-        liveCard.startDate,
-        liveCard.dueDate,
-        liveCard.recurrenceRule,
-        liveCard.isAllDay,
-        liveCard.myDay,
-        liveCard.dayCategory,
-        liveCard.estimatedMinutes,
-        liveCard.labels,
-        liveCard.color,
-        titleFocused,
-        descFocused,
-        remoteSync,
-    ]);
-
-    useEffect(() => {
-        lastSyncedCardAtRef.current = liveCard.updatedAt ?? null;
-    }, [card.id]);
+    }, [liveCard, titleFocused, descFocused, remoteSync]);
 
     useEffect(() => {
         if (!boardId || !card?.id) return undefined;

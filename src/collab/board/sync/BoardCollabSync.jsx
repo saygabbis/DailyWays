@@ -164,6 +164,9 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
 
   useEffect(() => {
+    // Maps estáveis (mesma instância a vida toda) — capturados para o cleanup.
+    const prevDragCards = prevDragCardByUserRef.current;
+    const prevDragLists = prevDragListByUserRef.current;
 
     if (!boardId) return undefined;
 
@@ -530,8 +533,8 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
       resetPresenceFields(boardAtCleanup);
 
-      prevDragCardByUserRef.current.clear();
-      prevDragListByUserRef.current.clear();
+      prevDragCards.clear();
+      prevDragLists.clear();
 
       const shouldLeaveRoom = getGlobalJoinedBoardId() === boardAtCleanup;
 
@@ -563,10 +566,9 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
   useEffect(() => {
 
+    const hydrated = hydratedBoardIdsRef.current;
     return () => {
-
-      hydratedBoardIdsRef.current.delete(boardId);
-
+      hydrated.delete(boardId);
     };
 
   }, [boardId]);

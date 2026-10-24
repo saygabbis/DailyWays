@@ -25,7 +25,7 @@ export default function DiaryQuickPlanner({ onCardClick, inDrawer = false, defau
     const { state, getMyDayCards, getActiveBoard } = useApp();
     const { collabDispatch } = useBoardCollabDispatch();
 
-    const boards = state.boards || [];
+    const boards = useMemo(() => state.boards || [], [state.boards]);
     const activeBoard = getActiveBoard();
 
     const [period, setPeriod] = useState('day');

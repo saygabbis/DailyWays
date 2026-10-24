@@ -33,7 +33,8 @@ export default function DraggablePanel({ id, defaultPosition = { left: 0, top: 0
     positionRef.current = position;
 
     useEffect(() => {
-        if (saved) setPosition(saved);
+        const stored = loadPosition(id);
+        if (stored) setPosition(stored);
     }, [id]);
 
     const handleMouseDown = useCallback(

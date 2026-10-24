@@ -58,7 +58,7 @@ export function useWorkspaceNavigation(ctx) {
     viewRestoreDoneRef.current = true;
     navPersistReadyRef.current = true;
     setNavReady(true);
-  }, [user.id, state.boards, state.spaces, state.activeBoard, boardsLoadError, dispatch, viewRestoreDoneRef, setActiveView, navPersistReadyRef, setNavReady]);
+  }, [user?.id, state.boards, state.spaces, state.activeBoard, boardsLoadError, dispatch, viewRestoreDoneRef, setActiveView, navPersistReadyRef, setNavReady]);
   const [selectedCard, setSelectedCard] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState('account');

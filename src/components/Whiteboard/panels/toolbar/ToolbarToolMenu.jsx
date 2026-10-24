@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useLayoutEffect } from 'react';
+import { useCallback, useEffect, useRef, useState, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 function computeMenuStyle(anchorEl, orientation) {
@@ -46,16 +46,16 @@ export default function ToolbarToolMenu({
     const menuRef = useRef(null);
     const [menuStyle, setMenuStyle] = useState({});
 
-    const updatePosition = () => {
+    const updatePosition = useCallback(() => {
         const anchorEl = anchorRef?.current;
         if (!anchorEl) return;
         setMenuStyle(computeMenuStyle(anchorEl, orientation));
-    };
+    }, [anchorRef, orientation]);
 
     useLayoutEffect(() => {
         if (!open) return;
         updatePosition();
-    }, [open, orientation, anchorRef]);
+    }, [open, updatePosition]);
 
     useEffect(() => {
         if (!open) return undefined;
@@ -66,7 +66,7 @@ export default function ToolbarToolMenu({
             window.removeEventListener('resize', onReposition);
             window.removeEventListener('scroll', onReposition, true);
         };
-    }, [open, orientation, anchorRef]);
+    }, [open, updatePosition]);
 
     useEffect(() => {
         if (!open) return undefined;

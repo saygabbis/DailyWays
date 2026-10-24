@@ -368,6 +368,7 @@ function AppContent() {
         {selectedCard && (
           <Suspense fallback={null}>
           <TaskDetailModal
+            key={selectedCard.card.id}
             card={selectedCard.card}
             boardId={selectedCard.boardId}
             listId={selectedCard.listId}

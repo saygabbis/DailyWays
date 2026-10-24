@@ -220,7 +220,7 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         const raf = requestAnimationFrame(publish);
         announcePresence(board.id);
         return () => cancelAnimationFrame(raf);
-    }, [board?.id, collab?.socket, collab?.connected, user?.id, profile]);
+    }, [board?.id, collab?.socket, collab?.connected, user, profile]);
 
     const { hoverByCardId, hoverByListId, hoverByUiKey, remoteDrags, remoteListDrags } = useBoardPresenceHighlights();
     const {

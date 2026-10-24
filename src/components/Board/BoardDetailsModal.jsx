@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Users, Mail, Shield, Trash2, ChevronDown, LogOut, Star } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -98,7 +98,7 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
         }, 1000);
     };
 
-    const loadMembers = async () => {
+    const loadMembers = useCallback(async () => {
         setMembersLoading(true);
         setShareError('');
         const { data, error } = await fetchBoardMembers(board.id);
@@ -108,13 +108,13 @@ export default function BoardDetailsModal({ board, onClose, initialTab = 'detail
             setMembers(data || []);
         }
         setMembersLoading(false);
-    };
+    }, [board.id]);
 
     useEffect(() => {
         if (activeTab === 'share') {
             loadMembers();
         }
-    }, [activeTab]);
+    }, [activeTab, loadMembers]);
 
     // Close on Escape
     useEffect(() => {

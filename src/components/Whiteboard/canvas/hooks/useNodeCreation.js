@@ -15,18 +15,9 @@ import { worldBoxFromAnchorWithModifiers } from '../../interaction/transform/cre
 import { cloneNode } from '../../core/history/whiteboardHistory';
 import { filterNodesByPage } from '../../core/pages/whiteboardPages';
 import { nodeToWorld, buildNodesById } from '../../core/ops/whiteboardNodeOps';
-import { getCornerRadii } from '../../shared/appearanceStyle';
 import { FRAME_CONSTRAINT_DEFAULT, normalizeFrameConstraints } from '../../core/frame/frameConstraints.js';
 import { NODE_TYPES_ALLOWED } from '../../shared/constants';
 
-const DEFAULT_NODE_RADIUS = {
-    sticky_note: 8,
-    comment: 8,
-    todo_list: 8,
-    link: 8,
-    file_card: 8,
-    frame: 8,
-};
 
 function getNextTopLevelZIndex(nodes) {
     const topLevel = (nodes || []).filter((n) => !n.parentId);
@@ -49,23 +40,6 @@ export function useNodeCreation(ctx) {
         collabConnected,
     } = ctx;
 
-    const dragPreviewBorderFromNode = useCallback((node) => {
-        if (!node) return {};
-        if (node.type === 'shape' && node.data?.shape === 'ellipse') {
-            return { radiusShape: 'ellipse' };
-        }
-        const appearance = node.style?.appearance;
-        if (appearance) {
-            const corners = getCornerRadii(appearance);
-            return { cornerRadii: corners };
-        }
-        if (typeof node.style?.borderRadius === 'number') {
-            return { borderRadius: node.style.borderRadius };
-        }
-        const fallback = DEFAULT_NODE_RADIUS[node.type];
-        if (typeof fallback === 'number') return { borderRadius: fallback };
-        return {};
-    }, []);
 
     const createNodeAt = useCallback(
         async (type, worldX, worldY, extraData = {}, dims) => {
@@ -213,7 +187,6 @@ export function useNodeCreation(ctx) {
     }, [createPreview, applyCreateDragBox, createDragRef, lastPointerClientRef, containerRef, viewportRef, setCreatePreview]);
 
     return {
-        dragPreviewBorderFromNode,
         createNodeAt,
         applyCreateDragBox,
     };

@@ -4,27 +4,6 @@ import { useCollab } from '../collab/core/CollabContext.jsx';
 import { isPeerOnBoardSurface } from '../collab/board/presence/presenceVisibility.js';
 import { initialFromName } from '../utils/userColor';
 
-/**
- * Remote hover / drag highlights from collab presence peers.
- */
-function cursorKey(c) {
-  if (!c || typeof c.x !== 'number' || typeof c.y !== 'number') return '';
-  return `${c.x},${c.y}`;
-}
-
-function draggingCursorSig(state) {
-  const parts = [];
-  for (const p of state.peers || []) {
-    if (!p.draggingCardId && !p.draggingListId) continue;
-    const c = state.remoteCursors[p.userId];
-    parts.push(
-      `${p.userId}:${p.draggingCardId || ''}:${p.draggingListId || ''}:`
-      + `${cursorKey(c)}:${cursorKey(p.cursorScreen)}`,
-    );
-  }
-  return parts.sort().join('|');
-}
-
 /** IDs do grupo quando o peer arrasta um card que faz parte da seleção dele. */
 function getRemoteMultiDragIds(peer) {
   const selected = Array.isArray(peer?.selectedCardIds) ? peer.selectedCardIds : [];
@@ -46,7 +25,6 @@ function dragPosition(peer) {
 
 export function useBoardPresenceHighlights() {
   const peers = usePresenceStore((s) => s.peers);
-  const dragCursors = usePresenceStore(draggingCursorSig);
   const collab = useCollab();
   const myId = collab?.userId;
 
@@ -104,5 +82,6 @@ export function useBoardPresenceHighlights() {
     }
 
     return { hoverByCardId, hoverByListId, hoverByUiKey, remoteDrags, remoteListDrags };
-  }, [peers, dragCursors, myId]);
+  // peers já é um array novo a cada mudança de cursor (presenceStore.setPeers).
+  }, [peers, myId]);
 }

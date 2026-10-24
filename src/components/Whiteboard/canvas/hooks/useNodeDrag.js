@@ -22,6 +22,8 @@ import {
 import { uuidv4 } from '../../../../utils/uuid';
 import { NODE_TYPES_ALLOWED } from '../../shared/constants';
 
+import { dragPreviewBorderFromNode } from './dragPreviewBorder';
+
 export function useNodeDrag(ctx) {
     const {
         spaceId,
@@ -41,7 +43,6 @@ export function useNodeDrag(ctx) {
         connectorFromNodeId,
         setConnectorFromNodeId,
         isDragCreationTool,
-        dragPreviewBorderFromNode,
         commitTextEdit,
         viewportForChildren,
     } = ctx;
@@ -340,7 +341,7 @@ export function useNodeDrag(ctx) {
             window.removeEventListener('pointerup', finishDrag);
             window.removeEventListener('pointercancel', finishDrag);
         };
-    }, []);
+    }, [collabPatchNodeRef, collabPatchNodesRef, containerRef, nodeDragRef, resizeActiveRef, setSnapGuidesIfChangedRef, updateDragPreviewRef, viewportRef]);
 
     return {
         handleNodePointerDown,

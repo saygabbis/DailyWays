@@ -139,7 +139,7 @@ export function useBoardToolbarDrag(ctx) {
             window.removeEventListener('resize', run);
             ro?.disconnect();
         };
-    }, [profileMenuOpen, showBoardToolbar, toolbarPos.x, toolbarPos.y, board.id, narrowBoardLayout, toolbarMembers.length, toolbarMembersLoading, containerRef, toolbarRef]);
+    }, [profileMenuOpen, showBoardToolbar, toolbarPos?.x, toolbarPos?.y, board?.id, narrowBoardLayout, toolbarMembers.length, toolbarMembersLoading, containerRef, toolbarRef]);
 
     const toolbarDefaultBottomCorner = narrowBoardLayout && toolbarPos == null;
 

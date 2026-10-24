@@ -33,13 +33,15 @@ export default function RadioWidget() {
     const [size, setSize] = useState(DEFAULT_SIZE);
     const miniSize = DEFAULT_MINI_SIZE;
 
+    // Ao abrir, traz o widget de volta se ficou fora da tela (ex.: janela redimensionada).
     useEffect(() => {
-        if (isOpen) {
-            if (position.x > window.innerWidth - 80 || position.y > window.innerHeight - 80) {
-                setPosition(getDefaultPos(size.width, size.height));
-            }
-        }
-    }, [isOpen]);
+        if (!isOpen) return;
+        setPosition((pos) => (
+            pos.x > window.innerWidth - 80 || pos.y > window.innerHeight - 80
+                ? getDefaultPos(size.width, size.height)
+                : pos
+        ));
+    }, [isOpen, size.width, size.height]);
 
     useEffect(() => {
         const onResize = () => {

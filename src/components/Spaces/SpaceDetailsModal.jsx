@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Users, Mail, Shield, Trash2, LogOut } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -46,7 +46,7 @@ export default function SpaceDetailsModal({ space, onClose, initialTab = 'detail
         setColor(currentSpace?.color || null);
     }, [spaceId, currentSpace?.title, currentSpace?.emoji, currentSpace?.color]);
 
-    const loadMembers = async () => {
+    const loadMembers = useCallback(async () => {
         if (!spaceId) return;
         setMembersLoading(true);
         setShareError('');
@@ -54,11 +54,11 @@ export default function SpaceDetailsModal({ space, onClose, initialTab = 'detail
         if (error) setShareError(error);
         else setMembers(data || []);
         setMembersLoading(false);
-    };
+    }, [spaceId]);
 
     useEffect(() => {
         if (activeTab === 'share') loadMembers();
-    }, [activeTab, spaceId]);
+    }, [activeTab, loadMembers]);
 
     useEffect(() => {
         const handleKey = (e) => { if (e.key === 'Escape') onClose(); };

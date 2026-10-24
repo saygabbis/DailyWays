@@ -330,7 +330,7 @@ function DesignTab({ selectedNodes, single, nodes, spaceId }) {
         setSizeW(String(Math.round(single.width ?? 0)));
         setSizeH(String(Math.round(single.height ?? 0)));
         setRotation(String(Math.round(single.rotation ?? 0)));
-    }, [single?.id, single?.x, single?.y, single?.width, single?.height, single?.rotation, nodes]);
+    }, [single, nodes]);
 
     const applyPosition = () => {
         if (!single) return;

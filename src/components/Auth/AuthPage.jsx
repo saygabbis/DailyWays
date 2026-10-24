@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../services/supabaseClient';
@@ -267,12 +267,12 @@ export default function AuthPage() {
     }
   };
 
-  const cancelOtp = () => {
+  const cancelOtp = useCallback(() => {
     setShowOtpModal(false);
     setOtpCode('');
     setOtpError('');
     clearPendingSignupEmail?.();
-  };
+  }, [clearPendingSignupEmail]);
 
   useEffect(() => {
     if (!showAccountCreatedRedirecting) return;
@@ -320,7 +320,7 @@ export default function AuthPage() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [showOtpModal, isCoarsePointer]);
+  }, [showOtpModal, isCoarsePointer, cancelOtp]);
 
   // Reenviar código: cooldown 60s ao abrir o modal
   useEffect(() => {

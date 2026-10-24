@@ -19,7 +19,7 @@ export default function ConfirmModal({
         if (show && checkbox) {
             setCheckboxChecked(!!checkbox.defaultChecked);
         }
-    }, [show, checkbox?.defaultChecked, checkbox?.label]);
+    }, [show, checkbox]);
 
     if (!show) return null;
 

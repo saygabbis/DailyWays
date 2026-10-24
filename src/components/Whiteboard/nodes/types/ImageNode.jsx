@@ -18,7 +18,7 @@ export default function ImageNode({ node, onNodePointerDown, onNodeContextMenu }
     const zoom = useWhiteboardViewportZoom();
     const filterId = useId().replace(/:/g, '');
     const appearance = getAppearanceFromNode(node);
-    const stroke = appearance.stroke ?? {};
+    const stroke = useMemo(() => appearance.stroke ?? {}, [appearance.stroke]);
     const w = Math.max(node.width ?? 0, WORLD_DIM_EPSILON);
     const h = Math.max(node.height ?? 0, WORLD_DIM_EPSILON);
     const opacity = (appearance.opacity ?? 100) / 100;
