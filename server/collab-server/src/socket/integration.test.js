@@ -116,6 +116,7 @@ describe('collab-server (integração com Postgres embutido)', () => {
     db = new PGlite();
     await db.exec(read('supabase/tests/schemaMirror.sql'));
     await db.exec(read('supabase/migrations/20261024190000_upsert_board_full_diff_and_idor.sql'));
+    await db.exec(read('supabase/migrations/20261024200000_upsert_board_full_day_category.sql'));
     await db.exec(`
       INSERT INTO public.profiles (id, username) VALUES ('${U3}', 'u3');
       INSERT INTO public.boards (id, owner_id, title) VALUES ('${BOARD}', '${U1}', 'Board'), ('${OTHER_BOARD}', '${U1}', 'Outro');

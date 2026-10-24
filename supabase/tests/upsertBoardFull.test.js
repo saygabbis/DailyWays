@@ -17,6 +17,7 @@ describe('upsert_board_full v3 (migration 20261024190000)', () => {
     db = new PGlite();
     await db.exec(read('schemaMirror.sql'));
     await db.exec(read('../migrations/20261024190000_upsert_board_full_diff_and_idor.sql'));
+    await db.exec(read('../migrations/20261024200000_upsert_board_full_day_category.sql'));
   }, 60_000);
 
   it('passa em todos os casos (IDOR, pasta do dono, save sem mudança não reescreve)', async () => {

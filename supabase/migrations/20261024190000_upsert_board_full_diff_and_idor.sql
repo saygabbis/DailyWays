@@ -13,9 +13,6 @@
 --      - lista de outro board: rejeitada (listas não mudam de board);
 --      - card/subtask de outro board: só se o usuário também puder escrever naquele board
 --        (mover entre dois boards em que ele é editor continua permitido).
--- 4) Diário: dayCategory/estimatedMinutes dos cards não eram gravados pela RPC (só no INSERT do
---    board novo), então a categoria da missão sumia ao recarregar. Agora vão junto (valor inválido
---    vira NULL em vez de derrubar o save inteiro pelo CHECK).
 
 -- Helper interno: o usuário pode escrever no board? (dono ou owner/admin/editor em board_members)
 CREATE OR REPLACE FUNCTION public.dw_can_write_board(p_board_id uuid, p_user_id uuid)
@@ -200,7 +197,7 @@ BEGIN
   INSERT INTO public.cards AS t (
     id, list_id, title, description, priority, due_date, start_date,
     is_all_day, recurrence_rule, my_day, labels, color, cover_attachment_id,
-    created_at, updated_at, completed, position, day_category, estimated_minutes
+    created_at, updated_at, completed, position
   )
   SELECT
     (ci->>'id')::uuid,
@@ -219,9 +216,7 @@ BEGIN
     COALESCE((ci->>'createdAt')::timestamptz, now()),
     COALESCE((ci->>'updatedAt')::timestamptz, now()),
     COALESCE((ci->>'completed')::boolean, false),
-    (ci_ord - 1)::int,
-    CASE WHEN ci->>'dayCategory' IN ('essential', 'creative', 'self') THEN ci->>'dayCategory' END,
-    CASE WHEN (ci->>'estimatedMinutes') ~ '^[0-9]{1,6}$' THEN (ci->>'estimatedMinutes')::int END
+    (ci_ord - 1)::int
   FROM jsonb_array_elements(COALESCE(p_board->'lists', '[]'::jsonb)) AS li,
        LATERAL jsonb_array_elements(COALESCE(li->'cards', '[]'::jsonb))
               WITH ORDINALITY AS c(ci, ci_ord)
@@ -240,18 +235,15 @@ BEGIN
     cover_attachment_id = EXCLUDED.cover_attachment_id,
     updated_at = GREATEST(EXCLUDED.updated_at, t.updated_at),
     completed = EXCLUDED.completed,
-    position = EXCLUDED.position,
-    day_category = EXCLUDED.day_category,
-    estimated_minutes = EXCLUDED.estimated_minutes
+    position = EXCLUDED.position
   WHERE (t.list_id, t.title, t.description, t.priority, t.due_date, t.start_date,
          t.is_all_day, t.recurrence_rule, t.my_day, t.labels, t.color,
-         t.cover_attachment_id, t.completed, t.position, t.day_category, t.estimated_minutes)
+         t.cover_attachment_id, t.completed, t.position)
         IS DISTINCT FROM
         (EXCLUDED.list_id, EXCLUDED.title, EXCLUDED.description, EXCLUDED.priority,
          EXCLUDED.due_date, EXCLUDED.start_date, EXCLUDED.is_all_day,
          EXCLUDED.recurrence_rule, EXCLUDED.my_day, EXCLUDED.labels, EXCLUDED.color,
-         EXCLUDED.cover_attachment_id, EXCLUDED.completed, EXCLUDED.position,
-         EXCLUDED.day_category, EXCLUDED.estimated_minutes);
+         EXCLUDED.cover_attachment_id, EXCLUDED.completed, EXCLUDED.position);
 
   -- ── Subtarefas ──
   INSERT INTO public.subtasks AS t (

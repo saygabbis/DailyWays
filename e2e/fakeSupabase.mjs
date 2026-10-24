@@ -32,7 +32,9 @@ function parseList(raw) {
 export async function startFakeSupabase({ port = 54321, users = [], seed = '' } = {}) {
   const db = new PGlite();
   await db.exec(readFileSync(join(here, 'schema.sql'), 'utf8'));
-  await db.exec(readFileSync(join(repo, 'supabase/migrations/20261024190000_upsert_board_full_diff_and_idor.sql'), 'utf8'));
+  for (const m of ['20261024190000_upsert_board_full_diff_and_idor', '20261024200000_upsert_board_full_day_category']) {
+    await db.exec(readFileSync(join(repo, `supabase/migrations/${m}.sql`), 'utf8'));
+  }
   for (const u of users) {
     await db.query('INSERT INTO public.profiles (id, username, name) VALUES ($1, $2, $3)', [u.id, u.username, u.name]);
   }
