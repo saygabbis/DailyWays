@@ -6,6 +6,7 @@ import { nodeToWorld } from '../../core/nodeGeometry';
 import { screenToWorldWithContainer, worldToScreenWithContainer } from '../../interaction/viewport/viewportUtils';
 import { clampViewportZoom } from '../../interaction/viewport/viewportLimits';
 import { WORLD_DIM_EPSILON } from '../../shared/vectorViewport';
+import { useElementRect } from '../../../../hooks/useElementRect';
 
 const OUTLINE_BORDER_PX = 2;
 
@@ -51,7 +52,7 @@ function PreviewOutline({ screenBox }) {
 export default function MarqueePreviewOutlines({ selectionBox, viewport, containerRef }) {
     const nodes = useWhiteboardDocumentStore((s) => s.nodes);
     const activePageId = useWhiteboardDocumentStore((s) => s.activePageId);
-    const rect = containerRef?.current?.getBoundingClientRect?.() ?? null;
+    const rect = useElementRect(containerRef);
     const zoom = clampViewportZoom(viewport?.zoom ?? 1);
 
     const screenBoxes = useMemo(() => {

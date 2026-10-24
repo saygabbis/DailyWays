@@ -3,6 +3,7 @@ import { useAuth } from './useAuth';
 import { recordFocusSeconds } from '../services/dailyProgressService';
 import { DEFAULT_FOCUS_MINUTES, TIMEZONE_FALLBACK } from '../components/MyDay/hub/diaryHubConfig';
 import { PomodoroContext } from './usePomodoro';
+import { useLatestRef } from '../hooks/useLatestRef';
 
 
 
@@ -31,15 +32,14 @@ export function PomodoroProvider({ children }) {
     });
 
     const timezone = user?.timezone || TIMEZONE_FALLBACK;
-    const userIdRef = useRef(user?.id);
-    userIdRef.current = user?.id;
+    const userIdRef = useLatestRef(user?.id);
 
     const handleFocusSessionComplete = useCallback(async (durationSeconds) => {
         if (focusSessionRef.current.recorded || !userIdRef.current) return;
         focusSessionRef.current.recorded = true;
         await recordFocusSeconds(userIdRef.current, durationSeconds, timezone);
         window.dispatchEvent(new CustomEvent('diary-focus-complete'));
-    }, [timezone]);
+    }, [timezone, userIdRef]);
 
     useEffect(() => {
         const interval = setInterval(() => {

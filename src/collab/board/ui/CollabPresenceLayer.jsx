@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { usePresenceStore } from '../presence/presenceStore';
 import { useCollab } from '../../core/useCollab';
@@ -16,6 +16,7 @@ import { createRemoteCursorSmoother } from '../presence/remoteCursorSmoother.js'
 import { isBoardDevPrankEnabled, useBoardDevPrankStore } from '../dev/boardDevPrank.js';
 import { attachDevPrankToCursor } from '../dev/attachDevPrankToCursor.js';
 import { useContextMenu } from '../../../components/Common/useContextMenu';
+import { useLatestRef } from '../../../hooks/useLatestRef';
 import './PresenceLayer.css';
 
 const POINTER_PATH = 'M2 2 L2 17 L7 12 L10.5 21 L13 19.5 L9.5 11.5 L16 11.5 Z';
@@ -171,19 +172,17 @@ export default function CollabPresenceLayer({
   const layerRef = useRef(null);
   const nodeRefs = useRef(new Map());
   const prankDetachRef = useRef(new Map());
-  const viewportRef = useRef(viewport);
+  const viewportRef = useLatestRef(viewport);
   const smootherRef = useRef(null);
   const visibleMetaRef = useRef([]);
-  const scrollRepaintRef = useRef(scrollRepaint);
-  const layoutRepaintRef = useRef(layoutRepaint);
-  scrollRepaintRef.current = scrollRepaint;
-  layoutRepaintRef.current = layoutRepaint;
+  const scrollRepaintRef = useLatestRef(scrollRepaint);
+  const layoutRepaintRef = useLatestRef(layoutRepaint);
 
-  if (!smootherRef.current) {
+  // Inicialização preguiçosa (padrão permitido: só quando ainda é null).
+  if (smootherRef.current === null) {
     smootherRef.current = createRemoteCursorSmoother();
   }
 
-  viewportRef.current = viewport;
   const { panX = 0, panY = 0, zoom = 1 } = viewport || {};
 
   const visibleMeta = useMemo(() => {
@@ -195,7 +194,9 @@ export default function CollabPresenceLayer({
     return out;
   }, [peers, myId, peerFilter, collab?.connected, devPrankHidden]);
 
-  visibleMetaRef.current = visibleMeta;
+  useLayoutEffect(() => {
+    visibleMetaRef.current = visibleMeta;
+  }, [visibleMeta]);
 
   const isNodeInLayer = (el, layer) => {
     if (!el || !layer) return false;
@@ -398,7 +399,7 @@ export default function CollabPresenceLayer({
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [collab?.connected, visibleMeta.length, mode, panX, panY, zoom, useBoardContentCoords, modalRootRef, overlayScrollSelector, boardScrollerRef, worldContainerRef]);
+  }, [collab?.connected, visibleMeta.length, mode, panX, panY, zoom, useBoardContentCoords, modalRootRef, overlayScrollSelector, boardScrollerRef, worldContainerRef, scrollRepaintRef, layoutRepaintRef, viewportRef]);
 
   if (!collab?.connected || !visibleMeta.length) return null;
 

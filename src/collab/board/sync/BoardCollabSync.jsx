@@ -47,6 +47,7 @@ import {
   getBoardCollabMountGen,
 
 } from './boardCollabSession.js';
+import { useLatestRef } from '../../../hooks/useLatestRef';
 
 
 
@@ -67,12 +68,9 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
     savingBoardIds,
   } = useApp();
 
-  const boardsRef = useRef(state.boards);
-  const pendingBoardIdsRef = useRef(pendingBoardIds);
-  const savingBoardIdsRef = useRef(savingBoardIds);
-  boardsRef.current = state.boards;
-  pendingBoardIdsRef.current = pendingBoardIds;
-  savingBoardIdsRef.current = savingBoardIds;
+  const boardsRef = useLatestRef(state.boards);
+  const pendingBoardIdsRef = useLatestRef(pendingBoardIds);
+  const savingBoardIdsRef = useLatestRef(savingBoardIds);
 
   const joinedRef = useRef(null);
 
@@ -84,16 +82,14 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
   const hydratedBoardIdsRef = useRef(new Set());
 
-  const boardCollabRef = useRef(boardCollab);
+  const boardCollabRef = useLatestRef(boardCollab);
 
   const prevDragCardByUserRef = useRef(new Map());
   const prevDragListByUserRef = useRef(new Map());
 
-  const authRef = useRef({ user, profile });
+  const authRef = useLatestRef({ user, profile });
 
-  authRef.current = { user, profile };
 
-  boardCollabRef.current = boardCollab;
 
 
 
@@ -107,7 +103,7 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
     publishBoardPresenceFull(socket, id, authRef.current);
 
-  }, [collab?.socket, boardId]);
+  }, [collab?.socket, boardId, authRef]);
 
 
 
@@ -131,9 +127,8 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
 
 
-  const boardViewActiveRef = useRef(boardViewActive);
+  const boardViewActiveRef = useLatestRef(boardViewActive);
 
-  boardViewActiveRef.current = boardViewActive;
 
 
 
@@ -159,7 +154,7 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
       cancelled = true;
       cancelAnimationFrame(raf);
     };
-  }, [boardViewActive, boardId, collab?.socket, collab?.connected]);
+  }, [boardViewActive, boardId, collab?.socket, collab?.connected, boardViewActiveRef, authRef]);
 
 
 
@@ -530,6 +525,9 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
 
       const boardAtCleanup = joiningBoardId;
+      // boardCollabRef é um "latest ref" (useLatestRef), não um nó do DOM: o cleanup quer o valor atual.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const latestBoardCollab = boardCollabRef.current;
 
       resetPresenceFields(boardAtCleanup);
 
@@ -550,17 +548,17 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
         });
 
-        boardCollabRef.current?.setBoardRoomReady?.(boardAtCleanup, false);
+        latestBoardCollab?.setBoardRoomReady?.(boardAtCleanup, false);
 
         setCollabActiveBoardId(null);
 
-        boardCollabRef.current?.setActiveBoardId?.(null);
+        latestBoardCollab?.setActiveBoardId?.(null);
 
       }
 
     };
 
-  }, [boardId, collab?.socket, dispatch, setCollabActiveBoardId, setCollabConnectedForBoard, publishNow]);
+  }, [boardId, collab?.socket, dispatch, setCollabActiveBoardId, setCollabConnectedForBoard, publishNow, boardCollabRef, pendingBoardIdsRef, savingBoardIdsRef, boardsRef, authRef]);
 
 
 

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useLatestRef } from '../../../hooks/useLatestRef';
 import '../styles/DraggablePanel.css';
 
 const STORAGE_KEY = 'dailyways_panel_positions';
@@ -26,11 +27,10 @@ export default function DraggablePanel({ id, defaultPosition = { left: 0, top: 0
     const saved = loadPosition(id);
     const useBottomDefault = !saved && defaultBottom != null;
     const [position, setPosition] = useState(saved || defaultPosition);
-    const positionRef = useRef(position);
+    const positionRef = useLatestRef(position);
     const [isDragging, setIsDragging] = useState(false);
     const dragStart = useRef({ x: 0, y: 0 });
     const panelRef = useRef(null);
-    positionRef.current = position;
 
     useEffect(() => {
         const stored = loadPosition(id);
@@ -51,7 +51,7 @@ export default function DraggablePanel({ id, defaultPosition = { left: 0, top: 0
             setIsDragging(true);
             dragStart.current = { x: e.clientX - startPos.left, y: e.clientY - startPos.top };
         },
-        [position, useBottomDefault]
+        [position, positionRef, useBottomDefault]
     );
 
     useEffect(() => {
@@ -71,7 +71,7 @@ export default function DraggablePanel({ id, defaultPosition = { left: 0, top: 0
             window.removeEventListener('mousemove', onMove);
             window.removeEventListener('mouseup', onUp);
         };
-    }, [isDragging, id]);
+    }, [isDragging, id, positionRef]);
 
     const useBottomStyle = useBottomDefault && !isDragging;
     return (

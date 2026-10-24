@@ -8,6 +8,7 @@ import { presenceLabelTextColor } from '../../../utils/presenceLabelContrast.js'
 import { boardContentCursorPosition } from '../coords/boardCursorCoords.js';
 import { getBoardPresenceLayerAnchor } from '../coords/scrollContentCoords.js';
 import BoardMultiDragStack from '../../../components/Board/BoardMultiDragStack';
+import { useRefElement } from '../../../hooks/useElementRect';
 import './PresenceLayer.css';
 
 const CARD_OFFSET_X = 14;
@@ -150,7 +151,7 @@ export default function RemoteDragLayer({ boardId, boardScrollerRef = null, layo
     return { cardsById, listsById };
   }, [state.boards, boardId]);
 
-  const scrollerEl = boardScrollerRef?.current ?? null;
+  const scrollerEl = useRefElement(boardScrollerRef);
 
   useEffect(() => {
     const layer = layerRef.current;

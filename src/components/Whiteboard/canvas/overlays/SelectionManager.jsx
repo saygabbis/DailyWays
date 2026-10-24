@@ -1,6 +1,7 @@
 import { worldBoxFromAnchorWithModifiers } from '../../interaction/transform/createDragBounds';
 import { worldToScreenWithContainer } from '../../interaction/viewport/viewportUtils';
 import MarqueePreviewOutlines from './MarqueePreviewOutlines';
+import { useElementRect } from '../../../../hooks/useElementRect';
 
 function MarqueeBox({ left, top, width, height, className = 'whiteboard-selection-box' }) {
     if (width < 2 && height < 2) return null;
@@ -27,7 +28,7 @@ function MarqueeBox({ left, top, width, height, className = 'whiteboard-selectio
  * createPreview: { anchorWorld, currentWorld } in world coords while drag-creating a node.
  */
 export default function SelectionManager({ selectionBox, createPreview, viewport, containerRef }) {
-    const rect = containerRef?.current?.getBoundingClientRect?.() ?? null;
+    const rect = useElementRect(containerRef);
 
     if (createPreview && viewport && rect) {
         const box = worldBoxFromAnchorWithModifiers(

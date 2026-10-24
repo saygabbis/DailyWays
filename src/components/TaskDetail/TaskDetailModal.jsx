@@ -76,7 +76,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const [titleFocused, setTitleFocused] = useState(false);
     const [descFocused, setDescFocused] = useState(false);
     const [commentFocused, setCommentFocused] = useState(false);
-    const remoteSync = useRef(createRemoteSyncLock()).current;
+    const [remoteSync] = useState(createRemoteSyncLock);
 
     const liveCard = (() => {
         const board = state.boards.find(b => b.id === boardId);

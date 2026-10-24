@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react';
 import { zoomViewportAtClient } from '../viewport/viewportUtils';
 
 /**
@@ -17,8 +17,11 @@ export function useViewport(initialPan = { x: 0, y: 0 }, initialZoom = 1, onView
     const panFrameRef = useRef(null);
     const panDeltaRef = useRef({ dx: 0, dy: 0 });
 
-    panRef.current = pan;
-    zoomRef.current = zoom;
+    // Refs acompanham o estado commitado (handlers de wheel/pan também escrevem nelas adiantado).
+    useLayoutEffect(() => {
+        panRef.current = pan;
+        zoomRef.current = zoom;
+    }, [pan, zoom]);
 
     const persist = useCallback(
         (newPan, newZoom) => {

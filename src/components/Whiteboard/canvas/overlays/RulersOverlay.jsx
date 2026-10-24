@@ -1,5 +1,6 @@
 import { useMemo, useCallback } from 'react';
 import { screenToWorldWithContainer } from '../../interaction/viewport/viewportUtils';
+import { useElementRect } from '../../../../hooks/useElementRect';
 import './RulersOverlay.css';
 
 const RULER_SIZE = 22;
@@ -28,8 +29,8 @@ export default function RulersOverlay({
     interactive = false,
     onRulerPointerDown,
 }) {
+    const rect = useElementRect(containerRef);
     const layout = useMemo(() => {
-        const rect = containerRef?.current?.getBoundingClientRect();
         if (!rect || !viewport) return null;
         const step = pickWorldStep(viewport.zoom);
         const tl = screenToWorldWithContainer(rect.left + RULER_SIZE, rect.top + RULER_SIZE, rect, viewport);
@@ -47,7 +48,7 @@ export default function RulersOverlay({
         }));
 
         return { rect, hTicks, vTicks, step };
-    }, [containerRef, viewport]);
+    }, [rect, viewport]);
 
     const stopBubble = useCallback((e) => {
         e.stopPropagation();
@@ -74,7 +75,7 @@ export default function RulersOverlay({
     );
 
     if (!layout) return null;
-    const { rect, hTicks, vTicks } = layout;
+    const { hTicks, vTicks } = layout;
 
     return (
         <div className={`whiteboard-rulers ${interactive ? 'whiteboard-rulers--interactive' : ''}`} aria-hidden={!interactive}>

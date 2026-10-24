@@ -1,4 +1,5 @@
 import { useRef, useCallback, createContext, useContext } from 'react';
+import { useLatestRef } from '../../hooks/useLatestRef';
 
 const MOVE_CANCEL_PX = 12;
 
@@ -14,10 +15,8 @@ export function useLongPressSelect({ onSelect, elementRef, disabled = false, onP
     const timerRef = useRef(null);
     const posRef = useRef({ x: 0, y: 0 });
     const pendingRef = useRef(false);
-    const onSelectRef = useRef(onSelect);
-    const onPendingRef = useRef(onPendingChange);
-    onSelectRef.current = onSelect;
-    onPendingRef.current = onPendingChange;
+    const onSelectRef = useLatestRef(onSelect);
+    const onPendingRef = useLatestRef(onPendingChange);
 
     const resolveMs = useCallback(() => {
         if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) return 550;
@@ -33,7 +32,7 @@ export function useLongPressSelect({ onSelect, elementRef, disabled = false, onP
             pendingRef.current = false;
             onPendingRef.current?.(false);
         }
-    }, []);
+    }, [onPendingRef]);
 
     const start = useCallback((e) => {
         if (disabled) return;
@@ -45,7 +44,7 @@ export function useLongPressSelect({ onSelect, elementRef, disabled = false, onP
             pendingRef.current = true;
             onPendingRef.current?.(true);
         }, resolveMs());
-    }, [disabled, resolveMs]);
+    }, [disabled, onPendingRef, resolveMs]);
 
     const onTouchMove = useCallback((e) => {
         if (disabled) return;
@@ -73,7 +72,7 @@ export function useLongPressSelect({ onSelect, elementRef, disabled = false, onP
             e.stopPropagation();
             onSelectRef.current?.();
         }
-    }, [cancel, disabled, elementRef]);
+    }, [cancel, disabled, elementRef, onSelectRef]);
 
     const onTouchCancel = useCallback(() => {
         cancel();

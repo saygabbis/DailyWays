@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useCollab } from '../../core/useCollab';
 import { usePresenceStore } from '../../board/presence/presenceStore.js';
+import { useElementRect } from '../../../hooks/useElementRect';
 import './SpaceRemoteDragLayer.css';
 
 function toScreenRect(rect, viewport, layerRect = null) {
@@ -38,9 +39,9 @@ export default function SpaceRemoteDragLayer({ viewport, worldContainerRef = nul
   const peers = usePresenceStore((s) => s.peers);
   const myId = collab?.userId;
 
+  const layerRect = useElementRect(worldContainerRef);
   const dragGhosts = useMemo(() => {
     if (!collab?.connected || !Array.isArray(peers) || peers.length === 0) return [];
-    const layerRect = worldContainerRef?.current?.getBoundingClientRect?.() ?? null;
     const out = [];
     for (const peer of peers) {
       if (!peer?.userId || peer.userId === myId) continue;
@@ -59,7 +60,7 @@ export default function SpaceRemoteDragLayer({ viewport, worldContainerRef = nul
       }
     }
     return out;
-  }, [collab?.connected, myId, peers, viewport, worldContainerRef]);
+  }, [collab?.connected, layerRect, myId, peers, viewport]);
 
   if (!collab?.connected || dragGhosts.length === 0) return null;
 
