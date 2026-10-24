@@ -167,7 +167,8 @@ function AppContent() {
 
   const activeBoard = getActiveBoard();
 
-  useGlobalBoardUndoShortcuts({ enabled: !selectedCard });
+  // No Space o Ctrl+Z é do canvas: antes os dois disparavam e desfaziam também o board aberto na sidebar.
+  useGlobalBoardUndoShortcuts({ enabled: !selectedCard && activeView !== 'space' });
 
   const handleCardClick = (card, boardId, listId) => {
     setSelectedCard({ card, boardId, listId });

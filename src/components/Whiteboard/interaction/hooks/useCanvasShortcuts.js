@@ -107,8 +107,10 @@ export function useCanvasShortcuts({
                 return;
             }
 
-            const mod = e.ctrlKey || e.metaKey;
-            const keyLower = e.key.toLowerCase();
+            // AltGr (Ctrl+Alt no Windows/ABNT) não é atalho: digitar @ ou [ não pode virar Ctrl+…
+            const mod = (e.ctrlKey || e.metaKey) && !isAltGrKey(e);
+            const keyLower = (e.key || '').toLowerCase();
+            const codeKey = /^Key[A-Z]$/.test(e.code || '') ? e.code.slice(3).toLowerCase() : null;
 
             if (mod) {
                 if (keyLower === 'r') {
@@ -132,13 +134,15 @@ export function useCanvasShortcuts({
                         }
                         return;
                     }
-                    if (keyLower === 'z') {
+                    if (keyLower === 'z' || codeKey === 'z') {
                         e.preventDefault();
+                        e.stopImmediatePropagation();
                         if (e.shiftKey) performRedo();
                         else performUndo();
                         return;
                     }
-                    if (keyLower === 'y') {
+                    if (keyLower === 'y' || codeKey === 'y') {
+                        e.stopImmediatePropagation();
                         e.preventDefault();
                         performRedo();
                         return;

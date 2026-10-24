@@ -19,22 +19,40 @@ function writeMap(map) {
   }
 }
 
-/** Persist last pointer per board (survives F5 e troca na sidebar). */
+/**
+ * Último ponteiro por board (sobrevive a F5 e à troca na sidebar). Fica em memória e vai para o
+ * sessionStorage no máximo 2x por segundo: antes cada pointermove fazia JSON.parse + stringify.
+ */
+let memory = null;
+let persistTimer = null;
+
+function mapInMemory() {
+  if (!memory) memory = readMap();
+  return memory;
+}
+
+function schedulePersist() {
+  if (persistTimer) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    writeMap(mapInMemory());
+  }, 500);
+}
+
 export function setLastBoardPointer(boardId, { x, y, cursorScreen }) {
   if (!boardId || typeof x !== 'number' || typeof y !== 'number') return;
-  const map = readMap();
-  map[boardId] = {
+  mapInMemory()[boardId] = {
     x,
     y,
     cursorScreen: cursorScreen || null,
     ts: Date.now(),
   };
-  writeMap(map);
+  schedulePersist();
 }
 
 export function getLastBoardPointer(boardId) {
   if (!boardId) return null;
-  const entry = readMap()[boardId];
+  const entry = mapInMemory()[boardId];
   if (!entry) return null;
   if (Date.now() - (entry.ts || 0) > 4 * 60 * 60 * 1000) return null;
   return entry;

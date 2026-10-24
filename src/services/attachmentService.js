@@ -22,32 +22,37 @@ async function resolveAttachmentUrl(storagePath) {
   return data?.signedUrl ?? null;
 }
 
-/** URL assinada da capa (1 query) — usado no card do board. */
-export async function fetchCoverAttachmentUrl(cardId, coverAttachmentId) {
-  if (!cardId || !coverAttachmentId) {
-    return { url: null, error: null };
-  }
-
+/**
+ * URLs assinadas das capas de vários cards de uma vez (1 consulta + 1 assinatura em lote).
+ * @returns {Promise<Record<string, { url: string|null, expiresAt: number }>>}
+ */
+export async function fetchCoverUrls(attachmentIds) {
+  const ids = [...new Set((attachmentIds || []).filter(Boolean))];
+  const out = {};
+  if (!ids.length) return out;
+  const expiresAt = Date.now() + SIGNED_URL_TTL_SECONDS * 1000;
   try {
-    const { data, error } = await supabase
-      .from('card_attachments')
-      .select('id, storage_path, kind')
-      .eq('id', coverAttachmentId)
-      .eq('card_id', cardId)
-      .maybeSingle();
-
-    if (error) {
-      return { url: null, error: error.message || 'Erro ao carregar capa.' };
+    const rows = [];
+    for (let i = 0; i < ids.length; i += 100) {
+      const { data, error } = await supabase
+        .from('card_attachments')
+        .select('id, storage_path, kind')
+        .in('id', ids.slice(i, i + 100));
+      if (error) return out;
+      rows.push(...(data || []));
     }
-    if (!data?.storage_path || data.kind !== 'image') {
-      return { url: null, error: 'Capa não encontrada.' };
+    const images = rows.filter((r) => r.kind === 'image' && r.storage_path);
+    if (images.length) {
+      const { data: signed } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrls(images.map((r) => r.storage_path), SIGNED_URL_TTL_SECONDS);
+      const byPath = new Map((signed || []).map((s) => [s.path, s.signedUrl]));
+      for (const r of images) out[r.id] = { url: byPath.get(r.storage_path) ?? null, expiresAt };
     }
-
-    const url = await resolveAttachmentUrl(data.storage_path);
-    return { url, error: url ? null : 'URL da capa indisponível.' };
-  } catch (err) {
-    return { url: null, error: err?.message || 'Erro ao carregar capa.' };
+  } catch {
+    /* rede: tenta de novo no próximo render */
   }
+  return out;
 }
 
 export async function fetchAttachments(cardId) {
@@ -213,20 +218,6 @@ export async function removeAttachment(attachment) {
 
   if (error) return { success: false, error: error.message || 'Erro ao remover anexo.' };
   return { success: true };
-}
-
-export async function setCardCover(cardId, attachmentId) {
-  const { error } = await supabase
-    .from('cards')
-    .update({ cover_attachment_id: attachmentId, updated_at: new Date().toISOString() })
-    .eq('id', cardId);
-
-  if (error) return { success: false, error: error.message || 'Erro ao definir capa.' };
-  return { success: true };
-}
-
-export async function clearCardCover(cardId) {
-  return setCardCover(cardId, null);
 }
 
 export function subscribeToAttachments(cardId, onChange) {

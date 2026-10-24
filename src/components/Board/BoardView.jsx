@@ -348,10 +348,12 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
         anchorListId,
     });
 
+    const lastClientPointRef = useRef(null);
     const handleBoardPointerMove = useCallback((e) => {
         if (!onBoardSurface) return;
         const el = scrollerRef.current;
         if (!el) return;
+        lastClientPointRef.current = { clientX: e.clientX, clientY: e.clientY };
         const coords = pointerCoordsFromBoardEvent(e, el);
         if (activeBoardId) {
             setLastBoardPointer(activeBoardId, {
@@ -365,6 +367,27 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
             selectedCardId: null,
         });
     }, [updateBoardCursor, activeBoardId, onBoardSurface]);
+
+    // Rolar sem mexer o mouse muda o ponto do conteúdo sob o cursor. Sem isto, para os outros o
+    // cursor ficava parado e "teletransportava" no próximo movimento.
+    useEffect(() => {
+        const el = scrollerRef.current;
+        if (!el || !onBoardSurface) return undefined;
+        let raf = 0;
+        const onScroll = () => {
+            if (raf || !lastClientPointRef.current) return;
+            raf = requestAnimationFrame(() => {
+                raf = 0;
+                const point = lastClientPointRef.current;
+                if (point) handleBoardPointerMove(point);
+            });
+        };
+        el.addEventListener('scroll', onScroll, { passive: true, capture: true });
+        return () => {
+            el.removeEventListener('scroll', onScroll, { capture: true });
+            if (raf) cancelAnimationFrame(raf);
+        };
+    }, [handleBoardPointerMove, onBoardSurface]);
 
     const handleCardHover = useCallback((cardId) => {
         if (!onBoardSurface) return;

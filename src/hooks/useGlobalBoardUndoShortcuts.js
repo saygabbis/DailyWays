@@ -27,7 +27,8 @@ export function useGlobalBoardUndoShortcuts({ enabled = true } = {}) {
             if (!boardId || !user?.id || isEditableTarget()) return;
             const mod = e.ctrlKey || e.metaKey;
             if (!mod) return;
-            const key = e.key?.toLowerCase?.() || e.key;
+            // e.code cobre teclados em que a letra não é latina (ex.: layout cirílico).
+            const key = e.code === 'KeyZ' ? 'z' : e.code === 'KeyY' ? 'y' : (e.key?.toLowerCase?.() || e.key);
 
             if (key === 'z' && !e.shiftKey) {
                 e.preventDefault();

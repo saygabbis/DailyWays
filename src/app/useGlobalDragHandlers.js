@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { pushPresenceFields } from '../collab/board/presence/presenceBridge.js';
 import { publishBoardPresenceFull } from '../collab/board/presence/boardPresencePublish.js';
 import { useBoardSelectionStore } from '../stores/boardSelectionStore';
+import { isCardImportant } from '../utils/cardImportant';
 
 export function useGlobalDragHandlers(ctx) {
   const {
@@ -98,10 +99,13 @@ export function useGlobalDragHandlers(ctx) {
           payload: { boardId, listId, cardId: card.id, updates: { myDay: true } },
         });
       } else if (destination.droppableId === 'sidebar-important') {
-        collabDispatch({
-          type: 'UPDATE_CARD',
-          payload: { boardId, listId, cardId: card.id, updates: { important: true } },
-        });
+        // "Importante" = prioridade alta/urgente (não existe coluna `important`: antes sumia no F5).
+        if (!isCardImportant(card)) {
+          collabDispatch({
+            type: 'UPDATE_CARD',
+            payload: { boardId, listId, cardId: card.id, updates: { priority: 'high' } },
+          });
+        }
       } else if (destination.droppableId === 'sidebar-planned') {
         setPlannedDropCard({ card, boardId, listId });
       }

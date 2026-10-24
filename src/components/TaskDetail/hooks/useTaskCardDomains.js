@@ -9,14 +9,13 @@ import {
     uploadAttachment,
     createLinkAttachment,
     removeAttachment,
-    setCardCover,
-    clearCardCover,
     subscribeToAttachments,
     renameAttachment,
 } from '../../../services/attachmentService';
 import { fetchComments, createComment, softDeleteComment, subscribeToComments } from '../../../services/commentService';
 import { fetchActivity, createActivity, subscribeToActivity } from '../../../services/activityService';
 import { fetchAssignees, fetchBoardCandidates, assignUser, removeUser, subscribeToAssignees } from '../../../services/assigneeService';
+import { primeCardCover } from '../../../hooks/useCardCoverImage';
 
 export function useTaskCardDomains({ card, liveCard, boardId, listId, user, collabDispatch, showConfirm, commentBody, setCommentBody }) {
     const [attachments, setAttachments] = useState([]);
@@ -94,12 +93,17 @@ export function useTaskCardDomains({ card, liveCard, boardId, listId, user, coll
 
         setAttachmentError('');
         setUploading(true);
+        // Capa automática: a primeira imagem vira capa se o card não tem uma capa VÁLIDA (sem capa
+        // ou apontando para um anexo que já foi apagado — antes isso travava a capa para sempre).
+        let hasCover = Boolean(liveCard.coverAttachmentId)
+            && attachments.some((a) => a.id === liveCard.coverAttachmentId && a.kind === 'image');
         for (const file of files) {
             const result = await uploadAttachment(card.id, file, user.id);
             if (result.success) {
                 await createActivity(card.id, user.id, 'attachment_added', { fileName: file.name });
-                if (file.type?.startsWith('image/') && !liveCard.coverAttachmentId) {
-                    await handleSetCover({ id: result.data.id });
+                if (!hasCover && result.data?.kind === 'image') {
+                    hasCover = true;
+                    await handleSetCover(result.data);
                 }
             } else {
                 setAttachmentError(result.error || 'Não foi possível adicionar o anexo.');
@@ -144,7 +148,7 @@ export function useTaskCardDomains({ card, liveCard, boardId, listId, user, coll
                         boardId,
                         listId,
                         cardId: card.id,
-                        updates: { coverAttachmentId: null, coverPreviewUrl: null, updatedAt: new Date().toISOString() },
+                        updates: { coverAttachmentId: null, coverPreviewUrl: null },
                     },
                 });
             }
@@ -154,52 +158,36 @@ export function useTaskCardDomains({ card, liveCard, boardId, listId, user, coll
         }
     };
 
+    // A capa é um campo do card: vai pelo mesmo caminho das outras edições (collab ou fallback).
+    // Antes também havia um UPDATE direto na tabela, e o flush do servidor podia sobrescrevê-lo.
     const handleSetCover = async (attachment) => {
-        const result = await setCardCover(card.id, attachment.id);
-        if (result.success) {
-            let coverPreviewUrl = attachment.publicUrl || null;
-            if (!coverPreviewUrl && attachment.storagePath) {
-                const { fetchCoverAttachmentUrl } = await import('../../../services/attachmentService');
-                const resolved = await fetchCoverAttachmentUrl(card.id, attachment.id);
-                coverPreviewUrl = resolved.url || null;
-            }
-            collabDispatch({
-                type: 'UPDATE_CARD',
-                payload: {
-                    boardId,
-                    listId,
-                    cardId: card.id,
-                    updates: {
-                        coverAttachmentId: attachment.id,
-                        coverPreviewUrl,
-                        updatedAt: new Date().toISOString(),
-                    },
-                },
-            });
-            setShowCoverPanel(false);
-            if (user?.id) await createActivity(card.id, user.id, 'cover_set', { attachmentId: attachment.id });
-        } else {
-            setAttachmentError(result.error || 'Não foi possível definir a capa.');
-        }
+        if (!attachment?.id) return;
+        if (attachment.publicUrl) primeCardCover(attachment.id, attachment.publicUrl);
+        collabDispatch({
+            type: 'UPDATE_CARD',
+            payload: {
+                boardId,
+                listId,
+                cardId: card.id,
+                updates: { coverAttachmentId: attachment.id, coverPreviewUrl: attachment.publicUrl || null },
+            },
+        });
+        setShowCoverPanel(false);
+        if (user?.id) await createActivity(card.id, user.id, 'cover_set', { attachmentId: attachment.id });
     };
 
     const handleClearCover = async () => {
-        const result = await clearCardCover(card.id);
-        if (result.success) {
-            collabDispatch({
-                type: 'UPDATE_CARD',
-                payload: {
-                    boardId,
-                    listId,
-                    cardId: card.id,
-                    updates: { coverAttachmentId: null, coverPreviewUrl: null, updatedAt: new Date().toISOString() },
-                },
-            });
-            setShowCoverPanel(false);
-            if (user?.id) await createActivity(card.id, user.id, 'cover_cleared', {});
-        } else {
-            setAttachmentError(result.error || 'Não foi possível remover a capa.');
-        }
+        collabDispatch({
+            type: 'UPDATE_CARD',
+            payload: {
+                boardId,
+                listId,
+                cardId: card.id,
+                updates: { coverAttachmentId: null, coverPreviewUrl: null },
+            },
+        });
+        setShowCoverPanel(false);
+        if (user?.id) await createActivity(card.id, user.id, 'cover_cleared', {});
     };
 
     const handleAttachmentDraftChange = (attachmentId, field, value) => {
