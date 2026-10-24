@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import ErrorBoundary from './components/Common/ErrorBoundary';
 import { useAuth } from './context/AuthContext';
 import { useApp } from './context/AppContext';
@@ -11,16 +11,11 @@ import BoardCollabBridge from './collab/board/sync/BoardCollabBridge.jsx';
 import BoardCollabSync from './collab/board/sync/BoardCollabSync.jsx';
 import { isCollabEnabled } from './collab/core/collabConfig.js';
 import { pushPresenceFields } from './collab/board/presence/presenceBridge.js';
-import { publishBoardPresenceFull } from './collab/board/presence/boardPresencePublish.js';
 import { useCollab } from './collab/core/CollabContext.jsx';
 import { setLastBoardPointer } from './collab/board/presence/lastBoardPointer.js';
 import { pointerCoordsFromBoardEvent } from './collab/board/coords/boardCursorCoords.js';
 import { BoardCollabProvider, useBoardCollabDispatch } from './collab/board/ops/BoardCollabContext.jsx';
-import {
-  persistNavigation,
-  resolveRestoredNavigation,
-  isWorkspaceDataReady,
-} from './utils/restoreNavigation';
+import { persistNavigation } from './utils/restoreNavigation';
 
 import PomodoroTimer from './components/Pomodoro/PomodoroTimer';
 import RadioWidget from './components/Radio/RadioWidget';
@@ -31,10 +26,13 @@ import DevConfigSync from './dev/DevConfigSync.jsx';
 import DevConfigHotkey from './dev/DevConfigHotkey.jsx';
 import { setDevPrankSession } from './collab/board/dev/boardDevPrank.js';
 import PlannedDropPopover from './components/Common/PlannedDropPopover';
-import { useContextMenu } from './components/Common/ContextMenu';
 import { DragDropContext } from '@hello-pangea/dnd';
-import { useBoardSelectionStore } from './stores/boardSelectionStore';
-import { LayoutDashboard, Sun, Star, CalendarDays, Search, Settings, PanelLeft, Maximize, Plus } from 'lucide-react';
+import { useWorkspaceNavigation } from './app/useWorkspaceNavigation';
+import { useGlobalDragHandlers } from './app/useGlobalDragHandlers';
+import { useAppShellEffects } from './app/useAppShellEffects';
+import { useGlobalContextMenu } from './app/useGlobalContextMenu';
+import { usePasswordResetGate } from './app/passwordResetGate';
+import { getViewTitle, getViewSubtitle } from './app/viewTitles';
 import './styles/global.css';
 import './App.css';
 
@@ -51,21 +49,6 @@ const SearchOverlay = lazy(() => import('./components/Search/SearchOverlay'));
 const SpaceView = lazy(() => import('./components/Spaces/SpaceView'));
 const PasswordResetPage = lazy(() => import('./components/Auth/PasswordResetPage'));
 
-
-function readLocalFlag(key) {
-  try { return window.localStorage.getItem(key) === '1'; } catch { return false; }
-}
-
-/** Reset de senha iniciado há menos de 10 min (marcado no localStorage pelo fluxo de recuperação). */
-function isPwResetPendingValid() {
-  try {
-    if (!readLocalFlag('dailyways_pw_reset_pending')) return false;
-    const ts = Number(window.localStorage.getItem('dailyways_pw_reset_pending_ts') || '0');
-    return !!ts && Date.now() - ts < 10 * 60 * 1000;
-  } catch {
-    return false;
-  }
-}
 
 function AppContent() {
   const { user, profile } = useAuth();
@@ -104,59 +87,31 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  useEffect(() => {
-    if (!navPersistReadyRef.current) return;
-    persistNavigation(activeView, state.activeBoard);
-  }, [activeView, state.activeBoard]);
-
-  useEffect(() => {
-    if (!user?.id) {
-      viewRestoreDoneRef.current = false;
-      navPersistReadyRef.current = false;
-      setNavReady(false);
-    }
-  }, [user?.id]);
-
-  // After F5 / open: restore last screen (board, space, dashboard, myday, …)
-  useEffect(() => {
-    if (!user?.id || viewRestoreDoneRef.current) return;
-    if (!isWorkspaceDataReady({
-      userId: user.id,
-      boards: state.boards,
-      boardsLoadError,
-    })) {
-      return;
-    }
-
-    const { view, boardId } = resolveRestoredNavigation({
-      boards: state.boards,
-      spaces: state.spaces,
-      activeBoardHint: state.activeBoard,
-    });
-
-    if (boardId && state.activeBoard !== boardId) {
-      dispatch({ type: 'SET_ACTIVE_BOARD', payload: boardId });
-    }
-    setActiveView(view);
-    persistNavigation(view, boardId || state.activeBoard);
-    viewRestoreDoneRef.current = true;
-    navPersistReadyRef.current = true;
-    setNavReady(true);
-  }, [
-    user?.id,
-    state.boards,
-    state.spaces,
-    state.activeBoard,
-    boardsLoadError,
+  const {
+    selectedCard,
+    setSelectedCard,
+    showSettings,
+    setShowSettings,
+    settingsInitialTab,
+    setSettingsInitialTab,
+    showSearch,
+    setShowSearch,
+    showContextMenu,
+    hideContextMenu,
+    boardViewRef,
+    plannedDropCard,
+    setPlannedDropCard,
+  } = useWorkspaceNavigation({
+    user,
     dispatch,
-  ]);
-  const [selectedCard, setSelectedCard] = useState(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState('account');
-  const [showSearch, setShowSearch] = useState(false);
-  const { showContextMenu, hideContextMenu } = useContextMenu();
-  const boardViewRef = useRef(null);
-  const [plannedDropCard, setPlannedDropCard] = useState(null);
+    state,
+    boardsLoadError,
+    activeView,
+    setActiveView,
+    viewRestoreDoneRef,
+    navPersistReadyRef,
+    setNavReady,
+  });
 
   const activeBoardId = getActiveBoard()?.id;
   /** Só mantém sala collab na vista do board; ao ir para Diário/Visão geral/etc. faz leave. */
@@ -186,168 +141,32 @@ function AppContent() {
     return () => document.removeEventListener('pointermove', onPointerMove);
   }, [activeBoardId]);
 
-  // Global DragDropContext handler — intercepts sidebar drops, delegates the rest
-  const handleGlobalDragStart = useCallback((start) => {
-    hideContextMenu();
-    document.body.classList.add('dnd-dragging');
-    const boardId = getActiveBoard()?.id;
-    if (boardId && start.type === 'list') {
-      pushPresenceFields(boardId, {
-        draggingListId: start.draggableId,
-        draggingCardId: null,
-        selectedCardId: null,
-        onBoardSurface: true,
-      });
-    } else if (
-      boardId
-      && start.type !== 'list'
-      && start.source?.droppableId
-      && start.source.droppableId !== 'board'
-      && start.source.droppableId !== 'boards'
-    ) {
-      useBoardSelectionStore.getState().beginMultiDrag(start.draggableId);
-      if (useBoardSelectionStore.getState().multiDragCardIds.length > 1) {
-        document.body.classList.add('board-multi-drag-active');
-      }
-      pushPresenceFields(boardId, {
-        draggingCardId: start.draggableId,
-        draggingListId: start.source.droppableId,
-        selectedCardId: null,
-        onBoardSurface: true,
-      });
-    }
-    if (boardId && collab?.socket?.connected) {
-      publishBoardPresenceFull(collab.socket, boardId, { user, profile });
-    }
-    if (['board', 'space', 'board-group', 'space-group'].includes(start.type)) {
-      if (state.selectedItems?.includes(start.draggableId) && state.selectedItems.length > 1) {
-        dispatch({ type: 'SET_DRAGGING_BULK', payload: true });
-      }
-    }
-  }, [state.selectedItems, dispatch, hideContextMenu, getActiveBoard, collab?.socket, collab?.connected, user, profile]);
+  const {
+    handleGlobalDragStart,
+    handleGlobalDragEnd,
+    handlePlannedDateSelect,
+  } = useGlobalDragHandlers({
+    user,
+    profile,
+    getActiveBoard,
+    dispatch,
+    state,
+    updateBoardsOrder,
+    suppressRealtime,
+    updateWorkspaceOrder,
+    collabDispatch,
+    collab,
+    hideContextMenu,
+    boardViewRef,
+    plannedDropCard,
+    setPlannedDropCard,
+  });
 
-  const handleGlobalDragEnd = useCallback((result) => {
-    document.body.classList.remove('dnd-dragging');
-    try {
-    const boardId = getActiveBoard()?.id;
-    if (boardId) {
-      pushPresenceFields(boardId, { draggingCardId: null, draggingListId: null });
-      if (collab?.socket?.connected) {
-        publishBoardPresenceFull(collab.socket, boardId, { user, profile });
-      }
-    }
-    dispatch({ type: 'SET_DRAGGING_BULK', payload: false });
-    const { source, destination, draggableId, type } = result;
-    if (!destination) return;
-
-    // Sidebar smart drop zones
-    if (destination.droppableId.startsWith('sidebar-')) {
-      // Find the card across all boards
-      let card = null, boardId = null, listId = null;
-      for (const b of state.boards) {
-        for (const l of b.lists) {
-          const found = l.cards.find(c => c.id === draggableId);
-          if (found) {
-            card = found;
-            boardId = b.id;
-            listId = l.id;
-            break;
-          }
-        }
-        if (card) break;
-      }
-      if (!card) return;
-
-      if (destination.droppableId === 'sidebar-myday') {
-        collabDispatch({
-          type: 'UPDATE_CARD',
-          payload: { boardId, listId, cardId: card.id, updates: { myDay: true } },
-        });
-      } else if (destination.droppableId === 'sidebar-important') {
-        collabDispatch({
-          type: 'UPDATE_CARD',
-          payload: { boardId, listId, cardId: card.id, updates: { important: true } },
-        });
-      } else if (destination.droppableId === 'sidebar-planned') {
-        setPlannedDropCard({ card, boardId, listId });
-      }
-      return;
-    }
-
-    // Workspace Reordering in Sidebar (Groups, Boards, Spaces)
-    if (['board', 'space', 'group', 'board-group', 'space-group'].includes(type) && destination.droppableId !== 'boards') {
-      // old 'boards' droppableId is replaced by 'boards-root', 'spaces-root', 'groups-board', 'groups-space', and 'group-{id}'
-      if (source.droppableId === destination.droppableId && source.index === destination.index) return;
-
-      let itemType = 'boards';
-      if (type === 'space') itemType = 'spaces';
-      if (type === 'group' || type === 'board-group' || type === 'space-group') itemType = 'groups';
-
-      let sourceGroupId = null;
-      if (source.droppableId.startsWith('group-') && source.droppableId !== 'groups-board' && source.droppableId !== 'groups-space') {
-        sourceGroupId = source.droppableId.replace('group-', '');
-      }
-
-      let destGroupId = null;
-      if (destination.droppableId.startsWith('group-') && destination.droppableId !== 'groups-board' && destination.droppableId !== 'groups-space') {
-        destGroupId = destination.droppableId.replace('group-', '');
-      }
-
-      // Call updateWorkspaceOrder from the App Context
-      updateWorkspaceOrder(itemType, draggableId, sourceGroupId, destGroupId, destination.index);
-
-      return;
-    }
-
-    // Board card / list DnD — delegate to BoardView
-    if (boardViewRef.current?.handleDragEnd) {
-      boardViewRef.current.handleDragEnd(result);
-    }
-    } finally {
-      document.body.classList.remove('board-multi-drag-active');
-      useBoardSelectionStore.getState().clearMultiDrag();
-    }
-  }, [state.boards, collabDispatch, user?.id, profile, collab?.socket, collab?.connected, getActiveBoard, updateBoardsOrder, suppressRealtime]);
-
-  const handlePlannedDateSelect = (date) => {
-    if (!plannedDropCard) return;
-    const { boardId, listId, card } = plannedDropCard;
-    collabDispatch({
-      type: 'UPDATE_CARD',
-      payload: { boardId, listId, cardId: card.id, updates: { dueDate: date } },
-    });
-    setPlannedDropCard(null);
-  };
-
-  useEffect(() => {
-    const handleResize = () => setIsDesktop(window.innerWidth > 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Apply stored zoom on mount
-  useEffect(() => {
-    const zoom = localStorage.getItem('dailyways_zoom');
-    if (zoom) document.documentElement.style.fontSize = `${zoom}%`;
-
-    // Keyboard shortcuts
-    const handleKey = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setShowSearch(true);
-      }
-      // Tab to toggle sidebar (only when not in an input)
-      if (e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        const tag = document.activeElement?.tagName;
-        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !document.activeElement?.isContentEditable) {
-          e.preventDefault();
-          setSidebarOpen(prev => !prev);
-        }
-      }
-    };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, []);
+  useAppShellEffects({
+    setIsDesktop,
+    setSidebarOpen,
+    setShowSearch,
+  });
 
   const activeBoard = getActiveBoard();
 
@@ -387,93 +206,24 @@ function AppContent() {
     return () => window.removeEventListener('app-navigate-view', onNavigate);
   }, [handleViewChange]);
 
-  const getTitle = () => {
-    switch (activeView) {
-      case 'dashboard': return 'Visão Geral';
-      case 'myday': return 'Diário';
-      case 'important': return 'Importante';
-      case 'planned': return 'Planejado';
-      case 'contacts': return 'Contatos';
-      case 'board': return activeBoard ? `${activeBoard.emoji} ${activeBoard.title}` : 'Board';
-      case 'help': return 'Central de Ajuda';
-      default:
-        if (activeView.startsWith('space-')) {
-          const spaceId = activeView.replace('space-', '');
-          const space = state.spaces.find(s => s.id === spaceId);
-          return space ? `${space.emoji} ${space.title}` : 'Space';
-        }
-        return 'DailyWays';
-    }
-  };
-
-  const getSubtitle = () => {
-    if (activeView === 'board' && activeBoard) {
-      const totalCards = activeBoard.lists.reduce((acc, l) => acc + l.cards.length, 0);
-      return `${activeBoard.lists.length} listas · ${totalCards} tarefas`;
-    }
-    if (activeView.startsWith('space-')) {
-      return 'Canvas Infinito';
-    }
-    return null;
-  };
+  const getTitle = () => getViewTitle(activeView, activeBoard, state.spaces);
+  const getSubtitle = () => getViewSubtitle(activeView, activeBoard);
 
   const mainClass = `app-main${sidebarOpen && isDesktop ? ' sidebar-pushed' : ''}${!isDesktop ? ' has-mobile-nav' : ''}`;
 
-  // Global right-click context menu
-  const handleGlobalContextMenu = useCallback((e) => {
-    // Don't override if a child already handled it (stopPropagation)
-    if (e.defaultPrevented) return;
-
-    // Don't show on inputs, buttons, etc.
-    const target = e.target;
-    if (
-      target.tagName === 'INPUT' ||
-      target.tagName === 'TEXTAREA' ||
-      target.tagName === 'BUTTON' ||
-      target.closest('button') ||
-      target.tagName === 'A' ||
-      target.closest('a') ||
-      target.isContentEditable
-    ) {
-      e.preventDefault();
-      hideContextMenu();
-      return;
-    }
-
-    const navItems = [
-      { label: 'Visão Geral', icon: <LayoutDashboard size={15} />, action: () => setActiveView('dashboard'), shortcut: '' },
-      { label: 'Diário', icon: <Sun size={15} />, action: () => setActiveView('myday') },
-      { label: 'Importante', icon: <Star size={15} />, action: () => setActiveView('important') },
-      { label: 'Planejado', icon: <CalendarDays size={15} />, action: () => setActiveView('planned') },
-    ];
-
-    const boardItems = activeView === 'board' && activeBoard ? [
-      { type: 'divider' },
-      {
-        label: 'Adicionar lista', icon: <Plus size={15} />, action: () => {
-          // Dispatch to trigger add list form in BoardView — simplified: we just focus the "add list" button
-          const addBtn = document.querySelector('.board-add-list-btn');
-          if (addBtn) addBtn.click();
-        }
-      },
-    ] : [];
-
-    const generalItems = [
-      { type: 'divider' },
-      { label: 'Buscar', icon: <Search size={15} />, action: () => setShowSearch(true), shortcut: 'Ctrl+K' },
-      { label: sidebarOpen ? 'Fechar sidebar' : 'Abrir sidebar', icon: <PanelLeft size={15} />, action: toggleSidebar },
-      { label: 'Configurações', icon: <Settings size={15} />, action: () => setShowSettings(true) },
-      { type: 'divider' },
-      {
-        label: 'Tela cheia', icon: <Maximize size={15} />, action: () => {
-          if (document.fullscreenElement) document.exitFullscreen();
-          else document.documentElement.requestFullscreen();
-        }
-      },
-    ];
-
-    showContextMenu(e, [...navItems, ...boardItems, ...generalItems], { title: 'DailyWays' });
-  }, [activeView, activeBoard, sidebarOpen, showContextMenu, toggleSidebar]);
+  const {
+    handleGlobalContextMenu,
+  } = useGlobalContextMenu({
+    activeView,
+    setActiveView,
+    sidebarOpen,
+    setShowSettings,
+    setShowSearch,
+    showContextMenu,
+    hideContextMenu,
+    activeBoard,
+    toggleSidebar,
+  });
 
   return (
     <DragDropContext onDragStart={handleGlobalDragStart} onDragEnd={handleGlobalDragEnd}>
@@ -652,59 +402,7 @@ function AppContent() {
 export default function App() {
   const { user, loading } = useAuth();
 
-  const hash = window.location.hash || '';
-  const search = window.location.search || '';
-  const combined = `${hash || ''}&${search || ''}`.toLowerCase();
-
-  const isPasswordRecovery = (() => {
-    // usa as mesmas variáveis externas (hash/search) porém mantendo o escopo local
-    const combined = `${hash || ''}&${search || ''}`.toLowerCase();
-
-    const searchParams = new URLSearchParams(search || '');
-    const hashParams = new URLSearchParams(hash?.startsWith('#') ? hash.slice(1) : hash || '');
-
-    const type = (searchParams.get('type') || hashParams.get('type') || '').toLowerCase();
-    const token = searchParams.get('token') || hashParams.get('token');
-
-    // Casos suportados:
-    // 1) Supabase recovery link: ?type=recovery&token=...
-    if (type === 'recovery' && token) return true;
-
-    // 2) Links que vêm com access/refresh token (às vezes sem `token=...`)
-    const hasAccessRefresh =
-      (combined.includes('access_token') || combined.includes('access_token=')) &&
-      (combined.includes('refresh_token') || combined.includes('refresh_token='));
-
-    // Para evitar falso positivo em fluxos não relacionados,
-    // exigimos que seja explicitamente recovery pelo `type` ou pela palavra "recovery".
-    const hasRecoveryKeyword = type === 'recovery' || combined.includes('recovery');
-
-    return hasAccessRefresh && hasRecoveryKeyword;
-  })();
-
-  const pwResetPending = readLocalFlag('dailyways_pw_reset_pending');
-  const pwResetPendingValid = isPwResetPendingValid();
-
-  const urlHasAccessRefresh =
-    (combined.includes('access_token') || combined.includes('access_token=')) &&
-    (combined.includes('refresh_token') || combined.includes('refresh_token='));
-
-  // Segurança + UX:
-  // 1) Se a URL indicar explicitamente recovery, abre a tela.
-  // 2) Se houver access/refresh tokens na URL e você iniciou recovery recentemente,
-  // ainda abrimos (alguns redirects não vêm com `type=recovery`).
-  // 3) Em navegação normal, sem tokens na URL, nunca força a tela novamente.
-  const shouldForcePasswordReset = isPasswordRecovery || (pwResetPendingValid && urlHasAccessRefresh);
-
-  // Limpa a flag pendente quando não for recovery real na URL (ou quando expirar),
-  // pra não ficar "preso" e aparecer de novo em login normal.
-  useEffect(() => {
-    if (!pwResetPending) return;
-    if (isPasswordRecovery) return;
-    if (urlHasAccessRefresh) return;
-    window.localStorage.removeItem('dailyways_pw_reset_pending');
-    window.localStorage.removeItem('dailyways_pw_reset_pending_ts');
-  }, [isPasswordRecovery, pwResetPending, pwResetPendingValid, urlHasAccessRefresh]);
+  const shouldForcePasswordReset = usePasswordResetGate();
 
   if (loading) {
     return (
