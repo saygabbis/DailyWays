@@ -22,11 +22,7 @@ import { isPeerInTaskModal } from '../../collab/board/presence/presenceVisibilit
 import CollabPresenceLayer from '../../collab/board/ui/CollabPresenceLayer.jsx';
 import { useCollab } from '../../collab/core/CollabContext.jsx';
 import { usePresenceStore } from '../../collab/board/presence/presenceStore';
-import {
-    useTaskModalPeerPresence,
-    presenceHoverClass,
-    presenceHoverStyle,
-} from '../../hooks/useTaskModalPeerPresence.js';
+import { useTaskModalPeerPresence } from '../../hooks/useTaskModalPeerPresence.js';
 import {
     buildTaskModalLiveDraft,
     applyPeerTaskModalDraft,
@@ -35,64 +31,30 @@ import { createRemoteSyncLock } from '../../collab/task-modal/taskModalCollabSyn
 import { useDocumentPointerPresence } from '../../collab/board/presence/useDocumentPointerPresence.js';
 import { pointerCoordsFromTaskModalEvent } from '../../collab/board/coords/taskModalCursorCoords.js';
 
-function ph(hoverByEl, key, baseClass = '', baseStyle = {}) {
-    return {
-        'data-presence-hover': key,
-        className: presenceHoverClass(hoverByEl, key, baseClass),
-        style: presenceHoverStyle(hoverByEl, key, baseStyle),
-    };
-}
 import {
     X,
     Tag,
     AlertCircle,
     Sun,
-    CheckSquare,
     Plus,
     Trash2,
-    Edit3,
     Repeat,
-    ImagePlus,
     Link as LinkIcon,
-    MessageSquare,
-    History,
-    UserPlus,
-    Paperclip,
     Upload,
-    Download,
-    Send,
     ChevronDown,
     Ban,
 } from 'lucide-react';
 import './TaskDetail.css';
 import { uuidv4 } from '../../utils/uuid';
-import { initialFromName } from '../../utils/userColor';
-import {
-    fetchAttachments,
-    uploadAttachment,
-    createLinkAttachment,
-    removeAttachment,
-    setCardCover,
-    clearCardCover,
-    subscribeToAttachments,
-    renameAttachment,
-} from '../../services/attachmentService';
-import { fetchComments, createComment, softDeleteComment, subscribeToComments } from '../../services/commentService';
 import { TEXT, COUNT } from '@dailyways/limits';
 import { LIMIT_MSG } from '../../limits/messages.js';
 import { useToast } from '../../context/ToastContext';
-import { fetchActivity, createActivity, formatActivityText, subscribeToActivity } from '../../services/activityService';
-import { fetchAssignees, fetchBoardCandidates, assignUser, removeUser, subscribeToAssignees } from '../../services/assigneeService';
 import TaskDateTimeField from '../Common/TaskDateTimeField';
-
-const RECURRENCE_OPTIONS = [
-    { value: 'none', label: 'Não repetir' },
-    { value: 'daily', label: 'Diariamente' },
-    { value: 'weekdays', label: 'Dias úteis' },
-    { value: 'weekly', label: 'Semanalmente' },
-    { value: 'monthly', label: 'Mensalmente' },
-    { value: 'yearly', label: 'Anualmente' },
-];
+import { RECURRENCE_OPTIONS, PRIORITY_OPTIONS, ph } from './taskDetailConstants';
+import { useTaskCardDomains } from './hooks/useTaskCardDomains';
+import TaskDetailSidebar from './TaskDetailSidebar';
+import TaskAttachmentsSection from './TaskAttachmentsSection';
+import TaskSubtasksSection from './TaskSubtasksSection';
 
 export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const { dispatch, LABEL_COLORS, state, showConfirm } = useApp();
@@ -140,57 +102,27 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const [estimatedMinutes, setEstimatedMinutes] = useState(liveCard.estimatedMinutes ?? '');
     const [labels, setLabels] = useState(liveCard.labels || []);
     const [cardColor, setCardColor] = useState(liveCard.color || null);
-    const [newSubtask, setNewSubtask] = useState('');
-    const [editingSubtaskId, setEditingSubtaskId] = useState(null);
-    const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('');
     const [showAddLabel, setShowAddLabel] = useState(false);
     const [newLabelName, setNewLabelName] = useState('');
     const [newLabelColor, setNewLabelColor] = useState('#2ec4b6');
-    const [attachments, setAttachments] = useState([]);
-    const [comments, setComments] = useState([]);
-    const [activity, setActivity] = useState([]);
-    const [assignees, setAssignees] = useState([]);
-    const [boardCandidates, setBoardCandidates] = useState([]);
     const [commentBody, setCommentBody] = useState('');
-    const [linkUrl, setLinkUrl] = useState('');
-    const [linkLabel, setLinkLabel] = useState('');
-    const [showLinkForm, setShowLinkForm] = useState(false);
-    const [loadingDomains, setLoadingDomains] = useState(true);
-    const [uploading, setUploading] = useState(false);
-    const [savingComment, setSavingComment] = useState(false);
-    const [savingAssignee, setSavingAssignee] = useState(false);
-    const [attachmentError, setAttachmentError] = useState('');
-    const [editingAttachmentId, setEditingAttachmentId] = useState(null);
-    const [attachmentDrafts, setAttachmentDrafts] = useState({});
-    const [showCoverPanel, setShowCoverPanel] = useState(false);
 
-    const subtaskInputRef = useRef(null);
-    const editInputRef = useRef(null);
     const fileInputRef = useRef(null);
     const recurrenceMenuRef = useRef(null);
     const coverPanelRef = useRef(null);
     const labelPopoverRef = useRef(null);
 
-    const coverAttachment = attachments.find((item) => item.id === liveCard.coverAttachmentId) || null;
-    const imageAttachments = attachments.filter((item) => item.kind === 'image' && item.publicUrl);
-    const visibleComments = comments.filter((item) => !item.deletedAt);
+    const domains = useTaskCardDomains({ card, liveCard, boardId, listId, user, collabDispatch, showConfirm, commentBody, setCommentBody });
+    const {
+        coverAttachment,
+        showLinkForm,
+        setShowLinkForm,
+        uploading,
+        setShowCoverPanel,
+        handleUploadFiles,
+    } = domains;
     const recurrenceLabel = RECURRENCE_OPTIONS.find((item) => item.value === recurrenceRule)?.label || 'Não repetir';
 
-    const assigneeProfiles = assignees.map((item) => {
-        const candidate = boardCandidates.find((candidateItem) => candidateItem.userId === item.userId);
-        return {
-            ...item,
-            name: candidate?.name || candidate?.username || 'Usuário',
-            photoUrl: candidate?.photo_url || '',
-            avatar: candidate?.avatar || initialFromName(candidate?.name || candidate?.username || 'U'),
-        };
-    });
-
-    useEffect(() => {
-        if (editingSubtaskId && editInputRef.current) {
-            editInputRef.current.focus();
-        }
-    }, [editingSubtaskId]);
 
     const liveDraftPayload = useMemo(
         () => buildTaskModalLiveDraft({ title, description, commentBody }),
@@ -418,44 +350,6 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     };
 
     useEffect(() => {
-        let active = true;
-
-        async function loadDomains() {
-            setLoadingDomains(true);
-            const [attachmentsResult, commentsResult, activityResult, assigneesResult, candidatesResult] = await Promise.all([
-                fetchAttachments(card.id),
-                fetchComments(card.id),
-                fetchActivity(card.id),
-                fetchAssignees(card.id),
-                fetchBoardCandidates(boardId),
-            ]);
-
-            if (!active) return;
-            setAttachments(attachmentsResult.data || []);
-            setComments(commentsResult.data || []);
-            setActivity(activityResult.data || []);
-            setAssignees(assigneesResult.data || []);
-            setBoardCandidates(candidatesResult.data || []);
-            setLoadingDomains(false);
-        }
-
-        loadDomains();
-
-        const unsubAttachments = subscribeToAttachments(card.id, () => fetchAttachments(card.id).then((result) => active && setAttachments(result.data || [])));
-        const unsubComments = subscribeToComments(card.id, () => fetchComments(card.id).then((result) => active && setComments(result.data || [])));
-        const unsubActivity = subscribeToActivity(card.id, () => fetchActivity(card.id).then((result) => active && setActivity(result.data || [])));
-        const unsubAssignees = subscribeToAssignees(card.id, () => fetchAssignees(card.id).then((result) => active && setAssignees(result.data || [])));
-
-        return () => {
-            active = false;
-            unsubAttachments();
-            unsubComments();
-            unsubActivity();
-            unsubAssignees();
-        };
-    }, [card.id, boardId]);
-
-    useEffect(() => {
         function handleOutsideClick(event) {
             if (recurrenceMenuRef.current && !recurrenceMenuRef.current.contains(event.target)) {
                 setShowRecurrenceMenu(false);
@@ -525,273 +419,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         setShowAddLabel(false);
     };
 
-    const handleAddSubtask = (e) => {
-        e.preventDefault();
-        if (!newSubtask.trim()) return;
-        if ((liveCard.subtasks?.length ?? 0) >= COUNT.subtasksPerCard) {
-            addToast(LIMIT_MSG.subtasks, 'error');
-            return;
-        }
-        collabDispatch({
-            type: 'ADD_SUBTASK',
-            payload: { boardId, listId, cardId: card.id, title: newSubtask.trim() },
-        });
-        setNewSubtask('');
-        subtaskInputRef.current?.focus();
-    };
 
-    const handleToggleSubtask = (subtaskId) => {
-        collabDispatch({
-            type: 'TOGGLE_SUBTASK',
-            payload: { boardId, listId, cardId: card.id, subtaskId },
-        });
-    };
-
-    const handleDeleteSubtask = (subtaskId) => {
-        collabDispatch({
-            type: 'DELETE_SUBTASK',
-            payload: { boardId, listId, cardId: card.id, subtaskId },
-        });
-    };
-
-    const startEditSubtask = (st) => {
-        setEditingSubtaskId(st.id);
-        setEditingSubtaskTitle(st.title);
-    };
-
-    const saveEditSubtask = () => {
-        if (editingSubtaskId && editingSubtaskTitle.trim()) {
-            collabDispatch({
-                type: 'UPDATE_SUBTASK',
-                payload: {
-                    boardId,
-                    listId,
-                    cardId: card.id,
-                    subtaskId: editingSubtaskId,
-                    updates: {
-                        title: editingSubtaskTitle.trim(),
-                        updatedAt: new Date().toISOString(),
-                    },
-                },
-            });
-        }
-        setEditingSubtaskId(null);
-        setEditingSubtaskTitle('');
-    };
-
-    const handleEditSubtaskKeyDown = (e) => {
-        if (e.key === 'Enter') saveEditSubtask();
-        if (e.key === 'Escape') {
-            setEditingSubtaskId(null);
-            setEditingSubtaskTitle('');
-        }
-    };
-
-    const handleUploadFiles = async (event) => {
-        const files = Array.from(event.target.files || []);
-        if (!files.length || !user?.id) return;
-
-        setAttachmentError('');
-        setUploading(true);
-        for (const file of files) {
-            const result = await uploadAttachment(card.id, file, user.id);
-            if (result.success) {
-                await createActivity(card.id, user.id, 'attachment_added', { fileName: file.name });
-                if (file.type?.startsWith('image/') && !liveCard.coverAttachmentId) {
-                    await handleSetCover({ id: result.data.id });
-                }
-            } else {
-                setAttachmentError(result.error || 'Não foi possível adicionar o anexo.');
-            }
-        }
-        setUploading(false);
-        event.target.value = '';
-    };
-
-    const handleAddLink = async (event) => {
-        event.preventDefault();
-        if (!linkUrl.trim() || !user?.id) return;
-
-        const result = await createLinkAttachment(card.id, linkUrl.trim(), linkLabel.trim(), user.id);
-        if (result.success) {
-            await createActivity(card.id, user.id, 'attachment_added', { linkUrl: linkUrl.trim() });
-            setLinkUrl('');
-            setLinkLabel('');
-            setShowLinkForm(false);
-        } else {
-            setAttachmentError(result.error || 'Não foi possível salvar o link.');
-        }
-    };
-
-    const handleRemoveAttachment = async (attachment) => {
-        const confirmed = await showConfirm({
-            title: 'Remover anexo',
-            message: `Tem certeza que deseja remover "${attachment.fileName || attachment.linkLabel || 'este anexo'}"?`,
-            confirmLabel: 'Remover',
-            type: 'danger',
-        });
-
-        if (!confirmed) return;
-
-        const result = await removeAttachment(attachment);
-        if (result.success && user?.id) {
-            setAttachments((prev) => prev.filter((item) => item.id !== attachment.id));
-            if (liveCard.coverAttachmentId === attachment.id) {
-                collabDispatch({
-                    type: 'UPDATE_CARD',
-                    payload: {
-                        boardId,
-                        listId,
-                        cardId: card.id,
-                        updates: { coverAttachmentId: null, coverPreviewUrl: null, updatedAt: new Date().toISOString() },
-                    },
-                });
-            }
-            await createActivity(card.id, user.id, 'attachment_removed', { attachmentId: attachment.id });
-        } else if (!result.success) {
-            setAttachmentError(result.error || 'Não foi possível remover o anexo.');
-        }
-    };
-
-    const handleSetCover = async (attachment) => {
-        const result = await setCardCover(card.id, attachment.id);
-        if (result.success) {
-            let coverPreviewUrl = attachment.publicUrl || null;
-            if (!coverPreviewUrl && attachment.storagePath) {
-                const { fetchCoverAttachmentUrl } = await import('../../services/attachmentService');
-                const resolved = await fetchCoverAttachmentUrl(card.id, attachment.id);
-                coverPreviewUrl = resolved.url || null;
-            }
-            collabDispatch({
-                type: 'UPDATE_CARD',
-                payload: {
-                    boardId,
-                    listId,
-                    cardId: card.id,
-                    updates: {
-                        coverAttachmentId: attachment.id,
-                        coverPreviewUrl,
-                        updatedAt: new Date().toISOString(),
-                    },
-                },
-            });
-            setShowCoverPanel(false);
-            if (user?.id) await createActivity(card.id, user.id, 'cover_set', { attachmentId: attachment.id });
-        } else {
-            setAttachmentError(result.error || 'Não foi possível definir a capa.');
-        }
-    };
-
-    const handleClearCover = async () => {
-        const result = await clearCardCover(card.id);
-        if (result.success) {
-            collabDispatch({
-                type: 'UPDATE_CARD',
-                payload: {
-                    boardId,
-                    listId,
-                    cardId: card.id,
-                    updates: { coverAttachmentId: null, coverPreviewUrl: null, updatedAt: new Date().toISOString() },
-                },
-            });
-            setShowCoverPanel(false);
-            if (user?.id) await createActivity(card.id, user.id, 'cover_cleared', {});
-        } else {
-            setAttachmentError(result.error || 'Não foi possível remover a capa.');
-        }
-    };
-
-    const handleAttachmentDraftChange = (attachmentId, field, value) => {
-        setAttachmentDrafts((prev) => ({
-            ...prev,
-            [attachmentId]: {
-                ...(prev[attachmentId] || {}),
-                [field]: value,
-            },
-        }));
-    };
-
-    const handleSaveAttachmentMeta = async (attachment) => {
-        const draft = attachmentDrafts[attachment.id] || {};
-        const result = await renameAttachment(attachment.id, {
-            fileName: draft.fileName ?? attachment.fileName,
-            description: draft.description ?? attachment.description,
-        });
-
-        if (result.success) {
-            setAttachments((prev) => prev.map((item) => item.id === attachment.id ? {
-                ...item,
-                fileName: draft.fileName ?? item.fileName,
-                description: draft.description ?? item.description,
-                linkLabel: draft.description ?? item.linkLabel,
-            } : item));
-            setEditingAttachmentId(null);
-        } else {
-            setAttachmentError(result.error || 'Não foi possível atualizar o anexo.');
-        }
-    };
-
-    const handleCreateComment = async (event) => {
-        event.preventDefault();
-        if (!commentBody.trim() || !user?.id) return;
-
-        setSavingComment(true);
-        const result = await createComment(card.id, commentBody.trim(), user.id);
-        if (result.success) {
-            await createActivity(card.id, user.id, 'comment_added', {});
-            setCommentBody('');
-        }
-        setSavingComment(false);
-    };
-
-    const handleDeleteComment = async (commentId) => {
-        const confirmed = await showConfirm({
-            title: 'Remover comentário',
-            message: 'Tem certeza que deseja remover este comentário?',
-            confirmLabel: 'Remover',
-            type: 'danger',
-        });
-        if (!confirmed) return;
-
-        const result = await softDeleteComment(commentId);
-        if (result.success && user?.id) {
-            setComments((prev) => prev.map((item) => item.id === commentId ? { ...item, deletedAt: new Date().toISOString() } : item));
-            await createActivity(card.id, user.id, 'comment_deleted', { commentId });
-        }
-    };
-
-    const handleAssignUser = async (event) => {
-        const nextUserId = event.target.value;
-        if (!nextUserId || !user?.id) return;
-
-        setSavingAssignee(true);
-        const result = await assignUser(card.id, nextUserId, user.id);
-        if (result.success) {
-            await createActivity(card.id, user.id, 'assignee_added', { userId: nextUserId });
-        }
-        setSavingAssignee(false);
-        event.target.value = '';
-    };
-
-    const handleRemoveAssignee = async (userIdToRemove) => {
-        const result = await removeUser(card.id, userIdToRemove);
-        if (result.success && user?.id) {
-            setAssignees((prev) => prev.filter((item) => item.userId !== userIdToRemove));
-            await createActivity(card.id, user.id, 'assignee_removed', { userId: userIdToRemove });
-        }
-    };
-
-    const subtasks = liveCard.subtasks || [];
-    const doneCount = subtasks.filter(st => st.done).length;
-    const progress = subtasks.length > 0 ? (doneCount / subtasks.length) * 100 : 0;
-
-    const priorities = [
-        { value: 'none', label: 'Nenhuma', color: 'var(--text-tertiary)' },
-        { value: 'low', label: 'Baixa', color: '#3b82f6' },
-        { value: 'medium', label: 'Média', color: '#f59e0b' },
-        { value: 'high', label: 'Alta', color: '#f97316' },
-        { value: 'urgent', label: 'Urgente', color: '#ef4444' },
-    ];
 
     useEffect(() => {
         const onKey = async (e) => {
@@ -1070,7 +698,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                             <div className="task-detail-field task-detail-field-full">
                                 <label><AlertCircle size={15} /> Prioridade</label>
                                 <div className="task-detail-priority-grid">
-                                    {priorities.map(p => (
+                                    {PRIORITY_OPTIONS.map(p => (
                                         <button
                                             key={p.value}
                                             type="button"
@@ -1163,324 +791,28 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                             )}
                         </div>
 
-                        <div className="task-detail-section">
-                            <div className="task-detail-section-header">
-                                <h3><Paperclip size={16} /> Anexos</h3>
-                                <span>{attachments.length}</span>
-                            </div>
+                        <TaskAttachmentsSection domains={domains} fileInputRef={fileInputRef} />
 
-                            {showLinkForm && (
-                                <form className="task-detail-link-form" onSubmit={handleAddLink}>
-                                    <input value={linkUrl} maxLength={TEXT.linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://..." />
-                                    <input value={linkLabel} maxLength={TEXT.linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Nome opcional" />
-                                    <button className="btn btn-primary btn-sm" type="submit">Salvar link</button>
-                                </form>
-                            )}
-
-                            <div className="task-detail-attachments-grid task-detail-attachments-list">
-                                {attachments.map((attachment) => {
-                                    const draft = attachmentDrafts[attachment.id] || {};
-                                    const isEditing = editingAttachmentId === attachment.id;
-                                    return (
-                                        <div key={attachment.id} className="task-detail-attachment-row">
-                                            {attachment.kind === 'image' && attachment.publicUrl ? (
-                                                <img src={attachment.publicUrl} alt={attachment.fileName || 'Imagem'} className="task-detail-attachment-thumb" />
-                                            ) : (
-                                                <div className="task-detail-attachment-placeholder">
-                                                    {attachment.kind === 'link' ? <LinkIcon size={18} /> : <Paperclip size={18} />}
-                                                </div>
-                                            )}
-
-                                            <div className="task-detail-attachment-info">
-                                                {isEditing ? (
-                                                    <>
-                                                        <input
-                                                            className="task-detail-inline-input"
-                                                            value={draft.fileName ?? attachment.fileName ?? ''}
-                                                            onChange={(e) => handleAttachmentDraftChange(attachment.id, 'fileName', e.target.value)}
-                                                            placeholder="Nome do anexo"
-                                                        />
-                                                        <input
-                                                            className="task-detail-inline-input"
-                                                            value={draft.description ?? attachment.description ?? ''}
-                                                            onChange={(e) => handleAttachmentDraftChange(attachment.id, 'description', e.target.value)}
-                                                            placeholder="Descrição"
-                                                        />
-                                                        <div className="task-detail-inline-actions">
-                                                            <button type="button" className="btn btn-primary btn-xs" onClick={() => handleSaveAttachmentMeta(attachment)}>Salvar</button>
-                                                            <button type="button" className="btn btn-secondary btn-xs" onClick={() => setEditingAttachmentId(null)}>Cancelar</button>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <strong>{attachment.fileName || attachment.linkLabel || 'Anexo'}</strong>
-                                                        <span>{attachment.description || attachment.mimeType || attachment.kind}</span>
-                                                    </>
-                                                )}
-                                            </div>
-
-                                            <div className="task-detail-attachment-actions-inline">
-                                                {attachment.publicUrl && (
-                                                    <a className="btn-icon" href={attachment.publicUrl} download={attachment.fileName || 'anexo'} title="Baixar">
-                                                        <Download size={16} />
-                                                    </a>
-                                                )}
-                                                <button type="button" className="btn-icon" title="Editar nome e descrição" onClick={() => {
-                                                    setEditingAttachmentId(attachment.id);
-                                                    setAttachmentDrafts((prev) => ({
-                                                        ...prev,
-                                                        [attachment.id]: {
-                                                            fileName: attachment.fileName || '',
-                                                            description: attachment.description || '',
-                                                        },
-                                                    }));
-                                                }}>
-                                                    <Edit3 size={16} />
-                                                </button>
-                                                <button type="button" className="btn-icon danger" title="Remover" onClick={() => handleRemoveAttachment(attachment)}>
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-
-                                {!attachments.length && !loadingDomains && (
-                                    <button type="button" className="task-detail-empty task-detail-empty-upload" onClick={() => fileInputRef.current?.click()}>
-                                        <Upload size={16} />
-                                        <span>{uploading ? 'Enviando...' : 'Clique aqui para adicionar arquivo ou imagem'}</span>
-                                    </button>
-                                )}
-                            </div>
-                            {attachmentError && <div className="task-detail-error">{attachmentError}</div>}
-                        </div>
-
-                        <div className="task-detail-field task-detail-subtasks-section">
-                            <label>
-                                <CheckSquare size={15} />
-                                Subtarefas
-                                {subtasks.length > 0 && (
-                                    <span className="task-detail-subtask-count">{doneCount}/{subtasks.length}</span>
-                                )}
-                            </label>
-
-                            {subtasks.length > 0 && (
-                                <div className="task-detail-progress">
-                                    <div
-                                        className="task-detail-progress-bar"
-                                        style={{ width: `${progress}%` }}
-                                    />
-                                </div>
-                            )}
-
-                            <div className="task-detail-subtasks">
-                                {subtasks.map(st => (
-                                    <div key={st.id} className={`task-detail-subtask ${st.done ? 'done' : ''}`}>
-                                        <button
-                                            type="button"
-                                            {...ph(hoverByEl, `subtask-check-${st.id}`, `task-detail-checkbox ${st.done ? 'checked' : ''}`)}
-                                            onClick={() => handleToggleSubtask(st.id)}
-                                        />
-                                        {editingSubtaskId === st.id ? (
-                                            <input
-                                                ref={editInputRef}
-                                                type="text"
-                                                className="task-detail-subtask-edit"
-                                                value={editingSubtaskTitle}
-                                                onChange={e => setEditingSubtaskTitle(e.target.value)}
-                                                onBlur={saveEditSubtask}
-                                                onKeyDown={handleEditSubtaskKeyDown}
-                                            />
-                                        ) : (
-                                            <span
-                                                className="task-detail-subtask-title"
-                                                onDoubleClick={() => startEditSubtask(st)}
-                                            >
-                                                {st.title}
-                                            </span>
-                                        )}
-                                        <div className="task-detail-subtask-actions">
-                                            <button className="btn-icon btn-xs" onClick={() => startEditSubtask(st)} title="Editar">
-                                                <Edit3 size={12} />
-                                            </button>
-                                            <button className="btn-icon btn-xs" onClick={() => handleDeleteSubtask(st.id)} title="Remover">
-                                                <Trash2 size={12} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <form onSubmit={handleAddSubtask} className="task-detail-add-subtask">
-                                <Plus size={16} />
-                                <input
-                                    ref={subtaskInputRef}
-                                    type="text"
-                                    {...ph(hoverByEl, 'subtask-add', '')}
-                                    placeholder="Adicionar subtarefa..."
-                                    value={newSubtask}
-                                    maxLength={TEXT.subtaskTitle}
-                                    onChange={e => setNewSubtask(e.target.value)}
-                                />
-                            </form>
-                        </div>
+                        <TaskSubtasksSection
+                            subtasks={liveCard.subtasks || []}
+                            boardId={boardId}
+                            listId={listId}
+                            cardId={card.id}
+                            collabDispatch={collabDispatch}
+                            hoverByEl={hoverByEl}
+                        />
                     </div>
 
-                    <aside className="task-detail-sidebar">
-                        <div className="task-detail-section task-detail-cover-panel" ref={coverPanelRef}>
-                            <div className="task-detail-section-header">
-                                <h3><ImagePlus size={16} /> Capa</h3>
-                                <button type="button" {...ph(hoverByEl, 'cover-toggle', 'btn-icon')} onClick={() => setShowCoverPanel((prev) => !prev)}>
-                                    <ChevronDown size={16} className={showCoverPanel ? 'rotated' : ''} />
-                                </button>
-                            </div>
-                            {showCoverPanel && (
-                                <div className="task-detail-cover-menu">
-                                    {imageAttachments.length > 0 ? (
-                                        <>
-                                            <div className="task-detail-cover-thumbs">
-                                                {imageAttachments.map((attachment) => (
-                                                    <button
-                                                        key={attachment.id}
-                                                        type="button"
-                                                        {...ph(
-                                                            hoverByEl,
-                                                            `cover-${attachment.id}`,
-                                                            `task-detail-cover-thumb ${liveCard.coverAttachmentId === attachment.id ? 'active' : ''}`,
-                                                        )}
-                                                        onClick={() => handleSetCover(attachment)}
-                                                    >
-                                                        <img src={attachment.publicUrl} alt={attachment.fileName || 'Imagem'} />
-                                                    </button>
-                                                ))}
-                                            </div>
-                                            <div className="task-detail-cover-actions-row">
-                                                {liveCard.coverAttachmentId && (
-                                                    <button type="button" {...ph(hoverByEl, 'cover-remove', 'btn btn-secondary btn-sm')} onClick={handleClearCover}>Remover capa</button>
-                                                )}
-                                                <button type="button" {...ph(hoverByEl, 'cover-clear', 'btn-icon')} title="Sem capa" onClick={handleClearCover}>
-                                                    <Ban size={16} />
-                                                </button>
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <div className="task-detail-empty">Envie uma imagem para definir como capa.</div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="task-detail-section">
-                            <div className="task-detail-section-header">
-                                <h3><UserPlus size={16} /> Responsáveis</h3>
-                            </div>
-                            <select
-                                className={presenceHoverClass(hoverByEl, 'assignees-select', 'task-detail-select')}
-                                style={presenceHoverStyle(hoverByEl, 'assignees-select')}
-                                data-presence-hover="assignees-select"
-                                onChange={handleAssignUser}
-                                disabled={savingAssignee}
-                                defaultValue=""
-                            >
-                                <option value="">Adicionar responsável</option>
-                                {boardCandidates
-                                    .filter((candidate) => !assignees.some((item) => item.userId === candidate.userId))
-                                    .map((candidate) => (
-                                        <option key={candidate.userId} value={candidate.userId}>
-                                            {candidate.name || candidate.username || candidate.userId}
-                                        </option>
-                                    ))}
-                            </select>
-                            <div className="task-detail-assignee-list">
-                                {assigneeProfiles.map((assignee) => (
-                                    <div key={assignee.userId} className="task-detail-assignee-item">
-                                        <div className="task-detail-assignee-avatar">
-                                            {assignee.photoUrl ? <img src={assignee.photoUrl} alt={assignee.name} /> : <span>{assignee.avatar}</span>}
-                                        </div>
-                                        <div className="task-detail-assignee-meta">
-                                            <strong>{assignee.name}</strong>
-                                            <span>{assignee.role || 'membro'}</span>
-                                        </div>
-                                        <button type="button" {...ph(hoverByEl, `assignee-remove-${assignee.userId}`, 'btn-icon btn-xs')} onClick={() => handleRemoveAssignee(assignee.userId)}>
-                                            <Trash2 size={12} />
-                                        </button>
-                                    </div>
-                                ))}
-                                {!assigneeProfiles.length && !loadingDomains && <div className="task-detail-empty">Sem responsáveis.</div>}
-                            </div>
-                        </div>
-
-                        <div className="task-detail-section">
-                            <div className="task-detail-section-header">
-                                <h3><MessageSquare size={16} /> Comentários</h3>
-                                <span>{visibleComments.length}</span>
-                            </div>
-                            <form className="task-detail-comment-composer" onSubmit={handleCreateComment}>
-                                <div className="task-detail-comment-box">
-                                    <button type="button" className="btn-icon" title="Adicionar">
-                                        <Plus size={18} />
-                                    </button>
-                                    <textarea
-                                        {...ph(hoverByEl, 'comment-composer', '')}
-                                        value={commentBody}
-                                        maxLength={TEXT.cardComment}
-                                        onChange={(e) => setCommentBody(e.target.value)}
-                                        onFocus={() => setCommentFocused(true)}
-                                        onBlur={() => setCommentFocused(false)}
-                                        placeholder="Digite uma mensagem"
-                                        rows={1}
-                                    />
-                                    <button
-                                        {...ph(hoverByEl, 'comment-send', 'task-detail-send-btn')}
-                                        type="submit"
-                                        disabled={savingComment || !commentBody.trim()}
-                                        title="Enviar comentário"
-                                    >
-                                        <Send size={16} />
-                                    </button>
-                                </div>
-                            </form>
-                            <div className="task-detail-comment-list">
-                                {comments.map((comment) => {
-                                    const author = comment.authorId === user?.id
-                                        ? { name: user?.name || 'Você', photoUrl: user?.photo_url || '', avatar: initialFromName(user?.name || 'V') }
-                                        : boardCandidates.find((candidate) => candidate.userId === comment.authorId) || null;
-
-                                    return (
-                                        <div key={comment.id} className={`task-detail-comment-item ${comment.deletedAt ? 'deleted' : ''}`}>
-                                            <div className="task-detail-comment-avatar">
-                                                {author?.photoUrl ? <img src={author.photoUrl} alt={author.name} /> : <span>{author?.avatar || initialFromName(author?.name || 'U')}</span>}
-                                            </div>
-                                            <div className="task-detail-comment-content">
-                                                <div className="task-detail-comment-head">
-                                                    <strong>{author?.name || 'Usuário'}</strong>
-                                                    {!comment.deletedAt && <button type="button" className="btn-icon btn-xs" onClick={() => handleDeleteComment(comment.id)}><Trash2 size={12} /></button>}
-                                                </div>
-                                                <p>{comment.deletedAt ? 'Comentário removido.' : comment.body}</p>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                                {!comments.length && !loadingDomains && <div className="task-detail-empty">Nenhum comentário ainda.</div>}
-                            </div>
-                        </div>
-
-                        <div className="task-detail-section">
-                            <div className="task-detail-section-header">
-                                <h3><History size={16} /> Activity</h3>
-                                <span>{activity.length}</span>
-                            </div>
-                            <div className="task-detail-activity-list">
-                                {activity.map((item) => (
-                                    <div key={item.id} className="task-detail-activity-item">
-                                        <History size={14} />
-                                        <span>{formatActivityText(item)}</span>
-                                    </div>
-                                ))}
-                                {!activity.length && !loadingDomains && <div className="task-detail-empty">Nenhuma atividade registrada.</div>}
-                            </div>
-                        </div>
-                    </aside>
+                    <TaskDetailSidebar
+                        domains={domains}
+                        hoverByEl={hoverByEl}
+                        liveCard={liveCard}
+                        user={user}
+                        coverPanelRef={coverPanelRef}
+                        commentBody={commentBody}
+                        setCommentBody={setCommentBody}
+                        setCommentFocused={setCommentFocused}
+                    />
                 </div>
 
                 <div className="task-detail-footer">
