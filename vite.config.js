@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { createLogger, defineConfig } from 'vite'
+import { createLogger, defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import strip from '@rollup/plugin-strip'
 
@@ -19,12 +19,24 @@ function getCollabPort() {
   return 2529
 }
 
+/** Origem http(s) e ws(s) de uma URL do .env (Supabase próprio, collab em outro host…). */
+function connectOrigins(url) {
+  try {
+    const u = new URL(url)
+    const ws = u.protocol === 'https:' ? 'wss:' : 'ws:'
+    return [u.origin, `${ws}//${u.host}`]
+  } catch {
+    return []
+  }
+}
+
 /**
  * Cabeçalhos de segurança lidos de public/_headers (fonte única, também usada por Netlify & cia).
- * O `vite preview` (produção na VPS) passa a enviá-los. A CSP vai como Report-Only por padrão
- * (só avisa no console) para não quebrar rádio/OAuth/imagens externas; DW_CSP_ENFORCE=1 aplica de verdade.
+ * O `vite preview` (produção na VPS) passa a enviá-los. A CSP é APLICADA; o connect-src ganha o
+ * Supabase e o collab configurados no .env (sem regra fixa de domínio).
+ * DW_CSP_REPORT_ONLY=1 volta para só avisar no console.
  */
-function getSecurityHeaders() {
+function getSecurityHeaders(env = {}) {
   const headers = {}
   try {
     const raw = fs.readFileSync(path.resolve(__dirname, 'public/_headers'), 'utf8')
@@ -35,10 +47,17 @@ function getSecurityHeaders() {
   } catch {
     /* sem _headers → sem cabeçalhos extras */
   }
-  const csp = headers['Content-Security-Policy']
-  if (csp && process.env.DW_CSP_ENFORCE !== '1') {
-    delete headers['Content-Security-Policy']
-    headers['Content-Security-Policy-Report-Only'] = csp
+  let csp = headers['Content-Security-Policy']
+  if (csp) {
+    const extra = [env.VITE_SUPABASE_URL, env.VITE_COLLAB_SERVER_URL]
+      .filter((v) => v && /^https?:/.test(v))
+      .flatMap(connectOrigins)
+    if (extra.length) csp = csp.replace('connect-src ', `connect-src ${[...new Set(extra)].join(' ')} `)
+    headers['Content-Security-Policy'] = csp
+    if (process.env.DW_CSP_REPORT_ONLY === '1') {
+      delete headers['Content-Security-Policy']
+      headers['Content-Security-Policy-Report-Only'] = csp
+    }
   }
   return headers
 }
@@ -96,7 +115,7 @@ const socketIoProxy = {
   },
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   customLogger: devLogger,
   envDir: __dirname,
   plugins: [
@@ -127,7 +146,7 @@ export default defineConfig({
     allowedHosts: ['dailyways.saygabbis.cloud'],
     port: 5174,
     proxy: socketIoProxy,
-    headers: getSecurityHeaders(),
+    headers: getSecurityHeaders({ ...loadEnv(mode, __dirname, 'VITE_'), ...process.env }),
   },
 
   test: {
@@ -159,4 +178,4 @@ export default defineConfig({
       ],
     },
   },
-})
+}))

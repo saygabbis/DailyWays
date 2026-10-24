@@ -21,7 +21,7 @@ const RADIO_STATIONS = [
     {
         id: 'jazz-lofi',
         name: 'Jazz Lofi',
-        url: 'http://ice5.somafm.com/illstreet-128-mp3', // SomaFM Illinois Street Lounge - Ultra Stable 128kbps
+        url: 'https://ice5.somafm.com/illstreet-128-mp3', // SomaFM Illinois Street Lounge - Ultra Stable 128kbps
         color: '#ff9e00'
     },
     {

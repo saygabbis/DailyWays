@@ -40,7 +40,7 @@ Sem o collab-server o app continua funcionando: o navegador grava direto no Supa
 | `npm run db:validate-migrations` | Confere as migrations SQL |
 | `npm run db:idempotent-migrations` | Confere se as migrations podem rodar de novo sem erro |
 
-Variáveis opcionais do build: `DW_SOURCEMAP=1` gera sourcemaps; `DW_CSP_ENFORCE=1` aplica a CSP (por padrão ela é *Report-Only*).
+Variáveis opcionais do build: `DW_SOURCEMAP=1` gera sourcemaps; `DW_CSP_REPORT_ONLY=1` deixa a CSP só avisando (por padrão ela é aplicada).
 
 ## Estrutura
 

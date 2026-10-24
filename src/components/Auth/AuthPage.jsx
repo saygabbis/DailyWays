@@ -205,7 +205,7 @@ export default function AuthPage() {
     setForgotMessage('');
     const raw = identifier.trim();
     if (!raw) {
-      setForgotMessage('Digite seu e-mail ou username antes de pedir recuperação.');
+      setForgotMessage('Digite o e-mail da conta antes de pedir recuperação.');
       return;
     }
 
@@ -216,12 +216,11 @@ export default function AuthPage() {
       window.localStorage.setItem('dailyways_pw_reset_pending', '1');
       window.localStorage.setItem('dailyways_pw_reset_pending_ts', String(Date.now()));
 
-      let email = raw;
+      // Só por e-mail: descobrir o e-mail a partir do username sem senha vazava e-mails.
       if (!raw.includes('@')) {
-        const { data, error: rpcErr } = await supabase.rpc('get_email_by_username', { u: raw });
-        if (rpcErr || !data) throw new Error('Se o usuário existir, enviaremos um link por e-mail.');
-        email = data;
+        throw new Error('Digite o e-mail da conta para receber o link.');
       }
+      const email = raw;
 
       const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: getAppOrigin(),

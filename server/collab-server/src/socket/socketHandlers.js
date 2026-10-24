@@ -169,7 +169,7 @@ export function registerSocketHandlers(io) {
         return next(new Error(conn.reason || 'Too many connections'));
       }
       socket.data.userId = user.id;
-      socket.data.userEmail = user.email;
+      socket.data.userEmail = user.email; // do JWT verificado (checagem de dev); nunca vai para a presença
       socket.data.accessToken = token;
       next();
     } catch (err) {
@@ -287,7 +287,6 @@ export function registerSocketHandlers(io) {
         const stub = await enrichPresenceFromProfile(
           socket.data.userId,
           { userId: socket.data.userId },
-          socket.data.userEmail,
         );
         roomManager.setPresence(roomId, socket.data.userId, stub, socket.id);
         const peers = roomManager.getPresenceList(room);
@@ -491,7 +490,6 @@ export function registerSocketHandlers(io) {
       const full = await enrichPresenceFromProfile(
         socket.data.userId,
         { ...payload, userId: socket.data.userId },
-        socket.data.userEmail,
       );
       const peers = roomManager.setPresence(roomId, socket.data.userId, full, socket.id) || [];
       io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, createPresenceSyncPayload(roomId, peers));

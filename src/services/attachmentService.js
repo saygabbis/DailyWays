@@ -1,6 +1,7 @@
 import { validateFile, COUNT, validateLinkUrl, validateLinkLabel } from '@dailyways/limits';
 import { resolveLimitError, LIMIT_MSG } from '../limits/messages.js';
 import { supabase } from './supabaseClient';
+import { normalizeHttpUrl } from '../utils/safeUrl';
 
 const BUCKET = 'task-attachments';
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
@@ -147,6 +148,8 @@ export async function createLinkAttachment(cardId, linkUrl, linkLabel, userId) {
   }
   const urlCheck = validateLinkUrl(linkUrl);
   if (!urlCheck.ok) return { success: false, error: resolveLimitError(urlCheck) };
+  const safeLink = normalizeHttpUrl(linkUrl);
+  if (!safeLink) return { success: false, error: 'Use um endereço http(s), ex.: https://site.com' };
   if (linkLabel) {
     const labelCheck = validateLinkLabel(linkLabel);
     if (!labelCheck.ok) return { success: false, error: resolveLimitError(labelCheck) };
@@ -164,9 +167,9 @@ export async function createLinkAttachment(cardId, linkUrl, linkLabel, userId) {
     .insert({
       card_id: cardId,
       kind: 'link',
-      link_url: linkUrl,
+      link_url: safeLink,
       link_label: linkLabel || null,
-      file_name: linkLabel || linkUrl,
+      file_name: linkLabel || safeLink,
       created_by: userId,
       updated_at: new Date().toISOString(),
     })

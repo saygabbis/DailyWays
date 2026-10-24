@@ -67,6 +67,26 @@ async function ensureProfile(authUser) {
   return inserted;
 }
 
+
+/**
+ * Login por username: o servidor só devolve o e-mail se a senha conferir (login_email_for), com
+ * bloqueio após tentativas erradas. Antes qualquer um, sem login, descobria o e-mail de qualquer
+ * username. Enquanto a migration 20261024210000 não roda, cai na função antiga.
+ */
+async function resolveLoginEmail(username, password) {
+  const invalid = { email: null, error: 'Credenciais inválidas.' };
+  const { data, error } = await supabase.rpc('login_email_for', { p_username: username, p_password: password });
+  if (!error) return data ? { email: data, error: null } : invalid;
+  if (/too_many_attempts/.test(error.message || '')) {
+    return { email: null, error: 'Muitas tentativas. Espere 15 minutos ou entre com o e-mail.' };
+  }
+  if (error.code === 'PGRST202') {
+    const legacy = await supabase.rpc('get_email_by_username', { u: username });
+    if (!legacy.error && legacy.data) return { email: legacy.data, error: null };
+  }
+  return invalid;
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -227,13 +247,13 @@ export function AuthProvider({ children }) {
     try {
       let email = identifier;
       if (!identifier.includes('@')) {
-        const { data, error } = await supabase.rpc('get_email_by_username', { u: identifier });
-        if (error || !data) {
+        const resolved = await resolveLoginEmail(identifier, password);
+        if (!resolved.email) {
           setLoading(false);
-          setAuthError('Credenciais inválidas.');
-          return { success: false, error: 'Credenciais inválidas.' };
+          setAuthError(resolved.error);
+          return { success: false, error: resolved.error };
         }
-        email = data;
+        email = resolved.email;
       }
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {

@@ -17,17 +17,14 @@ function cacheSet(userId, data) {
   cache.set(userId, { at: Date.now(), data });
 }
 
-/** Fill name/photo/color from profiles when the client sent a placeholder or omitted meta. */
-export async function enrichPresenceFromProfile(userId, payload, userEmail) {
-  const needsName = !payload.name || payload.name === 'Usuário';
-  const needsPhoto = payload.photoUrl == null;
-  const needsColor = !payload.color;
-
-  if (!needsName && !needsPhoto && !needsColor) return payload;
-  if (!supabaseAdmin) return payload;
-
+/**
+ * Nome, foto e cor da presença vêm SEMPRE do perfil no banco: antes o servidor aceitava o que o
+ * cliente mandasse (dava para aparecer no cursor como outra pessoa, com a foto dela) e, sem nome,
+ * mostrava aos outros o começo do e-mail.
+ */
+export async function enrichPresenceFromProfile(userId, payload) {
   let profile = cacheGet(userId);
-  if (!profile) {
+  if (!profile && supabaseAdmin) {
     const { data } = await supabaseAdmin
       .from('profiles')
       .select('name, photo_url, presence_color, presence_color_auto')
@@ -38,17 +35,14 @@ export async function enrichPresenceFromProfile(userId, payload, userEmail) {
   }
 
   const out = { ...payload };
-  if (needsName) {
-    out.name =
-      profile?.name
-      || (userEmail ? userEmail.split('@')[0] : null)
-      || out.name
-      || 'Usuário';
+  if (profile) {
+    out.name = profile.name || 'Usuário';
+    out.photoUrl = profile.photo_url || null;
+    if (profile.presence_color && profile.presence_color_auto === false) out.color = profile.presence_color;
+  } else if (!out.name) {
+    out.name = 'Usuário';
   }
-  if (needsPhoto && profile?.photo_url) out.photoUrl = profile.photo_url;
-  if (needsColor && profile?.presence_color) out.color = profile.presence_color;
-  if (!out.avatarInitial && out.name) {
-    out.avatarInitial = String(out.name).trim().charAt(0).toUpperCase() || '?';
-  }
+  if (typeof out.photoUrl === 'string' && !/^https:\/\//i.test(out.photoUrl)) out.photoUrl = null;
+  out.avatarInitial = String(out.name).trim().charAt(0).toUpperCase() || '?';
   return out;
 }

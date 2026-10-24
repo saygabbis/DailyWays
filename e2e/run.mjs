@@ -136,7 +136,11 @@ async function main() {
   }
 
   let collab = startCollab();
-  const preview = startProcess('app', 'npx', ['vite', 'preview', '--outDir', 'dist-e2e', '--port', String(APP_PORT), '--host', '127.0.0.1', '--strictPort'], {});
+  // Mesmo .env do build: a CSP (aplicada) libera o Supabase e o collab configurados.
+  const preview = startProcess('app', 'npx', ['vite', 'preview', '--outDir', 'dist-e2e', '--port', String(APP_PORT), '--host', '127.0.0.1', '--strictPort'], {
+    VITE_SUPABASE_URL: supa.url,
+    VITE_COLLAB_SERVER_URL: `http://127.0.0.1:${COLLAB_PORT}`,
+  });
   const browsers = [];
   try {
     await waitHttp(`http://127.0.0.1:${COLLAB_PORT}/health`);
@@ -158,7 +162,10 @@ async function main() {
       page.errors = [];
       page.consoleLines = [];
       page.on('pageerror', (e) => page.errors.push(e.message));
-      page.on('console', (m) => page.consoleLines.push(`${m.type()}: ${m.text()}`));
+      page.on('console', (m) => {
+        page.consoleLines.push(`${m.type()}: ${m.text()}`);
+        if (m.type() === 'error' && /Content Security Policy/.test(m.text())) page.errors.push(`CSP: ${m.text()}`);
+      });
       await page.goto(APP);
       try {
         await page.locator('.sidebar', { hasText: 'Board E2E' }).getByText('Board E2E').first().click({ timeout: 20000 });
@@ -235,7 +242,7 @@ async function main() {
       if (!(await dbCard('Feito offline'))) throw new Error('card do fallback sumiu depois que o collab voltou');
     });
 
-    await check('nenhum erro de página nos dois navegadores', async () => {
+    await check('nenhum erro de página nem bloqueio da CSP nos dois navegadores', async () => {
       const errs = [...a.errors, ...b.errors];
       if (errs.length) throw new Error(errs.slice(0, 3).join(' | '));
     });

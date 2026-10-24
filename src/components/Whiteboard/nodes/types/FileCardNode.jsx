@@ -1,8 +1,9 @@
 import BaseNode from './BaseNode';
 import { FileText, Download } from 'lucide-react';
+import { safeHref } from '../../../../utils/safeUrl';
 
 export default function FileCardNode({ node, onNodePointerDown, onNodeContextMenu }) {
-    const url = node.data?.url ?? '';
+    const url = safeHref(node.data?.url);
     const filename = node.data?.filename ?? 'Arquivo';
     const size = node.data?.size ?? '';
 

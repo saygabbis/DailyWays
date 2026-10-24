@@ -1,4 +1,4 @@
-import { FILE_LIMITS } from './fileLimits.js';
+import { BLOCKED_FILE_EXTENSIONS, BLOCKED_FILE_MIME, FILE_LIMITS } from './fileLimits.js';
 import { LIMIT_ERROR } from './errorCodes.js';
 
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'avif']);
@@ -43,6 +43,11 @@ export function validateFile(file, specKey) {
   const size = file.size ?? 0;
   if (size > spec.maxBytes) {
     return { ok: false, code: LIMIT_ERROR.FILE_TOO_LARGE, specKey };
+  }
+  const type = (file.type || '').toLowerCase();
+  const ext = file.name?.split('.').pop()?.toLowerCase();
+  if (BLOCKED_FILE_MIME.includes(type) || (ext && BLOCKED_FILE_EXTENSIONS.includes(ext))) {
+    return { ok: false, code: LIMIT_ERROR.FILE_TYPE_NOT_ALLOWED, specKey };
   }
   if (!mimeMatches(file, spec)) {
     return { ok: false, code: LIMIT_ERROR.FILE_TYPE_NOT_ALLOWED, specKey };

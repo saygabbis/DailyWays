@@ -12,6 +12,13 @@ export const FILE_LIMIT_MB = {
 
 const mb = (n) => n * 1024 * 1024;
 
+/**
+ * Tipos "ativos" (o navegador executa ao abrir o arquivo): nunca como anexo livre. Um HTML enviado
+ * como arquivo do Space abria como página no domínio do storage.
+ */
+export const BLOCKED_FILE_MIME = ['text/html', 'application/xhtml+xml', 'text/javascript', 'application/javascript', 'application/x-msdownload'];
+export const BLOCKED_FILE_EXTENSIONS = ['html', 'htm', 'xhtml', 'js', 'mjs', 'exe', 'bat', 'cmd', 'msi', 'ps1', 'vbs', 'scr'];
+
 /** Especificações derivadas — use estas keys nos validadores. */
 export const FILE_LIMITS = {
   chatImage: {

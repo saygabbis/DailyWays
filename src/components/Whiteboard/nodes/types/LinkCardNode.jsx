@@ -2,9 +2,11 @@ import BaseNode from './BaseNode';
 import { Link2 } from 'lucide-react';
 import { useEditableNodeField } from '../../interaction/hooks/useEditableNodeField';
 import { getTextStyleFromNode, textStyleToCss } from '../../shared/textStyle';
+import { safeHref } from '../../../../utils/safeUrl';
 
 export default function LinkCardNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const url = node.data?.url ?? '';
+    const href = safeHref(url);
     const title = node.data?.title ?? '';
     const displayTitle = title || url || '';
     const textStyle = getTextStyleFromNode(node);
@@ -68,9 +70,9 @@ export default function LinkCardNode({ node, onNodePointerDown, onNodeContextMen
                                 {displayTitle || <span style={{ color: 'var(--text-tertiary)' }}>Título do link</span>}
                             </div>
                         )}
-                        {url && !isEditing && (
+                        {href && !isEditing && (
                             <a
-                                href={url}
+                                href={href}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}

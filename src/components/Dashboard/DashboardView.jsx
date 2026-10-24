@@ -24,6 +24,7 @@ import { format, isTomorrow, isThisWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getCardTemporalBucket, parseCardDate } from '../../utils/cardDateTime';
 import './Dashboard.css';
+import { safeHref } from '../../utils/safeUrl';
 
 const CIRCLE_R = 44;
 const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_R;
@@ -549,7 +550,7 @@ export default function DashboardView() {
                         <ul className="link-list">
                             {cardsWithSubtaskLinks.slice(0, 12).map(s => (
                                 <li key={s.id} className="link-list__item">
-                                    <a href={s.linkUrl} target="_blank" rel="noopener noreferrer">
+                                    <a href={safeHref(s.linkUrl)} target="_blank" rel="noopener noreferrer">
                                         {s.linkLabel || s.linkUrl}
                                     </a>
                                     <span>{s._card?.title}</span>

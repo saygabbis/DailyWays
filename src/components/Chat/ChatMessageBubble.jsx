@@ -1,4 +1,5 @@
 import { Check, CheckCheck } from 'lucide-react';
+import { safeHref } from '../../utils/safeUrl';
 
 function formatTime(ts) {
   if (!ts) return '';
@@ -58,9 +59,9 @@ export default function ChatMessageBubble({
       <div className="chat-msg__bubble">
         {deleted ? (
           <span className="chat-msg__deleted">Mensagem apagada</span>
-        ) : isImage ? (
-          <a href={message.attachment_url} target="_blank" rel="noreferrer" className="chat-msg__image-link">
-            <img src={message.attachment_url} alt="" className="chat-msg__image" />
+        ) : isImage && safeHref(message.attachment_url) ? (
+          <a href={safeHref(message.attachment_url)} target="_blank" rel="noreferrer" className="chat-msg__image-link">
+            <img src={safeHref(message.attachment_url)} alt="" className="chat-msg__image" />
           </a>
         ) : null}
         {!deleted && message.body ? (
