@@ -42,9 +42,16 @@ export function createUserScopedClient(accessToken) {
   });
 }
 
+let dbClientFactory = createUserScopedClient;
+
+/** Testes de integração: troca o cliente do banco por um falso (ver socket/integration.test.js). */
+export function setDbClientFactoryForTests(factory) {
+  dbClientFactory = factory || createUserScopedClient;
+}
+
 /** Cliente com RLS do usuário (auth, canAccess*, load de dados). Nunca usa service_role. */
 export function getUserDbClient(accessToken) {
-  return createUserScopedClient(accessToken);
+  return dbClientFactory(accessToken);
 }
 
 devLog('supabase.init', {

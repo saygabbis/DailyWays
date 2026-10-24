@@ -13,8 +13,16 @@ function getJwks() {
   return jwks;
 }
 
+let verifierForTests = null;
+
+/** Testes de integração: verificador de token falso (sem JWKS). */
+export function setTokenVerifierForTests(fn) {
+  verifierForTests = fn || null;
+}
+
 /** Verifica access_token do usuário via JWKS (não depende da service_role). */
 export async function verifyUserJwt(token) {
+  if (verifierForTests) return verifierForTests(token);
   if (!token || !supabaseUrl) return null;
   const keys = getJwks();
   if (!keys) return null;

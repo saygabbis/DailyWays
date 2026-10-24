@@ -9,7 +9,7 @@ import {
   validatePresence,
 } from '@dailyways/collab-protocol';
 import { verifyToken, canAccessSpace, canAccessBoard, resolveRoomEntityAccess } from '../auth/auth.js';
-import { noteRoomFlushContext } from '../services/roomFlushContext.js';
+import { noteRoomFlushContext, refreshRoomFlushToken } from '../services/roomFlushContext.js';
 import { roomManager } from '../services/roomManager.js';
 import { enrichPresenceFromProfile } from '../services/presenceProfile.js';
 import { isDevPrankAttacker, isDevPrankHandlerEnabled } from '../auth/devAccess.js';
@@ -182,11 +182,23 @@ export function registerSocketHandlers(io) {
     socket.data.canWrite = false;
     socket.data.clientIp = getClientIp(socket.handshake);
 
+    // Uma fila por socket para join, leave e TODAS as ops (na sala ou de fora): as checagens
+    // assíncronas não podem inverter a ordem (MOVE_CARD seguido de UPDATE_CARD; ops enviadas
+    // logo antes de sair do board precisam ser aplicadas antes do leave).
+    let opQueue = Promise.resolve();
+    const enqueue = (fn) => {
+      opQueue = opQueue.then(fn).catch((err) => {
+        console.error('[collab-server] op queue error', err?.message || err);
+      });
+    };
+
     if (isDevPrankHandlerEnabled()) {
       registerDevPrankHandler(io, socket);
     }
 
-    socket.on(CLIENT_EVENTS.JOIN, async (payload, ack) => {
+    socket.on(CLIENT_EVENTS.JOIN, (payload, ack) => enqueue(() => handleJoin(payload, ack)));
+
+    const handleJoin = async (payload, ack) => {
       try {
         const spaceId = payload?.spaceId;
         const boardId = payload?.boardId;
@@ -238,6 +250,14 @@ export function registerSocketHandlers(io) {
         let room = await roomManager.getOrLoad(roomId, {
           accessToken: socket.data.accessToken,
         });
+        if (boardId) {
+          // Sala vazia e sem nada pendente: o banco pode ter algo mais novo (fallback do navegador
+          // enquanto o collab estava fora). Recarrega antes de entregar o snapshot.
+          room = await roomManager.refreshIdleBoardRoom(roomId, {
+            accessToken: socket.data.accessToken,
+            maxAgeMs: 1500,
+          }) ?? room;
+        }
         if (boardId && !room.board) {
           roomManager.evictRoom(roomId);
           room = await roomManager.getOrLoad(roomId, {
@@ -281,9 +301,11 @@ export function registerSocketHandlers(io) {
         await rollbackPartialJoin(socket, socket.data.roomId);
         ack?.({ ok: false, error: err.message });
       }
-    });
+    };
 
-    socket.on(CLIENT_EVENTS.LEAVE, async (payload, ack) => {
+    socket.on(CLIENT_EVENTS.LEAVE, (payload, ack) => enqueue(() => handleLeave(payload, ack)));
+
+    const handleLeave = async (payload, ack) => {
       const roomId = socket.data.roomId;
       if (!roomId) {
         ack?.({ ok: true, peers: [] });
@@ -298,7 +320,7 @@ export function registerSocketHandlers(io) {
       await roomManager.clientLeft(roomId, socket.id);
       socket.data.roomId = null;
       ack?.({ ok: true, peers });
-    });
+    };
 
     /** Aplica uma op já autorizada numa sala e avisa quem está nela. */
     const applyAuthorizedOp = async (roomId, op, ack) => {
@@ -324,18 +346,26 @@ export function registerSocketHandlers(io) {
         ack?.({ ok: false, error: result.reason });
         return;
       }
+      if (result.duplicate) {
+        // Reenvio depois de reconectar: já foi aplicada e transmitida antes.
+        ack?.({ ok: true, duplicate: true, revision: result.revision });
+        return;
+      }
+      const appliedOp = result.op ?? op;
       const applied = {
-        op,
+        op: appliedOp,
         revision: result.revision,
         userId: socket.data.userId,
-        opId: op.opId,
+        opId: appliedOp.opId,
       };
       socket.to(roomId).emit(SERVER_EVENTS.APPLIED, applied);
       socket.emit(SERVER_EVENTS.APPLIED, applied);
       ack?.({ ok: true, revision: result.revision });
     };
 
-    socket.on(CLIENT_EVENTS.OP, async (op, ack) => {
+    socket.on(CLIENT_EVENTS.OP, (op, ack) => enqueue(() => handleRoomOp(op, ack)));
+
+    const handleRoomOp = async (op, ack) => {
       const roomId = socket.data.roomId;
       if (!roomId) {
         ack?.({ ok: false, error: 'Not in room' });
@@ -347,6 +377,22 @@ export function registerSocketHandlers(io) {
         return;
       }
       await applyAuthorizedOp(roomId, op, ack);
+    };
+
+    // Renovação da sessão: troca o token sem derrubar o socket (antes o cliente desconectava e
+    // reconectava a cada hora, e as ops desse intervalo iam para o fallback do navegador).
+    socket.on(CLIENT_EVENTS.AUTH_REFRESH, async (payload, ack) => {
+      const token = payload?.token;
+      const user = typeof token === 'string' ? await verifyToken(token) : null;
+      if (!user || user.id !== socket.data.userId) {
+        ack?.({ ok: false, error: 'Unauthorized' });
+        return;
+      }
+      socket.data.accessToken = token;
+      for (const room of roomManager.rooms.values()) {
+        refreshRoomFlushToken(room, { userId: user.id, accessToken: token });
+      }
+      ack?.({ ok: true });
     });
 
     // Cache curto de permissão por board (evita 2 consultas ao banco por op fora da sala).
@@ -361,12 +407,7 @@ export function registerSocketHandlers(io) {
       return canWrite;
     };
 
-    // Fila por socket: a checagem de permissão é assíncrona e não pode inverter a ordem das ops
-    // (ex.: MOVE_CARD seguido de UPDATE_CARD).
-    let boardOpQueue = Promise.resolve();
-    socket.on(CLIENT_EVENTS.BOARD_OP, (payload, ack) => {
-      boardOpQueue = boardOpQueue.then(() => handleBoardOp(payload, ack));
-    });
+    socket.on(CLIENT_EVENTS.BOARD_OP, (payload, ack) => enqueue(() => handleBoardOp(payload, ack)));
 
     const handleBoardOp = async (payload, ack) => {
       try {

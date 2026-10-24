@@ -86,6 +86,17 @@ BEGIN
   ok := (r->>'success')::boolean AND (SELECT list_id FROM public.cards WHERE id = cb) = la;
   res := res || jsonb_build_object('caso', '9 mover card entre boards com escrita nos dois', 'ok', ok, 'r', r);
 
+  -- 9b) Diário: categoria e minutos estimados são gravados; valor inválido vira NULL
+  r := public.upsert_board_full(jsonb_build_object('id', ba, 'title', 'A', 'position', 1, 'emoji', '📋',
+    'lists', jsonb_build_array(jsonb_build_object('id', la, 'title', 'LA', 'cards', jsonb_build_array(
+      jsonb_build_object('id', ca, 'title', 'CA novo', 'dayCategory', 'creative', 'estimatedMinutes', 25,
+        'subtasks', jsonb_build_array(jsonb_build_object('id', sa, 'title', 'SA', 'position', 0))),
+      jsonb_build_object('id', cb, 'title', 'CB', 'dayCategory', 'hack', 'estimatedMinutes', -3))))));
+  ok := (r->>'success')::boolean
+    AND (SELECT day_category = 'creative' AND estimated_minutes = 25 FROM public.cards WHERE id = ca)
+    AND (SELECT day_category IS NULL AND estimated_minutes IS NULL FROM public.cards WHERE id = cb);
+  res := res || jsonb_build_object('caso', '9b categoria do Diário gravada', 'ok', ok, 'r', r);
+
   -- 10) dono reordena B por UPDATE direto: vale
   UPDATE public.boards SET position = 3 WHERE id = bb;
   ok := (SELECT position FROM public.boards WHERE id = bb) = 3;

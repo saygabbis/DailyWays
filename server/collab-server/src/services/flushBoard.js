@@ -27,6 +27,8 @@ export function boardToRpcPayload(board) {
         isAllDay: card.isAllDay ?? true,
         recurrenceRule: card.recurrenceRule ?? null,
         myDay: card.myDay ?? false,
+        dayCategory: card.dayCategory ?? null,
+        estimatedMinutes: card.estimatedMinutes ?? null,
         labels: Array.isArray(card.labels) ? card.labels : [],
         color: card.color ?? null,
         coverAttachmentId: card.coverAttachmentId ?? null,

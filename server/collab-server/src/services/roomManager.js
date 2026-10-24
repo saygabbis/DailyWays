@@ -1,5 +1,6 @@
 import { createOpIdTracker } from './opIdTracker.js';
-import { noteRoomFlushContext } from './roomFlushContext.js';
+import { isAuthFlushError, noteRoomFlushContext, rotateRoomFlushToken } from './roomFlushContext.js';
+import { prepareBoardOp } from './applyBoardOp.js';
 import {
   applyRoomOp,
   flushRoomState,
@@ -154,6 +155,8 @@ export class RoomManager {
       }
     } catch (err) {
       recordFlushError(room, roomId, err);
+      // Token do editor expirou/foi revogado: tenta logo com o de outro editor da sala.
+      if (isAuthFlushError(err) && rotateRoomFlushToken(room)) room.flushErrorCount = 0;
       this._scheduleFlushRetry(roomId, room);
     } finally {
       room.flushInFlight = false;
@@ -174,11 +177,11 @@ export class RoomManager {
   }
 
   /** Sala de board vazia e limpa há um tempo → recarrega do banco (ver IDLE_BOARD_RELOAD_MS). */
-  async refreshIdleBoardRoom(roomId, { accessToken } = {}) {
+  async refreshIdleBoardRoom(roomId, { accessToken, maxAgeMs = IDLE_BOARD_RELOAD_MS } = {}) {
     const room = this.rooms.get(roomId);
     if (!room || room.kind !== 'board' || !accessToken) return room;
     const idle = room.clientCount === 0 && !room.dirty && !room.flushInFlight;
-    const stale = Date.now() - (room.loadedAt || 0) > IDLE_BOARD_RELOAD_MS;
+    const stale = Date.now() - (room.loadedAt || 0) > maxAgeMs;
     if (!idle || !stale) return room;
     const data = await loadRoomState(roomId, { accessToken });
     if (data?.board && room.clientCount === 0 && !room.dirty && !room.flushInFlight) {
@@ -220,8 +223,13 @@ export class RoomManager {
     return false;
   }
 
-  async applyOp(roomId, op, { accessToken, userId } = {}) {
+  /**
+   * Aplica a op e devolve a versão que foi de fato aplicada (`op`): para board, já saneada e com
+   * ids completos — é ela que deve ser transmitida para a sala.
+   */
+  async applyOp(roomId, incomingOp, { accessToken, userId } = {}) {
     const room = await this.getOrLoad(roomId, { accessToken });
+    const op = room.kind === 'board' ? prepareBoardOp(room, incomingOp) : incomingOp;
     if (accessToken || userId) {
       noteRoomFlushContext(room, { accessToken, userId });
     }
@@ -229,7 +237,7 @@ export class RoomManager {
     if (!room.seenOpIds) room.seenOpIds = createOpIdTracker(5000);
     const seen = room.seenOpIds;
     if (seen.has(op.opId)) {
-      return { ok: true, duplicate: true, revision: room.revision };
+      return { ok: true, duplicate: true, revision: room.revision, op };
     }
     seen.add(op.opId);
 
@@ -243,7 +251,7 @@ export class RoomManager {
       }
       room.lastActivity = Date.now();
     }
-    return { ...result, revision: room.revision };
+    return { ...result, revision: room.revision, op };
   }
 
   setPresence(roomId, userId, payload, socketId = null) {

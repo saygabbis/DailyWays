@@ -31,6 +31,8 @@ export const CLIENT_EVENTS = {
   /** Op de board sem entrar na sala (edição a partir de outra vista: Importante, Diário…). */
   BOARD_OP: 'board:op',
   PRESENCE: 'presence:update',
+  /** Token renovado (TOKEN_REFRESHED) sem reconectar o socket. */
+  AUTH_REFRESH: 'auth:refresh',
 };
 
 export const SERVER_EVENTS = {

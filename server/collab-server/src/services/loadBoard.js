@@ -29,6 +29,8 @@ function mapBoard(row, lists, cardsByList, subtasksByCard) {
         isAllDay: c.is_all_day ?? true,
         recurrenceRule: c.recurrence_rule,
         myDay: c.my_day ?? false,
+        dayCategory: c.day_category ?? null,
+        estimatedMinutes: c.estimated_minutes ?? null,
         color: c.color,
         coverAttachmentId: c.cover_attachment_id,
         completed: c.completed ?? false,
@@ -83,7 +85,7 @@ export async function loadBoardFromDb(boardId, accessToken) {
   if (listIds.length) {
     const { data: cards } = await db
       .from('cards')
-      .select('id, list_id, title, description, priority, due_date, start_date, is_all_day, recurrence_rule, my_day, labels, color, cover_attachment_id, created_at, updated_at, completed, position')
+      .select('id, list_id, title, description, priority, due_date, start_date, is_all_day, recurrence_rule, my_day, day_category, estimated_minutes, labels, color, cover_attachment_id, created_at, updated_at, completed, position')
       .in('list_id', listIds)
       .order('position', { ascending: true });
     cardsData = cards || [];
