@@ -1,5 +1,7 @@
 /** Ações da sidebar: criar/renomear/duplicar/apagar boards, spaces e pastas, seleção em massa e menus de contexto. */
-import { insertBoardFull, deleteBoard, removeMember, isBoardOwnerClient } from '../../services/boardService';
+import { insertBoardFull, deleteBoard } from '../../services/boardService';
+import { removeMember } from '../../services/boardSharingService';
+import { isBoardOwnerClient } from '../../services/boardMappers';
 import { Edit3, Trash2, Copy, LayoutDashboard, MoreHorizontal, Settings2 } from 'lucide-react';
 import './Sidebar.css';
 import { uuidv4 } from '../../utils/uuid';

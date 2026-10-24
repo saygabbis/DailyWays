@@ -1,12 +1,6 @@
 import { useState, useEffect, useCallback, memo } from 'react';
 import { useApp } from '../../../context/AppContext';
-import {
-    fetchMyInvitations,
-    fetchMyInvitationHistory,
-    clearMyInvitationHistory,
-    acceptInvitation,
-    declineInvitation,
-} from '../../../services/boardService';
+import { fetchMyInvitations, fetchMyInvitationHistory, clearMyInvitationHistory, acceptInvitation, declineInvitation } from '../../../services/boardSharingService';
 import '../Settings.css';
 import '../AvatarCropper.css';
 

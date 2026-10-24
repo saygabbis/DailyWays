@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { useI18n } from '../../context/ThemeContext';
 import { useNotifications } from '../../hooks/useNotifications';
-import { acceptInvitation, declineInvitation } from '../../services/boardService';
+import { acceptInvitation, declineInvitation } from '../../services/boardSharingService';
 import { respondToContactRequest } from '../../services/contactsService';
 import NotificationDropdown from '../Notifications/NotificationDropdown';
 import BoardDetailsModal from '../Board/BoardDetailsModal';

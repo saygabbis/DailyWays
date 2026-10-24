@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { fetchMyInvitations } from './boardService';
+import { fetchMyInvitations } from './boardSharingService';
 
 function getReadIdsKey(userId) {
     return userId ? `dailyways_notifications_read_${userId}` : null;

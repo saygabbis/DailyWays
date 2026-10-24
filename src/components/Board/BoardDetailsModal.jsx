@@ -4,7 +4,8 @@ import { X, Save, Users, Mail, Shield, Trash2, ChevronDown, LogOut, Star } from 
 import { useApp } from '../../context/AppContext';
 import { useBoardCollabContext } from '../../collab/board/ops/BoardCollabContext.jsx';
 import { useAuth } from '../../context/AuthContext';
-import { fetchBoardMembers, inviteBoardMember, updateMemberRole, removeMember, isBoardOwnerClient, sortBoardMembersOwnerFirst } from '../../services/boardService';
+import { fetchBoardMembers, inviteBoardMember, updateMemberRole, removeMember } from '../../services/boardSharingService';
+import { isBoardOwnerClient, sortBoardMembersOwnerFirst } from '../../services/boardMappers';
 import { TEXT } from '@dailyways/limits';
 import './BoardDetailsModal.css';
 
