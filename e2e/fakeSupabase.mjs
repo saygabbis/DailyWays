@@ -245,6 +245,59 @@ export async function startFakeSupabase({ port = 54321, users = [], seed = '' } 
     return send(res, 404, { message: 'not found' });
   }
 
+  // ── Storage mínimo em memória (upload multipart, URL assinada, download) ──
+  const objects = new Map(); // "bucket/path" → { buf, type }
+  const CRLF2 = Buffer.from('\r\n\r\n');
+  function parseMultipartFile(buf, contentType) {
+    const m = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType || '');
+    if (!m) return { buf, type: contentType || 'application/octet-stream' };
+    const boundary = Buffer.from(`--${m[1] || m[2]}`);
+    let start = buf.indexOf(boundary);
+    while (start !== -1) {
+      const next = buf.indexOf(boundary, start + boundary.length);
+      if (next === -1) break;
+      const part = buf.subarray(start + boundary.length + 2, next - 2);
+      const sep = part.indexOf(CRLF2);
+      const headers = part.subarray(0, sep).toString();
+      if (/filename=/i.test(headers) || /name=""/.test(headers)) {
+        const type = (/content-type:\s*([^\r\n]+)/i.exec(headers) || [])[1] || 'application/octet-stream';
+        return { buf: Buffer.from(part.subarray(sep + 4)), type };
+      }
+      start = next;
+    }
+    return { buf, type: contentType };
+  }
+  async function handleStorage(req, res, url, raw, body) {
+    const rest = decodeURIComponent(url.pathname.replace(/^\/storage\/v1\//, ''));
+    const signBatch = /^object\/sign\/([^/]+)$/.exec(rest);
+    if (signBatch && req.method === 'POST') {
+      const bucket = signBatch[1];
+      return send(res, 200, (body?.paths || []).map((p) => (objects.has(`${bucket}/${p}`)
+        ? { path: p, signedURL: `/object/sign/${bucket}/${p}?token=e2e`, error: null }
+        : { path: p, signedURL: null, error: 'Either the object does not exist or you do not have access to it' })));
+    }
+    const sign = /^object\/sign\/([^/]+)\/(.+)$/.exec(rest);
+    if (sign) {
+      const key = `${sign[1]}/${sign[2]}`;
+      const obj = objects.get(key);
+      if (!obj) return send(res, 400, { statusCode: '404', error: 'not_found', message: 'Object not found' });
+      if (req.method === 'POST') return send(res, 200, { signedURL: `/object/sign/${key}?token=e2e` });
+      res.statusCode = 200;
+      res.setHeader('Content-Type', obj.type);
+      return res.end(obj.buf);
+    }
+    const put = /^object\/([^/]+)\/(.+)$/.exec(rest);
+    if (put && (req.method === 'POST' || req.method === 'PUT')) {
+      const key = `${put[1]}/${put[2]}`;
+      if (objects.has(key) && req.method === 'POST' && req.headers['x-upsert'] !== 'true') {
+        return send(res, 400, { statusCode: '409', error: 'Duplicate', message: 'The resource already exists' });
+      }
+      objects.set(key, parseMultipartFile(raw, req.headers['content-type']));
+      return send(res, 200, { Key: key, Id: key });
+    }
+    return send(res, 404, { message: 'not found' });
+  }
+
   function send(res, status, payload) {
     res.statusCode = status;
     if (payload === null || status === 204) return res.end();
@@ -260,10 +313,11 @@ export async function startFakeSupabase({ port = 54321, users = [], seed = '' } 
     res.setHeader('Access-Control-Expose-Headers', 'Content-Range');
     if (req.method === 'OPTIONS') return send(res, 204, null);
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    let raw = '';
-    for await (const chunk of req) raw += chunk;
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const raw = Buffer.concat(chunks);
     let body = null;
-    try { body = raw ? JSON.parse(raw) : null; } catch { body = null; }
+    try { body = raw.length && !String(req.headers['content-type'] || '').startsWith('multipart/') ? JSON.parse(raw.toString()) : null; } catch { body = null; }
     try {
       if (url.pathname.startsWith('/rest/v1/')) {
         stats.rest += 1;
@@ -271,6 +325,7 @@ export async function startFakeSupabase({ port = 54321, users = [], seed = '' } 
         return await handleRest(req, res, url, body);
       }
       if (url.pathname.startsWith('/auth/v1/')) return await handleAuth(req, res, url, body);
+      if (url.pathname.startsWith('/storage/v1/')) return await handleStorage(req, res, url, raw, body);
       return send(res, 404, { message: 'not found' });
     } catch (err) {
       return send(res, 500, { message: err.message });
@@ -281,6 +336,7 @@ export async function startFakeSupabase({ port = 54321, users = [], seed = '' } 
   return {
     db,
     stats,
+    objects,
     url: `http://127.0.0.1:${port}`,
     sessionFor: (id) => sessionFor(userById.get(id)),
     close: async () => {

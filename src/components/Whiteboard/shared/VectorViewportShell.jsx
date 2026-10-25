@@ -1,10 +1,5 @@
 import { useWhiteboardViewportZoom } from '../interaction/viewport/useWhiteboardViewportZoom';
-import { getRenderZoom, getSharpSvgLayout, WORLD_DIM_EPSILON } from './vectorViewport.js';
-
-/** Fator mundo → px do layout interno do shell (para tipografia/padding dos filhos). */
-export function useSharpRenderZoom() {
-    return getRenderZoom(useWhiteboardViewportZoom());
-}
+import { getSharpSvgLayout, WORLD_DIM_EPSILON } from './vectorViewport.js';
 
 /**
  * Renderiza filhos num espaço lógico (px de ecrã) com nitidez em qualquer zoom do canvas.

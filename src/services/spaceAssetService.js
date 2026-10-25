@@ -65,7 +65,10 @@ export async function resolveSpaceAssetUrl(storagePathOrLegacyUrl, { retries = 2
   if (cached) return cached;
 
   if (inflightResolves.has(path)) {
-    return inflightResolves.get(path);
+    const shared = await inflightResolves.get(path);
+    if (shared) return shared;
+    // o lote não trouxe esta: tenta sozinha abaixo (com retry)
+    if (inflightResolves.has(path)) return inflightResolves.get(path);
   }
 
   const promise = (async () => {
@@ -91,12 +94,33 @@ export async function resolveSpaceAssetUrl(storagePathOrLegacyUrl, { retries = 2
   return promise;
 }
 
-/** Pré-carrega URLs assinadas (cache + dedup) sem depender de montar ImageNode. */
-export function prefetchSpaceAssetPaths(paths) {
-  const unique = [...new Set((paths ?? []).filter(Boolean))];
-  for (const path of unique) {
-    if (!getCachedSpaceAssetUrl(path)) {
-      void resolveSpaceAssetUrl(path);
-    }
+/**
+ * Pré-carrega URLs assinadas da página inteira num pedido só (createSignedUrls), em vez de um
+ * pedido por imagem. O que falhar no lote cai no caminho individual (com retry) quando o nó montar.
+ */
+export async function prefetchSpaceAssetPaths(paths) {
+  const missing = [...new Set((paths ?? []).filter(Boolean))].filter(
+    (p) => !getCachedSpaceAssetUrl(p) && !inflightResolves.has(p),
+  );
+  if (!missing.length) return;
+  for (let i = 0; i < missing.length; i += 100) {
+    const chunk = missing.slice(i, i + 100);
+    const pending = supabase.storage
+      .from(SPACE_ASSETS_BUCKET)
+      .createSignedUrls(chunk, SIGNED_URL_TTL_SECONDS)
+      .then(({ data }) => {
+        const byPath = new Map((data || []).map((row) => [row.path, row]));
+        return chunk.map((p) => {
+          const url = byPath.get(p)?.signedUrl || null;
+          if (url) signedUrlCache.set(p, { url, expiresAt: Date.now() + CACHE_REFRESH_MS });
+          return url;
+        });
+      })
+      .catch(() => chunk.map(() => null));
+    chunk.forEach((p, idx) => {
+      const one = pending.then((urls) => urls[idx]).finally(() => inflightResolves.delete(p));
+      inflightResolves.set(p, one);
+    });
+    await pending;
   }
 }

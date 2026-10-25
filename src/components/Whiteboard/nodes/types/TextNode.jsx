@@ -2,7 +2,8 @@ import BaseNode from './BaseNode';
 import { TEXT } from '@dailyways/limits';
 import { useEditableNodeField } from '../../interaction/hooks/useEditableNodeField';
 import { getTextStyleFromNode, scaleTextCss, textStyleToCss } from '../../shared/textStyle';
-import VectorViewportShell, { useSharpRenderZoom } from '../../shared/VectorViewportShell.jsx';
+import VectorViewportShell from '../../shared/VectorViewportShell.jsx';
+import { useSharpRenderZoom } from '../../interaction/viewport/useWhiteboardViewportZoom';
 
 export default function TextNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const text = node.data?.text ?? '';

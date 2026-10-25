@@ -1,3 +1,4 @@
+import { optimizeImageForUpload, thumbPathFor } from '../utils/imageOptimize';
 import { supabase } from './supabaseClient';
 import { uuidv4 } from '../utils/uuid';
 
@@ -265,18 +266,41 @@ import { validateFile, isImageFile } from '@dailyways/limits';
 import { resolveLimitError } from '../limits/messages.js';
 import { SPACE_ASSETS_BUCKET, resolveSpaceAssetUrl } from './spaceAssetService';
 
-export async function uploadSpaceAsset(spaceId, file, userId = null) {
-    if (!spaceId || !file) return { success: false, error: 'Missing spaceId or file' };
-    const image = isImageFile(file);
-    const fileCheck = validateFile(file, image ? 'whiteboardImage' : 'whiteboardFile');
+/** Miniaturas enviadas nesta sessão (o payload do nó de imagem guarda o caminho delas). */
+const uploadedThumbs = new Set();
+export function hasUploadedThumb(storagePath) {
+    return uploadedThumbs.has(storagePath);
+}
+
+export async function uploadSpaceAsset(spaceId, originalFile, userId = null) {
+    if (!spaceId || !originalFile) return { success: false, error: 'Missing spaceId or file' };
+    const image = isImageFile(originalFile);
+    const fileCheck = validateFile(originalFile, image ? 'whiteboardImage' : 'whiteboardFile');
     if (!fileCheck.ok) return { success: false, error: resolveLimitError(fileCheck) };
+    // Imagem grande: reduz/regrava em WebP e gera miniatura (canvas carrega bem menos dados).
+    const optimized = image ? await optimizeImageForUpload(originalFile) : { file: originalFile, thumb: null };
+    const file = optimized.file;
     const ext = file.name.split('.').pop() || 'bin';
     const path = `${spaceId}/${uuidv4()}.${ext}`;
     const { error } = await supabase.storage.from(SPACE_ASSETS_BUCKET).upload(path, file, {
-        cacheControl: '3600',
+        cacheControl: '31536000',
         upsert: false,
+        contentType: file.type || undefined,
     });
     if (error) return { success: false, error: error.message };
+    let thumbStoragePath = null;
+    if (optimized.thumb) {
+        const tp = thumbPathFor(path);
+        const { error: thumbErr } = await supabase.storage.from(SPACE_ASSETS_BUCKET).upload(tp, optimized.thumb, {
+            cacheControl: '31536000',
+            upsert: false,
+            contentType: 'image/webp',
+        });
+        if (!thumbErr) {
+            thumbStoragePath = tp;
+            uploadedThumbs.add(path);
+        }
+    }
     const url = await resolveSpaceAssetUrl(path);
     const { error: insertErr } = await supabase.from('space_assets').insert({
         space_id: spaceId,
@@ -286,6 +310,6 @@ export async function uploadSpaceAsset(spaceId, file, userId = null) {
         created_by: userId,
     });
     if (insertErr) console.warn('[whiteboardService] space_assets insert failed', insertErr);
-    return { success: true, url, path, storagePath: path };
+    return { success: true, url, path, storagePath: path, thumbStoragePath };
 }
 

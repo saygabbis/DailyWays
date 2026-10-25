@@ -53,6 +53,9 @@ function getSecurityHeaders(env = {}) {
       .filter((v) => v && /^https?:/.test(v))
       .flatMap(connectOrigins)
     if (extra.length) csp = csp.replace('connect-src ', `connect-src ${[...new Set(extra)].join(' ')} `)
+    // imagens do Storage vêm do Supabase do .env (em http no Supabase local / testes)
+    const supaOrigin = connectOrigins(env.VITE_SUPABASE_URL || '')[0]
+    if (supaOrigin?.startsWith('http:')) csp = csp.replace('img-src ', `img-src ${supaOrigin} `)
     headers['Content-Security-Policy'] = csp
     if (process.env.DW_CSP_REPORT_ONLY === '1') {
       delete headers['Content-Security-Policy']

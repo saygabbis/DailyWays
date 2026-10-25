@@ -12,6 +12,7 @@ export function usePageSpaceAssetPrefetch(pageNodes) {
       if (node.type === 'image') {
         const p = resolveSpaceAssetStoragePath(node);
         if (p) paths.push(p);
+        if (node.data?.thumbStoragePath) paths.push(node.data.thumbStoragePath);
       }
       const fill = node.style?.appearance?.fill;
       if (fill?.type === 'image') {

@@ -6,7 +6,8 @@ import { useCollabPatch } from '../../../../collab/space/ops/useCollabPatch';
 import { recordNodesMutation } from '../../core/history/whiteboardHistory';
 import { contrastingTextColor } from '../../../../utils/contrastingTextColor';
 import { getTextStyleFromNode, scaleTextCss, textStyleToCss } from '../../shared/textStyle';
-import VectorViewportShell, { useSharpRenderZoom } from '../../shared/VectorViewportShell.jsx';
+import VectorViewportShell from '../../shared/VectorViewportShell.jsx';
+import { useSharpRenderZoom } from '../../interaction/viewport/useWhiteboardViewportZoom';
 
 export default function StickyNoteNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const text = node.data?.text ?? '';

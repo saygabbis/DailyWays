@@ -12,8 +12,10 @@ const REFRESH_MS = 50 * 60 * 1000;
  * Resolve URL assinada para asset do whiteboard (storagePath ou url legada no nó).
  * Aceita nó completo ou { storagePath, url } (ex.: preenchimento de forma).
  */
-export function useSpaceAssetUrl(source) {
-  const storagePath = resolveSpaceAssetStoragePath(source);
+export function useSpaceAssetUrl(source, { thumb = false } = {}) {
+  // miniatura (quando existe) para imagem que aparece pequena na tela
+  const thumbPath = thumb ? source?.data?.thumbStoragePath ?? null : null;
+  const storagePath = thumbPath || resolveSpaceAssetStoragePath(source);
   const legacyUrl = source?.url ?? source?.imageUrl ?? source?.data?.url ?? null;
   const cachedUrl = storagePath ? getCachedSpaceAssetUrl(storagePath) : null;
 

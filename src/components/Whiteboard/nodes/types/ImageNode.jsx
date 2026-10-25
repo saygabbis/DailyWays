@@ -10,10 +10,19 @@ import { getMorphologyRadius } from '../../shared/imageOutlineMath';
 import { WORLD_DIM_EPSILON } from '../../shared/vectorViewport.js';
 import { resolveSpaceAssetStoragePath } from '../../../../services/spaceAssetService';
 
+const THUMB_EDGE_PX = 512;
+
 export default function ImageNode({ node, onNodePointerDown, onNodeContextMenu }) {
-    const url = useSpaceAssetUrl(node);
     const objectFit = getImageObjectFit(node);
     const zoom = useWhiteboardViewportZoom();
+    // Pequena na tela → miniatura. Ao aproximar troca pela original, mantendo a miniatura até ela chegar.
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    const screenEdge = Math.max(node.width ?? 0, node.height ?? 0) * zoom * dpr;
+    const wantsThumb = Boolean(node.data?.thumbStoragePath) && screenEdge <= THUMB_EDGE_PX;
+    const thumbUrl = useSpaceAssetUrl(node, { thumb: Boolean(node.data?.thumbStoragePath) });
+    const fullUrl = useSpaceAssetUrl(wantsThumb ? null : node);
+    const layers = [thumbUrl, wantsThumb ? null : fullUrl].filter(Boolean);
+    const url = layers[0] ?? null;
     const filterId = useId().replace(/:/g, '');
     const appearance = getAppearanceFromNode(node);
     const stroke = useMemo(() => appearance.stroke ?? {}, [appearance.stroke]);
@@ -81,17 +90,22 @@ export default function ImageNode({ node, onNodePointerDown, onNodeContextMenu }
                         aria-hidden
                     >
                         {filterDef && <defs>{filterDef}</defs>}
-                        <image
-                            href={url}
-                            x={0}
-                            y={0}
-                            width={w}
-                            height={h}
-                            preserveAspectRatio={preserveAspectRatio}
-                            opacity={opacity}
-                            crossOrigin="anonymous"
-                            filter={hasOutline && dilateR > 0 ? `url(#${filterId})` : undefined}
-                        />
+                        {/* miniatura embaixo, original por cima: trocar de resolução não pisca */}
+                        {layers.map((href) => (
+                            <image
+                                key={href}
+                                href={href}
+                                x={0}
+                                y={0}
+                                width={w}
+                                height={h}
+                                preserveAspectRatio={preserveAspectRatio}
+                                opacity={opacity}
+                                crossOrigin="anonymous"
+                                decoding="async"
+                                filter={hasOutline && dilateR > 0 ? `url(#${filterId})` : undefined}
+                            />
+                        ))}
                     </svg>
                 ) : (
                     <div className={`whiteboard-image-placeholder${isLoading ? ' is-loading' : ''}`}>

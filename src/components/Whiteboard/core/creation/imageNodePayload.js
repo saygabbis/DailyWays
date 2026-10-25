@@ -1,6 +1,8 @@
 import { getDefaultNodePayload } from '../nodeDefaults.js';
 import { getDefaultAppearanceStyle } from '../../shared/appearanceStyle.js';
 import { clampViewportZoom } from '../../interaction/viewport/viewportLimits.js';
+import { hasUploadedThumb } from '../../../../services/whiteboardService';
+import { thumbPathFor } from '../../../../utils/imageOptimize';
 
 export function formatFileSizeBytes(bytes) {
     if (bytes == null) return '';
@@ -77,6 +79,7 @@ export async function buildImageNodePayload(
     payload.data = {
         ...(payload.data || {}),
         storagePath: path,
+        thumbStoragePath: path && hasUploadedThumb(path) ? thumbPathFor(path) : null,
         url: path ? null : urlOrPath,
         filename: file.name,
         size: formatFileSizeBytes(file.size),

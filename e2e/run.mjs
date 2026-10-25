@@ -21,11 +21,13 @@ const U2 = { id: '00000000-0000-4000-8000-0000000000b2', username: 'amiga-e2e', 
 const BOARD = '10000000-0000-4000-8000-0000000000e2';
 const LIST_A = '20000000-0000-4000-8000-0000000000a1';
 const LIST_B = '20000000-0000-4000-8000-0000000000b1';
+const SPACE = '40000000-0000-4000-8000-0000000000e2';
 
 const SEED = `
   INSERT INTO public.boards (id, owner_id, title, position) VALUES ('${BOARD}', '${U1.id}', 'Board E2E', 0);
   INSERT INTO public.board_members (board_id, user_id, role) VALUES ('${BOARD}', '${U1.id}', 'owner'), ('${BOARD}', '${U2.id}', 'editor');
   INSERT INTO public.lists (id, board_id, title, position) VALUES ('${LIST_A}', '${BOARD}', 'Lista A', 0), ('${LIST_B}', '${BOARD}', 'Lista B', 1);
+  INSERT INTO public.spaces (id, owner_id, title, emoji, position) VALUES ('${SPACE}', '${U1.id}', 'Space E2E', '🧪', 0);
 `;
 
 const results = [];
@@ -178,6 +180,39 @@ async function main() {
       await addCard(b, 'Lista B', 'Depois de voltar');
       await waitFor(() => dbCard('Depois de voltar'), 10000, 'card pós-retorno no banco');
       if (!(await dbCard('Feito offline'))) throw new Error('card do fallback sumiu depois que o collab voltou');
+    });
+
+    await check('imagem grande no Space: sobe reduzida (WebP ≤ 2560 px) com miniatura e aparece', async () => {
+      await a.locator('.sidebar').getByText('Space E2E').first().click();
+      await a.locator('.whiteboard-viewport').first().waitFor({ timeout: 15000 });
+      const b64 = await a.evaluate(() => {
+        const c = document.createElement('canvas');
+        c.width = 3000;
+        c.height = 2000;
+        const g = c.getContext('2d');
+        const grad = g.createLinearGradient(0, 0, 3000, 2000);
+        grad.addColorStop(0, '#7c3aed');
+        grad.addColorStop(1, '#22c55e');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 3000, 2000);
+        return c.toDataURL('image/png').split(',')[1];
+      });
+      await a.locator('input[type=file][accept="image/*"]').first().setInputFiles({ name: 'grande.png', mimeType: 'image/png', buffer: Buffer.from(b64, 'base64') });
+      await waitFor(() => [...supa.objects.keys()].some((k) => k.endsWith('.thumb.webp')), 15000, 'miniatura no storage');
+      const keys = [...supa.objects.keys()].filter((k) => k.startsWith(`space-assets/${SPACE}/`));
+      const main = keys.find((k) => !k.endsWith('.thumb.webp'));
+      if (!main?.endsWith('.webp')) throw new Error(`arquivo principal não virou webp: ${keys.join(', ')}`);
+      const dims = await a.evaluate(async (bytes) => {
+        const bmp = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: 'image/webp' }));
+        return [bmp.width, bmp.height];
+      }, [...supa.objects.get(main).buf]);
+      if (Math.max(...dims) > 2560) throw new Error(`não reduziu: ${dims}`);
+      await waitFor(async () => {
+        const r = (await supa.db.query(`SELECT data_json FROM public.space_nodes WHERE space_id = $1 AND type = 'image'`, [SPACE])).rows[0];
+        const data = typeof r?.data_json === 'string' ? JSON.parse(r.data_json) : r?.data_json;
+        return data?.thumbStoragePath?.endsWith('.thumb.webp');
+      }, 10000, 'nó com thumbStoragePath no banco');
+      await waitFor(() => a.locator('.whiteboard-image-svg image').first().isVisible(), 10000, 'imagem visível no canvas');
     });
 
     await check('nenhum erro de página nem bloqueio da CSP nos dois navegadores', async () => {
