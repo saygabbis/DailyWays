@@ -42,7 +42,11 @@ import {
     Link as LinkIcon,
     Upload,
     ChevronDown,
+    ChevronRight,
     Ban,
+    MoreHorizontal,
+    CalendarDays,
+    Palette,
 } from 'lucide-react';
 import './TaskDetail.css';
 import { uuidv4 } from '../../utils/uuid';
@@ -78,13 +82,15 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const [commentFocused, setCommentFocused] = useState(false);
     const [remoteSync] = useState(createRemoteSyncLock);
 
-    const liveCard = (() => {
-        const board = state.boards.find(b => b.id === boardId);
-        if (!board) return card;
-        const list = board.lists.find(l => l.id === listId);
-        if (!list) return card;
-        return list.cards.find(c => c.id === card.id) || card;
-    })();
+    const liveBoard = state.boards.find(b => b.id === boardId) || null;
+    // procura o card em todas as listas: se alguém o moveu, o modal continua acompanhando
+    const liveList = liveBoard?.lists.find(l => l.cards.some(c => c.id === card.id))
+        || liveBoard?.lists.find(l => l.id === listId)
+        || null;
+    const liveCard = liveList?.cards.find(c => c.id === card.id) || card;
+    const [showMenu, setShowMenu] = useState(false);
+    const menuRef = useRef(null);
+    const titleRef = useRef(null);
 
     // O modal é montado com key={card.id}: trocar de card remonta, então os valores iniciais bastam.
     const lastPersistedRef = useRef(snapshotFromCard(liveCard));
@@ -116,7 +122,6 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
     const domains = useTaskCardDomains({ card, liveCard, boardId, listId, user, collabDispatch, showConfirm, commentBody, setCommentBody });
     const {
         coverAttachment,
-        showLinkForm,
         setShowLinkForm,
         uploading,
         setShowCoverPanel,
@@ -401,6 +406,14 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         const onKey = async (e) => {
             const mod = e.ctrlKey || e.metaKey;
             const key = e.key?.toLowerCase?.() || e.key;
+            const typing = e.target?.closest?.('input, textarea, select, [contenteditable="true"]');
+            if (e.key === 'Escape') {
+                if (showMenu) { setShowMenu(false); return; }
+                handleClose();
+                return;
+            }
+            // digitando: Ctrl+Z desfaz o texto e Shift+Backspace apaga letra (não o card)
+            if (typing) return;
 
             if (mod && key === 'z') {
                 e.preventDefault();
@@ -419,13 +432,40 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                 e.preventDefault();
                 e.stopPropagation();
                 handleDelete({ defaultPermanentChecked: true });
-                return;
             }
-            if (e.key === 'Escape') handleClose();
         };
         document.addEventListener('keydown', onKey, true);
         return () => document.removeEventListener('keydown', onKey, true);
-    }, [handleClose, boardUndo, boardRedo, handleDelete]);
+    }, [handleClose, boardUndo, boardRedo, handleDelete, showMenu]);
+
+    // título cresce em linhas em vez de cortar
+    useEffect(() => {
+        const el = titleRef.current;
+        if (!el) return;
+        el.style.height = 'auto';
+        el.style.height = `${el.scrollHeight}px`;
+    }, [title]);
+
+    useEffect(() => {
+        if (!showMenu) return undefined;
+        const onDown = (e) => {
+            if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false);
+        };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [showMenu]);
+
+    const toggleMyDay = () => {
+        const next = !myDay;
+        applyDiscreteField(
+            {
+                myDay: next,
+                dayCategory: next ? (dayCategory || 'essential') : null,
+                estimatedMinutes: next && estimatedMinutes !== '' ? Number(estimatedMinutes) : null,
+            },
+            () => setMyDay(next),
+        );
+    };
 
     return createPortal(
         <>
@@ -433,6 +473,9 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
             <div
                 ref={modalRef}
                 className="task-detail-modal animate-scale-in-centered"
+                role="dialog"
+                aria-modal="true"
+                aria-label={title || 'Tarefa'}
                 onPointerLeave={handleModalPointerLeave}
             >
                 {collab?.connected && (
@@ -443,212 +486,164 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                         peerFilter={(p) => isPeerInTaskModal(p, card.id)}
                     />
                 )}
-                {coverAttachment?.publicUrl && (
-                    <div className="task-detail-cover">
-                        <img src={coverAttachment.publicUrl} alt={coverAttachment.fileName || liveCard.title} />
-                    </div>
-                )}
 
-                <div className="task-detail-header">
-                    <h2>Detalhes da Tarefa</h2>
-                    <button type="button" {...ph(hoverByEl, 'close', 'btn-icon')} onClick={handleClose} title="Fechar">
-                        <X size={20} />
-                    </button>
+                <div className="td-head">
+                    <span className="td-crumb" title={`${liveBoard?.title ?? ''} › ${liveList?.title ?? ''}`}>
+                        {liveBoard && <span className="td-crumb-board">{liveBoard.emoji} {liveBoard.title}</span>}
+                        {liveList && (
+                            <>
+                                <ChevronRight size={14} aria-hidden />
+                                <span className="td-crumb-list">{liveList.title}</span>
+                            </>
+                        )}
+                    </span>
+                    <div className="td-head-actions">
+                        <button
+                            type="button"
+                            {...ph(hoverByEl, 'quick-meu-dia', `td-chip-btn ${myDay ? 'is-on' : ''}`)}
+                            aria-pressed={Boolean(myDay)}
+                            onClick={toggleMyDay}
+                            title={myDay ? 'Tirar do Diário' : 'Adicionar ao Diário'}
+                        >
+                            <Sun size={15} aria-hidden />
+                            <span>{myDay ? 'No Diário' : 'Diário'}</span>
+                        </button>
+                        <div className="td-menu-wrap" ref={menuRef}>
+                            <button
+                                type="button"
+                                className="td-icon-btn"
+                                aria-haspopup="menu"
+                                aria-expanded={showMenu}
+                                aria-label="Mais ações"
+                                onClick={() => setShowMenu((v) => !v)}
+                            >
+                                <MoreHorizontal size={18} />
+                            </button>
+                            {showMenu && (
+                                <div className="td-menu" role="menu">
+                                    <button type="button" role="menuitem" onClick={() => { setShowMenu(false); fileInputRef.current?.click(); }} disabled={uploading}>
+                                        <Upload size={15} /> {uploading ? 'Enviando…' : 'Anexar arquivo'}
+                                    </button>
+                                    <button type="button" role="menuitem" onClick={() => { setShowMenu(false); setShowLinkForm(true); }}>
+                                        <LinkIcon size={15} /> Anexar link
+                                    </button>
+                                    <div className="td-menu-sep" />
+                                    <button type="button" role="menuitem" className="is-danger" onClick={() => { setShowMenu(false); handleDelete({ defaultPermanentChecked: false }); }}>
+                                        <Trash2 size={15} /> Excluir
+                                    </button>
+                                    <button type="button" role="menuitem" className="is-danger" title="Shift+Delete" onClick={() => { setShowMenu(false); handleDelete({ defaultPermanentChecked: true }); }}>
+                                        <Ban size={15} /> Excluir para sempre
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        <button type="button" {...ph(hoverByEl, 'close', 'td-icon-btn')} onClick={handleClose} aria-label="Fechar" title="Fechar (Esc)">
+                            <X size={18} />
+                        </button>
+                    </div>
+                    <input ref={fileInputRef} type="file" multiple hidden onChange={handleUploadFiles} />
                 </div>
 
                 <div className="task-detail-layout">
                     <div className="task-detail-body">
-                        <input
-                            type="text"
+                        {coverAttachment?.publicUrl && (
+                            <div className="task-detail-cover">
+                                <img src={coverAttachment.publicUrl} alt="" />
+                            </div>
+                        )}
+                        <textarea
+                            ref={titleRef}
+                            rows={1}
                             {...ph(hoverByEl, 'title', 'task-detail-title')}
                             value={title}
                             maxLength={TEXT.cardTitle}
-                            onChange={e => setTitle(e.target.value)}
+                            onChange={e => setTitle(e.target.value.replace(/\n/g, ' '))}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    e.currentTarget.blur();
+                                }
+                            }}
                             onFocus={() => setTitleFocused(true)}
                             onBlur={() => {
                                 setTitleFocused(false);
                                 flushPersist();
                             }}
-                            placeholder="Título da tarefa..."
+                            placeholder="Título da tarefa"
+                            aria-label="Título"
                         />
 
-                        <textarea
-                            {...ph(hoverByEl, 'description', 'task-detail-desc')}
-                            value={description}
-                            maxLength={TEXT.cardDescription}
-                            onChange={e => setDescription(e.target.value)}
-                            onFocus={() => setDescFocused(true)}
-                            onBlur={() => {
-                                setDescFocused(false);
-                                flushPersist();
-                            }}
-                            placeholder="Adicionar descrição..."
-                            rows={4}
-                        />
-
-                        <div className="task-detail-quick-actions">
-                            <button
-                                type="button"
-                                {...ph(hoverByEl, 'quick-meu-dia', `task-detail-quick-btn ${myDay ? 'active' : ''}`)}
-                                onClick={() => {
-                                    const next = !myDay;
-                                    applyDiscreteField(
-                                        {
-                                            myDay: next,
-                                            dayCategory: next ? (dayCategory || 'essential') : null,
-                                            estimatedMinutes: next && estimatedMinutes !== ''
-                                                ? Number(estimatedMinutes)
-                                                : null,
-                                        },
-                                        () => setMyDay(next),
-                                    );
-                                }}
-                            >
-                                <Sun size={16} />
-                                <span>{myDay ? 'Meu Dia ✓' : 'Meu Dia'}</span>
-                            </button>
-                            {myDay && (
-                                <div className="task-detail-mission-meta">
-                                    <label className="task-detail-mission-label">Categoria do dia</label>
-                                    <div className="task-detail-mission-cats">
-                                        {[
-                                            { id: 'essential', label: '⚡ Obrigatório' },
-                                            { id: 'creative', label: '🎨 Criativo' },
-                                            { id: 'self', label: '💛 Você' },
-                                        ].map(cat => (
+                        <div className="td-props">
+                            <div className="td-prop">
+                                <span className="td-prop-label"><AlertCircle size={15} aria-hidden /> Prioridade</span>
+                                <div className="td-prop-value">
+                                    <div className="task-detail-priority-grid" role="radiogroup" aria-label="Prioridade">
+                                        {PRIORITY_OPTIONS.map(p => (
                                             <button
-                                                key={cat.id}
+                                                key={p.value}
                                                 type="button"
-                                                className={`task-detail-mission-cat ${dayCategory === cat.id ? 'active' : ''}`}
-                                                onClick={() => applyDiscreteField(
-                                                    { dayCategory: cat.id },
-                                                    () => setDayCategory(cat.id),
+                                                role="radio"
+                                                aria-checked={priority === p.value}
+                                                {...ph(
+                                                    hoverByEl,
+                                                    `priority-${p.value}`,
+                                                    `task-detail-priority-btn ${priority === p.value ? 'active' : ''}`,
+                                                    { '--priority-color': p.color },
                                                 )}
+                                                onClick={() => applyDiscreteField({ priority: p.value }, () => setPriority(p.value))}
                                             >
-                                                {cat.label}
+                                                {p.label}
                                             </button>
                                         ))}
                                     </div>
-                                    <label className="task-detail-mission-label" htmlFor="task-estimated-min">Tempo estimado (min)</label>
-                                    <input
-                                        id="task-estimated-min"
-                                        type="number"
-                                        min="0"
-                                        className="task-detail-mission-time-input"
-                                        value={estimatedMinutes}
-                                        onBlur={() => {
-                                            const mins = estimatedMinutes !== '' && estimatedMinutes != null
-                                                ? Number(estimatedMinutes)
-                                                : null;
-                                            persistCardSnapshot({
-                                                estimatedMinutes: Number.isFinite(mins) ? mins : null,
-                                            });
-                                        }}
-                                        onChange={(e) => setEstimatedMinutes(e.target.value)}
-                                        placeholder="ex: 35"
+                                </div>
+                            </div>
+
+                            <div className="td-prop td-prop--dates">
+                                <span className="td-prop-label"><CalendarDays size={15} aria-hidden /> Datas</span>
+                                <div className="td-prop-value td-dates">
+                                    <TaskDateTimeField
+                                        label="Início"
+                                        value={startDate}
+                                        onChange={(v) => applyDiscreteField({ startDate: v || null }, () => setStartDate(v))}
+                                        isAllDay={isAllDay}
+                                        onToggleAllDay={() => applyDiscreteField({ isAllDay: !isAllDay }, () => setIsAllDay((prev) => !prev))}
+                                        hoverByEl={hoverByEl}
+                                        presenceKey="inicio"
+                                    />
+                                    <TaskDateTimeField
+                                        label="Fim"
+                                        value={dueDate}
+                                        onChange={(v) => applyDiscreteField({ dueDate: v || null }, () => setDueDate(v))}
+                                        isAllDay={isAllDay}
+                                        onToggleAllDay={() => applyDiscreteField({ isAllDay: !isAllDay }, () => setIsAllDay((prev) => !prev))}
+                                        hoverByEl={hoverByEl}
+                                        presenceKey="fim"
                                     />
                                 </div>
-                            )}
-                            <button
-                                type="button"
-                                {...ph(hoverByEl, 'quick-arquivo', 'task-detail-quick-btn')}
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={uploading}
-                            >
-                                <Upload size={16} />
-                                <span>{uploading ? 'Enviando...' : 'Adicionar arquivo'}</span>
-                            </button>
-                            <button
-                                type="button"
-                                {...ph(hoverByEl, 'quick-link', `task-detail-quick-btn ${showLinkForm ? 'active' : ''}`)}
-                                onClick={() => setShowLinkForm(prev => !prev)}
-                            >
-                                <LinkIcon size={16} />
-                                <span>Adicionar link</span>
-                            </button>
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                multiple
-                                hidden
-                                onChange={handleUploadFiles}
-                            />
-                        </div>
-
-                        <div className="task-detail-field" style={{ marginTop: 10 }}>
-                            <label><Tag size={15} /> Cor do card</label>
-                            <div className="task-detail-color-row">
-                                {[null, '#6b7280', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899', '__glass__'].map((c) => {
-                                    const isGlass = c === '__glass__';
-                                    const key = c ?? (isGlass ? 'glass' : 'none');
-                                    const isActive = cardColor === c;
-                                    return (
-                                        <button
-                                            key={key}
-                                            type="button"
-                                            {...ph(
-                                                hoverByEl,
-                                                `color-${key}`,
-                                                `task-detail-color-chip ${isActive ? 'active' : ''} ${!c ? 'none' : ''} ${isGlass ? 'glass' : ''}`,
-                                                !isGlass && c ? { background: c } : {},
-                                            )}
-                                            title={isGlass ? 'Vidro (usa a cor da lista)' : (c ?? 'Sem cor')}
-                                            onClick={() => applyDiscreteField(
-                                                { color: c || null },
-                                                () => setCardColor(c),
-                                            )}
-                                        >
-                                            {isGlass && <span className="task-detail-color-glass-dot" />}
-                                        </button>
-                                    );
-                                })}
                             </div>
-                        </div>
 
-                        <div className="task-detail-fields task-detail-fields-compact">
-                            <TaskDateTimeField
-                                label="Início"
-                                value={startDate}
-                                onChange={(v) => applyDiscreteField({ startDate: v || null }, () => setStartDate(v))}
-                                isAllDay={isAllDay}
-                                onToggleAllDay={() => applyDiscreteField(
-                                    { isAllDay: !isAllDay },
-                                    () => setIsAllDay((prev) => !prev),
-                                )}
-                                hoverByEl={hoverByEl}
-                                presenceKey="inicio"
-                            />
-
-                            <TaskDateTimeField
-                                label="Fim"
-                                value={dueDate}
-                                onChange={(v) => applyDiscreteField({ dueDate: v || null }, () => setDueDate(v))}
-                                isAllDay={isAllDay}
-                                onToggleAllDay={() => applyDiscreteField(
-                                    { isAllDay: !isAllDay },
-                                    () => setIsAllDay((prev) => !prev),
-                                )}
-                                hoverByEl={hoverByEl}
-                                presenceKey="fim"
-                            />
-
-                            <div className="task-detail-field task-detail-field-full">
-                                <label><Repeat size={15} /> Repetir</label>
-                                <div className="task-detail-menu-wrap" ref={recurrenceMenuRef}>
+                            <div className="td-prop">
+                                <span className="td-prop-label"><Repeat size={15} aria-hidden /> Repetir</span>
+                                <div className="td-prop-value task-detail-menu-wrap" ref={recurrenceMenuRef}>
                                     <button
                                         type="button"
                                         {...ph(hoverByEl, 'recurrence-trigger', 'task-detail-menu-trigger')}
                                         onClick={() => setShowRecurrenceMenu((prev) => !prev)}
+                                        aria-haspopup="listbox"
+                                        aria-expanded={showRecurrenceMenu}
                                     >
                                         <span>{recurrenceLabel}</span>
                                         <ChevronDown size={14} />
                                     </button>
                                     {showRecurrenceMenu && (
-                                        <div className="task-detail-menu-dropdown">
+                                        <div className="task-detail-menu-dropdown" role="listbox">
                                             {RECURRENCE_OPTIONS.map((option) => (
                                                 <button
                                                     key={option.value}
                                                     type="button"
+                                                    role="option"
+                                                    aria-selected={recurrenceRule === option.value}
                                                     {...ph(
                                                         hoverByEl,
                                                         `recurrence-${option.value}`,
@@ -656,10 +651,7 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                                     )}
                                                     onClick={() => {
                                                         const val = option.value;
-                                                        applyDiscreteField(
-                                                            { recurrenceRule: val === 'none' ? null : val },
-                                                            () => setRecurrenceRule(val),
-                                                        );
+                                                        applyDiscreteField({ recurrenceRule: val === 'none' ? null : val }, () => setRecurrenceRule(val));
                                                         setShowRecurrenceMenu(false);
                                                     }}
                                                 >
@@ -671,112 +663,182 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                                 </div>
                             </div>
 
-                            <div className="task-detail-field task-detail-field-full">
-                                <label><AlertCircle size={15} /> Prioridade</label>
-                                <div className="task-detail-priority-grid">
-                                    {PRIORITY_OPTIONS.map(p => (
-                                        <button
-                                            key={p.value}
-                                            type="button"
-                                            {...ph(
-                                                hoverByEl,
-                                                `priority-${p.value}`,
-                                                `task-detail-priority-btn ${priority === p.value ? 'active' : ''}`,
-                                                { '--priority-color': p.color },
-                                            )}
-                                            onClick={() => applyDiscreteField(
-                                                { priority: p.value },
-                                                () => setPriority(p.value),
-                                            )}
-                                        >
-                                            {p.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="task-detail-field">
-                            <label><Tag size={15} /> Labels</label>
-                            <div className="task-detail-labels">
-                                {LABEL_COLORS.map(l => (
-                                    <button
-                                        key={l.id}
-                                        type="button"
-                                        {...ph(
-                                            hoverByEl,
-                                            `label-${l.id}`,
-                                            `task-detail-label-btn ${labels.includes(l.id) ? 'selected' : ''}`,
-                                            { '--label-color': l.color },
-                                        )}
-                                        onClick={() => toggleLabel(l.id)}
-                                        title={l.name}
-                                    >
-                                        <span className="task-detail-label-dot" />
-                                        {l.name}
-                                    </button>
-                                ))}
-                                <button
-                                    type="button"
-                                    {...ph(hoverByEl, 'label-add', 'task-detail-label-btn add-btn')}
-                                    onClick={() => setShowAddLabel(!showAddLabel)}
-                                    title="Criar nova etiqueta"
-                                >
-                                    <Plus size={14} />
-                                </button>
-                            </div>
-
-                            {showAddLabel && (
-                                <div className="label-popover animate-pop-in label-popover-floating" ref={labelPopoverRef}>
-                                    <input
-                                        type="text"
-                                        placeholder="Nome da etiqueta..."
-                                        value={newLabelName}
-                                        maxLength={TEXT.labelName}
-                                        onChange={e => setNewLabelName(e.target.value)}
-                                        autoFocus
-                                    />
-                                    <div className="label-colors">
-                                        {['#ff6b6b', '#ffa06b', '#ffd93d', '#6bcb77', '#4d96ff', '#9b59b6', '#ff6b9d', '#2ec4b6', '#607d8b', '#34495e'].map(c => (
+                            <div className="td-prop">
+                                <span className="td-prop-label"><Tag size={15} aria-hidden /> Etiquetas</span>
+                                <div className="td-prop-value">
+                                    <div className="task-detail-labels">
+                                        {LABEL_COLORS.map(l => (
                                             <button
-                                                key={c}
-                                                className={`color-dot ${newLabelColor === c ? 'selected' : ''}`}
-                                                style={{ background: c }}
-                                                onClick={() => setNewLabelColor(c)}
-                                            />
+                                                key={l.id}
+                                                type="button"
+                                                aria-pressed={labels.includes(l.id)}
+                                                {...ph(
+                                                    hoverByEl,
+                                                    `label-${l.id}`,
+                                                    `task-detail-label-btn ${labels.includes(l.id) ? 'selected' : ''}`,
+                                                    { '--label-color': l.color },
+                                                )}
+                                                onClick={() => toggleLabel(l.id)}
+                                                title={l.name}
+                                            >
+                                                <span className="task-detail-label-dot" />
+                                                {l.name}
+                                            </button>
                                         ))}
                                         <button
                                             type="button"
-                                            className="color-dot color-dot-custom"
-                                            onClick={() => document.getElementById('task-label-custom-color')?.click()}
+                                            {...ph(hoverByEl, 'label-add', 'task-detail-label-btn add-btn')}
+                                            onClick={() => setShowAddLabel(!showAddLabel)}
+                                            aria-label="Criar etiqueta"
+                                            title="Criar etiqueta"
                                         >
-                                            <Plus size={12} />
+                                            <Plus size={14} />
                                         </button>
-                                        <input
-                                            id="task-label-custom-color"
-                                            type="color"
-                                            value={newLabelColor}
-                                            onChange={e => setNewLabelColor(e.target.value)}
-                                            className="color-input-tiny"
-                                        />
                                     </div>
-                                    <button className="btn btn-primary btn-sm btn-full" onClick={handleAddLabel}>
-                                        Criar Etiqueta
-                                    </button>
+                                    {showAddLabel && (
+                                        <div className="label-popover animate-pop-in label-popover-floating" ref={labelPopoverRef}>
+                                            <input
+                                                type="text"
+                                                placeholder="Nome da etiqueta..."
+                                                value={newLabelName}
+                                                maxLength={TEXT.labelName}
+                                                onChange={e => setNewLabelName(e.target.value)}
+                                                autoFocus
+                                            />
+                                            <div className="label-colors">
+                                                {['#ff6b6b', '#ffa06b', '#ffd93d', '#6bcb77', '#4d96ff', '#9b59b6', '#ff6b9d', '#2ec4b6', '#607d8b', '#34495e'].map(c => (
+                                                    <button
+                                                        key={c}
+                                                        type="button"
+                                                        aria-label={`Cor ${c}`}
+                                                        className={`color-dot ${newLabelColor === c ? 'selected' : ''}`}
+                                                        style={{ background: c }}
+                                                        onClick={() => setNewLabelColor(c)}
+                                                    />
+                                                ))}
+                                                <button
+                                                    type="button"
+                                                    aria-label="Outra cor"
+                                                    className="color-dot color-dot-custom"
+                                                    onClick={() => document.getElementById('task-label-custom-color')?.click()}
+                                                >
+                                                    <Plus size={12} />
+                                                </button>
+                                                <input
+                                                    id="task-label-custom-color"
+                                                    type="color"
+                                                    value={newLabelColor}
+                                                    onChange={e => setNewLabelColor(e.target.value)}
+                                                    className="color-input-tiny"
+                                                />
+                                            </div>
+                                            <button type="button" className="btn btn-primary btn-sm btn-full" onClick={handleAddLabel}>
+                                                Criar etiqueta
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="td-prop">
+                                <span className="td-prop-label"><Palette size={15} aria-hidden /> Cor</span>
+                                <div className="td-prop-value task-detail-color-row">
+                                    {[null, '#6b7280', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899', '__glass__'].map((c) => {
+                                        const isGlass = c === '__glass__';
+                                        const key = c ?? (isGlass ? 'glass' : 'none');
+                                        const isActive = cardColor === c;
+                                        return (
+                                            <button
+                                                key={key}
+                                                type="button"
+                                                aria-pressed={isActive}
+                                                aria-label={isGlass ? 'Vidro (cor da lista)' : (c ?? 'Sem cor')}
+                                                {...ph(
+                                                    hoverByEl,
+                                                    `color-${key}`,
+                                                    `task-detail-color-chip ${isActive ? 'active' : ''} ${!c ? 'none' : ''} ${isGlass ? 'glass' : ''}`,
+                                                    !isGlass && c ? { background: c } : {},
+                                                )}
+                                                title={isGlass ? 'Vidro (usa a cor da lista)' : (c ?? 'Sem cor')}
+                                                onClick={() => applyDiscreteField({ color: c || null }, () => setCardColor(c))}
+                                            >
+                                                {isGlass && <span className="task-detail-color-glass-dot" />}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {myDay && (
+                                <div className="td-prop">
+                                    <span className="td-prop-label"><Sun size={15} aria-hidden /> No Diário</span>
+                                    <div className="td-prop-value td-myday">
+                                        <div className="task-detail-mission-cats">
+                                            {[
+                                                { id: 'essential', label: '⚡ Obrigatório' },
+                                                { id: 'creative', label: '🎨 Criativo' },
+                                                { id: 'self', label: '💛 Você' },
+                                            ].map(cat => (
+                                                <button
+                                                    key={cat.id}
+                                                    type="button"
+                                                    aria-pressed={dayCategory === cat.id}
+                                                    className={`task-detail-mission-cat ${dayCategory === cat.id ? 'active' : ''}`}
+                                                    onClick={() => applyDiscreteField({ dayCategory: cat.id }, () => setDayCategory(cat.id))}
+                                                >
+                                                    {cat.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <label className="td-minutes">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                className="task-detail-mission-time-input"
+                                                value={estimatedMinutes}
+                                                onBlur={() => {
+                                                    const mins = estimatedMinutes !== '' && estimatedMinutes != null ? Number(estimatedMinutes) : null;
+                                                    persistCardSnapshot({ estimatedMinutes: Number.isFinite(mins) ? mins : null });
+                                                }}
+                                                onChange={(e) => setEstimatedMinutes(e.target.value)}
+                                                placeholder="35"
+                                                aria-label="Tempo estimado em minutos"
+                                            />
+                                            <span>min</span>
+                                        </label>
+                                    </div>
                                 </div>
                             )}
                         </div>
 
-                        <TaskAttachmentsSection domains={domains} fileInputRef={fileInputRef} />
+                        <section className="td-section">
+                            <h3 className="td-section-title">Descrição</h3>
+                            <textarea
+                                {...ph(hoverByEl, 'description', 'task-detail-desc')}
+                                value={description}
+                                maxLength={TEXT.cardDescription}
+                                onChange={e => setDescription(e.target.value)}
+                                onFocus={() => setDescFocused(true)}
+                                onBlur={() => {
+                                    setDescFocused(false);
+                                    flushPersist();
+                                }}
+                                placeholder="Detalhes, contexto, links…"
+                                rows={4}
+                                aria-label="Descrição"
+                            />
+                        </section>
 
                         <TaskSubtasksSection
                             subtasks={liveCard.subtasks || []}
                             boardId={boardId}
-                            listId={listId}
+                            listId={liveList?.id ?? listId}
                             cardId={card.id}
                             collabDispatch={collabDispatch}
                             hoverByEl={hoverByEl}
                         />
+
+                        <TaskAttachmentsSection domains={domains} fileInputRef={fileInputRef} />
                     </div>
 
                     <TaskDetailSidebar
@@ -789,29 +851,6 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
                         setCommentBody={setCommentBody}
                         setCommentFocused={setCommentFocused}
                     />
-                </div>
-
-                <div className="task-detail-footer">
-                    <div className="task-detail-footer-actions">
-                        <button
-                            type="button"
-                            {...ph(hoverByEl, 'delete', 'btn btn-danger btn-sm')}
-                            onClick={() => handleDelete({ defaultPermanentChecked: false })}
-                        >
-                            <Trash2 size={14} /> Deletar
-                        </button>
-                        <button
-                            type="button"
-                            className="btn btn-ghost btn-sm task-detail-delete-permanent"
-                            onClick={() => handleDelete({ defaultPermanentChecked: true })}
-                            title="Eliminar para sempre (Shift+Delete)"
-                        >
-                            <Ban size={14} /> Eliminar para sempre
-                        </button>
-                    </div>
-                    <div className="task-detail-footer-info">
-                        Ctrl+Z desfaz por ação · Shift+Delete elimina sem restaurar
-                    </div>
                 </div>
             </div>
         </>,

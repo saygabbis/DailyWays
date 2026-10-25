@@ -162,6 +162,12 @@ async function main() {
     await check('clique no card ainda abre o card (arrastar não engole o clique)', async () => {
       await cardEl(a, 'Simultâneo A').click();
       await waitFor(() => a.locator('.task-detail-modal').first().isVisible(), 5000, 'modal aberto');
+      // apagar letra com Shift+Backspace no título não pode excluir o card
+      await a.locator('.task-detail-title').click();
+      await a.keyboard.press('End');
+      await a.keyboard.press('Shift+Backspace');
+      await a.waitForTimeout(400);
+      if (await a.locator('.confirm-modal, [role=alertdialog]').first().isVisible().catch(() => false)) throw new Error('abriu confirmação de excluir');
       await a.keyboard.press('Escape');
       await waitFor(async () => !(await a.locator('.task-detail-modal').first().isVisible().catch(() => false)), 5000, 'modal fechado');
     });
