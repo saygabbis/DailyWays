@@ -139,6 +139,19 @@ async function main() {
       await waitFor(async () => (await b.locator('.board-list-title').first().innerText()).includes('Lista B'), 8000, 'B ver a ordem nova');
     });
 
+    await check('selecionar duas colunas (Ctrl+clique) e pintar as duas de uma vez', async () => {
+      await a.locator('.board-list-title', { hasText: 'Lista A' }).first().click({ modifiers: ['Control'] });
+      await a.locator('.board-list-title', { hasText: 'Lista B' }).first().click({ modifiers: ['Control'] });
+      await waitFor(() => a.getByRole('toolbar', { name: 'Colunas selecionadas' }).getByText('2 colunas').isVisible(), 5000, 'barra com 2 colunas');
+      await a.getByRole('button', { name: 'Cor #22c55e' }).click();
+      await waitFor(async () => {
+        const rows = (await supa.db.query('SELECT color FROM public.lists WHERE board_id = $1', [BOARD])).rows;
+        return rows.length === 2 && rows.every((r) => r.color === '#22c55e');
+      }, 8000, 'as duas listas verdes no banco');
+      await a.keyboard.press('Escape');
+      await waitFor(async () => !(await a.getByRole('toolbar', { name: 'Colunas selecionadas' }).isVisible().catch(() => false)), 3000, 'barra fechada');
+    });
+
     await check('soltar card em "Diário" na sidebar marca para hoje', async () => {
       await drag(a, cardEl(a, 'Mais um'), a.locator('.sb-today').getByRole('button', { name: /Diário/ }));
       try {

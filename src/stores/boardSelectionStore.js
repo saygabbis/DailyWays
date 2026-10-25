@@ -11,6 +11,19 @@ export const useBoardSelectionStore = create((set, get) => ({
     marqueePreviewCardIds: [],
     longPressPendingCardId: null,
     multiDragCardIds: [],
+    /** Colunas selecionadas (Ctrl/Cmd+clique no título) para ações em grupo. */
+    selectedListIds: [],
+
+    toggleList: (listId) => {
+        const { selectedListIds } = get();
+        set({
+            selectedListIds: selectedListIds.includes(listId)
+                ? selectedListIds.filter((id) => id !== listId)
+                : [...selectedListIds, listId],
+        });
+    },
+
+    clearLists: () => set({ selectedListIds: [] }),
 
     setBoard: (boardId) => {
         const prev = get().boardId;
@@ -23,6 +36,7 @@ export const useBoardSelectionStore = create((set, get) => ({
             longPressPendingCardId: null,
             multiDragCardIds: [],
             marqueePreviewCardIds: [],
+            selectedListIds: [],
         });
     },
 

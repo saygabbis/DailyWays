@@ -37,6 +37,7 @@ import { uuidv4 } from '../../utils/uuid';
 import { useBoardSelectionStore } from '../../stores/boardSelectionStore';
 import { useBoardRemoteSelection } from '../../hooks/useBoardRemoteSelection';
 import BoardMarqueeSelection from './BoardMarqueeSelection';
+import ListSelectionBar from './ListSelectionBar';
 import './Board.css';
 import { useRemoteDragMaps } from './hooks/useRemoteDragMaps';
 import { useBoardPanning } from './hooks/useBoardPanning';
@@ -433,6 +434,7 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
             onPointerMove={handleBoardPointerMove}
         >
             <BoardCollabStatusBanner />
+            <ListSelectionBar board={board} collabDispatch={collabDispatch} showConfirm={showConfirm} />
             {/* Board Toolbar - Floating & Draggable */}
             {showBoardToolbar && (
                 <div

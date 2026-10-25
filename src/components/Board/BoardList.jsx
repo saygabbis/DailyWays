@@ -9,7 +9,8 @@ import { useApp } from '../../context/useApp';
 import { useBoardCollabDispatch } from '../../collab/board/ops/useBoardCollab';
 import { useContextMenu } from '../Common/useContextMenu';
 import BoardCard from './BoardCard';
-import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Settings2, CheckCircle } from 'lucide-react';
+import { Plus, MoreHorizontal, Trash2, Edit3, SortAsc, Settings2, CheckCircle, CheckSquare } from 'lucide-react';
+import { useBoardSelectionStore } from '../../stores/boardSelectionStore';
 import { uuidv4 } from '../../utils/uuid';
 import { BOARD_UI_HOVER, boardUiHoverProps } from '../../collab/board/presence/boardUiHover.js';
 
@@ -62,6 +63,8 @@ export default function BoardList({
     shiftSelecting = false,
 }) {
     const { state, showConfirm } = useApp();
+    const isListSelected = useBoardSelectionStore((st) => st.selectedListIds.includes(list.id));
+    const toggleList = useBoardSelectionStore((st) => st.toggleList);
     const { collabDispatch } = useBoardCollabDispatch(boardId);
     const { showContextMenu } = useContextMenu();
     const [addingCard, setAddingCard] = useState(false);
@@ -141,6 +144,12 @@ export default function BoardList({
             action: () => setEditing(true),
         },
         {
+            label: isListSelected ? 'Tirar da seleção' : 'Selecionar coluna',
+            icon: <CheckSquare size={15} />,
+            shortcut: 'Ctrl+clique',
+            action: () => toggleList(list.id),
+        },
+        {
             label: 'Ordenar por prioridade',
             icon: <SortAsc size={15} />,
             action: () => {
@@ -200,7 +209,8 @@ export default function BoardList({
 
     return (
         <div
-            className={`board-list ${listHoverPeers.length ? 'board-list-remote-hover' : ''}`}
+            className={`board-list ${listHoverPeers.length ? 'board-list-remote-hover' : ''} ${isListSelected ? 'is-selected' : ''}`}
+            aria-selected={isListSelected || undefined}
             onContextMenu={handleListContextMenu}
             onMouseEnter={() => onListHover?.(list.id)}
             onMouseLeave={() => onPresenceHoverEnd?.()}
@@ -233,7 +243,19 @@ export default function BoardList({
                             />
                         </form>
                     ) : (
-                        <h3 className="board-list-title" onClick={() => setEditing(true)} style={{ cursor: 'pointer' }}>
+                        <h3
+                            className="board-list-title"
+                            onClick={(e) => {
+                                // Ctrl/Cmd+clique seleciona a coluna; clique simples renomeia
+                                if (e.ctrlKey || e.metaKey) {
+                                    e.stopPropagation();
+                                    toggleList(list.id);
+                                    return;
+                                }
+                                setEditing(true);
+                            }}
+                            style={{ cursor: 'pointer' }}
+                        >
                             {list.isCompletionList && <CheckCircle size={14} className="list-completion-icon" />}
                             {list.title}
                             <span className="board-list-count">{list.cards.length}</span>
