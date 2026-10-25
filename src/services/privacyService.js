@@ -61,6 +61,16 @@ export async function fetchBlockedUsers() {
   return { data: data || [], error: null };
 }
 
+/** Bloqueados com nome/@ (antes a tela mostrava só o começo do id). */
+export async function fetchBlockedUsersWithProfiles() {
+  const { data, error } = await fetchBlockedUsers();
+  if (error || !data.length) return { data, error };
+  const ids = data.map((b) => b.blocked_user_id);
+  const { data: profiles } = await supabase.from('profiles').select('id, username, name, photo_url').in('id', ids);
+  const byId = new Map((profiles || []).map((p) => [p.id, p]));
+  return { data: data.map((b) => ({ ...b, profile: byId.get(b.blocked_user_id) || null })), error: null };
+}
+
 export async function blockUser(blockedUserId) {
   if (!blockedUserId) return { success: false, error: 'Usuário inválido.' };
   const { data: { user } } = await supabase.auth.getUser();

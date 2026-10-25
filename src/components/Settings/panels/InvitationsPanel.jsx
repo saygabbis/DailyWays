@@ -21,7 +21,8 @@ function formatInviteDate(iso) {
 }
 
 const InvitationsPanel = memo(function InvitationsPanel() {
-    const { reloadBoards } = useApp();
+    const { reloadBoards, showConfirm } = useApp();
+    const [historyKind, setHistoryKind] = useState('all');
     const [loadingPending, setLoadingPending] = useState(true);
     const [loadingHistory, setLoadingHistory] = useState(true);
     const [clearingHistory, setClearingHistory] = useState(false);
@@ -79,9 +80,13 @@ const InvitationsPanel = memo(function InvitationsPanel() {
     };
 
     const handleClearHistory = async () => {
-        if (!window.confirm('Limpar todo o histórico de convites? Esta ação não pode ser desfeita.')) {
-            return;
-        }
+        const ok = await showConfirm({
+            title: 'Limpar histórico',
+            message: 'Apagar todo o histórico de convites? Isso não pode ser desfeito.',
+            confirmLabel: 'Limpar',
+            type: 'danger',
+        });
+        if (!ok) return;
         setError('');
         setClearingHistory(true);
         const res = await clearMyInvitationHistory();
@@ -163,21 +168,37 @@ const InvitationsPanel = memo(function InvitationsPanel() {
                             onClick={handleClearHistory}
                             disabled={clearingHistory}
                         >
-                            {clearingHistory ? 'A limpar...' : 'Limpar histórico'}
+                            {clearingHistory ? 'Limpando…' : 'Limpar histórico'}
                         </button>
                     )}
                 </div>
                 <p className="settings-section-desc">
-                    Registo de convites que aceitaste ou recusaste.
+                    Boards e spaces para os quais você foi convidado, com o que respondeu.
                 </p>
                 {loadingHistory && <p className="settings-muted">Carregando histórico...</p>}
                 {!loadingHistory && history.length === 0 && (
                     <p className="settings-muted">Ainda não há entradas no histórico.</p>
                 )}
                 {!loadingHistory && history.length > 0 && (
+                    <div className="settings-history-filter" role="tablist" aria-label="Filtrar histórico">
+                        {[['all', 'Todos'], ['board', 'Boards'], ['space', 'Spaces']].map(([id, label]) => (
+                            <button
+                                key={id}
+                                type="button"
+                                role="tab"
+                                aria-selected={historyKind === id}
+                                className={`settings-history-filter-btn ${historyKind === id ? 'is-active' : ''}`}
+                                onClick={() => setHistoryKind(id)}
+                            >
+                                {label} <span>{id === 'all' ? history.length : history.filter((h) => (h.kind || 'board') === id).length}</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+                {!loadingHistory && history.length > 0 && (
                     <div className="settings-invitations-history-scroll">
                         <ul className="settings-invitations-history">
-                            {history.map((inv) => (
+                            {history.filter((inv) => historyKind === 'all' || (inv.kind || 'board') === historyKind).map((inv) => (
                                 <li key={`${inv.kind}-${inv.id}`} className="settings-invitation-history-row">
                                     <div className="settings-invitation-history-main">
                                         <span className="settings-invitation-emoji" aria-hidden>
@@ -201,7 +222,7 @@ const InvitationsPanel = memo(function InvitationsPanel() {
                                     <span
                                         className={`settings-invitation-status settings-invitation-status--${inv.status}`}
                                     >
-                                        {inv.status === 'accepted' ? 'Aceite' : 'Recusado'}
+                                        {inv.status === 'accepted' ? 'Aceito' : 'Recusado'}
                                     </span>
                                 </li>
                             ))}

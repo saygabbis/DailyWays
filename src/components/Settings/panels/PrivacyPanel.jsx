@@ -1,12 +1,50 @@
 import { useState, useEffect, memo } from 'react';
 import { Save, Shield, Bell, ShieldCheck } from 'lucide-react';
-import { fetchPrivacySettings, updatePrivacySettings } from '../../../services/privacyService';
+import { fetchPrivacySettings, updatePrivacySettings, fetchBlockedUsersWithProfiles, unblockUser } from '../../../services/privacyService';
 
 const PRIVACY_ALLOW_OPTIONS = [
     { id: 'everyone', label: 'Todos' },
     { id: 'contacts_only', label: 'Apenas contatos' },
     { id: 'no_one', label: 'Ninguém' },
 ];
+
+/** Quem você bloqueou (veio da antiga aba Contatos das Configurações). */
+function BlockedUsersSection() {
+    const [blocked, setBlocked] = useState(null);
+    const [err, setErr] = useState('');
+    const load = async () => {
+        const { data, error } = await fetchBlockedUsersWithProfiles();
+        if (error) setErr(error);
+        setBlocked(data || []);
+    };
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- busca no Supabase ao montar
+    useEffect(() => { load(); }, []);
+    const unblock = async (id) => {
+        const { success, error } = await unblockUser(id);
+        if (!success) setErr(error || 'Erro ao desbloquear.');
+        load();
+    };
+    return (
+        <div className="settings-section">
+            <h3 className="settings-section-title">Bloqueados</h3>
+            {err && <p className="settings-error">{err}</p>}
+            {blocked === null && <p className="settings-muted">Carregando…</p>}
+            {blocked?.length === 0 && <p className="settings-field-hint">Você não bloqueou ninguém.</p>}
+            {blocked?.map((b) => (
+                <div key={b.blocked_user_id} className="settings-danger-card">
+                    <div>
+                        <strong>{b.profile?.name || b.profile?.username || 'Usuário'}</strong>
+                        <p>
+                            {b.profile?.username ? `@${b.profile.username} · ` : ''}
+                            bloqueado em {b.created_at ? new Date(b.created_at).toLocaleDateString('pt-BR') : '—'}
+                        </p>
+                    </div>
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => unblock(b.blocked_user_id)}>Desbloquear</button>
+                </div>
+            ))}
+        </div>
+    );
+}
 
 // ─────────────────────────────────────────────
 // PRIVACY PANEL
@@ -160,6 +198,8 @@ const PrivacyPanel = memo(function PrivacyPanel({ user }) {
                     {saved ? 'Salvo' : (saving ? 'Salvando…' : 'Salvar')}
                 </button>
             </div>
+
+            <BlockedUsersSection />
         </div>
     );
 });

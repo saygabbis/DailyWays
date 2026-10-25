@@ -13,10 +13,8 @@ import AppearancePanel from './panels/AppearancePanel';
 import AppPanel from './panels/AppPanel';
 import InvitationsPanel from './panels/InvitationsPanel';
 import LanguagePanel from './panels/LanguagePanel';
-import ContactsPanel from './panels/ContactsPanel';
 import PrivacyPanel from './panels/PrivacyPanel';
 
- // 2 rows × 5 columns
 
 // ─────────────────────────────────────────────
 // SETTINGS MODAL (thin shell — only holds tab state)
@@ -30,17 +28,31 @@ export default function SettingsModal({ onClose, initialTab = 'account' }) {
     const { theme, toggleTheme, setTheme, accentId, setAccent, ACCENT_PRESETS, THEME_PRESETS, fontId, setFont, FONT_PRESETS, language, setLanguage, animStyle, setAnimStyle, customAccentValue, setCustomAccent } = useTheme();
     const t = useI18n();
 
-    const [activeTab, setActiveTab] = useState(initialTab);
+    // 'contacts' saiu daqui (Contatos tem página própria; bloqueados foram para Privacidade)
+    const [activeTab, setActiveTab] = useState(initialTab === 'contacts' ? 'privacy' : initialTab);
 
-    const tabs = [
-        { id: 'account', label: t.stAccount, icon: User },
-        { id: 'security', label: t.stSecurity, icon: Shield },
-        { id: 'invitations', label: 'Convites', icon: Users },
-        { id: 'contacts', label: 'Contatos', icon: Users },
-        { id: 'privacy', label: 'Privacidade', icon: ShieldCheck },
-        { id: 'appearance', label: t.stAppearance, icon: Palette },
-        { id: 'app', label: t.stApp, icon: Smartphone },
-        { id: 'language', label: t.stLanguage, icon: Globe },
+    // Agrupadas: o que é seu, com quem você trabalha, como o app se comporta
+    const tabGroups = [
+        {
+            label: 'Conta',
+            tabs: [
+                { id: 'account', label: t.stAccount, icon: User },
+                { id: 'security', label: t.stSecurity, icon: Shield },
+                { id: 'privacy', label: 'Privacidade', icon: ShieldCheck },
+            ],
+        },
+        {
+            label: 'Colaboração',
+            tabs: [{ id: 'invitations', label: 'Convites', icon: Users }],
+        },
+        {
+            label: 'Preferências',
+            tabs: [
+                { id: 'appearance', label: t.stAppearance, icon: Palette },
+                { id: 'language', label: t.stLanguage, icon: Globe },
+                { id: 'app', label: t.stApp, icon: Smartphone },
+            ],
+        },
     ];
 
     // Close on Escape
@@ -54,7 +66,7 @@ export default function SettingsModal({ onClose, initialTab = 'account' }) {
         <>
             <div className="modal-backdrop" onClick={onClose} />
             <div className="settings-modal animate-scale-in-centered">
-                <button className="settings-modal-close btn-icon" onClick={onClose}>
+                <button type="button" className="settings-modal-close btn-icon" onClick={onClose} aria-label="Fechar">
                     <X size={20} />
                 </button>
 
@@ -65,19 +77,24 @@ export default function SettingsModal({ onClose, initialTab = 'account' }) {
                             <img src={['light', 'latte', 'ocean', 'nord'].includes(theme) ? logoBlack : logoWhite} alt="DailyWays" className="settings-logo-img" />
                             {t.settings}
                         </div>
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                type="button"
-                                className={`settings-tab ${activeTab === tab.id ? 'settings-tab-active' : ''}`}
-                                onClick={() => setActiveTab(tab.id)}
-                                aria-label={tab.label}
-                                title={tab.label}
-                            >
-                                <tab.icon size={18} className="settings-tab-icon" aria-hidden />
-                                <span className="settings-tab-label">{tab.label}</span>
-                                <ChevronRight size={14} className="settings-tab-arrow" aria-hidden />
-                            </button>
+                        {tabGroups.map((group) => (
+                            <div key={group.label} className="settings-tab-group" role="group" aria-label={group.label}>
+                                <div className="settings-tab-group-label">{group.label}</div>
+                                {group.tabs.map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        type="button"
+                                        className={`settings-tab ${activeTab === tab.id ? 'settings-tab-active' : ''}`}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        aria-current={activeTab === tab.id ? 'page' : undefined}
+                                        title={tab.label}
+                                    >
+                                        <tab.icon size={18} className="settings-tab-icon" aria-hidden />
+                                        <span className="settings-tab-label">{tab.label}</span>
+                                        <ChevronRight size={14} className="settings-tab-arrow" aria-hidden />
+                                    </button>
+                                ))}
+                            </div>
                         ))}
                     </div>
 
@@ -103,7 +120,6 @@ export default function SettingsModal({ onClose, initialTab = 'account' }) {
                                 t={t}
                             />
                         )}
-                        {activeTab === 'contacts' && <ContactsPanel user={user} />}
                         {activeTab === 'privacy' && <PrivacyPanel user={user} />}
                         {activeTab === 'appearance' && (
                             <AppearancePanel

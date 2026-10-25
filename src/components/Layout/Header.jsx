@@ -135,13 +135,11 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
         setShowNotifications(false);
         if (notification?.type === 'contact_request') {
             window.dispatchEvent(new CustomEvent('app-navigate-view', { detail: { view: 'contacts' } }));
-            onOpenSettings?.('contacts');
         } else if (
             notification?.type === 'contact_accepted'
             || notification?.type === 'contact_declined'
         ) {
             window.dispatchEvent(new CustomEvent('app-navigate-view', { detail: { view: 'contacts' } }));
-            onOpenSettings?.('contacts');
         } else if (notification?.type === 'chat_message') {
             window.dispatchEvent(new CustomEvent('app-chat-open', {
                 detail: {
