@@ -68,3 +68,11 @@
     outline: 2px solid var(--accent, #4d96ff);
     outline-offset: 1px;
 }
+
+.whiteboard-context-menu-kbd {
+    margin-left: auto;
+    padding-left: 12px;
+    font-family: inherit;
+    font-size: 10px;
+    color: var(--text-tertiary);
+}

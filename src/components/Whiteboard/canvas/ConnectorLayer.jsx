@@ -25,7 +25,7 @@ export default function ConnectorLayer() {
             const pathD = controlPoints
                 ? `M ${start.x} ${start.y} Q ${controlPoints[0].x} ${controlPoints[0].y} ${controlPoints[1].x} ${controlPoints[1].y} L ${end.x} ${end.y}`
                 : `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
-            return { id: conn.id, pathD, style: conn.style || {} };
+            return { id: conn.id, from: conn.fromNodeId, to: conn.toNodeId, pathD, style: conn.style || {} };
         });
     }, [connectors, nodesById]);
 
@@ -52,6 +52,8 @@ export default function ConnectorLayer() {
             {paths.map((p) => (
                 <path
                     key={p.id}
+                    data-connector-from={p.from}
+                    data-connector-to={p.to}
                     d={p.pathD}
                     fill="none"
                     stroke={p.style.stroke || 'var(--text-secondary)'}

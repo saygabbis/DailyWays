@@ -233,6 +233,24 @@ async function main() {
       await a.keyboard.press('Escape');
     });
 
+    await check('exportar a página do Space como PNG (Ctrl+Shift+E) baixa uma imagem com o conteúdo', async () => {
+      await a.locator('.whiteboard-viewport').first().click({ position: { x: 20, y: 20 } });
+      const [download] = await Promise.all([
+        a.waitForEvent('download', { timeout: 20000 }),
+        a.keyboard.press('Control+Shift+E'),
+      ]);
+      if (!/-pagina\.png$/.test(download.suggestedFilename())) throw new Error(`nome: ${download.suggestedFilename()}`);
+      mkdirSync(join(here, 'out'), { recursive: true });
+      await download.saveAs(join(here, 'out', 'export-pagina.png'));
+      const chunks = [];
+      for await (const c of await download.createReadStream()) chunks.push(c);
+      const png = Buffer.concat(chunks);
+      if (png.subarray(1, 4).toString() !== 'PNG') throw new Error('não é PNG');
+      const w = png.readUInt32BE(16);
+      const h = png.readUInt32BE(20);
+      if (w < 1000 || h < 600) throw new Error(`imagem pequena demais: ${w}x${h}`);
+    });
+
     await check('nenhum erro de página nem bloqueio da CSP nos dois navegadores', async () => {
       const errs = [...a.errors, ...b.errors];
       if (errs.length) throw new Error(errs.slice(0, 3).join(' | '));

@@ -47,6 +47,7 @@ import { useCanvasPointerDown } from './hooks/useCanvasPointerDown';
 import { useCanvasPointerGestures } from './hooks/useCanvasPointerGestures';
 import { useCanvasContextMenu } from './hooks/useCanvasContextMenu';
 import { useFreehandDraw } from './hooks/useFreehandDraw';
+import { useCanvasExport } from './hooks/useCanvasExport';
 import PenBar from '../panels/PenBar';
 
 export default function CanvasEngine({ spaceId, space, onViewportChange, onRegisterViewportControl }) {
@@ -334,6 +335,26 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         });
         return unsub;
     }, [spaceId, setViewportForFit]);
+
+    const exportImage = useCanvasExport({
+        containerRef,
+        viewportState,
+        spaceTitle: space?.title || space?.name,
+        addToast,
+    });
+    const exportImageRef = useRef(exportImage);
+    exportImageRef.current = exportImage;
+    // Ctrl+Shift+E: exporta a seleção (ou a página, sem seleção) como PNG
+    useEffect(() => {
+        const onKey = (e) => {
+            if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || (e.key || '').toLowerCase() !== 'e') return;
+            if (e.target?.closest?.('input, textarea, [contenteditable="true"]')) return;
+            e.preventDefault();
+            void exportImageRef.current('auto');
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
 
     const setViewportState = viewportState.setViewport;
     useEffect(() => {
@@ -679,6 +700,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 onColorChange={handleSelectionColor}
                 onDownloadImage={handleDownloadSelectedImages}
                 onToggleGuideLock={handleToggleGuideLock}
+                onExportImage={(mode) => void exportImage(mode)}
                 showColorPicker={contextMenuPosition?.showColorPicker}
                 showDownloadImage={contextMenuPosition?.showDownloadImage}
                 guideAllLocked={contextMenuPosition?.guideAllLocked}

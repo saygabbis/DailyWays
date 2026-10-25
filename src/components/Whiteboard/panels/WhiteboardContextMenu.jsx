@@ -15,6 +15,7 @@ import {
     Download,
     Lock,
     Unlock,
+    ImageDown,
 } from 'lucide-react';
 import { getNodeCreateOffset } from '../core/whiteboardCreateOffsets';
 import { useWhiteboardSelectionStore } from '../../../stores/whiteboardSelectionStore';
@@ -44,6 +45,7 @@ export default function WhiteboardContextMenu({
     onColorChange,
     onDownloadImage,
     onToggleGuideLock,
+    onExportImage,
     showColorPicker,
     showDownloadImage,
     guideAllLocked,
@@ -203,6 +205,18 @@ export default function WhiteboardContextMenu({
                     type="button"
                     className="whiteboard-context-menu-item"
                     onClick={() => {
+                        onExportImage?.('selection');
+                        onClose?.();
+                    }}
+                >
+                    <ImageDown size={16} />
+                    <span>Exportar como PNG</span>
+                    <kbd className="whiteboard-context-menu-kbd">Ctrl+Shift+E</kbd>
+                </button>
+                <button
+                    type="button"
+                    className="whiteboard-context-menu-item"
+                    onClick={() => {
                         onDuplicate?.();
                         onClose?.();
                     }}
@@ -251,6 +265,11 @@ export default function WhiteboardContextMenu({
             <button type="button" className="whiteboard-context-menu-item" onClick={() => { onUploadFile?.(); onClose?.(); }}>
                 <FileUp size={16} />
                 <span>Arquivo</span>
+            </button>
+            <div className="whiteboard-context-menu-sep" />
+            <button type="button" className="whiteboard-context-menu-item" onClick={() => { onExportImage?.('page'); onClose?.(); }}>
+                <ImageDown size={16} />
+                <span>Exportar página como PNG</span>
             </button>
         </div>
     );
