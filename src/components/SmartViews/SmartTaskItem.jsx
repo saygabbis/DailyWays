@@ -10,6 +10,8 @@ import { format, isPast, isToday, isTomorrow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import './SmartTaskItem.css';
 
+const PRIORITY_LABEL = { urgent: 'Urgente', high: 'Alta', medium: 'Média', low: 'Baixa' };
+
 export default function SmartTaskItem({
     card, board, list, onClick, onToggleMyDay, onToggleImportant, onRemoveFromPlanned, showLocation = true,
 }) {
@@ -53,7 +55,7 @@ export default function SmartTaskItem({
                     <span className="smart-task-title">{card.title}</span>
                     {card.priority && card.priority !== 'none' && !card.completed && (
                         <span className="smart-task-priority-tag" style={{ color: priorityColor, borderColor: priorityColor }}>
-                            {card.priority}
+                            {PRIORITY_LABEL[card.priority] ?? card.priority}
                         </span>
                     )}
                 </div>

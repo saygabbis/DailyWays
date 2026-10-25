@@ -24,7 +24,6 @@ export default function MyDayView({ onCardClick }) {
                 completedToday={hub.completedToday}
                 totalToday={hub.totalToday}
                 focusDisplay={hub.focusDisplay}
-                streak={hub.streak}
             />
 
             <DiaryFocusCard

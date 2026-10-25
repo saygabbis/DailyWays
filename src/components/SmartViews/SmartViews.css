@@ -9,118 +9,61 @@
     gap: var(--space-xl);
 }
 
-/* Hero Section */
+/* Cabeçalho compacto: o título já está no topo do app; aqui só o resumo e os contadores */
 .smart-view-hero {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-xl);
-    border-radius: var(--radius-xl);
-    border: 1px solid var(--border-color);
-    position: relative;
-    overflow: hidden;
-    color: white;
-    background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
     flex-wrap: wrap;
-    gap: var(--space-md);
-}
-
-.important-hero {
-    background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
-    border-color: #ff9a9e;
-}
-
-.planned-hero {
-    background: linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%);
-    border-color: #84fab0;
-}
-
-.smart-view-hero::before {
-    content: '';
-    position: absolute;
-    top: -50px;
-    right: -50px;
-    width: 200px;
-    height: 200px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 50%;
-    pointer-events: none;
+    gap: var(--dw-s-3, 12px);
 }
 
 .smart-view-hero-content h1 {
-    font-size: var(--font-size-2xl);
-    font-weight: 800;
-    margin-bottom: var(--space-xs);
-    color: #fff;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
 }
 
 .smart-view-subtitle {
-    font-size: var(--font-size-md);
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.9);
+    font-size: var(--dw-fs-md, 1rem);
+    color: var(--dw-text-2, var(--text-secondary));
 }
 
-/* ── Summary Chips ── */
 .smart-summary-chips {
     display: flex;
-    gap: var(--space-sm);
+    gap: var(--dw-s-2, 8px);
     flex-wrap: wrap;
-    z-index: 1;
 }
 
-.summary-chip {
-    display: flex;
+.summary-chip,
+.planned-overdue-badge {
+    display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
     padding: 4px 10px;
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
+    border-radius: var(--dw-r-full, 999px);
+    font-size: var(--dw-fs-xs, 0.75rem);
     font-weight: 700;
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(4px);
+    background: var(--dw-surface-2, var(--bg-tertiary));
+    color: var(--dw-text-2, var(--text-secondary));
 }
 
-.chip-urgent {
-    color: #dc2626;
+.chip-urgent,
+.planned-overdue-badge {
+    background: var(--dw-danger-soft, rgba(239, 68, 68, 0.12));
+    color: var(--dw-danger, #ef4444);
 }
 
 .chip-high {
-    color: #ea580c;
+    background: color-mix(in oklab, var(--dw-prio-high, #f97316) 16%, transparent);
+    color: var(--dw-prio-high, #f97316);
 }
 
 .chip-starred {
-    color: #d97706;
-}
-
-/* ── Planned Overdue Badge ── */
-.planned-overdue-badge {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
-    padding: 6px 14px;
-    background: rgba(220, 38, 38, 0.9);
-    color: white;
-    font-size: var(--font-size-sm);
-    font-weight: 700;
-    border-radius: var(--radius-full);
-    z-index: 1;
-    animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-
-    0%,
-    100% {
-        transform: scale(1);
-    }
-
-    50% {
-        transform: scale(1.05);
-    }
+    background: var(--dw-warning-soft, rgba(245, 158, 11, 0.15));
+    color: var(--dw-warning, #d97706);
 }
 
 /* ── Timeline Bar ── */
@@ -368,10 +311,6 @@
         padding: var(--space-md);
     }
 
-    .smart-view-hero {
-        flex-direction: column;
-        align-items: flex-start;
-    }
 
     .planned-timeline {
         overflow-x: auto;

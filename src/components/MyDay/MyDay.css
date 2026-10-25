@@ -1294,30 +1294,9 @@
     opacity: 0.85;
 }
 
-.diary-streak-badge {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    flex-wrap: wrap;
-    padding-top: var(--space-xs);
-    position: relative;
-    z-index: 1;
-}
 
-.diary-streak-emoji {
-    font-size: 1.25rem;
-}
 
-.diary-streak-count {
-    font-weight: 700;
-    color: var(--accent-primary);
-}
 
-.diary-streak-copy {
-    font-size: var(--font-size-sm);
-    color: var(--text-secondary);
-    font-style: italic;
-}
 
 .diary-focus-card--active {
     border-color: color-mix(in srgb, var(--accent-primary) 40%, var(--glass-border));

@@ -1,7 +1,6 @@
-import { CheckCircle2, Clock, Flame } from 'lucide-react';
+import { CheckCircle2, Clock } from 'lucide-react';
 import { useAuth } from '../../../context/useAuth';
 import DiaryStatChip from './DiaryStatChip';
-import DiaryStreakBadge from './DiaryStreakBadge';
 
 function getGreeting(hour) {
     if (hour >= 12 && hour < 18) return 'Boa tarde';
@@ -14,7 +13,6 @@ export default function DiaryHero({
     completedToday,
     totalToday,
     focusDisplay,
-    streak,
 }) {
     const { user } = useAuth();
     const hour = new Date().getHours();
@@ -42,14 +40,8 @@ export default function DiaryHero({
                     value={focusDisplay}
                     label="tempo focado"
                 />
-                <DiaryStatChip
-                    icon={Flame}
-                    value={streak}
-                    label="dias avançando"
-                />
             </div>
 
-            {streak > 0 && <DiaryStreakBadge streak={streak} />}
         </header>
     );
 }
