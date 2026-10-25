@@ -2,7 +2,7 @@
 
 Aplicativo de produtividade visual: boards kanban, tarefas com subtarefas e recorrência, visões inteligentes (Meu Dia/Diário, Importante, Planejado), whiteboard infinito (Spaces), chat e contatos, com **colaboração em tempo real**.
 
-**Stack:** React 19, Vite 7, zustand, @hello-pangea/dnd, Supabase (Postgres + RLS, Auth, Storage, Realtime) e um servidor Node + Socket.io para o collab.
+**Stack:** React 19, Vite 7, zustand, dnd-kit, Supabase (Postgres + RLS, Auth, Storage, Realtime) e um servidor Node + Socket.io para o collab.
 
 ## Começando
 

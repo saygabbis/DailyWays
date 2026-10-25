@@ -81,7 +81,10 @@ export async function buildImageNodePayload(
         storagePath: path,
         thumbStoragePath: path && hasUploadedThumb(path) ? thumbPathFor(path) : null,
         url: path ? null : urlOrPath,
-        filename: file.name,
+        // a imagem pode ter sido regravada em WebP no upload: o nome acompanha o conteúdo
+        filename: path?.endsWith('.webp') && !/\.webp$/i.test(file.name)
+            ? file.name.replace(/\.[^.]+$/, '') + '.webp'
+            : file.name,
         size: formatFileSizeBytes(file.size),
         naturalWidth,
         naturalHeight,
