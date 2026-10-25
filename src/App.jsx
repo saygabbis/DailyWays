@@ -244,7 +244,6 @@ function AppContent() {
               setShowSettings(true);
             }}
             onOpenSearch={() => setShowSearch(true)}
-            onOpenDiary={() => handleViewChange('myday')}
             editableBoardTitle={activeView === 'board' && activeBoard ? { board: activeBoard, onSave: (newTitle) => updateBoardMeta({ title: newTitle }) } : null}
             editableSpaceTitle={activeView.startsWith('space-') && (() => {
               const spaceId = activeView.replace('space-', '');
@@ -338,14 +337,8 @@ function AppContent() {
         {/* Radio Widget */}
         <RadioWidget />
 
-        {/* Undo/redo + ajuda (?) */}
-        {user && (
-          <AppBottomFabCluster
-            boardId={activeBoard?.id}
-            showBoardHistory={activeView === 'board' && !!activeBoard}
-            onNavigateView={handleViewChange}
-          />
-        )}
+        {/* Chat e ajuda: painéis abertos pelo header/sidebar (sem botões flutuantes) */}
+        {user && <AppBottomFabCluster onNavigateView={handleViewChange} />}
 
         {!isDesktop && (
           <MobileBottomNav
@@ -353,7 +346,6 @@ function AppContent() {
             activeView={activeView}
             onViewChange={handleViewChange}
             onOpenBoards={() => setSidebarOpen(true)}
-            hasBoardContext={!!activeBoard}
           />
         )}
 

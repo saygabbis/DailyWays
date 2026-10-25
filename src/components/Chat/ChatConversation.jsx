@@ -39,6 +39,7 @@ export default function ChatConversation({
   onTogglePinned,
   onClose,
   isOpen,
+  onHeaderPointerDown,
 }) {
   const [draft, setDraft] = useState('');
   const [online, setOnline] = useState(false);
@@ -192,7 +193,7 @@ export default function ChatConversation({
 
   return (
     <div className="chat-conversation chat-wa">
-      <header className="chat-conv-header" title="Arraste para mover">
+      <header className="chat-conv-header" title="Arraste para mover" onPointerDown={onHeaderPointerDown}>
         <button type="button" className="btn-icon btn-xs" onClick={onBack}>
           <ChevronLeft size={20} />
         </button>

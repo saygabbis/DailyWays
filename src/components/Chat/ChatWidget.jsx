@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  MessageCircle,
   X,
   Pin,
   PinOff,
@@ -165,6 +164,10 @@ export default function ChatWidget() {
   }, [ensureProfiles]);
 
   const openPanel = useCallback((detail = {}) => {
+    if (detail.toggle) {
+      setIsOpen((v) => !v);
+      return;
+    }
     setIsOpen(true);
     if (detail.inbox) setListTab('inbox');
     if (detail.conversationId) {
@@ -269,7 +272,7 @@ export default function ChatWidget() {
   }, [isOpen, pinned]);
 
   const startDrag = (e) => {
-    if (e.button !== 0) return;
+    if (e.button !== undefined && e.button !== 0) return;
     const target = e.target;
     if (target?.closest?.('button, input, textarea, a, select, label')) return;
     const el = panelRef.current;
@@ -284,6 +287,7 @@ export default function ChatWidget() {
     };
     const onMove = (ev) => {
       if (!dragRef.current.dragging) return;
+      ev.preventDefault?.();
       const dx = ev.clientX - dragRef.current.startX;
       const dy = ev.clientY - dragRef.current.startY;
       const next = clampPos({ left: dragRef.current.startLeft + dx, top: dragRef.current.startTop + dy }, panelHeight);
@@ -291,28 +295,27 @@ export default function ChatWidget() {
     };
     const onUp = () => {
       dragRef.current.dragging = false;
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   };
+
+  // O cabeçalho mostra quantas conversas novas há.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('app-chat-unread', { detail: { count: inboxCount } }));
+  }, [inboxCount]);
 
   const contactRecord = channel?.otherUserId
     ? contacts.find((c) => c.contact_user_id === channel.otherUserId)
     : null;
   const otherProfile = channel?.otherUserId ? profilesById.get(channel.otherUserId) : null;
 
-  if (!isOpen) {
-    return (
-      <button type="button" className="app-chat-fab" title="Chat" onClick={() => openPanel({})} aria-label="Abrir chat">
-        <MessageCircle size={22} strokeWidth={2.25} />
-        {inboxCount > 0 && (
-          <span className="app-chat-fab-badge">{inboxCount > 9 ? '9+' : inboxCount}</span>
-        )}
-      </button>
-    );
-  }
+  // O botão do chat fica no cabeçalho (sem botão flutuante por cima do conteúdo).
+  if (!isOpen) return null;
 
   return (
     <div
@@ -336,7 +339,7 @@ export default function ChatWidget() {
       />
       {!channel ? (
         <>
-          <header className="app-chat-widget-header" onMouseDown={startDrag} title="Arraste para mover">
+          <header className="app-chat-widget-header" onPointerDown={startDrag} title="Arraste para mover">
             <span className="app-chat-widget-brand"><Users size={16} /></span>
             <div className="app-chat-widget-titles">
               <h2 className="app-chat-widget-title">Chat</h2>
@@ -437,6 +440,7 @@ export default function ChatWidget() {
           onTogglePinned={() => setPinned((v) => !v)}
           onClose={() => { setIsOpen(false); setChannel(null); }}
           isOpen={isOpen}
+          onHeaderPointerDown={startDrag}
         />
       )}
       {loading && !channel && <div className="app-chat-loading-overlay">Abrindo…</div>}

@@ -1,22 +1,39 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Menu, X, Bell, Settings, User, LogOut, ChevronDown, Layout, Share2 } from 'lucide-react';
+import { Search, Menu, X, Bell, Settings, Users, LogOut, ChevronDown, Layout, Share2, MessageCircle, Undo2, Redo2 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
 import { useApp } from '../../context/useApp';
-import { useI18n } from '../../context/useTheme';
 import { useNotifications } from '../../hooks/useNotifications';
+import { useBoardUndo } from '../../hooks/useBoardUndo';
 import { acceptInvitation, declineInvitation } from '../../services/boardSharingService';
 import { respondToContactRequest } from '../../services/contactsService';
 import NotificationDropdown from '../Notifications/NotificationDropdown';
 import BoardDetailsModal from '../Board/BoardDetailsModal';
 import SpaceDetailsModal from '../Spaces/SpaceDetailsModal';
 import CloudSyncIndicator from './CloudSyncIndicator';
-import HeaderStreakButton from './HeaderStreakButton';
 import './Header.css';
 
-export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOpenSettings, onOpenSearch, onOpenDiary, editableBoardTitle, editableSpaceTitle, variant = 'default' }) {
+/** Desfazer/refazer do board aberto (antes era um botão flutuante no canto da tela). */
+function HeaderBoardHistory({ boardId }) {
+    const { undo, redo, canUndo, canRedo } = useBoardUndo(boardId);
+    return (
+        <div className="hd-group" role="group" aria-label="Desfazer e refazer">
+            <button type="button" className="hd-icon" disabled={!canUndo} onClick={() => undo()} title="Desfazer (Ctrl+Z)" aria-label="Desfazer">
+                <Undo2 size={18} />
+            </button>
+            <button type="button" className="hd-icon" disabled={!canRedo} onClick={() => redo()} title="Refazer (Ctrl+Y)" aria-label="Refazer">
+                <Redo2 size={18} />
+            </button>
+        </div>
+    );
+}
+
+function badgeText(n) {
+    return n > 9 ? '9+' : String(n);
+}
+
+export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOpenSettings, onOpenSearch, editableBoardTitle, editableSpaceTitle, variant = 'default' }) {
     const { user, logout } = useAuth();
     const { getActiveBoard, showBoardToolbar, dispatch, showConfirm, reloadBoards } = useApp();
-    const t = useI18n();
     const {
         notifications,
         unreadCount,
@@ -31,6 +48,7 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
     const [showShareModal, setShowShareModal] = useState(false);
     const [editingBoardTitle, setEditingBoardTitle] = useState(false);
     const [editBoardTitleValue, setEditBoardTitleValue] = useState('');
+    const [chatUnread, setChatUnread] = useState(0);
     const profileRef = useRef(null);
     const bellRef = useRef(null);
     const notificationsRef = useRef(null);
@@ -40,6 +58,7 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
 
     const editableTitle = editableBoardTitle || editableSpaceTitle;
     const currentEditableValue = editableBoardTitle?.board?.title ?? editableSpaceTitle?.space?.title ?? '';
+    const titleEmoji = editableBoardTitle?.board?.emoji || editableSpaceTitle?.space?.emoji || null;
 
     const handleStartEditBoardTitle = () => {
         if (!editableTitle) return;
@@ -55,6 +74,9 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
     };
 
     const firstName = user?.name?.split(' ')[0] || 'Usuário';
+    const avatar = user?.photo_url
+        ? <img src={user.photo_url} alt="" className="header-avatar-img" />
+        : (user?.avatar || firstName[0]);
 
     const handleLogout = async () => {
         setShowProfile(false);
@@ -69,14 +91,25 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
     };
 
     useEffect(() => {
+        const onUnread = (e) => setChatUnread(Number(e.detail?.count) || 0);
+        window.addEventListener('app-chat-unread', onUnread);
+        return () => window.removeEventListener('app-chat-unread', onUnread);
+    }, []);
+
+    useEffect(() => {
         if (!showProfile) return;
         const handleClick = (e) => {
             if (profileRef.current && !profileRef.current.contains(e.target)) {
                 setShowProfile(false);
             }
         };
+        const handleKey = (e) => { if (e.key === 'Escape') setShowProfile(false); };
         document.addEventListener('mousedown', handleClick);
-        return () => document.removeEventListener('mousedown', handleClick);
+        document.addEventListener('keydown', handleKey);
+        return () => {
+            document.removeEventListener('mousedown', handleClick);
+            document.removeEventListener('keydown', handleKey);
+        };
     }, [showProfile]);
 
     useEffect(() => {
@@ -194,73 +227,86 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
     return (
         <header className={`header ${variant === 'workspace' ? 'header--workspace' : ''}`}>
             <div className="header-left">
-                <button className="btn-icon header-menu" onClick={onMenuClick} aria-label="Menu">
-                    {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
+                <button
+                    type="button"
+                    className="hd-icon header-menu"
+                    onClick={onMenuClick}
+                    aria-label={sidebarOpen ? 'Fechar navegação' : 'Abrir navegação'}
+                    aria-expanded={!!sidebarOpen}
+                >
+                    {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
                 </button>
                 <div className="header-title-group">
-                    {editableTitle && editingBoardTitle ? (
-                        <form onSubmit={handleSaveBoardTitle} className="header-title-edit-form">
-                            <input
-                                type="text"
-                                className="header-title-edit-input"
-                                value={editBoardTitleValue}
-                                onChange={e => setEditBoardTitleValue(e.target.value)}
-                                onBlur={handleSaveBoardTitle}
-                                onKeyDown={e => e.key === 'Escape' && setEditingBoardTitle(false)}
-                                autoFocus
-                                aria-label="Nome do quadro"
-                            />
-                        </form>
-                    ) : editableTitle ? (
-                        <h1
-                            className="header-title header-title-editable"
-                            onClick={handleStartEditBoardTitle}
-                            title="Clique para renomear"
-                        >
-                            {title}
-                        </h1>
-                    ) : (
-                        <h1 className="header-title">{title}</h1>
-                    )}
-                    {subtitle && <span className="header-subtitle">{subtitle}</span>}
+                    {titleEmoji && <span className="header-title-emoji" aria-hidden>{titleEmoji}</span>}
+                    <div className="header-title-text">
+                        {editableTitle && editingBoardTitle ? (
+                            <form onSubmit={handleSaveBoardTitle} className="header-title-edit-form">
+                                <input
+                                    type="text"
+                                    className="header-title-edit-input"
+                                    value={editBoardTitleValue}
+                                    onChange={e => setEditBoardTitleValue(e.target.value)}
+                                    onBlur={handleSaveBoardTitle}
+                                    onKeyDown={e => e.key === 'Escape' && setEditingBoardTitle(false)}
+                                    autoFocus
+                                    maxLength={120}
+                                    aria-label="Nome"
+                                />
+                            </form>
+                        ) : editableTitle ? (
+                            <h1 className="header-title">
+                                <button type="button" className="header-title-editable" onClick={handleStartEditBoardTitle} title="Renomear">
+                                    {title}
+                                </button>
+                            </h1>
+                        ) : (
+                            <h1 className="header-title">{title}</h1>
+                        )}
+                        {subtitle && <span className="header-subtitle">{subtitle}</span>}
+                    </div>
                 </div>
             </div>
 
             <div className="header-right">
                 <CloudSyncIndicator />
 
-                <button className="header-search-btn" onClick={onOpenSearch}>
-                    <div className="header-search-btn-content">
-                        <span>{t.search}</span>
-                        <kbd className="header-search-kbd">Ctrl+K</kbd>
-                    </div>
-                    <Search size={18} className="header-search-btn-icon" />
+                {editableBoardTitle?.board?.id && <HeaderBoardHistory boardId={editableBoardTitle.board.id} />}
+
+                <button type="button" className="hd-search" onClick={onOpenSearch} aria-label="Buscar" title="Buscar (Ctrl+K)">
+                    <Search size={17} />
+                    <span className="hd-search-label">Buscar</span>
+                    <kbd className="hd-kbd">Ctrl K</kbd>
                 </button>
 
-                {(editableBoardTitle || editableSpaceTitle) && (
-                    <button className="btn-icon header-icon-btn" title="Compartilhar" onClick={() => setShowShareModal(true)}>
+                {editableTitle && (
+                    <button type="button" className="hd-icon hd-share" title="Compartilhar" aria-label="Compartilhar" onClick={() => setShowShareModal(true)}>
                         <Share2 size={18} />
                     </button>
                 )}
 
-                <HeaderStreakButton onOpenDiary={onOpenDiary} />
+                <button
+                    type="button"
+                    className="hd-icon"
+                    title="Conversas"
+                    aria-label={chatUnread ? `Conversas — ${chatUnread} não lidas` : 'Conversas'}
+                    onClick={() => window.dispatchEvent(new CustomEvent('app-chat-open', { detail: { toggle: true } }))}
+                >
+                    <MessageCircle size={18} />
+                    {chatUnread > 0 && <span className="hd-badge" aria-hidden>{badgeText(chatUnread)}</span>}
+                </button>
 
                 <div className="header-notifications" ref={notificationsRef}>
                     <button
                         ref={bellRef}
                         type="button"
-                        className={`btn-icon header-icon-btn header-notifications-btn ${hasUnread ? 'has-unread' : ''}`}
-                        title={hasUnread ? `${unreadCount} notificação(ões)` : 'Notificações'}
+                        className={`hd-icon ${hasUnread ? 'has-unread' : ''}`}
+                        title="Notificações"
                         aria-label={hasUnread ? `${unreadCount} notificações não lidas` : 'Notificações'}
                         aria-expanded={showNotifications}
                         onClick={() => setShowNotifications((v) => !v)}
                     >
-                        <Bell size={18} fill={hasUnread ? 'currentColor' : 'none'} />
-                        {hasUnread && (
-                            <span className="header-notifications-badge" aria-hidden>
-                                {unreadCount > 9 ? '9+' : unreadCount}
-                            </span>
-                        )}
+                        <Bell size={18} />
+                        {hasUnread && <span className="hd-badge" aria-hidden>{badgeText(unreadCount)}</span>}
                     </button>
 
                     <NotificationDropdown
@@ -278,46 +324,55 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                 </div>
 
                 <div className="header-user" ref={profileRef}>
-                    <button className="header-user-btn" onClick={() => setShowProfile(!showProfile)}>
-                        <div className="header-avatar">
-                            {user?.photo_url ? (
-                                <img src={user.photo_url} alt={user.name} className="header-avatar-img" />
-                            ) : (
-                                user?.avatar || firstName[0]
-                            )}
-                        </div>
-                        <div className="header-user-info">
-                            <span className="header-greeting-name">{firstName}</span>
-                        </div>
-                        <ChevronDown size={14} className={`header-chevron ${showProfile ? 'rotated' : ''}`} />
+                    <button
+                        type="button"
+                        className="header-user-btn"
+                        onClick={() => setShowProfile(!showProfile)}
+                        aria-haspopup="menu"
+                        aria-expanded={showProfile}
+                        aria-label={`Conta de ${firstName}`}
+                    >
+                        <span className="header-avatar">{avatar}</span>
+                        <span className="header-greeting-name">{firstName}</span>
+                        <ChevronDown size={14} className={`header-chevron ${showProfile ? 'rotated' : ''}`} aria-hidden />
                     </button>
 
                     {showProfile && (
-                        <div className="header-profile-dropdown animate-pop-in" data-profile-menu-dropdown>
+                        <div className="header-profile-dropdown" role="menu" data-profile-menu-dropdown>
                             <div className="header-profile-header">
-                                <div className="header-profile-avatar">
-                                    {user?.photo_url ? (
-                                        <img src={user.photo_url} alt={user.name} className="header-avatar-img" />
-                                    ) : (
-                                        user?.avatar || firstName[0]
-                                    )}
-                                </div>
+                                <span className="header-profile-avatar">{avatar}</span>
                                 <div className="header-profile-text">
                                     <div className="header-profile-name">{user?.name}</div>
                                     <div className="header-profile-email">{user?.email}</div>
                                 </div>
                             </div>
                             <div className="header-profile-divider" />
-                            <button className="header-profile-item" onClick={() => { onOpenSettings?.(); setShowProfile(false); }}>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="header-profile-item"
+                                onClick={() => {
+                                    setShowProfile(false);
+                                    window.dispatchEvent(new CustomEvent('app-navigate-view', { detail: { view: 'contacts' } }));
+                                }}
+                            >
+                                <Users size={16} />
+                                <span>Meus contatos</span>
+                            </button>
+                            {editableTitle && (
+                                <button type="button" role="menuitem" className="header-profile-item header-profile-item--compact-only" onClick={() => { setShowProfile(false); setShowShareModal(true); }}>
+                                    <Share2 size={16} />
+                                    <span>Compartilhar</span>
+                                </button>
+                            )}
+                            <button type="button" role="menuitem" className="header-profile-item" onClick={() => { onOpenSettings?.(); setShowProfile(false); }}>
                                 <Settings size={16} />
                                 <span>Configurações</span>
                             </button>
-                            <button className="header-profile-item" onClick={() => { onOpenSettings?.(); setShowProfile(false); }}>
-                                <User size={16} />
-                                <span>Minha Conta</span>
-                            </button>
-                            {activeBoard && (
+                            {activeBoard && variant === 'workspace' && !activeSpace && (
                                 <button
+                                    type="button"
+                                    role="menuitem"
                                     className="header-profile-item"
                                     onClick={() => {
                                         const next = !showBoardToolbar;
@@ -329,11 +384,11 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                                     }}
                                 >
                                     <Layout size={16} />
-                                    <span>{showBoardToolbar ? 'Ocultar Toolbar' : 'Mostrar Toolbar'}</span>
+                                    <span>{showBoardToolbar ? 'Ocultar barra do board' : 'Mostrar barra do board'}</span>
                                 </button>
                             )}
                             <div className="header-profile-divider" />
-                            <button className="header-profile-item header-profile-logout" onClick={handleLogout}>
+                            <button type="button" role="menuitem" className="header-profile-item header-profile-logout" onClick={handleLogout}>
                                 <LogOut size={16} />
                                 <span>Sair</span>
                             </button>

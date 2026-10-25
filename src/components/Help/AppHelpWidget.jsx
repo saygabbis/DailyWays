@@ -103,11 +103,21 @@ export default function AppHelpWidget({ onNavigateView }) {
         const onOpen = (e) => {
             openPanel(e.detail?.sectionId ?? null);
         };
+        // "?" (Shift+/) fora de campos de texto abre a ajuda.
+        const onKey = (e) => {
+            if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return;
+            const el = e.target;
+            if (el?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+            e.preventDefault();
+            openPanel(null);
+        };
         window.addEventListener('app-help-open', onOpen);
         window.addEventListener('diary-reflection-open', onOpen);
+        window.addEventListener('keydown', onKey);
         return () => {
             window.removeEventListener('app-help-open', onOpen);
             window.removeEventListener('diary-reflection-open', onOpen);
+            window.removeEventListener('keydown', onKey);
         };
     }, [openPanel]);
 
@@ -153,19 +163,8 @@ export default function AppHelpWidget({ onNavigateView }) {
 
     const activeSection = activeSectionId ? getHelpSection(activeSectionId) : null;
 
-    if (!isOpen) {
-        return (
-            <button
-                type="button"
-                className="app-help-fab"
-                title="Ajuda e atalhos"
-                onClick={() => openPanel()}
-                aria-label="Abrir central de ajuda"
-            >
-                <HelpCircle size={22} strokeWidth={2.25} />
-            </button>
-        );
-    }
+    // Abre pela sidebar ("Central de Ajuda") ou pela tecla "?" — sem botão flutuante.
+    if (!isOpen) return null;
 
     if (isMinimized) {
         return (

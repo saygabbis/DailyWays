@@ -1,44 +1,24 @@
-import { LayoutDashboard, Sun, LayoutGrid, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, Sun, Star, CalendarDays, PanelLeft } from 'lucide-react';
 import './MobileBottomNav.css';
 
 /**
- * Navegação inferior dedicada ao mobile (referência: Trello mobile).
- * Não renderiza em desktop — o pai controla com `visible`.
+ * Barra inferior do celular: as quatro telas do dia a dia + "Navegar", que abre a gaveta com
+ * boards, spaces e pastas. Fica ativo quando um board ou space está aberto.
  */
-export default function MobileBottomNav({
-  visible,
-  activeView,
-  onViewChange,
-  onOpenBoards,
-  hasBoardContext,
-}) {
+export default function MobileBottomNav({ visible, activeView, onViewChange, onOpenBoards }) {
   if (!visible) return null;
 
   const items = [
-    { id: 'dashboard', label: 'Início', icon: LayoutDashboard, view: 'dashboard' },
-    { id: 'myday', label: 'Diário', icon: Sun, view: 'myday' },
-    { id: 'boards', label: 'Boards', icon: LayoutGrid, isBoards: true },
-    { id: 'planned', label: 'Planejado', icon: CalendarDays, view: 'planned' },
+    { id: 'dashboard', label: 'Início', icon: LayoutDashboard },
+    { id: 'myday', label: 'Diário', icon: Sun },
+    { id: 'important', label: 'Importante', icon: Star },
+    { id: 'planned', label: 'Planejado', icon: CalendarDays },
+    { id: 'nav', label: 'Navegar', icon: PanelLeft, opensDrawer: true },
   ];
 
-  const isActive = (item) => {
-    if (item.isBoards) {
-      return activeView === 'board' || activeView.startsWith('space-');
-    }
-    return activeView === item.view;
-  };
-
-  const handleClick = (item) => {
-    if (item.isBoards) {
-      // Abre a sidebar para trocar de board; se houver board ativo mas a view não é board, navega primeiro.
-      if (hasBoardContext && activeView !== 'board' && !activeView.startsWith('space-')) {
-        onViewChange('board');
-      }
-      onOpenBoards?.();
-      return;
-    }
-    onViewChange(item.view);
-  };
+  const isActive = (item) => (item.opensDrawer
+    ? activeView === 'board' || activeView.startsWith('space-') || activeView === 'contacts'
+    : activeView === item.id);
 
   return (
     <nav className="mobile-bottom-nav" aria-label="Navegação principal">
@@ -49,11 +29,14 @@ export default function MobileBottomNav({
           <button
             key={item.id}
             type="button"
-            className={`mobile-bottom-nav__item ${active ? 'mobile-bottom-nav__item--active' : ''}`}
-            onClick={() => handleClick(item)}
-            aria-current={active ? 'page' : undefined}
+            className={`mobile-bottom-nav__item ${active ? 'is-active' : ''}`}
+            onClick={() => (item.opensDrawer ? onOpenBoards?.() : onViewChange(item.id))}
+            aria-current={active && !item.opensDrawer ? 'page' : undefined}
+            aria-haspopup={item.opensDrawer ? 'dialog' : undefined}
           >
-            <Icon size={22} strokeWidth={active ? 2.25 : 1.75} className="mobile-bottom-nav__icon" />
+            <span className="mobile-bottom-nav__pill">
+              <Icon size={21} strokeWidth={active ? 2.3 : 1.8} aria-hidden />
+            </span>
             <span className="mobile-bottom-nav__label">{item.label}</span>
           </button>
         );

@@ -3,17 +3,16 @@
   left: 0;
   right: 0;
   bottom: 0;
-  /* Acima do conteúdo e da toolbar do board no mobile; abaixo de modais */
+  /* Acima do conteúdo e da toolbar do board; abaixo de modais e da gaveta */
   z-index: 140;
   display: none;
   align-items: stretch;
   justify-content: space-around;
-  gap: 0;
-  min-height: var(--mobile-bottom-nav-height, 56px);
-  padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
-  background: var(--bg-secondary);
-  border-top: 1.5px solid var(--border-color);
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
+  min-height: var(--mobile-bottom-nav-height, 60px);
+  padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in oklab, var(--dw-surface) 92%, transparent);
+  backdrop-filter: blur(14px) saturate(1.4);
+  border-top: 1px solid var(--dw-line);
 }
 
 @media (max-width: 768px) {
@@ -30,38 +29,39 @@
   justify-content: center;
   gap: 2px;
   min-width: 0;
-  padding: 6px 4px;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    background 0.15s ease,
-    transform 0.15s ease;
+  min-height: 48px;
+  padding: 4px 2px;
+  color: var(--dw-text-3);
   -webkit-tap-highlight-color: transparent;
 }
 
-.mobile-bottom-nav__item:active {
-  transform: scale(0.96);
+.mobile-bottom-nav__pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 28px;
+  border-radius: var(--dw-r-full);
+  transition: background var(--dw-dur-2) var(--dw-ease-out), transform var(--dw-dur-3) var(--dw-ease-jelly);
 }
 
-.mobile-bottom-nav__item--active {
-  color: var(--accent-primary);
-  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+.mobile-bottom-nav__item:active .mobile-bottom-nav__pill {
+  transform: scale(0.9);
+}
+
+.mobile-bottom-nav__item.is-active {
+  color: var(--dw-accent-text);
+}
+
+.mobile-bottom-nav__item.is-active .mobile-bottom-nav__pill {
+  background: var(--dw-accent-soft);
 }
 
 .mobile-bottom-nav__label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: 0.66rem;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
-}
-
-.mobile-bottom-nav__icon {
-  flex-shrink: 0;
 }

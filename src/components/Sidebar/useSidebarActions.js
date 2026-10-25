@@ -2,6 +2,7 @@
 import { insertBoardFull } from '../../services/boardService';
 import { uuidv4 } from '../../utils/uuid';
 import { useSidebarContextMenus } from './useSidebarContextMenus';
+import { openAppHelp } from '../Help/appHelpEvents';
 
 export function useSidebarActions(ctx) {
     const {
@@ -224,7 +225,9 @@ export function useSidebarActions(ctx) {
     };
 
     const handleNavClick = (viewId) => {
-        onViewChange(viewId);
+        // Ajuda é um painel por cima da tela atual, não uma página.
+        if (viewId === 'help') openAppHelp();
+        else onViewChange(viewId);
         if (!isDesktop) onClose?.();
     };
 
