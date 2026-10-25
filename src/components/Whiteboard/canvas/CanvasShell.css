@@ -399,3 +399,39 @@
     outline-offset: 2px;
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--remote-selection-color, #7c3aed) 25%, transparent);
 }
+
+/* Conexão rápida (+ nos lados do nó selecionado) */
+.whiteboard-quick-connect-btn {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    margin: -11px 0 0 -11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--dw-surface, var(--bg-elevated));
+    color: var(--dw-accent-text, var(--accent-primary));
+    border: 1.5px solid var(--dw-accent-line, var(--accent-primary));
+    box-shadow: var(--dw-shadow-1, 0 1px 3px rgba(0, 0, 0, 0.2));
+    pointer-events: auto;
+    opacity: 0.85;
+    transition: transform var(--dw-dur-2, 150ms) var(--dw-ease-spring, ease-out), opacity var(--dw-dur-1, 100ms) linear,
+        background var(--dw-dur-1, 100ms) linear;
+    animation: popIn var(--dw-dur-3, 220ms) var(--dw-ease-spring, ease-out) both;
+}
+
+.whiteboard-quick-connect-btn:hover {
+    opacity: 1;
+    transform: scale(1.18);
+    background: var(--dw-accent-fill, var(--accent-primary));
+    color: var(--dw-on-accent, #fff);
+}
+
+@media (pointer: coarse) {
+    .whiteboard-quick-connect-btn {
+        width: 32px;
+        height: 32px;
+        margin: -16px 0 0 -16px;
+    }
+}

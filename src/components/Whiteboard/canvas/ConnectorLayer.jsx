@@ -1,13 +1,6 @@
 import { useMemo } from 'react';
 import { useWhiteboardFields } from '../../../stores/whiteboardStore';
-
-function getNodeCenter(node) {
-    if (!node) return { x: 0, y: 0 };
-    return {
-        x: node.x + (node.width || 0) / 2,
-        y: node.y + (node.height || 0) / 2,
-    };
-}
+import { connectorWorldRect as worldRect, connectorEdgePoint as edgePoint } from '../core/nodeGeometry';
 
 export default function ConnectorLayer() {
     const { connectors, nodes } = useWhiteboardFields('connectors', 'nodes');
@@ -15,18 +8,19 @@ export default function ConnectorLayer() {
 
     const paths = useMemo(() => {
         return connectors.map((conn) => {
-            const from = nodesById.get(conn.fromNodeId);
-            const to = nodesById.get(conn.toNodeId);
-            const start = getNodeCenter(from);
-            const end = getNodeCenter(to);
+            const from = worldRect(nodesById.get(conn.fromNodeId), nodesById);
+            const to = worldRect(nodesById.get(conn.toNodeId), nodesById);
+            if (!from || !to) return null;
             const controlPoints = conn.controlPoints && conn.controlPoints.length >= 2
                 ? conn.controlPoints
                 : null;
+            const start = edgePoint(from, controlPoints ? controlPoints[0] : { x: to.cx, y: to.cy });
+            const end = edgePoint(to, controlPoints ? controlPoints[1] : { x: from.cx, y: from.cy });
             const pathD = controlPoints
                 ? `M ${start.x} ${start.y} Q ${controlPoints[0].x} ${controlPoints[0].y} ${controlPoints[1].x} ${controlPoints[1].y} L ${end.x} ${end.y}`
                 : `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
             return { id: conn.id, from: conn.fromNodeId, to: conn.toNodeId, pathD, style: conn.style || {} };
-        });
+        }).filter(Boolean);
     }, [connectors, nodesById]);
 
     if (paths.length === 0) return null;

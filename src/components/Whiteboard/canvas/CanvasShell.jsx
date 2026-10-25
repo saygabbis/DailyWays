@@ -7,7 +7,11 @@ import { WhiteboardViewportProvider } from '../interaction/viewport/WhiteboardVi
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
 import { useWhiteboardSelectionStore } from '../../../stores/whiteboardSelectionStore';
 import { useWhiteboardDocumentStore } from '../../../stores/whiteboardDocumentStore';
-import { fetchRulerGuides } from '../../../services/whiteboardService';
+import { fetchRulerGuides, insertConnector } from '../../../services/whiteboardService';
+import { uuidv4 } from '../../../utils/uuid';
+import { buildNodesById, nodeToWorld } from '../core/nodeGeometry';
+import { filterNodesByPage } from '../core/pages/whiteboardPages';
+import QuickConnectHandles from './overlays/QuickConnectHandles';
 import { useCanvasShortcuts } from '../interaction/hooks/useCanvasShortcuts';
 import { isDragCreationTool as checkDragCreationTool } from '../interaction/hooks/useCreateTool';
 import { useResizeRotateState } from '../interaction/hooks/useResizeRotate';
@@ -336,6 +340,44 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         return unsub;
     }, [spaceId, setViewportForFit]);
 
+    // Conexão rápida: cria um nó parecido na direção do "+" e liga os dois
+    const handleQuickConnect = useCallback(async (source, dir) => {
+        const st = useWhiteboardStore.getState();
+        const pageNodes = filterNodesByPage(st.nodes, st.activePageId);
+        const byId = buildNodesById(pageNodes);
+        const pos = nodeToWorld(source, byId);
+        const sameType = ['sticky_note', 'shape', 'text', 'todo_list'].includes(source.type);
+        const type = sameType ? source.type : 'sticky_note';
+        const w = sameType ? source.width : 220;
+        const h = sameType ? source.height : 160;
+        const gap = Math.max(60, Math.min(source.width || 0, source.height || 0) * 0.35);
+        let x = dir.dx > 0 ? pos.x + source.width + gap : dir.dx < 0 ? pos.x - gap - w : pos.x + (source.width - w) / 2;
+        let y = dir.dy > 0 ? pos.y + source.height + gap : dir.dy < 0 ? pos.y - gap - h : pos.y + (source.height - h) / 2;
+        // já tem algo ali? desliza para o lado até achar espaço livre
+        const overlaps = (cx, cy) => pageNodes.some((n) => {
+            if (n.id === source.id) return false;
+            const p = nodeToWorld(n, byId);
+            return cx < p.x + n.width && cx + w > p.x && cy < p.y + n.height && cy + h > p.y;
+        });
+        for (let i = 0; i < 8 && overlaps(x, y); i += 1) {
+            if (dir.dx) y += h + gap / 2;
+            else x += w + gap / 2;
+        }
+        const extra = sameType
+            ? { data: source.type === 'shape' ? { shape: source.data?.shape } : {}, style: { ...(source.style || {}) } }
+            : {};
+        const newId = await createNodeAt(type, x, y, extra, { width: w, height: h });
+        if (!newId) return;
+        const conn = { id: uuidv4(), fromNodeId: source.id, toNodeId: newId, controlPoints: [], style: {} };
+        if (collabConnected) collabCreateConnector(conn);
+        else {
+            const res = await insertConnector(spaceId, conn);
+            if (res.success) useWhiteboardStore.getState().addConnector(conn);
+        }
+        setSelection([newId]);
+        if (type === 'sticky_note' || type === 'text') useWhiteboardSelectionStore.getState().setEditingNodeId(newId);
+    }, [createNodeAt, collabConnected, collabCreateConnector, spaceId, setSelection]);
+
     const exportImage = useCanvasExport({
         containerRef,
         viewportState,
@@ -585,6 +627,13 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                         viewport={viewportForChildren}
                         containerRef={containerRef}
                     />
+                    {!selectionBox && (
+                        <QuickConnectHandles
+                            viewport={viewportForChildren}
+                            containerRef={containerRef}
+                            onQuickConnect={handleQuickConnect}
+                        />
+                    )}
                     {!selectionBox && (
                         <TransformHandlesLayer
                             viewport={viewportForChildren}

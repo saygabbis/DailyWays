@@ -233,6 +233,19 @@ async function main() {
       await a.keyboard.press('Escape');
     });
 
+    await check('conexão rápida: o "+" ao lado do nó cria uma nota já conectada', async () => {
+      await a.keyboard.press('Escape');
+      const drawing = a.locator('.whiteboard-node-wrapper', { has: a.locator('.drawing-node--freehand') }).first();
+      const box = await drawing.boundingBox();
+      await a.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await a.getByRole('button', { name: 'Novo item conectado à direita' }).click();
+      await waitFor(async () => (await supa.db.query(`SELECT count(*)::int AS n FROM public.space_connectors WHERE space_id = $1`, [SPACE])).rows[0].n === 1, 10000, 'conector no banco');
+      const conn = (await supa.db.query(`SELECT c.*, n.type AS to_type FROM public.space_connectors c JOIN public.space_nodes n ON n.id = c.to_node_id WHERE c.space_id = $1`, [SPACE])).rows[0];
+      if (conn.to_type !== 'sticky_note') throw new Error(`nó criado é ${conn.to_type}`);
+      await a.keyboard.press('Escape');
+      await waitFor(() => a.locator('.connector-layer path').first().isVisible(), 5000, 'conector visível');
+    });
+
     await check('exportar a página do Space como PNG (Ctrl+Shift+E) baixa uma imagem com o conteúdo', async () => {
       await a.locator('.whiteboard-viewport').first().click({ position: { x: 20, y: 20 } });
       const [download] = await Promise.all([
