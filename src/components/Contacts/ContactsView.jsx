@@ -12,7 +12,6 @@ import {
 } from '../../services/contactsService';
 import { blockUser } from '../../services/privacyService';
 import {
-  Users,
   Search,
   Plus,
   MessageCircle,
@@ -297,21 +296,13 @@ export default function ContactsView() {
 
   return (
     <div className="contacts-view animate-slide-up">
-      <header className="contacts-header">
-        <div className="contacts-header-left">
-          <Users size={18} />
-          <div>
-            <h2>Contatos</h2>
-            <p>Amigos mútuos — se alguém te remover, some da lista automaticamente</p>
-          </div>
-        </div>
-      </header>
+      <p className="contacts-intro">Amigos são mútuos: se alguém te remover, some da sua lista também.</p>
 
       {error && <div className="contacts-error">{error}</div>}
       {successMsg && <div className="contacts-success">{successMsg}</div>}
 
       <div className="contacts-grid">
-        <section className="contacts-card">
+        <section className="contacts-card contacts-card--add">
           <div className="contacts-card-head">
             <h3>Adicionar contato</h3>
           </div>
@@ -367,7 +358,7 @@ export default function ContactsView() {
           )}
         </section>
 
-        <section className="contacts-card">
+        <section className="contacts-card contacts-card--friends">
           <div className="contacts-card-head">
             <h3>Amigos</h3>
             <span className="contacts-badge">{contacts.length}</span>
@@ -424,7 +415,7 @@ export default function ContactsView() {
           )}
         </section>
 
-        <section className="contacts-card">
+        <section className="contacts-card contacts-card--requests">
           <div className="contacts-card-head">
             <h3>Solicitações</h3>
             <span className="contacts-badge">{incoming.length + outgoing.length}</span>

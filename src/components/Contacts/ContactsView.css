@@ -327,3 +327,27 @@
   .contacts-grid { grid-template-columns: 1fr; }
 }
 
+
+/* Amigos em destaque; adicionar no topo; solicitações ao lado */
+.contacts-intro {
+  color: var(--dw-text-3, var(--text-tertiary));
+  font-size: var(--dw-fs-sm, 0.85rem);
+}
+
+.contacts-grid {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  grid-template-areas:
+    'add add'
+    'friends requests';
+}
+
+.contacts-card--add { grid-area: add; }
+.contacts-card--friends { grid-area: friends; }
+.contacts-card--requests { grid-area: requests; }
+
+@media (max-width: 900px) {
+  .contacts-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'add' 'requests' 'friends';
+  }
+}
