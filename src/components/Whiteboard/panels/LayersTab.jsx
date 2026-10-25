@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
-import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { useWhiteboardStore, useWhiteboardFields } from '../../../stores/whiteboardStore';
 import { useWhiteboardSelectionStore } from '../../../stores/whiteboardSelectionStore';
 import { useCollabPatch } from '../../../collab/space/ops/useCollabPatch';
 import { useAuth } from '../../../context/useAuth';
@@ -271,7 +271,7 @@ export default function LayersTab({ spaceId }) {
         deleteSpacePage,
         duplicateSpacePage,
         addNode,
-    } = useWhiteboardStore();
+    } = useWhiteboardFields('nodes', 'selectedNodeIds', 'spacePages', 'activePageId', 'setActivePageId', 'addSpacePage', 'renameSpacePage', 'deleteSpacePage', 'duplicateSpacePage', 'addNode');
     const { collabPatchNode, collabPatchNodes, collabCreateNode, collabDeleteNodes, connected: collabConnected } =
         useCollabPatch();
 

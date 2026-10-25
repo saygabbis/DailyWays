@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
+import { useWhiteboardStore, useWhiteboardFields } from '../../../../stores/whiteboardStore';
 import { useCollabPatch } from '../../../../collab/space/ops/useCollabPatch';
 import { recordNodesMutation } from '../../core/history/whiteboardHistory';
 
@@ -7,7 +7,7 @@ import { recordNodesMutation } from '../../core/history/whiteboardHistory';
  * Campo editável em nós de texto (Text, Sticky, Comment).
  */
 export function useEditableNodeField(nodeId, field, { displayValue, emptySeedValue = '' } = {}) {
-    const { editingNodeId, editTypingSeed, setEditingNodeId, setEditTypingSeed } = useWhiteboardStore();
+    const { editingNodeId, editTypingSeed, setEditingNodeId, setEditTypingSeed } = useWhiteboardFields('editingNodeId', 'editTypingSeed', 'setEditingNodeId', 'setEditTypingSeed');
     const { collabPatchNode } = useCollabPatch();
     const isEditing = editingNodeId === nodeId;
     const [editValue, setEditValue] = useState(displayValue ?? '');

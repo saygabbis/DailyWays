@@ -47,6 +47,8 @@ function loadInspectorTab() {
 }
 
 function loadInspectorPanelOpen() {
+    // No celular o inspetor é uma folha por cima do canvas: começa fechado e abre pelo botão.
+    if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 768px)').matches) return false;
     try {
         const v = localStorage.getItem(INSPECTOR_PANEL_KEY);
         if (v !== null) return v === 'true';

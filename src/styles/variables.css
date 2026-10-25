@@ -426,6 +426,6 @@
 /* Mobile: altura da barra inferior (MobileBottomNav) */
 @media (max-width: 768px) {
   :root {
-    --mobile-bottom-nav-height: 56px;
+    --mobile-bottom-nav-height: 60px;
   }
 }

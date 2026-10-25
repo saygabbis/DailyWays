@@ -16,7 +16,7 @@
     .space-inspector:not(.space-inspector--collapsed) {
         position: fixed;
         right: 0;
-        bottom: 0;
+        bottom: calc(var(--mobile-bottom-nav-height, 60px) + env(safe-area-inset-bottom, 0px));
         left: 0;
         width: 100%;
         height: min(46vh, 380px);
@@ -31,7 +31,8 @@
     .space-inspector--collapsed {
         position: fixed;
         right: 8px;
-        bottom: calc(var(--mobile-bottom-nav-height, 56px) + 72px);
+        top: calc(var(--header-height) + 10px);
+        bottom: auto;
         width: 44px;
         height: auto;
         border: 1px solid var(--border-color);

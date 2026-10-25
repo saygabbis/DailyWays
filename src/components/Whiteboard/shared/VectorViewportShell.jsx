@@ -1,11 +1,17 @@
 import { useWhiteboardViewportZoom } from '../interaction/viewport/useWhiteboardViewportZoom';
-import { getSharpSvgLayout, WORLD_DIM_EPSILON } from './vectorViewport.js';
+import { getRenderZoom, getSharpSvgLayout, WORLD_DIM_EPSILON } from './vectorViewport.js';
+
+/** Fator mundo → px do layout interno do shell (para tipografia/padding dos filhos). */
+export function useSharpRenderZoom() {
+    return getRenderZoom(useWhiteboardViewportZoom());
+}
 
 /**
  * Renderiza filhos num espaço lógico (px de ecrã) com nitidez em qualquer zoom do canvas.
- * Filhos devem usar width/height em unidades de mundo (mesmas do nó).
+ * O layout interno mede width×height×zoom: filhos usam 100% do tamanho e tipografia
+ * multiplicada por useSharpRenderZoom() (ver scaleTextCss).
  */
-export default function VectorViewportShell({ width, height, className = '', style, children }) {
+export default function VectorViewportShell({ width, height, className = '', style, innerStyle, children }) {
     const zoom = useWhiteboardViewportZoom();
     const { layoutWidth, layoutHeight, scaleTransform } = getSharpSvgLayout(width, height, zoom);
     const w = Math.max(Number(width) || 0, WORLD_DIM_EPSILON);
@@ -32,6 +38,7 @@ export default function VectorViewportShell({ width, height, className = '', sty
                     height: layoutHeight,
                     transform: scaleTransform,
                     transformOrigin: 'top left',
+                    ...innerStyle,
                 }}
             >
                 {children}

@@ -7,7 +7,7 @@ const RENDER_ZOOM_MAX = 512;
 /** Dimensão mínima em mundo — abaixo disto o browser perde subpixel. */
 export const WORLD_DIM_EPSILON = 1e-9;
 
-function getRenderZoom(zoom) {
+export function getRenderZoom(zoom) {
     const z = clampViewportZoom(zoom);
     return Math.min(RENDER_ZOOM_MAX, Math.max(RENDER_ZOOM_MIN, z));
 }

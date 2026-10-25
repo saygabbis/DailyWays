@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { useWhiteboardFields } from '../../../stores/whiteboardStore';
 
 function getNodeCenter(node) {
     if (!node) return { x: 0, y: 0 };
@@ -10,7 +10,7 @@ function getNodeCenter(node) {
 }
 
 export default function ConnectorLayer() {
-    const { connectors, nodes } = useWhiteboardStore();
+    const { connectors, nodes } = useWhiteboardFields('connectors', 'nodes');
     const nodesById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
 
     const paths = useMemo(() => {

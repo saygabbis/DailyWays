@@ -1,6 +1,6 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/useApp';
-import { useWhiteboardStore } from '../../stores/whiteboardStore';
+import { useWhiteboardSelectionStore } from '../../stores/whiteboardSelectionStore';
 import { getInspectorInsetPx, CanvasEngine } from '../Whiteboard';
 import { SpaceCollabOpsProvider } from '../../collab/space/ops/SpaceCollabOpsContext.jsx';
 import SpaceCollabSync from '../../collab/space/sync/SpaceCollabSync.jsx';
@@ -8,29 +8,40 @@ import SpaceCollabStatusBanner from '../../collab/space/ui/SpaceCollabStatusBann
 import PresenceOnlineList from '../../collab/board/ui/PresenceOnlineList.jsx';
 import './SpaceView.css';
 
+const VIEW_KEY = (spaceId) => `dailyways_space_view_${spaceId}`;
+
+/** Câmera do canvas é de cada aparelho (antes ia para a linha do space, compartilhada por todos). */
+function loadLocalView(spaceId) {
+    try {
+        const v = JSON.parse(localStorage.getItem(VIEW_KEY(spaceId)) || 'null');
+        if (v && Number.isFinite(v.panX) && Number.isFinite(v.panY) && Number.isFinite(v.zoom) && v.zoom > 0) return v;
+    } catch { /* sem storage: abre enquadrando o conteúdo */ }
+    return null;
+}
+
 export default function SpaceView({ spaceId }) {
-    const { state, dispatch, suppressRealtime } = useApp();
-    const inspectorPanelOpen = useWhiteboardStore((s) => s.inspectorPanelOpen);
+    const { state } = useApp();
+    const inspectorPanelOpen = useWhiteboardSelectionStore((s) => s.inspectorPanelOpen);
     const inspectorInset = getInspectorInsetPx(inspectorPanelOpen);
-    const space = state.spaces.find(s => s.id === spaceId);
+    const storedSpace = state.spaces.find(s => s.id === spaceId);
     const saveTimer = useRef(null);
+    // Sem vista salva neste aparelho → 0,0 a 100%: o canvas enquadra o conteúdo ao abrir.
+    const [initialView] = useState(() => loadLocalView(spaceId) || { panX: 0, panY: 0, zoom: 1 });
+    const space = useMemo(
+        () => (storedSpace ? { ...storedSpace, ...initialView } : null),
+        [storedSpace, initialView],
+    );
+
+    useEffect(() => () => clearTimeout(saveTimer.current), []);
 
     const onViewportChange = useCallback((newPan, newZoom) => {
-        if (saveTimer.current) clearTimeout(saveTimer.current);
-        dispatch({
-            type: 'UPDATE_SPACE',
-            payload: { id: spaceId, updates: { panX: newPan.x, panY: newPan.y, zoom: newZoom } }
-        });
-        if (suppressRealtime) suppressRealtime(2000);
-        saveTimer.current = setTimeout(async () => {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => {
             try {
-                const { updateSpace } = await import('../../services/workspaceService');
-                await updateSpace(spaceId, { panX: newPan.x, panY: newPan.y, zoom: newZoom });
-            } catch (error) {
-                console.error('Failed to save space coords', error);
-            }
-        }, 1000);
-    }, [spaceId, dispatch, suppressRealtime]);
+                localStorage.setItem(VIEW_KEY(spaceId), JSON.stringify({ panX: newPan.x, panY: newPan.y, zoom: newZoom }));
+            } catch { /* storage cheio ou bloqueado: só não lembra a vista */ }
+        }, 400);
+    }, [spaceId]);
 
     if (!space) return <div className="space-view-empty">Space não encontrado</div>;
 

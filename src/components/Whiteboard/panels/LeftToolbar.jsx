@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { useWhiteboardFields } from '../../../stores/whiteboardStore';
 import {
     MousePointer2,
     StickyNote,
@@ -54,7 +54,7 @@ export default function LeftToolbar({ onUploadImage, onUploadFile, registerOpenI
         setToolVariant,
         canUndo,
         canRedo,
-    } = useWhiteboardStore();
+    } = useWhiteboardFields('activeTool', 'setActiveTool', 'toolVariants', 'setToolVariant', 'canUndo', 'canRedo', 'history', 'historyIndex');
     const {
         collabPatchNode,
         collabCreateNode,

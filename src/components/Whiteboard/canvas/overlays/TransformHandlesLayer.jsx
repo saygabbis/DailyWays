@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useWhiteboardDocumentStore } from '../../../../stores/whiteboardDocumentStore';
-import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
+import { useWhiteboardFields } from '../../../../stores/whiteboardStore';
 import { getNodePageId } from '../../core/pages/whiteboardPages';
 import { nodeToWorld } from '../../core/nodeGeometry';
 import { buildNodesById } from '../../core/ops/whiteboardNodeOps';
@@ -17,7 +17,7 @@ import ResizeHandles from './ResizeHandles';
 export default function TransformHandlesLayer({ viewport, containerRef, onResizeStart, onRotateStart }) {
     const nodes = useWhiteboardDocumentStore((s) => s.nodes);
     const activePageId = useWhiteboardDocumentStore((s) => s.activePageId);
-    const { selectedNodeIds, groupDrill, isolateSelection } = useWhiteboardStore();
+    const { selectedNodeIds, groupDrill, isolateSelection } = useWhiteboardFields('selectedNodeIds', 'groupDrill', 'isolateSelection');
 
     const selectionContext = useMemo(
         () => ({ groupDrill, isolateSelection }),

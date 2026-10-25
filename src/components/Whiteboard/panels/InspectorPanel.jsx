@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useWhiteboardStore } from '../../../stores/whiteboardStore';
+import { useWhiteboardStore, useWhiteboardFields } from '../../../stores/whiteboardStore';
 import { useCollabPatch } from '../../../collab/space/ops/useCollabPatch';
 import { alignSelectedNodes } from '../core/align/whiteboardAlign';
 import { nodeToWorld, buildNodesById } from '../core/ops/whiteboardNodeOps';
@@ -471,7 +471,7 @@ function DesignTab({ selectedNodes, single, nodes, spaceId }) {
 }
 
 export default function InspectorPanel({ spaceId, spaceTitle, open, onToggle }) {
-    const { inspectorTab, setInspectorTab, nodes, selectedNodeIds } = useWhiteboardStore();
+    const { inspectorTab, setInspectorTab, nodes, selectedNodeIds } = useWhiteboardFields('inspectorTab', 'setInspectorTab', 'nodes', 'selectedNodeIds');
 
     const selectedNodes = useMemo(
         () => nodes.filter((n) => selectedNodeIds.includes(n.id)),

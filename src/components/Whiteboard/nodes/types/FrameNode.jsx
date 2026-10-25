@@ -2,7 +2,7 @@ import { memo, useCallback, useRef, useEffect } from 'react';
 import BaseNode from './BaseNode';
 import AppearanceRenderer from '../../shared/AppearanceRenderer.jsx';
 import { sameNodeVisual } from '../../shared/appearanceStyle.js';
-import { useWhiteboardStore, isCreationTool } from '../../../../stores/whiteboardStore';
+import { useWhiteboardFields, isCreationTool } from '../../../../stores/whiteboardStore';
 import { useWhiteboardSelectionStore } from '../../../../stores/whiteboardSelectionStore';
 import { pointerDownUpdateSelection } from '../../interaction/selection/nodeSelectionPointer';
 import { useEditableNodeField } from '../../interaction/hooks/useEditableNodeField';
@@ -10,7 +10,7 @@ import { useEditableNodeField } from '../../interaction/hooks/useEditableNodeFie
 const FrameNodeVisual = memo(function FrameNodeVisual({ node, onTitlePointerDown, onTitleContextMenu }) {
     const title = node.data?.title ?? 'Frame';
     const clipEnabled = node.data?.clipContent !== false;
-    const { setEditingNodeId, setEditTypingSeed } = useWhiteboardStore();
+    const { setEditingNodeId, setEditTypingSeed } = useWhiteboardFields('setEditingNodeId', 'setEditTypingSeed');
     const { isEditing, editValue, setEditValue, commitBlur } = useEditableNodeField(node.id, 'title', {
         displayValue: title,
         emptySeedValue: 'Frame',

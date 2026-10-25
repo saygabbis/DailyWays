@@ -51,3 +51,16 @@ export function textStyleToCss(style) {
     if (style.fontFamily) out.fontFamily = style.fontFamily;
     return out;
 }
+
+/**
+ * Tipografia para dentro do VectorViewportShell: lá dentro 1 px = 1 px de tela (layout × zoom),
+ * então tamanhos em unidades de mundo são multiplicados pelo zoom de render.
+ * Sem isso o texto crescia ao afastar (vazava da nota) e encolhia ao aproximar.
+ */
+export function scaleTextCss(css, k) {
+    const out = { ...css };
+    if (typeof out.fontSize === 'number') out.fontSize = out.fontSize * k;
+    const ls = parseFloat(out.letterSpacing);
+    if (Number.isFinite(ls)) out.letterSpacing = `${ls * k}px`;
+    return out;
+}

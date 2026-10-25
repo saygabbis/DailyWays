@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { patchToOps, THROTTLE_FIELDS, DEBOUNCE_FIELDS } from '@dailyways/collab-protocol';
 import { uuidv4 } from '../../../utils/uuid';
 import { useWhiteboardStore } from '../../../stores/whiteboardStore';
@@ -182,7 +182,9 @@ export function useSpaceCollabOps() {
     if (collab?.connected) emitFromPatch('connector', connectorId, patch);
   }, [collab?.connected, emitFromPatch]);
 
-  return {
+  const connected = collab?.connected ?? false;
+  // objeto estável: é o valor do contexto, e um objeto novo a cada render re-renderizava o canvas todo
+  return useMemo(() => ({
     collabPatchNode,
     collabPatchNodes,
     collabEmitNodeOps,
@@ -192,7 +194,8 @@ export function useSpaceCollabOps() {
     collabDeleteConnector,
     collabPatchConnector,
     scheduleOp,
-    connected: collab?.connected ?? false,
-  };
+    connected,
+  }), [collabPatchNode, collabPatchNodes, collabEmitNodeOps, collabCreateNode, collabDeleteNodes,
+    collabCreateConnector, collabDeleteConnector, collabPatchConnector, scheduleOp, connected]);
 }
 

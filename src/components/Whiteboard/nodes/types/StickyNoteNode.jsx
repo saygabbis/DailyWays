@@ -1,20 +1,21 @@
 import { useState, useEffect } from 'react';
 import { TEXT } from '@dailyways/limits';
 import BaseNode from './BaseNode';
-import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
+import { useWhiteboardStore, useWhiteboardFields } from '../../../../stores/whiteboardStore';
 import { useCollabPatch } from '../../../../collab/space/ops/useCollabPatch';
 import { recordNodesMutation } from '../../core/history/whiteboardHistory';
 import { contrastingTextColor } from '../../../../utils/contrastingTextColor';
-import { getTextStyleFromNode, textStyleToCss } from '../../shared/textStyle';
-import VectorViewportShell from '../../shared/VectorViewportShell.jsx';
+import { getTextStyleFromNode, scaleTextCss, textStyleToCss } from '../../shared/textStyle';
+import VectorViewportShell, { useSharpRenderZoom } from '../../shared/VectorViewportShell.jsx';
 
 export default function StickyNoteNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const text = node.data?.text ?? '';
     const color = node.style?.backgroundColor ?? '#fef08a';
     const textStyle = getTextStyleFromNode(node);
     const textColor = textStyle.color ?? contrastingTextColor(color);
-    const typographyCss = textStyleToCss({ ...textStyle, color: textColor });
-    const { editingNodeId, editTypingSeed, setEditingNodeId, setEditTypingSeed } = useWhiteboardStore();
+    const renderZoom = useSharpRenderZoom();
+    const typographyCss = scaleTextCss(textStyleToCss({ ...textStyle, color: textColor }), renderZoom);
+    const { editingNodeId, editTypingSeed, setEditingNodeId, setEditTypingSeed } = useWhiteboardFields('editingNodeId', 'editTypingSeed', 'setEditingNodeId', 'setEditTypingSeed');
     const { collabPatchNode } = useCollabPatch();
     const isEditing = editingNodeId === node.id;
     const [editValue, setEditValue] = useState(text);
@@ -56,12 +57,12 @@ export default function StickyNoteNode({ node, onNodePointerDown, onNodeContextM
                     onBlur={isEditing ? handleBlur : undefined}
                     autoFocus={isEditing}
                     style={{
-                        width: node.width,
-                        height: node.height,
+                        width: '100%',
+                        height: '100%',
                         resize: 'none',
                         border: 'none',
                         background: 'transparent',
-                        padding: 8,
+                        padding: 8 * renderZoom,
                         boxSizing: 'border-box',
                         ...typographyCss,
                     }}

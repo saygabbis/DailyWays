@@ -1,8 +1,8 @@
 import BaseNode from './BaseNode';
 import { TEXT } from '@dailyways/limits';
 import { useEditableNodeField } from '../../interaction/hooks/useEditableNodeField';
-import { getTextStyleFromNode, textStyleToCss } from '../../shared/textStyle';
-import VectorViewportShell from '../../shared/VectorViewportShell.jsx';
+import { getTextStyleFromNode, scaleTextCss, textStyleToCss } from '../../shared/textStyle';
+import VectorViewportShell, { useSharpRenderZoom } from '../../shared/VectorViewportShell.jsx';
 
 export default function TextNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const text = node.data?.text ?? '';
@@ -16,7 +16,10 @@ export default function TextNode({ node, onNodePointerDown, onNodeContextMenu })
         commitBlur(node, (n, value) => ({ data: { ...n.data, text: value } }));
     };
 
+    const renderZoom = useSharpRenderZoom();
     const css = textStyleToCss(textStyle);
+    // cor fica fora (herda); tamanhos vão para o layout interno, que mede mundo × zoom
+    const innerCss = scaleTextCss(css, renderZoom);
 
     return (
         <BaseNode node={node} onNodePointerDown={onNodePointerDown} onNodeContextMenu={onNodeContextMenu}>
@@ -24,7 +27,8 @@ export default function TextNode({ node, onNodePointerDown, onNodeContextMenu })
                 width={node.width}
                 height={node.height}
                 className={`whiteboard-node text-node ${isEditing ? 'text-node--editing' : ''} ${!text && !isEditing ? 'text-node--empty' : ''}`}
-                style={css}
+                style={{ color: css.color }}
+                innerStyle={innerCss}
             >
                 {isEditing ? (
                     <textarea

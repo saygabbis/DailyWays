@@ -22,6 +22,7 @@ import SelectionManager from './overlays/SelectionManager';
 import RulersOverlay from './overlays/RulersOverlay';
 import RulerGuidesOverlay from './overlays/RulerGuidesOverlay';
 import { useRulerGuideInteraction } from '../interaction/hooks/useRulerGuideInteraction';
+import { computeViewportToFitNodes } from '../interaction/viewport/viewportFit';
 import { getInspectorInsetPx } from '../shared/inspectorLayout';
 import { patchZIndexSelected } from '../core/ops/whiteboardNodeOps';
 import ShortcutsHelp from '../panels/ShortcutsHelp';
@@ -270,6 +271,47 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps -- só ao trocar de space
     }, [spaceId]);
+
+    // Ao abrir: vista nunca ajustada (0,0 a 100%) ou nenhum elemento ao menos metade na tela
+    // (vista salva em outra tela/tamanho) → enquadra o conteúdo. Uma vez por space.
+    const autoFitSpaceRef = useRef(null);
+    const setViewportForFit = viewportState.setViewport;
+    useEffect(() => {
+        if (!spaceId) return undefined;
+        const tryFit = () => {
+            if (autoFitSpaceRef.current === spaceId) return true;
+            const doc = useWhiteboardDocumentStore.getState();
+            if (doc.spaceId !== spaceId) return false;
+            const nodes = useWhiteboardStore.getState().nodes || [];
+            // o inspetor fica ao lado (flex), fora do retângulo do viewport
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (!nodes.length || !rect?.width) return false;
+            autoFitSpaceRef.current = spaceId;
+            const { panX, panY, zoom } = viewportRef.current || { panX: 0, panY: 0, zoom: 1 };
+            const neverAdjusted = !panX && !panY && zoom === 1;
+            const mostlyVisible = (n) => {
+                const w = (n.width ?? 0) * zoom;
+                const h = (n.height ?? 0) * zoom;
+                if (w <= 0 || h <= 0) return false;
+                const left = rect.width / 2 + panX + (n.x ?? 0) * zoom;
+                const top = rect.height / 2 + panY + (n.y ?? 0) * zoom;
+                const visW = Math.max(0, Math.min(left + w, rect.width) - Math.max(left, 0));
+                const visH = Math.max(0, Math.min(top + h, rect.height) - Math.max(top, 0));
+                return (visW * visH) / (w * h) >= 0.5;
+            };
+            if (!neverAdjusted && nodes.some(mostlyVisible)) return true;
+            const fit = computeViewportToFitNodes(nodes, rect, 160);
+            const zoomFit = Math.min(fit.zoom, 1);
+            const scale = zoomFit / fit.zoom;
+            setViewportForFit({ x: fit.pan.x * scale, y: fit.pan.y * scale }, zoomFit);
+            return true;
+        };
+        if (tryFit()) return undefined;
+        const unsub = useWhiteboardDocumentStore.subscribe(() => {
+            if (tryFit()) unsub();
+        });
+        return unsub;
+    }, [spaceId, setViewportForFit]);
 
     const setViewportState = viewportState.setViewport;
     useEffect(() => {
@@ -573,7 +615,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                 <DraggablePanel
                     id="whiteboard-toolbar"
                     className="whiteboard-toolbar-panel"
-                    defaultBottom={16}
+                    defaultBottom={76}
                     hideHandle
                     style={{ left: 12, right: 12, transform: 'none' }}
                 >

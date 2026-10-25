@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import BaseNode from './BaseNode';
-import { useWhiteboardStore } from '../../../../stores/whiteboardStore';
+import { useWhiteboardStore, useWhiteboardFields } from '../../../../stores/whiteboardStore';
 import { useCollabPatch } from '../../../../collab/space/ops/useCollabPatch';
 import { recordNodesMutation } from '../../core/history/whiteboardHistory';
 
 export default function CommentNode({ node, onNodePointerDown, onNodeContextMenu }) {
     const message = node.data?.message ?? '';
-    const { editingNodeId, setEditingNodeId } = useWhiteboardStore();
+    const { editingNodeId, setEditingNodeId } = useWhiteboardFields('editingNodeId', 'setEditingNodeId');
     const { collabPatchNode } = useCollabPatch();
     const isEditing = editingNodeId === node.id;
     const [editValue, setEditValue] = useState(message);
