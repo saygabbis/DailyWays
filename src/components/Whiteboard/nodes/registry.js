@@ -23,7 +23,7 @@ const NODE_REGISTRY = [
     { type: 'link', component: LinkCardNode, tool: 'link', label: 'Link' },
     { type: 'todo_list', component: TodoListNode, tool: 'todo_list', label: 'To-do' },
     { type: 'file_card', component: FileCardNode, tool: 'file', label: 'Ficheiro' },
-    { type: 'draw', component: DrawingNode, tool: 'draw', label: 'Desenho' },
+    { type: 'drawing', component: DrawingNode, tool: 'draw', label: 'Desenho' },
     { type: 'table', component: TableNode, tool: 'table', label: 'Tabela' },
 ];
 

@@ -75,7 +75,8 @@ const SEED = `
     ('${S_LAYOUT}', 'sticky_note', 120, 120, 220, 160, '{"text":"Ideias para a Visão Geral"}', 1),
     ('${S_LAYOUT}', 'sticky_note', 400, 160, 220, 160, '{"text":"Menos informação por tela"}', 2),
     ('${S_LAYOUT}', 'text', 120, 360, 320, 60, '{"text":"Redesign 2026"}', 3),
-    ('${S_LAYOUT}', 'shape', 520, 380, 160, 120, '{"shape":"rect"}', 4);
+    ('${S_LAYOUT}', 'shape', 520, 380, 160, 120, '{"shape":"rect"}', 4),
+    ('${S_LAYOUT}', 'drawing', 120, 460, 300, 90, '{"freehand":true,"vbW":300,"vbH":90,"paths":[{"d":"M 4 60 Q 40 10 80 45 Q 120 80 160 40 Q 200 5 240 40 L 296 30","width":4}]}', 5);
   INSERT INTO public.contacts (user_id, contact_user_id) VALUES ('${ME.id}', '${FRIEND.id}'), ('${FRIEND.id}', '${ME.id}');
 `;
 

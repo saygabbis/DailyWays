@@ -108,6 +108,8 @@ export default function AppHelpWidget({ onNavigateView }) {
             if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return;
             const el = e.target;
             if (el?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+            // no Space o "?" abre os atalhos do canvas
+            if (document.querySelector('.space-view-container')) return;
             e.preventDefault();
             openPanel(null);
         };

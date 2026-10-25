@@ -4,7 +4,47 @@ import { useWhiteboardViewportZoom } from '../../interaction/viewport/useWhitebo
 import { strokeWidthInWorld, WORLD_DIM_EPSILON } from '../../shared/vectorViewport.js';
 import { screenPxToWorld } from '../../interaction/viewport/viewportLimits.js';
 
-export default function DrawingNode({ node, onNodePointerDown, onNodeContextMenu }) {
+/** Traço da caneta: caminho vetorial que estica junto com o nó (viewBox do tamanho original). */
+function FreehandDrawing({ node, onNodePointerDown, onNodeContextMenu }) {
+    const paths = node.data?.paths ?? [];
+    const stroke = node.style?.stroke ?? '#8b5cf6';
+    const w = Math.max(node.width ?? 0, WORLD_DIM_EPSILON);
+    const h = Math.max(node.height ?? 0, WORLD_DIM_EPSILON);
+    const vbW = node.data?.vbW || w;
+    const vbH = node.data?.vbH || h;
+    return (
+        <BaseNode node={node} onNodePointerDown={onNodePointerDown} onNodeContextMenu={onNodeContextMenu}>
+            <svg
+                className="whiteboard-node drawing-node drawing-node--freehand"
+                width={w}
+                height={h}
+                viewBox={`0 0 ${vbW} ${vbH}`}
+                preserveAspectRatio="none"
+                style={{ display: 'block', overflow: 'visible' }}
+            >
+                {paths.map((path, i) => (
+                    <path
+                        key={i}
+                        d={path.d ?? ''}
+                        fill="none"
+                        stroke={path.stroke ?? stroke}
+                        strokeWidth={path.width ?? 3}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        shapeRendering="geometricPrecision"
+                    />
+                ))}
+            </svg>
+        </BaseNode>
+    );
+}
+
+export default function DrawingNode(props) {
+    if (props.node?.data?.freehand) return <FreehandDrawing {...props} />;
+    return <DrawingBox {...props} />;
+}
+
+function DrawingBox({ node, onNodePointerDown, onNodeContextMenu }) {
     const paths = node.data?.paths ?? [];
     const stroke = node.style?.stroke ?? '#000';
     const zoom = useWhiteboardViewportZoom();
@@ -27,7 +67,7 @@ export default function DrawingNode({ node, onNodePointerDown, onNodeContextMenu
                     boxSizing: 'border-box',
                 }}
             >
-                <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
+                <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
                     {paths.length > 0 ? (
                         paths.map((path, i) => {
                             const screenStroke = path.strokeWidth ?? 2;

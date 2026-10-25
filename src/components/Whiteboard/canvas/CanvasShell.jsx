@@ -46,6 +46,8 @@ import { useNodeDrag } from './hooks/useNodeDrag';
 import { useCanvasPointerDown } from './hooks/useCanvasPointerDown';
 import { useCanvasPointerGestures } from './hooks/useCanvasPointerGestures';
 import { useCanvasContextMenu } from './hooks/useCanvasContextMenu';
+import { useFreehandDraw } from './hooks/useFreehandDraw';
+import PenBar from '../panels/PenBar';
 
 export default function CanvasEngine({ spaceId, space, onViewportChange, onRegisterViewportControl }) {
     const containerRef = useRef(null);
@@ -174,6 +176,26 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
         collabPatchNode,
         collabCreateNode,
         collabConnected,
+    });
+
+    const [pen, setPen] = useState(() => {
+        try {
+            const v = JSON.parse(localStorage.getItem('dailyways_pen') || 'null');
+            if (v?.color && v?.size) return v;
+        } catch { /* padrão abaixo */ }
+        return { color: '#8b5cf6', size: 4 };
+    });
+    const changePen = useCallback((next) => {
+        setPen(next);
+        try { localStorage.setItem('dailyways_pen', JSON.stringify(next)); } catch { /* só não lembra */ }
+    }, []);
+    const freehandPreviewRef = useFreehandDraw({
+        containerRef,
+        viewportRef,
+        active: activeTool === 'draw',
+        isSpacePressed,
+        createNodeAt,
+        pen,
     });
 
     const {
@@ -479,7 +501,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
             >
                 <div className="whiteboard-canvas-column">
                 <div
-                    className={`whiteboard-viewport ${viewportState.isPanning ? 'panning' : ''} ${isSpacePressed ? 'space-pressed' : ''} ${!gridVisible ? 'grid-hidden' : ''} ${rulersVisible ? 'rulers-visible' : ''}`}
+                    className={`whiteboard-viewport ${activeTool === 'draw' ? 'tool-draw' : ''} ${viewportState.isPanning ? 'panning' : ''} ${isSpacePressed ? 'space-pressed' : ''} ${!gridVisible ? 'grid-hidden' : ''} ${rulersVisible ? 'rulers-visible' : ''}`}
                     ref={containerRef}
                     tabIndex={-1}
                 onWheel={viewportState.handleWheel}
@@ -512,6 +534,11 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                                 : snapGuides
                         }
                     />
+                    {activeTool === 'draw' && (
+                        <svg className="whiteboard-freehand-preview" aria-hidden>
+                            <path ref={freehandPreviewRef} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                    )}
                     <div className="whiteboard-nodes-container">
                         <NodeLayer
                             viewport={viewportForChildren}
@@ -574,6 +601,7 @@ export default function CanvasEngine({ spaceId, space, onViewportChange, onRegis
                     />
                 )}
             </div>
+                {activeTool === 'draw' && <PenBar pen={pen} onChange={changePen} />}
                 {!isMobile && (
                     <WhiteboardBottomChrome
                         toolbarProps={{

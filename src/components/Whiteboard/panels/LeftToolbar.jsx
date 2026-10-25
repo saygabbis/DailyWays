@@ -11,7 +11,6 @@ import {
     Table2,
     ArrowRightLeft,
     MessageSquare,
-    MoreHorizontal,
     Pencil,
     ImagePlus,
     FileUp,
@@ -25,13 +24,13 @@ import { performUndo, performRedo } from '../core/history/undoController';
 import { getToolMenuConfig } from './toolbar/toolMenuRegistry.js';
 import ToolbarToolGroup from './toolbar/ToolbarToolGroup.jsx';
 import ToolbarToolButton from './toolbar/ToolbarToolButton.jsx';
-import ToolbarToolMenu from './toolbar/ToolbarToolMenu.jsx';
 import '../styles/LeftToolbar.css';
 
 const TOOLS = [
     { id: 'select', icon: MousePointer2, label: 'Selecionar' },
     { id: 'sticky_note', icon: StickyNote, label: 'Nota' },
     { id: 'text', icon: Type, label: 'Texto' },
+    { id: 'draw', icon: Pencil, label: 'Caneta' },
     { id: 'shape', icon: Square, label: 'Forma' },
     { id: 'frame', icon: Layout, label: 'Frame' },
     { id: 'link', icon: Link2, label: 'Link' },
@@ -44,8 +43,6 @@ const TOOLS = [
 export default function LeftToolbar({ onUploadImage, onUploadFile, registerOpenImagePicker, registerOpenFilePicker, variant }) {
     const imageInputRef = useRef(null);
     const fileInputRef = useRef(null);
-    const moreRef = useRef(null);
-    const [showMore, setShowMore] = useState(false);
     const [showComments, setShowComments] = useState(false);
     const {
         activeTool,
@@ -129,28 +126,6 @@ export default function LeftToolbar({ onUploadImage, onUploadFile, registerOpenI
                         />
                     );
                 })}
-                <div ref={moreRef} className="left-toolbar-more">
-                    <button
-                        type="button"
-                        className="left-toolbar-btn"
-                        onClick={() => setShowMore((v) => !v)}
-                        title="Mais"
-                        aria-expanded={showMore}
-                    >
-                        <MoreHorizontal size={20} />
-                    </button>
-                    <ToolbarToolMenu
-                        open={showMore}
-                        onClose={() => setShowMore(false)}
-                        orientation="horizontal"
-                        anchorRef={moreRef}
-                        triggerRef={moreRef}
-                    >
-                        <button type="button" onClick={() => { setShowMore(false); setActiveTool('draw'); }}>
-                            <Pencil size={16} /> Desenho
-                        </button>
-                    </ToolbarToolMenu>
-                </div>
                 <button type="button" className="left-toolbar-btn" onClick={handleImageClick} title="Enviar imagem">
                     <ImagePlus size={20} />
                 </button>

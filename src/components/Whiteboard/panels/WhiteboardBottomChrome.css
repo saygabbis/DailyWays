@@ -21,3 +21,85 @@
     pointer-events: auto;
     max-width: 100%;
 }
+
+/* Caneta */
+.whiteboard-pen-bar {
+    position: absolute;
+    left: 50%;
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--dw-surface, var(--bg-elevated));
+    border: 1px solid var(--dw-line, var(--border-color));
+    border-radius: var(--dw-r-full, 999px);
+    box-shadow: var(--dw-shadow-2, var(--shadow-md));
+    z-index: 101;
+    animation: scaleIn var(--dw-dur-3, 200ms) var(--dw-ease-spring, ease-out) both;
+}
+
+.whiteboard-pen-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--pen-color);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15);
+    transition: transform var(--dw-dur-2, 150ms) var(--dw-ease-spring, ease-out);
+}
+
+.whiteboard-pen-swatch.is-active {
+    box-shadow: 0 0 0 2px var(--dw-surface, #fff), 0 0 0 4px var(--pen-color);
+    transform: scale(1.05);
+}
+
+.whiteboard-pen-sep {
+    width: 1px;
+    height: 20px;
+    background: var(--dw-line, var(--border-color));
+    margin: 0 2px;
+}
+
+.whiteboard-pen-size {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: var(--dw-text-2, var(--text-secondary));
+}
+
+.whiteboard-pen-size span {
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.whiteboard-pen-size.is-active {
+    background: var(--dw-accent-soft, rgba(124, 58, 237, 0.15));
+    color: var(--dw-accent-text, var(--accent-primary));
+}
+
+.whiteboard-freehand-preview {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.whiteboard-viewport.tool-draw {
+    cursor: crosshair;
+}
+
+@media (max-width: 768px) {
+    .whiteboard-pen-bar {
+        position: fixed;
+        bottom: calc(var(--mobile-bottom-nav-height, 60px) + 84px + env(safe-area-inset-bottom, 0px));
+        max-width: calc(100% - 24px);
+        overflow-x: auto;
+    }
+}

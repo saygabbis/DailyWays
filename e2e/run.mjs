@@ -215,6 +215,24 @@ async function main() {
       await waitFor(() => a.locator('.whiteboard-image-svg image').first().isVisible(), 10000, 'imagem visível no canvas');
     });
 
+    await check('caneta no Space: arrastar desenha um traço vetorial que vai ao banco', async () => {
+      await a.getByRole('button', { name: 'Caneta' }).first().click();
+      const vp = await a.locator('.whiteboard-viewport').first().boundingBox();
+      const x0 = vp.x + vp.width * 0.3;
+      const y0 = vp.y + vp.height * 0.3;
+      await a.mouse.move(x0, y0);
+      await a.mouse.down();
+      for (let i = 1; i <= 30; i += 1) await a.mouse.move(x0 + i * 6, y0 + Math.sin(i / 4) * 40);
+      await a.mouse.up();
+      await waitFor(async () => {
+        const r = (await supa.db.query(`SELECT data_json FROM public.space_nodes WHERE space_id = $1 AND type = 'drawing'`, [SPACE])).rows[0];
+        const data = typeof r?.data_json === 'string' ? JSON.parse(r.data_json) : r?.data_json;
+        return data?.freehand === true && /^M [\d.]+ [\d.]+ Q /.test(data.paths?.[0]?.d || '');
+      }, 10000, 'desenho no banco');
+      await waitFor(() => a.locator('.drawing-node--freehand path').first().isVisible(), 5000, 'traço visível');
+      await a.keyboard.press('Escape');
+    });
+
     await check('nenhum erro de página nem bloqueio da CSP nos dois navegadores', async () => {
       const errs = [...a.errors, ...b.errors];
       if (errs.length) throw new Error(errs.slice(0, 3).join(' | '));
