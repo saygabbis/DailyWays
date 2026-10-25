@@ -493,7 +493,7 @@ select option {
     opacity: 0.3;
 }
 
-/* Durante drag @hello-pangea/dnd: evita snap; não usar touch-action:none (atrapalha o sensor de toque) */
+/* Durante o arraste: sem snap do board e sem a página rolar por baixo no celular */
 body.dnd-dragging .board-scroller {
     scroll-snap-type: none !important;
 }

@@ -1364,3 +1364,60 @@
 body.board-multi-drag-active .board-card--selected:not(.board-card-dragging) {
     outline-color: color-mix(in srgb, var(--accent-primary) 40%, transparent);
 }
+/* ── Arrastar (dnd-kit): prévia que segue o ponteiro ── */
+.board-card-overlay {
+    position: relative;
+    width: 280px;
+}
+.board-card-overlay .board-card {
+    box-shadow: var(--dw-shadow-lift);
+}
+.board-list-overlay {
+    width: 280px;
+    padding: 10px;
+    border-radius: var(--dw-r-lg);
+    background: var(--dw-surface);
+    border: 1px solid color-mix(in oklab, var(--list-accent, var(--dw-line-strong)) 45%, transparent);
+    box-shadow: var(--dw-shadow-lift);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.board-list-overlay-head {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    color: var(--dw-text);
+    padding: 2px 4px 6px;
+}
+.board-list-overlay-card {
+    padding: 8px 10px;
+    border-radius: var(--dw-r-sm);
+    background: var(--dw-surface-2);
+    font-size: var(--dw-fs-sm);
+    color: var(--dw-text-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.board-list-overlay-more {
+    font-size: var(--dw-fs-xs);
+    color: var(--dw-text-3);
+    padding-left: 4px;
+}
+.board-list-empty {
+    padding: 14px 8px;
+    text-align: center;
+    font-size: var(--dw-fs-xs);
+    color: var(--dw-text-3);
+    border: 1.5px dashed var(--dw-line);
+    border-radius: var(--dw-r-md);
+}
+.board-list-cards.dragging-over .board-list-empty {
+    border-color: var(--dw-accent-line);
+    color: var(--dw-accent-text);
+    background: var(--dw-accent-softer);
+}
+.board-list-header {
+    touch-action: manipulation;
+}

@@ -4,6 +4,7 @@ import { useRemoteListAnim } from '../../hooks/useBoardRemoteAnim';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { dndKind } from '../../dnd/dndRegistry.js';
 import { useApp } from '../../context/useApp';
 import { useBoardCollabDispatch } from '../../collab/board/ops/useBoardCollab';
 import { useContextMenu } from '../Common/useContextMenu';
@@ -86,7 +87,11 @@ export default function BoardList({
     });
 
     const filteredCardIds = filteredCards.map((c) => c.id);
-    const zone = useDroppable({ id: `list-zone:${list.id}`, data: { kind: 'list-zone', listId: list.id } });
+    const { setNodeRef: bindZone, isOver: zoneOver, active: zoneActive } = useDroppable({
+        id: `list-zone:${list.id}`,
+        data: { kind: 'list-zone', listId: list.id },
+    });
+    const cardOverZone = zoneOver && dndKind(zoneActive) === 'card';
 
     const handleAddCard = (e) => {
         e.preventDefault();
@@ -248,8 +253,8 @@ export default function BoardList({
                 {/* Cards */}
                 <SortableContext items={filteredCardIds} strategy={verticalListSortingStrategy}>
                     <div
-                        className={`board-list-cards ${zone.isOver && zone.active?.data?.current?.kind === 'card' ? 'dragging-over' : ''}`}
-                        ref={zone.setNodeRef}
+                        className={`board-list-cards ${cardOverZone ? 'dragging-over' : ''}`}
+                        ref={bindZone}
                     >
                         {filteredCards.map((card) => {
                             const isMultiDragCompanion = multiDragCardIds.length > 1

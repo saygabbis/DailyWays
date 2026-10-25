@@ -1,6 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { MoreHorizontal, Check } from 'lucide-react';
+import { dndKind } from '../../dnd/dndRegistry.js';
 
 /**
  * Linha de board/space na sidebar. Arrastável (reordenar, mover para pasta) e, para boards,
@@ -32,7 +33,7 @@ export default function SidebarItem({
     disabled: isRenaming,
   });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver, active: dragActive } = sortable;
-  const cardOver = isOver && dragActive?.data?.current?.kind === 'card';
+  const cardOver = isOver && dndKind(dragActive) === 'card';
 
   const style = {
     transform: CSS.Translate.toString(transform),

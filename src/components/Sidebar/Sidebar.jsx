@@ -20,7 +20,7 @@ import { usePomodoro } from '../../context/usePomodoro';
 import { useRadio } from '../../context/useRadio';
 import { useContextMenu } from '../Common/useContextMenu';
 import { useI18n, useTheme } from '../../context/useTheme';
-import { useDndHandlers } from '../../dnd/dndRegistry.js';
+import { useDndHandlers, dndKind } from '../../dnd/dndRegistry.js';
 import { isCardImportant } from '../../utils/cardImportant';
 import BoardDetailsModal from '../Board/BoardDetailsModal';
 import SpaceDetailsModal from '../Spaces/SpaceDetailsModal';
@@ -42,7 +42,7 @@ function TodayLink({ item, active, onClick }) {
         data: { kind: 'zone', zone: item.id },
         disabled: !item.drop,
     });
-    const cardOver = isOver && dragActive?.data?.current?.kind === 'card';
+    const cardOver = isOver && dndKind(dragActive) === 'card';
     return (
         <li ref={setNodeRef}>
             <button
@@ -95,9 +95,9 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
     const [detailsSpace, setDetailsSpace] = useState(null);
     const { sidebarRef, sidebarWidth, handleMouseDown } = useResizableSidebar();
 
-    const boards = state.boards || [];
-    const spaces = state.spaces || [];
-    const groups = state.groups || [];
+    const boards = useMemo(() => state.boards || [], [state.boards]);
+    const spaces = useMemo(() => state.spaces || [], [state.spaces]);
+    const groups = useMemo(() => state.groups || [], [state.groups]);
     const selectedIds = state.selectedItems || [];
     const selectionMode = selectedIds.length > 0;
 
@@ -115,7 +115,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
 
     const {
         createBoard, createFolder, createSpace,
-        handleStartGroupRename, handleGroupRenameSubmit, handleGroupHeaderClick,
+        handleGroupRenameSubmit, handleGroupHeaderClick,
         handleBoardClick, handleSpaceClick, handleNavClick,
         handleStartRename, handleRenameSubmit,
         handleSpaceContextMenu, handleGroupContextMenu, handleBoardContextMenu,

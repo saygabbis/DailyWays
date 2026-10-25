@@ -41,7 +41,6 @@ export function useDndHandlers(handlersByKind) {
     }]));
     return registry.register(proxies);
     // Os tipos registrados não mudam durante a vida do componente.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registry]);
 }
 

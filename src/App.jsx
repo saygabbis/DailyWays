@@ -11,7 +11,6 @@ import BoardCollabBridge from './collab/board/sync/BoardCollabBridge.jsx';
 import BoardCollabSync from './collab/board/sync/BoardCollabSync.jsx';
 import { isCollabEnabled } from './collab/core/collabConfig.js';
 import { pushPresenceFields } from './collab/board/presence/presenceBridge.js';
-import { useCollab } from './collab/core/useCollab';
 import { setLastBoardPointer } from './collab/board/presence/lastBoardPointer.js';
 import { pointerCoordsFromBoardEvent } from './collab/board/coords/boardCursorCoords.js';
 import { BoardCollabProvider } from './collab/board/ops/BoardCollabContext.jsx';
@@ -27,7 +26,7 @@ import DevConfigSync from './dev/DevConfigSync.jsx';
 import DevConfigHotkey from './dev/DevConfigHotkey.jsx';
 import { setDevPrankSession } from './collab/board/dev/boardDevPrank.js';
 import PlannedDropPopover from './components/Common/PlannedDropPopover';
-import { DragDropContext } from '@hello-pangea/dnd';
+import DndProvider from './dnd/DndProvider.jsx';
 import { useWorkspaceNavigation } from './app/useWorkspaceNavigation';
 import { useGlobalDragHandlers } from './app/useGlobalDragHandlers';
 import { useAppShellEffects } from './app/useAppShellEffects';
@@ -61,13 +60,11 @@ function AppContent() {
     getActiveBoard,
     dispatch,
     state,
-    updateWorkspaceOrder,
     boardsLoadError,
     profileMenuOpen,
     saveAllPending,
   } = useApp();
   const { collabDispatch, updateBoardMeta } = useBoardCollabDispatch();
-  const collab = useCollab();
   const { initPreferences } = useTheme();
   const [activeView, setActiveView] = useState('dashboard');
   const viewRestoreDoneRef = useRef(false);
@@ -97,7 +94,6 @@ function AppContent() {
     setShowSearch,
     showContextMenu,
     hideContextMenu,
-    boardViewRef,
     plannedDropCard,
     setPlannedDropCard,
   } = useWorkspaceNavigation({
@@ -140,24 +136,17 @@ function AppContent() {
     return () => document.removeEventListener('pointermove', onPointerMove);
   }, [activeBoardId]);
 
-  const {
-    handleGlobalDragStart,
-    handleGlobalDragEnd,
-    handlePlannedDateSelect,
-  } = useGlobalDragHandlers({
-    user,
-    profile,
-    getActiveBoard,
-    dispatch,
-    state,
-    updateWorkspaceOrder,
+  const { handlePlannedDateSelect } = useGlobalDragHandlers({
     collabDispatch,
-    collab,
-    hideContextMenu,
-    boardViewRef,
     plannedDropCard,
     setPlannedDropCard,
   });
+
+  // Pegar algo para arrastar fecha o menu de contexto aberto.
+  useEffect(() => {
+    window.addEventListener('dw-drag-start', hideContextMenu);
+    return () => window.removeEventListener('dw-drag-start', hideContextMenu);
+  }, [hideContextMenu]);
 
   useAppShellEffects({
     setIsDesktop,
@@ -224,7 +213,7 @@ function AppContent() {
   });
 
   return (
-    <DragDropContext onDragStart={handleGlobalDragStart} onDragEnd={handleGlobalDragEnd}>
+    <DndProvider>
       <BoardCollabBridge />
       {navReady && keepBoardCollabSession && (
         <BoardCollabSync
@@ -239,6 +228,8 @@ function AppContent() {
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           isDesktop={isDesktop}
+          onOpenSearch={() => setShowSearch(true)}
+          onPlannedDrop={setPlannedDropCard}
         />
 
         <main className={mainClass}>
@@ -293,7 +284,7 @@ function AppContent() {
             {navReady && activeView === 'board' && activeBoard && (
               <BoardView
                 key={`board-${activeBoard.id}`}
-                ref={boardViewRef}
+
                 onCardClick={handleCardClick}
                 focusedCardId={
                   selectedCard?.boardId === activeBoard.id ? selectedCard.card.id : null
@@ -394,7 +385,7 @@ function AppContent() {
         <DevConfigHotkey />
 
       </div>
-    </DragDropContext>
+    </DndProvider>
   );
 }
 

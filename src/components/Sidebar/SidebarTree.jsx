@@ -4,6 +4,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { ChevronDown, Plus, FolderPlus, LayoutGrid, Shapes } from 'lucide-react';
 import SidebarFolder from './SidebarFolder';
 import SidebarItem from './SidebarItem';
+import { dndKind } from '../../dnd/dndRegistry.js';
 
 const navId = (itemType, id) => `nav:${itemType}:${id}`;
 
@@ -12,7 +13,7 @@ function RootZone({ itemType, children }) {
     id: `nav-root:${itemType}`,
     data: { kind: 'nav-root', groupType: itemType, groupId: null },
   });
-  const itemOver = isOver && active?.data?.current?.kind === 'nav-item';
+  const itemOver = isOver && dndKind(active) === 'nav-item';
   return (
     <div ref={setNodeRef} className={`sb-root ${itemOver ? 'dw-drop-target' : ''}`}>
       {children}

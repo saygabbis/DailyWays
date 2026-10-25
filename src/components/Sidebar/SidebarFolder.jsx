@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ChevronRight, Folder, FolderOpen, MoreHorizontal, Plus, Music, Box, Star, Tag, Briefcase, BookOpen } from 'lucide-react';
+import { dndKind } from '../../dnd/dndRegistry.js';
 
 const FOLDER_ICONS = { music: Music, box: Box, star: Star, tag: Tag, briefcase: Briefcase, book: BookOpen };
 
@@ -28,7 +29,7 @@ export default function SidebarFolder({
     disabled: isRenaming,
   });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver, active } = sortable;
-  const itemOver = isOver && active?.data?.current?.kind === 'nav-item';
+  const itemOver = isOver && dndKind(active) === 'nav-item';
   const Icon = FOLDER_ICONS[group.icon] || (expanded ? FolderOpen : Folder);
 
   // Arrastar um item por cima de uma pasta fechada abre a pasta (depois de um instante).

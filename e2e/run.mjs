@@ -107,6 +107,54 @@ async function main() {
       if (before !== after) throw new Error(`card não alterado foi reescrito (${before} → ${after})`);
     });
 
+    /** Arraste com mouse de verdade (vários passos, como uma pessoa). */
+    const drag = async (page, from, to, { dy = 0 } = {}) => {
+      await from.scrollIntoViewIfNeeded();
+      const s = await from.boundingBox();
+      const t = await to.boundingBox();
+      await page.mouse.move(s.x + s.width / 2, s.y + s.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(s.x + s.width / 2 + 8, s.y + s.height / 2 + 8, { steps: 4 });
+      await page.mouse.move(t.x + t.width / 2, t.y + t.height / 2 + dy, { steps: 18 });
+      await page.waitForTimeout(150);
+      await page.mouse.up();
+    };
+    const cardEl = (page, title) => page.locator('.board-card', { hasText: title }).first();
+    const listEl = (page, title) => page.locator('.board-list', { has: page.locator('.board-list-title', { hasText: title }) }).first();
+
+    await check('arrastar card para outra lista: move para A, B vê e o banco grava', async () => {
+      await drag(a, cardEl(a, 'Card da Gabbis'), listEl(a, 'Lista B').locator('.board-list-cards'));
+      await waitFor(async () => (await dbCard('Card da Gabbis'))?.list_title === 'Lista B', 8000, 'banco com o card na Lista B');
+      await waitFor(async () => (await listEl(b, 'Lista B').locator('.board-card', { hasText: 'Card da Gabbis' }).count()) === 1, 8000, 'B ver na Lista B');
+    });
+
+    await check('reordenar lista arrastando o cabeçalho', async () => {
+      await drag(a, listEl(a, 'Lista B').locator('.board-list-header'), listEl(a, 'Lista A').locator('.board-list-header'));
+      await waitFor(async () => {
+        const rows = (await supa.db.query(`SELECT title FROM public.lists WHERE board_id = $1 ORDER BY position`, [BOARD])).rows;
+        return rows[0]?.title === 'Lista B';
+      }, 8000, 'Lista B primeiro no banco');
+      await waitFor(async () => (await b.locator('.board-list-title').first().innerText()).includes('Lista B'), 8000, 'B ver a ordem nova');
+    });
+
+    await check('soltar card em "Diário" na sidebar marca para hoje', async () => {
+      await drag(a, cardEl(a, 'Mais um'), a.locator('.sb-today').getByRole('button', { name: /Diário/ }));
+      try {
+        await waitFor(async () => (await dbCard('Mais um'))?.my_day === true, 8000, 'my_day no banco');
+      } catch (err) {
+        console.log(a.consoleLines.filter((l) => /dnd-debug/.test(l)).slice(-4).join('\n'));
+        await a.screenshot({ path: join(here, 'out', 'falha-diario.png') });
+        throw err;
+      }
+    });
+
+    await check('clique no card ainda abre o card (arrastar não engole o clique)', async () => {
+      await cardEl(a, 'Simultâneo A').click();
+      await waitFor(() => a.locator('.task-detail-modal').first().isVisible(), 5000, 'modal aberto');
+      await a.keyboard.press('Escape');
+      await waitFor(async () => !(await a.locator('.task-detail-modal').first().isVisible().catch(() => false)), 5000, 'modal fechado');
+    });
+
     await check('collab cai: A continua editando, o navegador grava (fallback) e ao voltar B vê', async () => {
       stack.stopCollab();
       await new Promise((r) => setTimeout(r, 800));
