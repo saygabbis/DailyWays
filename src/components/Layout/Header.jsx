@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Menu, X, Bell, Settings, Users, LogOut, ChevronDown, Layout, Share2, MessageCircle, Undo2, Redo2 } from 'lucide-react';
+import { Search, Menu, PanelLeftClose, Bell, Settings, Users, LogOut, ChevronDown, Layout, Share2, MessageCircle, Undo2, Redo2 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
 import { useApp } from '../../context/useApp';
 import { useNotifications } from '../../hooks/useNotifications';
@@ -234,7 +234,7 @@ export default function Header({ title, subtitle, onMenuClick, sidebarOpen, onOp
                     aria-label={sidebarOpen ? 'Fechar navegação' : 'Abrir navegação'}
                     aria-expanded={!!sidebarOpen}
                 >
-                    {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+                    {sidebarOpen ? <PanelLeftClose size={20} /> : <Menu size={20} />}
                 </button>
                 <div className="header-title-group">
                     {titleEmoji && <span className="header-title-emoji" aria-hidden>{titleEmoji}</span>}

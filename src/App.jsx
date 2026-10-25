@@ -275,7 +275,7 @@ function AppContent() {
           }}>
             <ErrorBoundary label="view" resetKey={`${activeView}:${activeBoard?.id ?? ''}`}>
             <Suspense fallback={<div className="app-view-loading" aria-busy="true" />}>
-            {navReady && activeView === 'dashboard' && <DashboardView key="dashboard" />}
+            {navReady && activeView === 'dashboard' && <DashboardView key="dashboard" onCardClick={handleCardClick} />}
             {navReady && activeView === 'myday' && <MyDayView key="myday" onCardClick={handleCardClick} />}
             {navReady && activeView === 'important' && <ImportantView key="important" onCardClick={handleCardClick} />}
             {navReady && activeView === 'planned' && <PlannedView key="planned" onCardClick={handleCardClick} />}

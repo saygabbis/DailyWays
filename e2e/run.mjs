@@ -148,6 +148,15 @@ async function main() {
       }
     });
 
+    await check('concluir pela Visão Geral grava no banco e B vê', async () => {
+      await a.locator('.sidebar').getByText('Visão Geral').first().click();
+      await a.getByRole('button', { name: 'Concluir "Mais um"' }).click();
+      await waitFor(async () => (await dbCard('Mais um'))?.completed === true, 8000, 'completed no banco');
+      await a.locator('.sidebar').getByText('Board E2E').first().click();
+      await a.locator('.board-list-title', { hasText: 'Lista A' }).first().waitFor({ timeout: 10000 });
+      await waitFor(async () => (await b.locator('.board-card.board-card-done-state', { hasText: 'Mais um' }).count()) === 1, 8000, 'B ver concluído');
+    });
+
     await check('clique no card ainda abre o card (arrastar não engole o clique)', async () => {
       await cardEl(a, 'Simultâneo A').click();
       await waitFor(() => a.locator('.task-detail-modal').first().isVisible(), 5000, 'modal aberto');

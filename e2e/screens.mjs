@@ -80,7 +80,11 @@ const SEED = `
 `;
 
 const SCREENS = {
-  dashboard: async (page) => { await page.getByText('Visão Geral').first().click(); },
+  dashboard: async (page) => {
+    const link = page.locator('.sidebar').getByText('Visão Geral').first();
+    // no celular a sidebar fica fora da tela e a Visão Geral já é a tela inicial
+    if (page.viewportSize().width > 768) await link.click();
+  },
   myday: async (page) => { await page.getByText('Diário').first().click(); },
   important: async (page) => { await page.getByText('Importante').first().click(); },
   planned: async (page) => { await page.getByText('Planejado').first().click(); },
@@ -117,6 +121,8 @@ async function main() {
   const stack = await startStack({ users: [ME, FRIEND], seed: SEED, build: opts.build });
   try {
     for (const theme of opts.themes) {
+      // o tema salvo no perfil vence o do navegador
+      await stack.supa.db.query('UPDATE public.profiles SET theme = $1', [theme]);
       for (const format of opts.formats) {
         for (const name of opts.only) {
           const page = await stack.openAs(ME, {
