@@ -36,6 +36,8 @@ import { getViewTitle, getViewSubtitle } from './app/viewTitles';
 import './styles/global.css';
 import './App.css';
 
+const SIDEBAR_OPEN_KEY = 'dailyways_sidebar_open';
+
 // Telas carregadas sob demanda (code-splitting): o bundle inicial fica só com o shell + board.
 const AuthPage = lazy(() => import('./components/Auth/AuthPage'));
 const MyDayView = lazy(() => import('./components/MyDay/MyDayView'));
@@ -71,7 +73,15 @@ function AppContent() {
   const navPersistReadyRef = useRef(false);
   const [navReady, setNavReady] = useState(false);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
+  // Desktop lembra se a sidebar ficou aberta ou recolhida (trilho de ícones); celular começa fechada.
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (window.innerWidth <= 768) return false;
+    try { return localStorage.getItem(SIDEBAR_OPEN_KEY) !== '0'; } catch { return true; }
+  });
+  useEffect(() => {
+    if (!isDesktop) return;
+    try { localStorage.setItem(SIDEBAR_OPEN_KEY, sidebarOpen ? '1' : '0'); } catch { /* storage indisponível */ }
+  }, [sidebarOpen, isDesktop]);
 
   // Sync DB preferences (theme, font, accent, language, anim) to ThemeContext on login
   useEffect(() => {
@@ -196,7 +206,7 @@ function AppContent() {
   const getTitle = () => getViewTitle(activeView, activeBoard, state.spaces);
   const getSubtitle = () => getViewSubtitle(activeView, activeBoard);
 
-  const mainClass = `app-main${sidebarOpen && isDesktop ? ' sidebar-pushed' : ''}${!isDesktop ? ' has-mobile-nav' : ''}`;
+  const mainClass = `app-main${isDesktop ? (sidebarOpen ? ' sidebar-pushed' : ' sidebar-rail') : ''}${!isDesktop ? ' has-mobile-nav' : ''}`;
 
   const {
     handleGlobalContextMenu,
@@ -226,6 +236,7 @@ function AppContent() {
           activeView={activeView}
           onViewChange={handleViewChange}
           isOpen={sidebarOpen}
+          onOpen={() => setSidebarOpen(true)}
           onClose={() => setSidebarOpen(false)}
           isDesktop={isDesktop}
           onPlannedDrop={setPlannedDropCard}

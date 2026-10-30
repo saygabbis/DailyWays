@@ -6,6 +6,7 @@ import {
     CalendarDays,
     Home,
     ChevronsLeft,
+    ChevronsRight,
     Settings,
     HelpCircle,
     Timer,
@@ -35,7 +36,7 @@ const LIGHT_THEMES = ['light', 'latte', 'ocean', 'nord'];
 const cardCount = (board) => board.lists.reduce((acc, l) => acc + l.cards.length, 0);
 
 /** Item do "Hoje". Diário/Importante/Planejado também recebem cards arrastados do board. */
-function TodayLink({ item, active, onClick }) {
+function TodayLink({ item, active, onClick, rail }) {
     const { setNodeRef, isOver, active: dragActive } = useDroppable({
         id: `zone:${item.id}`,
         data: { kind: 'zone', zone: item.id },
@@ -48,6 +49,8 @@ function TodayLink({ item, active, onClick }) {
                 type="button"
                 className={`sb-nav ${active ? 'is-active' : ''} ${cardOver ? 'dw-drop-target is-drop' : ''}`}
                 aria-current={active ? 'page' : undefined}
+                aria-label={rail ? item.label : undefined}
+                title={rail ? item.label : undefined}
                 onClick={() => onClick(item.id)}
             >
                 <item.icon size={17} className="sb-nav-icon" aria-hidden />
@@ -62,13 +65,45 @@ function TodayLink({ item, active, onClick }) {
     );
 }
 
+/** Sidebar recolhida: só o ícone/emoji de cada board ou space, com o nome no tooltip. */
+function RailItems({ label, branch, activeId, onOpen }) {
+    const ordered = [
+        ...branch.root,
+        ...branch.folders.flatMap((f) => branch.items.filter((i) => i.groupId === f.id).sort((a, b) => a.position - b.position)),
+    ];
+    if (!ordered.length) return null;
+    return (
+        <nav aria-label={label} className="sb-rail-group">
+            <ul className="sb-list">
+                {ordered.map((item) => (
+                    <li key={item.id}>
+                        <button
+                            type="button"
+                            className={`sb-rail-item ${activeId === item.id ? 'is-active' : ''}`}
+                            aria-current={activeId === item.id ? 'page' : undefined}
+                            aria-label={item.title}
+                            title={item.title}
+                            onClick={(e) => onOpen(e, item.id)}
+                        >
+                            <span className="sb-item-emoji" aria-hidden style={item.color ? { '--sb-dot': item.color } : undefined}>
+                                {item.emoji || <span className="sb-dot" />}
+                            </span>
+                        </button>
+                    </li>
+                ))}
+            </ul>
+        </nav>
+    );
+}
+
 /**
  * Navegação lateral. Três partes:
  *  1. Hoje — Início, Diário, Importante, Planejado (os 3 últimos aceitam cards arrastados);
  *  2. Seus boards e spaces — pastas e itens, reordenáveis por arraste, com criação rápida;
  *  3. Rodapé FIXO — ferramentas (Foco, Rádio) e Contatos, Configurações, Ajuda.
+ * No desktop, recolhida ela vira um trilho estreito só com os ícones (como no Slack/Notion).
  */
-export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isDesktop, onPlannedDrop }) {
+export default function Sidebar({ activeView, onViewChange, isOpen, onOpen, onClose, isDesktop, onPlannedDrop }) {
     const { user, logout } = useAuth();
     const boardCollab = useBoardCollabContext();
     const {
@@ -233,6 +268,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
     };
     const toggleSelect = (type) => (item) => dispatch({ type: 'TOGGLE_SELECTION', payload: { id: item.id, type } });
     const isLight = LIGHT_THEMES.includes(theme);
+    const rail = isDesktop && !isOpen;
 
     return (
         <>
@@ -253,8 +289,8 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
             {isOpen && !isDesktop && <div className="sb-scrim" onClick={onClose} aria-hidden />}
             <aside
                 ref={sidebarRef}
-                className={`sidebar sb ${isOpen ? 'sidebar-open is-open' : ''}`}
-                style={isDesktop ? { width: sidebarWidth } : undefined}
+                className={`sidebar sb ${isOpen ? 'sidebar-open is-open' : ''} ${rail ? 'is-rail' : ''}`}
+                style={isDesktop && !rail ? { width: sidebarWidth } : undefined}
                 aria-label="Navegação principal"
                 onClick={(e) => {
                     if (selectionMode && !state.isDraggingBulk && !e.target.closest('.sb-item, .sb-folder, input, button')) {
@@ -267,70 +303,95 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                         <img src={isLight ? logoBlack : logoWhite} alt="" className="sb-brand-logo" />
                         <span className="sb-brand-name">DailyWays</span>
                     </div>
-                    <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="Recolher navegação" title="Recolher (Ctrl+B)">
-                        <ChevronsLeft size={18} />
-                    </button>
+                    {rail ? (
+                        <button type="button" className="sb-icon-btn" onClick={onOpen} aria-label="Expandir navegação" title="Expandir (Ctrl+B)">
+                            <ChevronsRight size={18} />
+                        </button>
+                    ) : (
+                        <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="Recolher navegação" title="Recolher (Ctrl+B)">
+                            <ChevronsLeft size={18} />
+                        </button>
+                    )}
                 </div>
 
                 <div className="sb-scroll">
                     <nav aria-label="Hoje" className="sb-today">
                         <ul className="sb-list">
                             {todayItems.map((item) => (
-                                <TodayLink key={item.id} item={item} active={activeView === item.id} onClick={handleNavClick} />
+                                <TodayLink key={item.id} item={item} active={activeView === item.id} onClick={handleNavClick} rail={rail} />
                             ))}
                         </ul>
                     </nav>
 
-                    <SidebarTree
-                        itemType="board"
-                        title={t.boards || 'Boards'}
-                        groups={tree.board.folders}
-                        items={tree.board.items}
-                        rootItems={tree.board.root}
-                        activeId={activeView === 'board' ? state.activeBoard : null}
-                        selectedIds={selectedIds}
-                        selectionMode={selectionMode && state.selectionType === 'board'}
-                        recentlyAddedId={recentlyAddedId || lastReorderedIds[0]}
-                        countFor={cardCount}
-                        renaming={renamingBoard}
-                        folderRenaming={renamingFolder}
-                        onOpenItem={handleBoardClick}
-                        onToggleSelect={toggleSelect('board')}
-                        onItemMenu={handleBoardContextMenu}
-                        onFolderMenu={handleGroupContextMenu}
-                        onFolderToggle={(g, e) => (e ? handleGroupHeaderClick(e, g) : handleGroupHeaderClick({}, g))}
-                        onStartRename={(item) => isDesktop && handleStartRename(item)}
-                        onCreateItem={(name, groupId) => createBoard(name, groupId)}
-                        onCreateFolder={(name) => createFolder(name, 'board')}
-                    />
+                    {rail ? (
+                        <>
+                            <RailItems
+                                label={t.boards || 'Boards'}
+                                branch={tree.board}
+                                activeId={activeView === 'board' ? state.activeBoard : null}
+                                onOpen={handleBoardClick}
+                            />
+                            <RailItems
+                                label="Spaces"
+                                branch={tree.space}
+                                activeId={activeView.startsWith('space-') ? activeView.slice(6) : null}
+                                onOpen={handleSpaceClick}
+                            />
+                        </>
+                    ) : (
+                        <>
+                            <SidebarTree
+                                itemType="board"
+                                title={t.boards || 'Boards'}
+                                groups={tree.board.folders}
+                                items={tree.board.items}
+                                rootItems={tree.board.root}
+                                activeId={activeView === 'board' ? state.activeBoard : null}
+                                selectedIds={selectedIds}
+                                selectionMode={selectionMode && state.selectionType === 'board'}
+                                recentlyAddedId={recentlyAddedId || lastReorderedIds[0]}
+                                countFor={cardCount}
+                                renaming={renamingBoard}
+                                folderRenaming={renamingFolder}
+                                onOpenItem={handleBoardClick}
+                                onToggleSelect={toggleSelect('board')}
+                                onItemMenu={handleBoardContextMenu}
+                                onFolderMenu={handleGroupContextMenu}
+                                onFolderToggle={(g, e) => (e ? handleGroupHeaderClick(e, g) : handleGroupHeaderClick({}, g))}
+                                onStartRename={(item) => isDesktop && handleStartRename(item)}
+                                onCreateItem={(name, groupId) => createBoard(name, groupId)}
+                                onCreateFolder={(name) => createFolder(name, 'board')}
+                            />
 
-                    <SidebarTree
-                        itemType="space"
-                        title="Spaces"
-                        groups={tree.space.folders}
-                        items={tree.space.items}
-                        rootItems={tree.space.root}
-                        activeId={activeView.startsWith('space-') ? activeView.slice(6) : null}
-                        selectedIds={selectedIds}
-                        selectionMode={selectionMode && state.selectionType === 'space'}
-                        recentlyAddedId={recentlyAddedId}
-                        folderRenaming={renamingFolder}
-                        onOpenItem={handleSpaceClick}
-                        onToggleSelect={toggleSelect('space')}
-                        onItemMenu={handleSpaceContextMenu}
-                        onFolderMenu={handleGroupContextMenu}
-                        onFolderToggle={(g, e) => (e ? handleGroupHeaderClick(e, g) : handleGroupHeaderClick({}, g))}
-                        onCreateItem={(name, groupId) => createSpace(name, groupId)}
-                        onCreateFolder={(name) => createFolder(name, 'space')}
-                    />
+                            <SidebarTree
+                                itemType="space"
+                                title="Spaces"
+                                groups={tree.space.folders}
+                                items={tree.space.items}
+                                rootItems={tree.space.root}
+                                activeId={activeView.startsWith('space-') ? activeView.slice(6) : null}
+                                selectedIds={selectedIds}
+                                selectionMode={selectionMode && state.selectionType === 'space'}
+                                recentlyAddedId={recentlyAddedId}
+                                folderRenaming={renamingFolder}
+                                onOpenItem={handleSpaceClick}
+                                onToggleSelect={toggleSelect('space')}
+                                onItemMenu={handleSpaceContextMenu}
+                                onFolderMenu={handleGroupContextMenu}
+                                onFolderToggle={(g, e) => (e ? handleGroupHeaderClick(e, g) : handleGroupHeaderClick({}, g))}
+                                onCreateItem={(name, groupId) => createSpace(name, groupId)}
+                                onCreateFolder={(name) => createFolder(name, 'space')}
+                            />
+                        </>
+                    )}
                 </div>
 
                 <footer className="sb-foot">
                     <div className="sb-tools" role="group" aria-label="Ferramentas">
-                        <button type="button" className={`sb-tool ${pomodoroOpen ? 'is-on' : ''}`} aria-pressed={Boolean(pomodoroOpen)} onClick={togglePomodoro}>
+                        <button type="button" className={`sb-tool ${pomodoroOpen ? 'is-on' : ''}`} aria-pressed={Boolean(pomodoroOpen)} onClick={togglePomodoro} title={rail ? (t.focusMode || 'Foco') : undefined} aria-label={rail ? (t.focusMode || 'Foco') : undefined}>
                             <Timer size={15} aria-hidden /> <span>{t.focusMode || 'Foco'}</span>
                         </button>
-                        <button type="button" className={`sb-tool ${radioOpen ? 'is-on' : ''}`} aria-pressed={Boolean(radioOpen)} onClick={toggleRadio}>
+                        <button type="button" className={`sb-tool ${radioOpen ? 'is-on' : ''}`} aria-pressed={Boolean(radioOpen)} onClick={toggleRadio} title={rail ? (t.radio || 'Rádio') : undefined} aria-label={rail ? (t.radio || 'Rádio') : undefined}>
                             <Radio size={15} aria-hidden /> <span>{t.radio || 'Rádio'}</span>
                         </button>
                     </div>
@@ -345,6 +406,8 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                                     type="button"
                                     className={`sb-nav is-quiet ${activeView === item.id ? 'is-active' : ''}`}
                                     aria-current={activeView === item.id ? 'page' : undefined}
+                                    aria-label={rail ? item.label : undefined}
+                                    title={rail ? item.label : undefined}
                                     onClick={() => handleNavClick(item.id)}
                                 >
                                     <item.icon size={16} className="sb-nav-icon" aria-hidden />
@@ -355,7 +418,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                     </ul>
                 </footer>
 
-                {isDesktop && <div className="sb-resize" onMouseDown={handleMouseDown} role="separator" aria-orientation="vertical" aria-label="Largura da navegação" />}
+                {isDesktop && !rail && <div className="sb-resize" onMouseDown={handleMouseDown} role="separator" aria-orientation="vertical" aria-label="Largura da navegação" />}
             </aside>
 
             {detailsBoard && <BoardDetailsModal board={detailsBoard} onClose={() => setDetailsBoard(null)} />}

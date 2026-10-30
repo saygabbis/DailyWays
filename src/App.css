@@ -23,6 +23,11 @@
   margin-left: var(--sidebar-width);
 }
 
+/* Sidebar recolhida no desktop: fica o trilho de ícones */
+.app-main.sidebar-rail {
+  margin-left: var(--sidebar-rail-width);
+}
+
 .app-content {
   flex: 1;
   min-height: 0;

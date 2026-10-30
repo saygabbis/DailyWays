@@ -81,6 +81,11 @@ const SEED = `
 `;
 
 const SCREENS = {
+  /** Sidebar recolhida: abre o board pelo ícone do trilho e passa o mouse para ver o tooltip. */
+  railboard: async (page) => {
+    await page.locator('.sb-rail-item[title="Objetivos - DailyWays"]').click();
+    await page.waitForTimeout(800);
+  },
   dashboard: async (page) => {
     const link = page.locator('.sidebar').getByText('Visão Geral').first();
     // no celular a sidebar fica fora da tela e a Visão Geral já é a tela inicial
@@ -115,6 +120,8 @@ function parseArgs() {
 const FORMATS = {
   desktop: { viewport: { width: 1440, height: 900 } },
   mobile: { viewport: { width: 390, height: 844 }, isMobile: true },
+  /** Desktop com a sidebar recolhida (trilho de ícones). */
+  rail: { viewport: { width: 1440, height: 900 }, init: { dailyways_sidebar_open: '0' } },
 };
 
 async function main() {
@@ -128,7 +135,7 @@ async function main() {
         for (const name of opts.only) {
           const page = await stack.openAs(ME, {
             ...FORMATS[format],
-            init: { dailyways_theme: JSON.stringify(theme), dailyways_onboarding_done: '1' },
+            init: { dailyways_theme: JSON.stringify(theme), dailyways_onboarding_done: '1', ...FORMATS[format].init },
           });
           await page.goto(APP);
           await page.waitForTimeout(1500);

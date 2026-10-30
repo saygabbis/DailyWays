@@ -361,6 +361,13 @@
     color: var(--dw-danger);
 }
 
+/* No desktop a sidebar tem o próprio botão de recolher/expandir; o do header é só para a gaveta do celular */
+@media (min-width: 769px) {
+    .header-menu {
+        display: none;
+    }
+}
+
 /* ── Telas menores: menos texto, mesmos comandos ── */
 @media (max-width: 1366px) {
     .hd-search {
