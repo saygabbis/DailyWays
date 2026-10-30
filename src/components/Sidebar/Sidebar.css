@@ -79,29 +79,6 @@
   transform: scale(0.92);
 }
 
-/* ── Busca ── */
-.sb-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 10px;
-  border-radius: var(--dw-r-md);
-  background: var(--dw-surface-2);
-  color: var(--dw-text-3);
-  font-size: var(--dw-fs-sm);
-  border: 1px solid var(--dw-line);
-  transition: border-color var(--dw-dur-2) var(--dw-ease-out), background var(--dw-dur-2) var(--dw-ease-out);
-}
-.sb-search:hover {
-  border-color: var(--dw-line-strong);
-  color: var(--dw-text-2);
-}
-.sb-search span {
-  flex: 1;
-  text-align: left;
-}
-.sb-search kbd,
 .sb-create-hint {
   font-family: inherit;
   font-size: 0.66rem;
@@ -296,7 +273,6 @@
   align-items: center;
 }
 .sb-item-main {
-  padding-right: 34px;
   cursor: pointer;
 }
 .sb-item-emoji {
@@ -327,15 +303,29 @@
 .sb-folder-row:focus-within .sb-row-actions {
   opacity: 1;
 }
+/* O contador fica no canto da linha; o espaço dos botões só é reservado quando eles aparecem */
+.sb-item:is(:hover, :focus-within) > .sb-item-main {
+  padding-right: 34px;
+}
+.sb-folder-row:is(:hover, :focus-within) > .sb-folder-main {
+  padding-right: 64px;
+}
 @media (hover: hover) and (pointer: fine) {
-  .sb-item:hover .sb-count {
-    opacity: 0;
+  .sb-item:hover .sb-count,
+  .sb-folder-row:hover .sb-count {
+    display: none;
   }
 }
 @media (pointer: coarse) {
   .sb-item-more,
   .sb-row-actions {
     opacity: 1 !important;
+  }
+  .sb-item-main {
+    padding-right: 34px;
+  }
+  .sb-folder-main {
+    padding-right: 64px;
   }
 }
 
@@ -367,7 +357,6 @@
   align-items: center;
 }
 .sb-folder-main {
-  padding-right: 64px;
   color: var(--dw-text-2);
 }
 .sb-chevron {

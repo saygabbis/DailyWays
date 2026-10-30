@@ -228,7 +228,6 @@ function AppContent() {
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           isDesktop={isDesktop}
-          onOpenSearch={() => setShowSearch(true)}
           onPlannedDrop={setPlannedDropCard}
         />
 

@@ -44,14 +44,20 @@
     min-width: 0;
 }
 
+/* Cresce com o monitor (16px no notebook → 24px em telas grandes) */
 .header-title {
-    font-size: var(--dw-fs-lg);
+    font-size: clamp(var(--dw-fs-lg), 0.55rem + 0.65vw, 1.5rem);
     font-weight: 700;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--dw-text);
     min-width: 0;
+}
+
+/* A margem negativa fica no h1: no botão ela encolhia o h1 e cortava o nome mesmo com espaço sobrando */
+.header-title:has(> .header-title-editable) {
+    margin-inline: -6px;
 }
 
 .header-title-editable {
@@ -63,7 +69,6 @@
     white-space: nowrap;
     border-radius: var(--dw-r-sm);
     padding: 2px 6px;
-    margin: 0 -6px;
     transition: background var(--dw-dur-1) var(--dw-ease-out);
 }
 
@@ -77,7 +82,7 @@
 }
 
 .header-title-edit-input {
-    font-size: var(--dw-fs-lg);
+    font-size: clamp(var(--dw-fs-lg), 0.55rem + 0.65vw, 1.5rem);
     font-weight: 700;
     padding: 3px 8px;
     min-width: 140px;
@@ -89,6 +94,9 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
+    /* sem espaço, o "3 listas · 3 tarefas" encolhe antes do nome */
+    flex-shrink: 100;
 }
 
 .header-right {
@@ -354,7 +362,7 @@
 }
 
 /* ── Telas menores: menos texto, mesmos comandos ── */
-@media (max-width: 1100px) {
+@media (max-width: 1366px) {
     .hd-search {
         min-width: 0;
         width: var(--dw-hit);

@@ -11,7 +11,6 @@ import {
     Timer,
     Radio,
     Users,
-    Search,
 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
 import { useApp } from '../../context/useApp';
@@ -69,7 +68,7 @@ function TodayLink({ item, active, onClick }) {
  *  2. Seus boards e spaces — pastas e itens, reordenáveis por arraste, com criação rápida;
  *  3. Rodapé FIXO — ferramentas (Foco, Rádio) e Contatos, Configurações, Ajuda.
  */
-export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isDesktop, onOpenSearch, onPlannedDrop }) {
+export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isDesktop, onPlannedDrop }) {
     const { user, logout } = useAuth();
     const boardCollab = useBoardCollabContext();
     const {
@@ -272,12 +271,6 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onClose, isD
                         <ChevronsLeft size={18} />
                     </button>
                 </div>
-
-                <button type="button" className="sb-search" onClick={() => { onOpenSearch?.(); if (!isDesktop) onClose?.(); }}>
-                    <Search size={15} aria-hidden />
-                    <span>Buscar</span>
-                    <kbd>Ctrl K</kbd>
-                </button>
 
                 <div className="sb-scroll">
                     <nav aria-label="Hoje" className="sb-today">
