@@ -201,6 +201,158 @@ async function main() {
       if (!(await dbCard('Feito offline'))) throw new Error('card do fallback sumiu depois que o collab voltou');
     });
 
+    /** Títulos dos cards por lista, na ordem da tela. */
+    const screenLists = (page) => page.evaluate(() => [...document.querySelectorAll('.board-list')].map((l) => ({
+      title: [...(l.querySelector('.board-list-title')?.childNodes || [])].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim(),
+      cards: [...l.querySelectorAll('.board-card .board-card-title')].map((c) => c.textContent.trim()).filter(Boolean),
+    })));
+    const dbLists = async () => {
+      const lists = (await supa.db.query('SELECT id, title FROM public.lists WHERE board_id = $1 ORDER BY position', [BOARD])).rows;
+      const out = [];
+      for (const l of lists) {
+        const cards = (await supa.db.query('SELECT title FROM public.cards WHERE list_id = $1 ORDER BY position', [l.id])).rows.map((r) => r.title.trim());
+        out.push({ title: l.title, cards });
+      }
+      return out;
+    };
+    const cardsWhere = (lists, title) => lists.find((l) => l.cards.some((c) => c.includes(title)))?.title;
+    /** Latência de rede de verdade (VPS): aqui é tudo 0 ms e as corridas não aparecem. */
+    const withLatency = async (ms, fn) => {
+      stack.setCollabLatency(ms);
+      try {
+        return await fn();
+      } finally {
+        stack.setCollabLatency(0);
+      }
+    };
+    const sameBoard = (x, y) => JSON.stringify(x.map((l) => [l.title, l.cards.join('|')])) === JSON.stringify(y.map((l) => [l.title, l.cards.join('|')]));
+
+    await check('A arrasta o mesmo card 6x rápido enquanto B cria cards: sem "voltar" na tela e tudo igual no fim', async () => {
+      await a.locator('.sidebar').getByText('Board E2E').first().click();
+      await b.locator('.sidebar').getByText('Board E2E').first().click();
+      await a.locator('.board-list-title', { hasText: 'Lista A' }).first().waitFor({ timeout: 10000 });
+      await b.locator('.board-list-title', { hasText: 'Lista A' }).first().waitFor({ timeout: 10000 });
+      await a.waitForTimeout(800);
+      const card = 'Card da Gabbis';
+      const start = cardsWhere(await screenLists(a), card);
+      // Grava em que lista o card aparece a cada quadro (só com o mouse solto: durante o arraste o
+      // dnd-kit mostra a prévia). Uma "volta" vira uma alternância a mais na sequência.
+      await a.evaluate((title) => {
+        window.__down = false;
+        window.__trail = [];
+        addEventListener('mousedown', () => { window.__down = true; }, true);
+        addEventListener('mouseup', () => { setTimeout(() => { window.__down = false; }, 0); }, true);
+        const tick = () => {
+          if (!window.__down) {
+            const list = [...document.querySelectorAll('.board-list')].find((l) => [...l.querySelectorAll('.board-card')].some((c) => c.textContent.includes(title)));
+            const t = [...(list?.querySelector('.board-list-title')?.childNodes || [])].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
+            if (t && window.__trail[window.__trail.length - 1] !== t) window.__trail.push(t);
+          }
+          window.__trailRaf = requestAnimationFrame(tick);
+        };
+        tick();
+      }, card);
+      const other = start === 'Lista A' ? 'Lista B' : 'Lista A';
+      const plan = [other, start, other, start, other, start];
+      const movesA = async () => {
+        for (const dest of plan) {
+          await drag(a, cardEl(a, card), listEl(a, dest).locator('.board-list-cards'));
+          await a.waitForTimeout(120);
+        }
+      };
+      const burstB = async () => {
+        for (let i = 1; i <= 5; i += 1) {
+          await addCard(b, 'Lista A', `Concorrente ${i}`);
+          await b.waitForTimeout(150);
+        }
+      };
+      await withLatency(90, async () => {
+        await Promise.all([movesA(), burstB()]);
+        await a.waitForTimeout(2500);
+      });
+      await a.waitForTimeout(2500);
+      const trail = await a.evaluate(() => { cancelAnimationFrame(window.__trailRaf); return window.__trail; });
+      const expected = [start, ...plan];
+      if (JSON.stringify(trail) !== JSON.stringify(expected)) throw new Error(`card piscou: ${trail.join(' → ')} (esperado ${expected.join(' → ')})`);
+      let last = null;
+      try {
+        await waitFor(async () => {
+          const [sa, sb, db] = [await screenLists(a), await screenLists(b), await dbLists()];
+          last = { sa, sb, db };
+          return sameBoard(sa, sb) && sameBoard(sa, db) && cardsWhere(db, card) === start
+            && db.flatMap((l) => l.cards).filter((c) => c.startsWith('Concorrente')).length === 5;
+        }, 10000, 'A, B e banco iguais');
+      } catch (err) {
+        const fmt = (x) => x.map((l) => `${l.title}[${l.cards.join(',')}]`).join(' ');
+        throw new Error(`${err.message}
+  A:  ${fmt(last.sa)}
+  B:  ${fmt(last.sb)}
+  DB: ${fmt(last.db)}`);
+      }
+    });
+
+    for (const latency of [0, 90]) {
+      await check(`detalhes do card (board compartilhado, ${latency * 2} ms de ida e volta): clicar etiqueta/prioridade/cor não pisca e grava`, async () => {
+        const title = latency ? 'Rajada 2' : 'Rajada 1';
+        const openModal = async (p) => {
+          await cardEl(p, title).click();
+          await waitFor(() => p.locator('.task-detail-modal').first().isVisible(), 5000, 'modal aberto');
+        };
+        await openModal(a);
+        await openModal(b); // a outra pessoa com o mesmo card aberto
+        // Grava cada mudança de estado visível dos botões (a cada quadro).
+        await a.evaluate(() => {
+          window.__states = [];
+          const read = () => {
+            const m = document.querySelector('.task-detail-modal');
+            if (!m) return null;
+            const lab = [...m.querySelectorAll('.task-detail-label-btn')].find((x) => x.textContent.includes('Laranja'));
+            const pri = m.querySelector('.task-detail-priority-btn.active')?.textContent?.trim();
+            return `${lab?.getAttribute('aria-pressed')}|${pri}`;
+          };
+          const tick = () => {
+            const v = read();
+            if (v && window.__states[window.__states.length - 1] !== v) window.__states.push(v);
+            window.__statesRaf = requestAnimationFrame(tick);
+          };
+          tick();
+        });
+        await withLatency(latency, async () => {
+          const modal = a.locator('.task-detail-modal').first();
+          await modal.locator('.task-detail-label-btn', { hasText: 'Laranja' }).click();
+          await a.waitForTimeout(250);
+          await modal.locator('.task-detail-priority-btn', { hasText: 'Alta' }).click();
+          await a.waitForTimeout(2500);
+        });
+        const states = await a.evaluate(() => { cancelAnimationFrame(window.__statesRaf); return window.__states; });
+        const expected = ['false|Nenhuma', 'true|Nenhuma', 'true|Alta'];
+        if (JSON.stringify(states) !== JSON.stringify(expected)) throw new Error(`piscou: ${states.join(' → ')}`);
+        await waitFor(async () => {
+          const r = (await supa.db.query('SELECT priority, labels FROM public.cards WHERE title = $1', [title])).rows[0];
+          return r && r.priority === 'high' && JSON.stringify(r.labels || []).includes('orange');
+        }, 8000, 'prioridade e etiqueta no banco');
+        for (const p of [a, b]) {
+          await p.keyboard.press('Escape');
+          await waitFor(async () => !(await p.locator('.task-detail-modal').first().isVisible().catch(() => false)), 5000, 'modal fechado');
+        }
+      });
+    }
+
+    await check('servidor reinicia por 50 s (deploy com build): sem F5 as duas voltam sozinhas, sem tela travada, e o feito na queda chega', async () => {
+      stack.stopCollab();
+      await a.waitForTimeout(1000);
+      await addCard(a, 'Lista B', 'Durante a queda');
+      await a.waitForTimeout(49000);
+      await stack.restartCollab();
+      for (const p of [a, b]) {
+        await waitFor(async () => !(await p.locator('.board-collab-status-banner, .board-collab-hydrate-overlay').first().isVisible().catch(() => false)), 15000, 'aviso de reconexão sumir');
+      }
+      await waitFor(() => sees(b, 'Durante a queda'), 15000, 'B ver o card feito na queda (sem recarregar)');
+      await addCard(b, 'Lista A', 'Depois do deploy');
+      await waitFor(() => sees(a, 'Depois do deploy'), 8000, 'A ver o card de B em tempo real');
+      await waitFor(async () => (await dbCard('Durante a queda')) && (await dbCard('Depois do deploy')), 10000, 'os dois no banco');
+    });
+
     await check('imagem grande no Space: sobe reduzida (WebP ≤ 2560 px) com miniatura e aparece', async () => {
       await a.locator('.sidebar').getByText('Space E2E').first().click();
       await a.locator('.whiteboard-viewport').first().waitFor({ timeout: 15000 });

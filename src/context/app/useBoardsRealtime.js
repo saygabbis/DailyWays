@@ -15,6 +15,13 @@ import { resolveRealtimeBoardId } from './realtimeBoardTarget.js';
 /** Janela em que uma edição local ainda pode não ter chegado ao banco (flush do collab ~600 ms). */
 const LOCAL_EDIT_GRACE_MS = 4000;
 const DEBOUNCE_MS = 250;
+/**
+ * Board aberto com a sala caída/entrando: o join seguinte traz o estado do servidor, que é mais novo
+ * que o banco (o flush vem depois). Recarregar do banco aqui fazia a tela voltar para trás.
+ * Se o collab ficar fora por mais que isso, volta a usar o banco (o navegador grava no fallback).
+ */
+const ROOM_HOLD_RETRY_MS = 3000;
+const ROOM_HOLD_MAX_MS = 20000;
 const FULL = '__all__';
 
 export function useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone, activeSavesRef, realtimeSuppressUntilRef, collabActiveBoardIdRef, collabConnectedRef, collabBoardRoomLiveRef, recentLocalEditsRef }) {
@@ -24,6 +31,7 @@ export function useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone,
         let realtimeChannel = null;
         let debounceTimer = null;
         const dirty = new Set();
+        let heldSince = 0;
 
         const isLiveRoom = (boardId) => (
             isCollabEnabled()
@@ -32,6 +40,16 @@ export function useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone,
             && collabConnectedRef.current
             && collabBoardRoomLiveRef.current
         );
+        /** Board aberto no collab, mas a sala ainda não está ao vivo (reconectando/entrando). */
+        const holdForRoom = (boardId) => {
+            if (!isCollabEnabled() || !boardId || boardId !== collabActiveBoardIdRef.current) return false;
+            if (isLiveRoom(boardId)) {
+                heldSince = 0;
+                return false;
+            }
+            if (!heldSince) heldSince = Date.now();
+            return Date.now() - heldSince < ROOM_HOLD_MAX_MS;
+        };
         const editedRecently = (boardId) => (
             Date.now() - (recentLocalEditsRef?.current?.get(boardId) ?? 0) < LOCAL_EDIT_GRACE_MS
         );
@@ -70,7 +88,7 @@ export function useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone,
                     const local = localById.get(b.id);
                     if (!local) return b;
                     if (isLiveRoom(b.id)) return local;
-                    if (editedRecently(b.id)) {
+                    if (editedRecently(b.id) || holdForRoom(b.id)) {
                         keptRecent = true;
                         dirty.add(b.id);
                         return local;
@@ -82,6 +100,7 @@ export function useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone,
                 return;
             }
 
+            let held = false;
             for (const boardId of ids) {
                 if (cancelled) return;
                 if (isLiveRoom(boardId)) continue;
@@ -90,15 +109,21 @@ export function useBoardsRealtime({ userId, dispatch, stateRef, initialLoadDone,
                     dirty.add(boardId);
                     continue;
                 }
+                if (holdForRoom(boardId)) {
+                    dirty.add(boardId);
+                    held = true;
+                    continue;
+                }
                 const { data, error } = await fetchBoard(boardId);
                 if (cancelled || error) continue;
-                if (editedRecently(boardId) || isLiveRoom(boardId)) {
+                if (isLiveRoom(boardId)) continue;
+                if (editedRecently(boardId) || holdForRoom(boardId)) {
                     dirty.add(boardId);
                     continue;
                 }
                 replaceBoard(data, boardId);
             }
-            if (dirty.size) schedule(LOCAL_EDIT_GRACE_MS);
+            if (dirty.size) schedule(held ? ROOM_HOLD_RETRY_MS : LOCAL_EDIT_GRACE_MS);
         }
 
         const handleChange = (payload) => {

@@ -1,6 +1,9 @@
 /**
  * VPS: build front + verificar back, depois collab (PORT do .env) + preview Vite (5174).
  * Mesmas portas que dev:all; qualquer falha imprime ERRO e termina com código ≠ 0.
+ *
+ * `--prebuilt`: pula build e testes (já feitos com o site ainda no ar, via `npm run build:vps`).
+ * Assim o deploy derruba o collab por ~2 s em vez de ~50 s, e ninguém vê "reconectando".
  */
 import {
   VITE_PORT,
@@ -23,22 +26,34 @@ console.log('');
 
 assertCollabEnv(LOG);
 
-console.log(`${LOG} — build —`);
-runStepOrExit(LOG, 'Build do frontend (vite build)', 'npm', ['run', 'build']);
+const prebuilt = process.argv.includes('--prebuilt');
+const buildOnly = process.argv.includes('--build-only');
+
+if (prebuilt) {
+  console.log(`${LOG} --prebuilt: usando o build e os testes já feitos`);
+} else {
+  console.log(`${LOG} — build —`);
+  runStepOrExit(LOG, 'Build do frontend (vite build)', 'npm', ['run', 'build']);
+
+  runStepOrExit(LOG, 'Verificação do backend (testes collab-protocol)', 'npm', [
+    'run',
+    'test',
+    '-w',
+    '@dailyways/collab-protocol',
+  ]);
+  runStepOrExit(LOG, 'Verificação do backend (testes collab-server)', 'npm', [
+    'run',
+    'test',
+    '-w',
+    '@dailyways/collab-server',
+  ]);
+}
 assertDistBuild(LOG);
 
-runStepOrExit(LOG, 'Verificação do backend (testes collab-protocol)', 'npm', [
-  'run',
-  'test',
-  '-w',
-  '@dailyways/collab-protocol',
-]);
-runStepOrExit(LOG, 'Verificação do backend (testes collab-server)', 'npm', [
-  'run',
-  'test',
-  '-w',
-  '@dailyways/collab-server',
-]);
+if (buildOnly) {
+  console.log(`${LOG} build e testes ok — agora reinicie com: npm run start:vps -- --prebuilt`);
+  process.exit(0);
+}
 
 console.log('');
 console.log(`${LOG} — arranque —`);

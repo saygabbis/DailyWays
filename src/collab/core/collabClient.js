@@ -44,20 +44,24 @@ export function connectCollabSocket(token) {
     socketInstance = null;
   }
 
-  // Começa em polling e sobe para WebSocket quando o proxy deixa (o nginx de deploy/ faz o upgrade).
-  // Se o upgrade falhar, o socket.io segue em polling sozinho. Só polling: VITE_COLLAB_POLLING_ONLY=1.
-  // Antes produção ficava SEMPRE em polling: cada alteração virava uma requisição HTTP (lento).
+  // WebSocket direto (sem o round-trip de polling antes do upgrade): a 1ª op já sai pelo canal rápido.
+  // Se o proxy/rede bloquear WebSocket, tryAllTransports cai para polling sozinho.
+  // Só polling: VITE_COLLAB_POLLING_ONLY=1.
   const pollingOnly = import.meta.env.VITE_COLLAB_POLLING_ONLY === '1';
   socketInstance = io(url, {
     auth: { token },
     path: '/socket.io',
     forceNew: true,
-    transports: pollingOnly ? ['polling'] : ['polling', 'websocket'],
+    transports: pollingOnly ? ['polling'] : ['websocket', 'polling'],
+    tryAllTransports: !pollingOnly,
     upgrade: !pollingOnly,
+    // Reconexão nunca desiste (deploy/queda de rede volta sozinho, sem F5) e com teto curto:
+    // quando o servidor volta, o cliente percebe em no máximo ~2 s.
     reconnection: true,
     reconnectionAttempts: Infinity,
-    reconnectionDelay: 500,
-    reconnectionDelayMax: 5000,
+    reconnectionDelay: 300,
+    reconnectionDelayMax: 2000,
+    timeout: 8000,
   });
 
   return socketInstance;
@@ -102,7 +106,10 @@ function joinRoom(socket, payload) {
       reject(new Error('Socket not connected'));
       return;
     }
+    // Sem resposta (socket caiu no meio) o join não pode prender a fila de ops para sempre.
+    const timer = setTimeout(() => reject(new Error('Join timeout')), JOIN_TIMEOUT_MS);
     socket.emit(CLIENT_EVENTS.JOIN, payload, (res) => {
+      clearTimeout(timer);
       if (res?.ok) resolve(res);
       else reject(new Error(res?.error || 'Join failed'));
     });
@@ -174,6 +181,7 @@ export function submitOp(socket, op) {
 }
 
 const OP_TIMEOUT_MS = 10000;
+const JOIN_TIMEOUT_MS = 12000;
 const BOARD_OP_TIMEOUT_MS = 8000;
 
 /** Op de board sem estar na sala dele: o servidor collab aplica, avisa a sala e persiste. */

@@ -49,8 +49,11 @@ const TEXT_DEBOUNCE_MS = 180;
 /** Campos não-texto (cor, prioridade, datas…): junta o que chegar nesse intervalo numa op só. */
 const FIELD_BATCH_MS = 80;
 const RATE_LIMIT_RETRY_MS = 500;
-/** Socket caído por mais que isso com ops na fila → o navegador grava (collab fora do ar). */
-const OFFLINE_FALLBACK_MS = 5000;
+/**
+ * Socket caído por mais que isso com ops na fila → o navegador também grava (cópia de segurança).
+ * As ops continuam na fila e são reenviadas ao reconectar (o servidor ignora o que já tem).
+ */
+const OFFLINE_FALLBACK_MS = 3000;
 const OFF_ROOM_ATTEMPTS = 3;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -85,6 +88,8 @@ export function BoardCollabProvider({ children }) {
   const [roomReadyMap, setRoomReadyMap] = useState({});
   const roomReadyMapRef = useLatestRef(roomReadyMap);
   const roomReadyRef = useRef({});
+  /** Boards com join em andamento: as ops esperam na fila em vez de irem avulsas fora de ordem. */
+  const joiningRef = useRef(new Set());
   const sendTimers = useRef(new Map());
   const inflight = useRef(new Map());
   const offlineTimers = useRef(new Map());
@@ -199,6 +204,8 @@ export function BoardCollabProvider({ children }) {
     if (timer) clearTimeout(timer);
     sendTimers.current.delete(boardId);
     if (!socketRef.current?.connected) return;
+    // Entrando na sala: o snapshot do join reaplica a fila por cima e o setBoardRoomReady envia.
+    if (!roomReadyRef.current[boardId] && joiningRef.current.has(boardId)) return;
     const entries = boardOutbox.takeUnsent(boardId);
     if (!entries.length) return;
     if (roomReadyRef.current[boardId]) {
@@ -227,11 +234,11 @@ export function BoardCollabProvider({ children }) {
     timers.set(boardId, setTimeout(() => {
       timers.delete(boardId);
       if (socketRef.current?.connected) return;
-      boardOutbox.clearPending(boardId);
-      syncPendingFlag(boardId);
+      // Antes a fila era descartada aqui: se o servidor ainda tinha a sala na memória, ao voltar ele
+      // devolvia o board antigo e a edição "voltava" ou sumia. Agora ela fica e é reenviada.
       persistBoard(boardId, { force: true, ensureSave: true });
     }, OFFLINE_FALLBACK_MS));
-  }, [socketRef, persistBoard, syncPendingFlag]);
+  }, [socketRef, persistBoard]);
 
   const scheduleFlush = useCallback((boardId, delay) => {
     const existing = sendTimers.current.get(boardId);
@@ -275,6 +282,12 @@ export function BoardCollabProvider({ children }) {
       setCollabSaving(boardId, false);
     }
   }, [flushOutbox, setCollabSaving, setCollabBoardRoomLive]);
+
+  const setBoardJoining = useCallback((boardId, joining) => {
+    if (!boardId) return;
+    if (joining) joiningRef.current.add(boardId);
+    else joiningRef.current.delete(boardId);
+  }, []);
 
   // Aba escondida/fechando: envia já o que está esperando a janela de fusão.
   useEffect(() => {
@@ -368,6 +381,7 @@ export function BoardCollabProvider({ children }) {
     const connected = collabOn && Boolean(collab?.connected);
     const inRoomFlow = collabOn && (
       roomReadyRef.current[boardId]
+      || joiningRef.current.has(boardId)
       || activeBoardId === boardId
     );
 
@@ -433,6 +447,7 @@ export function BoardCollabProvider({ children }) {
     activeBoardId,
     setActiveBoardId,
     setBoardRoomReady,
+    setBoardJoining,
     isBoardRoomReady,
     isBoardRoomLive,
     flushBoardOutbox: flushOutbox,
@@ -443,6 +458,7 @@ export function BoardCollabProvider({ children }) {
     activeBoardId,
     setActiveBoardId,
     setBoardRoomReady,
+    setBoardJoining,
     isBoardRoomReady,
     isBoardRoomLive,
     flushOutbox,

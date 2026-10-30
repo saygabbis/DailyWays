@@ -4,6 +4,7 @@
  */
 import { spawn, execSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
+import { createServer, connect } from 'node:net';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +15,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const repo = join(here, '..');
 export const SUPA_PORT = 54321;
 export const COLLAB_PORT = 2599;
+/** O collab de verdade escuta aqui; na COLLAB_PORT fica um proxy que pode simular a latência da VPS. */
+const COLLAB_BACKEND_PORT = 2598;
 export const APP_PORT = 4173;
 export const APP = `http://127.0.0.1:${APP_PORT}`;
 
@@ -78,11 +81,43 @@ export const startCollab = () => startProcess('collab', 'node', ['server/collab-
   SUPABASE_URL: `http://127.0.0.1:${SUPA_PORT}`,
   SUPABASE_ANON_KEY: 'e2e-anon',
   SUPABASE_SERVICE_ROLE_KEY: 'e2e-'.padEnd(160, 'x'),
-  PORT: String(COLLAB_PORT),
+  PORT: String(COLLAB_BACKEND_PORT),
   CORS_ORIGIN: APP,
   NODE_ENV: 'development',
   COLLAB_FLUSH_MS: '300',
 });
+
+/**
+ * Proxy TCP com atraso por sentido (mantém a ordem dos pacotes). Aqui tudo é 0 ms e as corridas de
+ * rede que aparecem em produção (ida e volta de ~150 ms) somem; `setLatency` liga o atraso.
+ */
+function startLatencyProxy(listenPort, targetPort) {
+  let latency = 0;
+  const pipeDelayed = (from, to) => {
+    let lastAt = 0;
+    from.on('data', (chunk) => {
+      if (!latency) {
+        to.write(chunk);
+        return;
+      }
+      const at = Math.max(Date.now() + latency, lastAt);
+      lastAt = at;
+      setTimeout(() => { if (!to.destroyed) to.write(chunk); }, at - Date.now());
+    });
+    from.on('close', () => setTimeout(() => to.destroy(), latency));
+    from.on('error', () => to.destroy());
+  };
+  const server = createServer((client) => {
+    const upstream = connect(targetPort, '127.0.0.1');
+    pipeDelayed(client, upstream);
+    pipeDelayed(upstream, client);
+  });
+  server.listen(listenPort, '127.0.0.1');
+  return {
+    setLatency: (ms) => { latency = ms; },
+    close: () => new Promise((r) => server.close(() => r())),
+  };
+}
 
 /**
  * Sobe tudo. `build: false` reaproveita dist-e2e/.
@@ -107,7 +142,9 @@ export async function startStack({ users, seed = '', build = true } = {}) {
     });
   }
 
-  const stack = { supa, collab: startCollab() };
+  const stack = { supa, collab: startCollab(), collabProxy: startLatencyProxy(COLLAB_PORT, COLLAB_BACKEND_PORT) };
+  /** Atraso (ms) em cada sentido entre os navegadores e o collab; 0 desliga. */
+  stack.setCollabLatency = (ms) => stack.collabProxy.setLatency(ms);
   // Mesmo .env do build: a CSP (aplicada) libera o Supabase e o collab configurados.
   stack.preview = startProcess('app', 'npx', ['vite', 'preview', '--outDir', 'dist-e2e', '--port', String(APP_PORT), '--host', '127.0.0.1', '--strictPort'], {
     VITE_SUPABASE_URL: supa.url,
@@ -150,6 +187,7 @@ export async function startStack({ users, seed = '', build = true } = {}) {
     for (const br of stack.browsers) await br.close().catch(() => {});
     killTree(stack.collab);
     killTree(stack.preview);
+    await stack.collabProxy.close();
     await supa.close();
   };
   return stack;

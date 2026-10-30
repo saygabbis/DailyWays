@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useLatestRef } from '../../hooks/useLatestRef';
 import { createPortal } from 'react-dom';
 import { useApp } from '../../context/useApp';
 import { useAuth } from '../../context/useAuth';
@@ -216,13 +217,17 @@ export default function TaskDetailModal({ card, boardId, listId, onClose }) {
         return () => clearTimeout(id);
     }, [title, description, persistCardSnapshot, remoteSync]);
 
+    // Só ao fechar o modal. Com [persistCardSnapshot] nas deps o cleanup rodava a CADA alteração,
+    // com a versão anterior (valores velhos): o clique era desfeito na hora e, com outra pessoa no
+    // mesmo card, as duas abas ficavam se desfazendo sem parar (etiqueta/prioridade "piscando").
+    const persistOnCloseRef = useLatestRef(persistCardSnapshot);
     useEffect(() => () => {
         if (persistTimerRef.current) {
             clearTimeout(persistTimerRef.current);
             persistTimerRef.current = null;
         }
-        persistCardSnapshot();
-    }, [persistCardSnapshot]);
+        persistOnCloseRef.current();
+    }, [persistOnCloseRef]);
 
     const handleClose = useCallback(() => {
         flushPersist();

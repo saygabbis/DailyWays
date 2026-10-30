@@ -280,6 +280,9 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
       const joinGen = ++joinGenRef.current;
 
+      // Edições feitas enquanto entra ficam na fila (mostradas na hora) e vão em ordem depois do join.
+      boardCollabRef.current?.setBoardJoining?.(joiningBoardId, true);
+
       try {
 
         const prevBoard = getGlobalJoinedBoardId() || joinedRef.current;
@@ -372,6 +375,7 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
         console.warn('[BoardCollabSync] join failed', err.message);
 
+        boardCollabRef.current?.setBoardJoining?.(joiningBoardId, false);
         boardCollabRef.current?.setBoardRoomReady?.(joiningBoardId, false);
         // O que ficou na fila vai como op avulsa (ou o navegador grava, se o servidor recusar).
         boardCollabRef.current?.flushBoardOutbox?.(joiningBoardId);
@@ -388,6 +392,11 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
 
         boardCollabRef.current?.setActiveBoardId?.(null);
 
+      } finally {
+        // Só o join mais recente desliga a espera (um rejoin mais novo ainda está entrando).
+        if (joinGenRef.current === joinGen) {
+          boardCollabRef.current?.setBoardJoining?.(joiningBoardId, false);
+        }
       }
 
     };
@@ -519,6 +528,7 @@ export default function BoardCollabSync({ boardId, boardViewActive = true }) {
       // boardCollabRef é um "latest ref" (useLatestRef), não um nó do DOM: o cleanup quer o valor atual.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       const latestBoardCollab = boardCollabRef.current;
+      latestBoardCollab?.setBoardJoining?.(boardAtCleanup, false);
 
       resetPresenceFields(boardAtCleanup);
 

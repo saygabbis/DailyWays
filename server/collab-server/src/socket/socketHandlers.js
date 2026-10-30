@@ -495,7 +495,11 @@ export function registerSocketHandlers(io) {
       io.in(roomId).emit(SERVER_EVENTS.PRESENCE_SYNC, createPresenceSyncPayload(roomId, peers));
     });
 
-    socket.on('disconnect', async () => {
+    socket.on('disconnect', async (reason) => {
+      // Fechar aba/trocar de rede é normal; ping timeout/erro de transporte indica rede ou proxy ruim.
+      if (reason === 'ping timeout' || reason === 'transport error') {
+        console.warn('[collab-server] disconnect', reason, String(socket.data.userId || '').slice(0, 8));
+      }
       releaseUserConnection(socket.data.userId);
       const roomId = socket.data.roomId;
       if (!roomId) return;

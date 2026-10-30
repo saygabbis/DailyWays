@@ -47,10 +47,13 @@ export default function CollabProviderRoot({ children }) {
     let bindings = [];
     let authSub = null;
     let consecutiveConnectErrors = 0;
+    let authFailures = 0;
+    let authRetryTimer = null;
 
     const handlers = {
       onConnect: () => {
         consecutiveConnectErrors = 0;
+        authFailures = 0;
         setConnected(true);
         console.info('[collab] connected', {
           url: getCollabServerUrl(),
@@ -58,8 +61,18 @@ export default function CollabProviderRoot({ children }) {
           transport: sock?.io?.engine?.transport?.name,
         });
       },
-      onDisconnect: () => {
+      onDisconnect: (reason) => {
         setConnected(false);
+        // O servidor derrubou de propósito (ex.: token trocado): o socket.io não reconecta sozinho.
+        if (reason === 'io server disconnect' && !cancelled) {
+          setTimeout(async () => {
+            if (cancelled || !sock || sock.connected) return;
+            const { data } = await supabase.auth.getSession();
+            if (cancelled) return;
+            if (data?.session?.access_token) sock.auth = { token: data.session.access_token };
+            sock.connect();
+          }, 300);
+        }
       },
       onConnectError: (err) => {
         consecutiveConnectErrors += 1;
@@ -80,23 +93,28 @@ export default function CollabProviderRoot({ children }) {
         }
         setConnected(false);
         const msg = (err?.message || '').toLowerCase();
-        if (
-          consecutiveConnectErrors >= 6
-          && sock?.io
-          && (msg.includes('xhr poll error') || msg.includes('websocket error'))
-        ) {
-          sock.io.opts.reconnection = false;
-          console.warn('[collab] servidor indisponível — reconexão pausada. Inicie o collab-server ou recarregue a página.');
-        }
+        // Erro de rede (servidor reiniciando no deploy, Wi-Fi caiu): o socket.io continua tentando
+        // sozinho, para sempre. Antes desligava depois de 6 erros e a aba ficava presa até o F5.
         if (msg.includes('unauthorized') || msg.includes('auth')) {
-          if (sock?.io) {
-            sock.io.opts.reconnection = false;
+          // Recusa do middleware não reconecta sozinha: pega um token novo (o Supabase renova se
+          // venceu) e tenta de novo, com espera crescente. Só avisa se continuar recusando.
+          authFailures += 1;
+          if (authFailures === 4) {
+            toastCollabError(
+              addToast,
+              'Sessão expirada. Recarregue a página ou faça login novamente.',
+            );
           }
-          sock?.disconnect();
-          toastCollabError(
-            addToast,
-            'Sessão expirada. Recarregue a página ou faça login novamente.',
-          );
+          clearTimeout(authRetryTimer);
+          const wait = Math.min(1000 * 2 ** Math.min(authFailures - 1, 4), 15000);
+          authRetryTimer = setTimeout(async () => {
+            if (cancelled || !sock || sock.connected) return;
+            const { data } = await supabase.auth.getSession();
+            const fresh = data?.session?.access_token;
+            if (cancelled || !fresh) return;
+            sock.auth = { token: fresh };
+            sock.connect();
+          }, wait);
         }
       },
       onApplied: (payload) => {
@@ -216,6 +234,7 @@ export default function CollabProviderRoot({ children }) {
 
     return () => {
       cancelled = true;
+      clearTimeout(authRetryTimer);
       authSub?.subscription?.unsubscribe();
       unbindSocketHandlers(sock, bindings);
       disconnectCollabSocket();

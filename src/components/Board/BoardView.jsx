@@ -30,8 +30,7 @@ import { publishBoardPresenceFocus } from '../../collab/board/presence/boardPres
 import { announcePresence } from '../../collab/board/presence/presenceBridge.js';
 import { useBoardPresenceHighlights } from '../../hooks/useBoardPresenceHighlights';
 import { BOARD_UI_HOVER, boardUiHoverProps } from '../../collab/board/presence/boardUiHover.js';
-import { useBoardCollabDispatch, useBoardCollabContext } from '../../collab/board/ops/useBoardCollab';
-import { isCollabEnabled } from '../../collab/core/collabConfig.js';
+import { useBoardCollabDispatch } from '../../collab/board/ops/useBoardCollab';
 import { useCollabPresence } from '../../collab/board/presence/useCollabPresence.js';
 import { uuidv4 } from '../../utils/uuid';
 import { useBoardSelectionStore } from '../../stores/boardSelectionStore';
@@ -44,8 +43,6 @@ import { useBoardPanning } from './hooks/useBoardPanning';
 import { useBoardDnd } from './hooks/useBoardDnd.jsx';
 import { useBoardToolbarDrag } from './hooks/useBoardToolbarDrag';
 import { useBoardKeyboardShortcuts } from './hooks/useBoardKeyboardShortcuts';
-
-const COLLAB_CONNECT_GRACE_MS = 4000;
 
 /** Coluna arrastável: o cabeçalho é a alça (o resto da coluna continua rolando/clicável). */
 function SortableColumn({ list, className, style, children }) {
@@ -117,26 +114,11 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
     const board = getActiveBoard();
     const activeBoardId = board?.id;
     const editorsByCardId = useMergedBoardEditors(focusedCardId, board?.id);
-    const boardCollab = useBoardCollabContext();
     const { collabDispatch, connected: collabConnected } = useBoardCollabDispatch(board?.id);
     const getBoardSnapshot = useCallback((boardId) => {
         const b = state.boards.find((x) => x.id === boardId);
         return b ? JSON.parse(JSON.stringify(b)) : null;
     }, [state.boards]);
-    // Sem socket por alguns segundos (collab fora do ar) → mostra o board em modo fallback
-    // (save pelo navegador) em vez de ficar preso em "Sincronizando…" para sempre.
-    const [collabConnectGraceOver, setCollabConnectGraceOver] = useState(false);
-    useEffect(() => {
-        const t = setTimeout(() => setCollabConnectGraceOver(true), COLLAB_CONNECT_GRACE_MS);
-        return () => clearTimeout(t);
-    }, []);
-    const collabHydrating = Boolean(
-        isCollabEnabled()
-        && board?.id
-        && boardCollab
-        && !boardCollab.isBoardRoomReady(board.id)
-        && (boardCollab.connected || !collabConnectGraceOver),
-    );
     const {
         updateCursor: updateBoardCursor,
         updateCardSelection,
@@ -562,18 +544,12 @@ function BoardView({ onCardClick, focusedCardId = null, boardAwayOverlay = false
             <BoardMarqueeSelection scrollerRef={scrollerRef} />
 
             <div
-                className={`board-scroller ${isPanning ? 'is-panning' : ''} ${collabHydrating ? 'board-scroller--hydrating' : ''}`}
+                className={`board-scroller ${isPanning ? 'is-panning' : ''}`}
                 ref={scrollerRef}
                 onPointerMove={handleBoardPointerMove}
                 onPointerDown={handlePanPointerDown}
                 onContextMenu={handleContextMenu}
             >
-                {collabHydrating && (
-                    <div className="board-collab-hydrate-overlay" role="status" aria-live="polite">
-                        <Loader2 size={28} className="spin" />
-                        <span>Sincronizando board…</span>
-                    </div>
-                )}
                 <>
                     <SortableContext items={shownLists.map((l) => l.id)} strategy={horizontalListSortingStrategy}>
                         <div className="board-lists">
